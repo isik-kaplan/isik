@@ -1,0 +1,52 @@
+[project]
+name = "isik"
+version = "0.1.0"
+description = "Everyday python utilities."
+authors = [
+  { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["utility"]
+classifiers = [
+  "Topic :: Software Development",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+sentry = ["sentry-sdk"]
+django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf"]
+drf = ["djangorestframework"]
+all = ["isik[sentry,django,drf]"]
+
+[project.urls]
+Homepage = "https://github.com/isik-kaplan/isik"
+Repository = "https://github.com/isik-kaplan/isik"
+Documentation = "https://github.com/isik-kaplan/isik"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pre-commit>=3.0.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+known-first-party = ["isik"]

@@ -1,0 +1,13 @@
+# Python
+__pycache__
+*.pyc
+
+# IDEs & Editors
+.idea
+
+# Frameworks & Libraries
+dist
+poetry.lock
+
+# Project Specific
+# ETC
