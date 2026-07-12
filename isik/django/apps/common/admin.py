@@ -5,7 +5,8 @@ from django.db.transaction import atomic
 from django.utils.translation import gettext_lazy as _
 from django_object_actions import DjangoObjectActions, takes_instance_or_queryset
 
-from isik.common.utils import ThreadLock, with_attrs
+from isik.common.utils.concurrency import ThreadLock
+from isik.common.utils.functional import with_attrs
 from isik.django.apps.common.models import BaseModel
 
 

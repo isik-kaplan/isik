@@ -1,6 +1,11 @@
 # Python
 __pycache__
 *.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.hypothesis
 
 # IDEs & Editors
 .idea

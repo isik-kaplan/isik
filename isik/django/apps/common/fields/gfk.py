@@ -68,7 +68,7 @@ class AutoGenericForeignKey(GenericForeignKey):
                 (
                     Q(app_label=model._meta.app_label, model=model._meta.model_name)
                     if isinstance(model, type)
-                    else Q(app_label=model.split(".")[0], model=model.split(".")[1])
+                    else Q(app_label=model.split(".")[0], model=model.split(".")[1].lower())
                 )
                 for model in self.limit_models_to
             ]

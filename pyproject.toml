@@ -18,7 +18,7 @@ dependencies = []
 
 [project.optional-dependencies]
 sentry = ["sentry-sdk"]
-django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf"]
+django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf", "django-lifecycle", "whitenoise"]
 drf = ["djangorestframework"]
 all = ["isik[sentry,django,drf]"]
 
@@ -30,6 +30,10 @@ Documentation = "https://github.com/isik-kaplan/isik"
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0.0",
+    "pytest-django>=4.9.0",
+    "hypothesis>=6.130.0",
+    "coverage>=7.6.0",
+    "psycopg[binary]>=3.2.0",
     "pre-commit>=3.0.0",
     "ruff>=0.9.0",
 ]
@@ -41,6 +45,7 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 120
 fix = true
+extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -50,3 +55,20 @@ unfixable = []
 [tool.ruff.lint.isort]
 lines-after-imports = 2
 known-first-party = ["isik"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.django_settings"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["isik"]
+branch = true
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
