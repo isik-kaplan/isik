@@ -1,6 +1,6 @@
 import pytest
 
-from isik.common.utils.exceptions import SuppressAndRun, TransformExceptions, suppress_callable
+from isik.common.utils.error_handling import SuppressAndRun, TransformExceptions, suppress_callable
 
 
 class TestTransformExceptions:
@@ -38,6 +38,54 @@ class TestTransformExceptions:
         assert parse(1) == 1
         with pytest.raises(RuntimeError):
             parse(-1)
+
+    def test_two_step_form_decorates_the_transform_then_the_guarded_function(self):
+        @TransformExceptions(ValueError)
+        def value_error_to_runtime_error(e):
+            return RuntimeError(str(e))
+
+        @value_error_to_runtime_error
+        def parse(x):
+            if x < 0:
+                raise ValueError("negative")
+            return x
+
+        assert parse(1) == 1
+        with pytest.raises(RuntimeError):
+            parse(-1)
+
+    def test_two_step_form_returns_the_same_instance_as_the_transform(self):
+        wrapper = TransformExceptions(ValueError)
+
+        @wrapper
+        def value_error_to_runtime_error(e):
+            return RuntimeError(str(e))
+
+        assert value_error_to_runtime_error is wrapper
+        assert wrapper.transform is not None
+
+    def test_two_step_form_transform_is_reusable_on_multiple_functions(self):
+        @TransformExceptions(ValueError)
+        def value_error_to_runtime_error(e):
+            return RuntimeError(str(e))
+
+        @value_error_to_runtime_error
+        def parse_a(x):
+            raise ValueError("a")
+
+        @value_error_to_runtime_error
+        def parse_b(x):
+            raise ValueError("b")
+
+        with pytest.raises(RuntimeError):
+            parse_a(1)
+        with pytest.raises(RuntimeError):
+            parse_b(1)
+
+    def test_missing_transform_raises_a_clear_error_used_as_a_bare_context_manager(self):
+        with pytest.raises(TypeError, match="no transform set"):
+            with TransformExceptions(ValueError):
+                raise ValueError("boom")
 
 
 class TestSuppressAndRun:

@@ -12,7 +12,7 @@ class TransformExceptions(ContextDecorator):
     Args:
         *exception_types: One or more exception types to catch and transform.
         transform: A callable that receives the original exception and returns a new one.
-                   This argument is required.
+                   Can be left out and filled in later - see the two-step form below.
         keep_original: If True (default), the original exception is chained to the new one
                        via `raise new from original`, preserving the traceback context.
                        If False, the original exception is suppressed and the new one is
@@ -32,18 +32,41 @@ class TransformExceptions(ContextDecorator):
         # Without chaining:
         with TransformExceptions(ValueError, transform=lambda e: MyCustomError(str(e)), keep_original=False):
             ...
+
+        # Two-step form: give it exception types now, decorate the transform function
+        # later - useful when the transform itself is more than a lambda one-liner.
+        # The transform function becomes a named, reusable decorator.
+        @TransformExceptions(ValueError)
+        def value_error_to_my_error(e):
+            return MyCustomError(str(e))
+
+        @value_error_to_my_error
+        def parse(x):
+            ...
     """
 
-    def __init__(self, *exception_types, transform, keep_original=True):
+    def __init__(self, *exception_types, transform=None, keep_original=True):
         self.exception_types = exception_types
         self.transform = transform
         self.keep_original = keep_original
+
+    def __call__(self, func):
+        if self.transform is None:
+            # two-step form: `func` is the transform, not the guarded code
+            self.transform = func
+            return self
+        return super().__call__(func)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if isinstance(exc_val, self.exception_types):
+            if self.transform is None:
+                raise TypeError(
+                    "TransformExceptions has no transform set - "
+                    "pass transform=... or decorate a transform function with it first."
+                )
             new_exception = self.transform(exc_val)
             raise new_exception from (exc_val if self.keep_original else None)
         return False
