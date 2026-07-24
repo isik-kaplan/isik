@@ -2,8 +2,8 @@ import pytest
 from dalf.admin import DALFRelatedFieldAjax
 from django.test import RequestFactory
 
-from isik.django.apps.common.admin import BaseAdmin, action
-from isik.django.apps.common.models import BaseModel
+from isik.django.apps.common.admin import BaseAdmin
+from isik.django.apps.common.db import BaseModel
 from tests.testapp.models import TaggedWidget, Widget
 
 
@@ -124,40 +124,3 @@ class TestFormfieldForManyToMany:
         admin.formfield_for_manytomany(field, request)
 
         assert field.remote_field.through._meta.auto_created is False
-
-
-def test_action_sets_the_admin_short_description():
-    @action("Do the thing")
-    def do_thing(modeladmin, request, queryset):
-        return queryset
-
-    assert do_thing.short_description == "Do the thing"
-
-
-def test_action_normalizes_a_single_instance_into_a_queryset(admin_site, rf):
-    widget = Widget.objects.create(name="bolt", count=1)
-    seen = {}
-
-    @action("Do the thing")
-    def do_thing(modeladmin, request, queryset):
-        seen["queryset"] = queryset
-
-    admin = make_admin()
-    do_thing(admin, rf.get("/"), widget)
-
-    assert list(seen["queryset"]) == [widget]
-
-
-def test_action_still_accepts_a_real_queryset(admin_site, rf):
-    Widget.objects.create(name="bolt", count=1)
-    Widget.objects.create(name="nut", count=2)
-    seen = {}
-
-    @action("Do the thing")
-    def do_thing(modeladmin, request, queryset):
-        seen["count"] = queryset.count()
-
-    admin = make_admin()
-    do_thing(admin, rf.get("/"), Widget.objects.all())
-
-    assert seen["count"] == 2

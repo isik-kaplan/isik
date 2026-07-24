@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from hypothesis import given
 from hypothesis import strategies as st
 
-from isik.django.apps.common.skippable_validators import make_skippable
+from isik.django.apps.common.skippable_validators import SkipNamedValidators, make_skippable
 from tests.testapp.models import Widget
 
 
@@ -69,3 +69,22 @@ class TestMakeSkippable:
         widget = Widget(name="bolt", count=value)
         with pytest.raises(ValidationError):
             widget.full_clean()
+
+    def test_explicit_name_is_used_instead_of_the_validators_own_name(self):
+        def validator(value):
+            raise ValidationError("nope")
+
+        wrapped = make_skippable(validator, field_name="count", name="custom_name")
+
+        with SkipNamedValidators("custom_name"):
+            assert wrapped(-1) is None
+
+    def test_the_validators_own_name_no_longer_skips_once_an_explicit_name_is_given(self):
+        def validator(value):
+            raise ValidationError("nope")
+
+        wrapped = make_skippable(validator, field_name="count", name="custom_name")
+
+        with SkipNamedValidators("validator"):
+            with pytest.raises(ValidationError):
+                wrapped(-1)

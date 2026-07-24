@@ -1,0 +1,23 @@
+{
+  "nodes": {
+    "doc": {"content": "block+"},
+    "paragraph": {"content": "inline*", "group": "block"},
+    "text": {"group": "inline"},
+    "heading": {"content": "inline*", "group": "block", "attrs": {"level": {"default": 1}}},
+    "bulletList": {"content": "listItem+", "group": "block"},
+    "orderedList": {"content": "listItem+", "group": "block"},
+    "listItem": {"content": "paragraph+"},
+    "hardBreak": {"group": "inline", "inline": true},
+    "mention": {
+      "group": "inline",
+      "inline": true,
+      "atom": true,
+      "attrs": {"id": {}, "label": {"default": null}}
+    }
+  },
+  "marks": {
+    "bold": {},
+    "italic": {},
+    "strike": {}
+  }
+}

@@ -1,6 +1,6 @@
 [project]
 name = "isik"
-version = "0.1.0"
+version = "0.2.0"
 description = "Everyday python utilities."
 authors = [
   { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
@@ -19,8 +19,10 @@ dependencies = []
 [project.optional-dependencies]
 sentry = ["sentry-sdk"]
 django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf", "django-lifecycle", "whitenoise"]
-drf = ["djangorestframework"]
-all = ["isik[sentry,django,drf]"]
+drf = ["djangorestframework", "django-filter"]
+tiptap = ["prosemirror"]
+templated_fields = ["jinja2"]
+all = ["isik[sentry,django,drf,tiptap,templated_fields]"]
 
 [project.urls]
 Homepage = "https://github.com/isik-kaplan/isik"

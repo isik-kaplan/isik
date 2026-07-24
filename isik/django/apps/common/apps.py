@@ -7,7 +7,7 @@ class CommonConfig(AppConfig):
     name = "isik.django.apps.common"
 
     modules_to_initialize = [
-        "isik.django.apps.common.lookups",
+        "isik.django.apps.common.db.lookups",
     ]
 
     def ready(self):

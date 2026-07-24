@@ -86,6 +86,16 @@ class TestIsAuthenticatedANDSignupCompleted:
         request.user = AnonymousUser()
         assert IsAuthenticatedANDSignupCompleted().has_permission(request, view=None) is False
 
+    def test_raises_when_signup_completed_field_is_not_configured_on_the_user_model(self, rf, django_user_model):
+        # SIGNUP_COMPLETED_FIELD is read directly off the user (not via getattr), so a user model
+        # that never defines it is a misconfiguration that fails loudly rather than silently
+        # denying access.
+        user = django_user_model.objects.create_user(username="alice", password="password")
+        request = rf.get("/")
+        request.user = user
+        with pytest.raises(AttributeError):
+            IsAuthenticatedANDSignupCompleted().has_permission(request, view=None)
+
 
 class TestIsOwner:
     def test_allows_when_the_owner_field_matches_the_requesting_user(self, rf, django_user_model):

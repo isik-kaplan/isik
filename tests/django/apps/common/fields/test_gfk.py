@@ -1,5 +1,7 @@
 import pytest
+from django.db import models
 from django.db.models import Q
+from django.test.utils import isolate_apps
 
 from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
 from tests.testapp.models import Note, Tag, Widget
@@ -51,3 +53,33 @@ def test_limit_gfk_models_to_is_none_when_unrestricted():
 def test_content_type_field_enforces_the_limit_choices_to():
     content_type_field = Note._meta.get_field("target_content_type")
     assert content_type_field.remote_field.limit_choices_to == Q(app_label="testapp", model="widget")
+
+
+def test_content_type_field_defaults_to_cascade_on_delete():
+    content_type_field = Note._meta.get_field("target_content_type")
+    assert content_type_field.remote_field.on_delete is models.CASCADE
+
+
+@isolate_apps("tests.testapp")
+def test_object_id_field_can_be_overridden_to_a_non_uuid_field():
+    class CharTarget(models.Model):
+        target = AutoGenericForeignKey(object_id_field=models.CharField, object_id_field_kwargs={"max_length": 255})
+
+        class Meta:
+            app_label = "testapp"
+
+    field = CharTarget._meta.get_field("target_object_id")
+    assert field.get_internal_type() == "CharField"
+    assert field.max_length == 255
+
+
+@isolate_apps("tests.testapp")
+def test_on_delete_can_be_overridden_away_from_the_cascade_default():
+    class ProtectedTarget(models.Model):
+        target = AutoGenericForeignKey(on_delete=models.PROTECT)
+
+        class Meta:
+            app_label = "testapp"
+
+    content_type_field = ProtectedTarget._meta.get_field("target_content_type")
+    assert content_type_field.remote_field.on_delete is models.PROTECT

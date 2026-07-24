@@ -42,6 +42,11 @@ def test_rejects_inactive_user(user):
     assert backend.authenticate(None, username="alice@example.com", password="password") is None
 
 
+def test_neither_username_nor_a_matching_kwarg_fails_to_match_rather_than_raising(db):
+    backend = UsernameOREmailModelBackend()
+    assert backend.authenticate(None) is None
+
+
 def test_accepts_the_username_field_name_via_kwargs(user):
     # No username= kwarg here - it always binds to the explicit parameter, never **kwargs.
     user_model = get_user_model()

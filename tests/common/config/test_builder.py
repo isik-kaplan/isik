@@ -1,8 +1,16 @@
-import pytest
+import os
 
-from isik.common.config.builder import Config, config
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from isik.common.config.builder import Config, _environment_key, config
 from isik.common.config.casters import boolean, comma_separated_list, integer, string
 from isik.common.config.exceptions import ConfigError
+
+
+KEY = st.from_regex(r"[A-Z][A-Z0-9_]{0,7}", fullmatch=True)
+ENV_VALUE = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), min_size=1, max_size=15)
 
 
 def test_builds_a_flat_config_from_environment_variables(monkeypatch):
@@ -208,3 +216,38 @@ class TestRefresh:
         result = config({"DATABASE": {"HOST": string()}})
         with pytest.raises(ConfigError, match="not a key in this config"):
             result.refresh("DATABASE", "MISSING")
+
+
+class TestEnvironmentKey:
+    # Pure function, no env access needed - can use monkeypatch-free hypothesis freely.
+
+    @given(st.lists(KEY, min_size=1, max_size=6), st.sampled_from(["__", "-", ".", ":"]))
+    def test_joins_the_path_with_the_separator(self, path, sep):
+        assert _environment_key(None, path, sep) == sep.join(path)
+
+    @given(KEY, st.lists(KEY, min_size=1, max_size=6), st.sampled_from(["__", "-"]))
+    def test_prefix_is_joined_ahead_of_the_path(self, prefix, path, sep):
+        assert _environment_key(prefix, path, sep) == sep.join([prefix, *path])
+
+
+class TestArbitraryNestingDepth:
+    # Env vars are set/torn down directly (not via monkeypatch) - @given + a function-scoped
+    # fixture trips hypothesis's function_scoped_fixture health check.
+
+    @given(st.lists(KEY, min_size=1, max_size=6, unique=True), ENV_VALUE)
+    def test_a_chain_of_nesting_resolves_to_the_env_value_at_any_depth(self, path, value):
+        schema = string()
+        for key in reversed(path):
+            schema = {key: schema}
+        env_key = "__".join(path)
+
+        os.environ[env_key] = value
+        try:
+            result = config(schema)
+        finally:
+            del os.environ[env_key]
+
+        node = result
+        for key in path:
+            node = getattr(node, key)
+        assert node == value

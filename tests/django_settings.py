@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     "pgtrigger",
     "pghistory",
     "isik.django.apps.common",
+    "isik.django.apps.feedback",
+    "isik.django.apps.tags",
     "tests.testapp",
 ]
 
@@ -76,3 +78,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # USERNAME_FIELD = "email" here - see tests/testapp/models.py.
 AUTH_USER_MODEL = "testapp.EmailUser"
+
+REST_FRAMEWORK = {
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.OrderingFilter",
+    ],
+}
+
+FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "tiptap_schema.json")

@@ -1,13 +1,11 @@
 from dalf.admin import DALFModelAdmin, DALFRelatedFieldAjax
 from django.contrib.admin import ModelAdmin
-from django.contrib.admin import action as action_
-from django.db.transaction import atomic
 from django.utils.translation import gettext_lazy as _
-from django_object_actions import DjangoObjectActions, takes_instance_or_queryset
+from django_object_actions import DjangoObjectActions
 
 from isik.common.utils.concurrency import ThreadLock
 from isik.common.utils.functional import with_attrs
-from isik.django.apps.common.models import BaseModel
+from isik.django.apps.common.db import BaseModel
 
 
 class BaseAdmin(DjangoObjectActions, DALFModelAdmin):
@@ -106,14 +104,3 @@ class BaseAdmin(DjangoObjectActions, DALFModelAdmin):
         else:
             form_field = ModelAdmin.formfield_for_manytomany(self, db_field, request, **kwargs)
         return form_field
-
-
-def action(description):
-    """
-    ModelAdmin method decorator to mark a method as both list and detail action.
-    """
-
-    def decorator(func):
-        return atomic(takes_instance_or_queryset(action_(description=description)(func)))
-
-    return decorator

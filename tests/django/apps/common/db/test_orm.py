@@ -1,6 +1,6 @@
 import pytest
 
-from isik.django.apps.common.orm import get_object_or_none, starts_with
+from isik.django.apps.common.db.orm import get_object_or_none, starts_with
 from tests.testapp.models import Widget
 
 

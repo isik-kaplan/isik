@@ -46,6 +46,12 @@ def test_debug_true_falls_through_for_an_unknown_path(settings, rf):
     assert response.content == b"fallback"
 
 
+def test_media_url_falsy_falls_back_to_the_root_prefix_without_crashing(settings):
+    settings.MEDIA_URL = ""
+    middleware = make_middleware()
+    assert middleware.directories[0][1] == "/"
+
+
 def test_script_prefix_is_stripped_from_the_static_prefix(settings):
     settings.MEDIA_URL = "/myapp/media/"
     previous_prefix = get_script_prefix()

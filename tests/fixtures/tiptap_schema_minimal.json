@@ -1,0 +1,8 @@
+{
+  "nodes": {
+    "doc": {"content": "block+"},
+    "paragraph": {"content": "inline*", "group": "block"},
+    "text": {"group": "inline"}
+  },
+  "marks": {}
+}

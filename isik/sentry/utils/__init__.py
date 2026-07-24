@@ -1,9 +1,7 @@
-from functools import partial
-
-import sentry_sdk
-
-from isik.common.utils.error_handling import SuppressAndRun, suppress_callable
+from isik.sentry.utils.suppression import suppress_callable_to_sentry, suppress_to_sentry
 
 
-suppress_to_sentry = partial(SuppressAndRun, func=sentry_sdk.capture_exception)
-suppress_callable_to_sentry = partial(suppress_callable, func=sentry_sdk.capture_exception)
+__all__ = [
+    "suppress_callable_to_sentry",
+    "suppress_to_sentry",
+]
