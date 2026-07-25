@@ -185,6 +185,14 @@ def enabled_if(condition, *, if_not_enabled_return_value):
         any mutating decorator stacked above this one will not affect the original function.
     """
     if not (condition() if callable(condition) else condition):
-        return returns(cloned(returns(if_not_enabled_return_value)))
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*a, **kw):
+                return if_not_enabled_return_value
+
+            return wrapper
+
+        return decorator
 
     return cloned

@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib.sessions.middleware import SessionMiddleware
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 
 
 class CookieORHeaderSessionMiddleware(SessionMiddleware):
@@ -9,8 +9,14 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
     cookie or a header, useful when the same API is consumed by both browsers and
     non-browser clients. Raises if a request supplies both and they disagree.
 
-    Requires settings.SESSION_HEADER_NAME to be set to the header name to read.
+    Requires settings.SESSION_HEADER_NAME to be set to the header name to read - raises
+    ImproperlyConfigured at middleware init time (not on the first request) if it's missing.
     """
+
+    def __init__(self, get_response):
+        if not hasattr(settings, "SESSION_HEADER_NAME"):
+            raise ImproperlyConfigured(f"{self.__class__.__name__} requires settings.SESSION_HEADER_NAME to be set.")
+        super().__init__(get_response)
 
     def process_request(self, request):
         session_key = self.get_session_key(request)

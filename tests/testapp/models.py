@@ -101,6 +101,7 @@ class Recorder(BaseModel):
     STR = "Recorder<{self.name}>"
 
     name = models.CharField(max_length=100)
+    slug = models.CharField(max_length=100, blank=True, default="")
 
     class Meta:
         app_label = "testapp"
@@ -128,6 +129,9 @@ class Recorder(BaseModel):
     @hook(BEFORE_SAVE)
     def _before_save(self):
         self.hook_log.append("before_save")
+        # Deliberately mutates a field the caller didn't pass to update() - exercises
+        # BaseModel.update_fields widening around hook-driven side effects.
+        self.slug = self.name.lower()
 
     @hook(AFTER_SAVE)
     def _after_save(self):

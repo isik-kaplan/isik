@@ -1,5 +1,6 @@
 from operator import attrgetter
 
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext_lazy as _
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
@@ -24,12 +25,21 @@ class IsSuperUser(BasePermission):
 class IsAuthenticatedANDSignupCompleted(BasePermission):
     """
     Allows access only to authenticated users who have completed signup.
-    The user model must define SIGNUP_COMPLETED_FIELD, naming the boolean field to check.
+    The user model must define SIGNUP_COMPLETED_FIELD, naming the boolean field to check - raises
+    ImproperlyConfigured (not a bare AttributeError) if the user model never defines it.
     """
 
     def has_permission(self, request, view):
         user = request.user
-        return bool(user and user.is_authenticated and getattr(user, user.SIGNUP_COMPLETED_FIELD, False))
+        if not (user and user.is_authenticated):
+            return False
+        try:
+            signup_completed_field = user.SIGNUP_COMPLETED_FIELD
+        except AttributeError as exc:
+            raise ImproperlyConfigured(
+                f"{user.__class__.__name__} must define SIGNUP_COMPLETED_FIELD to use {self.__class__.__name__}."
+            ) from exc
+        return bool(getattr(user, signup_completed_field, False))
 
 
 def is_owner(owner_field):
@@ -86,13 +96,20 @@ def user_property(property_=None, attribute=None):
     getter = property_.fget if property_ else attrgetter(attribute)
 
     def has_permission(self, request, view):  # NOQA
-        has_perm = getter(request.user)
+        try:
+            has_perm = getter(request.user)
+        except AttributeError:
+            # e.g. request.user is AnonymousUser and doesn't have the attribute/property at all.
+            return False
         if hasattr(has_perm, "reason"):
             self.message = has_perm.reason
         return has_perm
 
     def has_object_permission(self, request, view, obj):  # NOQA
-        has_perm = getter(request.user)
+        try:
+            has_perm = getter(request.user)
+        except AttributeError:
+            return False
         if hasattr(has_perm, "reason"):
             self.message = has_perm.reason
         return has_perm

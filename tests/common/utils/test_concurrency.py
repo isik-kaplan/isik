@@ -1,4 +1,5 @@
 import threading
+from contextvars import ContextVar
 
 from isik.common.utils.concurrency import ContextLocal, ThreadLocal, ThreadLock
 
@@ -90,3 +91,14 @@ class TestContextLocal:
             _PopulateRegistryOnEnter(lambda: ContextLocal._registry.__setitem__(name, sentinel)),
         )
         assert ContextLocal(name) is sentinel
+
+    def test_get_var_double_checked_lock_does_not_overwrite_a_concurrently_created_var(self, monkeypatch):
+        local = ContextLocal("RACE_CONTEXT_LOCAL_GET_VAR")
+        vars_ = object.__getattribute__(local, "_vars")
+        sentinel = ContextVar("sentinel")
+        monkeypatch.setattr(
+            local,
+            "_vars_lock",
+            _PopulateRegistryOnEnter(lambda: vars_.__setitem__("key", sentinel)),
+        )
+        assert local._get_var("key") is sentinel

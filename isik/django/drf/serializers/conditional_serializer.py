@@ -121,13 +121,15 @@ def serializer_method_include(getter):
             return OwnerSerializer(obj.owner, context=self.context)
 
     Field name comes from the method name, so only DRF's default `get_<field_name>`
-    convention is supported.
+    convention is supported. Returning `None` (e.g. a nullable relation) is passed through as-is.
     """
     field_name = getter.__name__.removeprefix("get_")
 
     @wraps(getter)
     def wrapper(self, obj):
         child = getter(self, obj)
+        if child is None:
+            return None
         parent_path = self._own_path()
         child._path_override = f"{parent_path}.{field_name}" if parent_path else field_name
         return child.data

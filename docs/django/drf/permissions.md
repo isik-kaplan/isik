@@ -20,7 +20,7 @@ class User(AbstractUser):
     SIGNUP_COMPLETED_FIELD = "profile_completed"
 ```
 
-- Reads `user.SIGNUP_COMPLETED_FIELD` directly (not via `getattr` with a default) - a user model that never defines it fails with `AttributeError` rather than silently denying access.
+- Reads `user.SIGNUP_COMPLETED_FIELD` directly (not via `getattr` with a default) - a user model that never defines it raises `ImproperlyConfigured` rather than silently denying access.
 
 ## is_owner
 

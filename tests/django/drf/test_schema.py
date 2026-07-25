@@ -7,6 +7,7 @@ import pytest
 from rest_framework import serializers
 
 from isik.django.drf.schema import FakeErrorSerializer, FakeSerializer
+from tests.testapp.models import Widget
 
 
 @pytest.fixture(autouse=True)
@@ -143,8 +144,10 @@ class TestFakeSerializer:
 
 class TestFakeErrorSerializer:
     class WidgetSerializer(serializers.Serializer):
-        class Meta:
-            fields = ["name", "count"]
+        """A plain Serializer with no Meta at all - one of the two previously-unsupported shapes."""
+
+        name = serializers.CharField()
+        count = serializers.IntegerField()
 
     def test_builds_a_list_of_strings_field_per_source_field_plus_non_field_errors(self):
         ErrorSerializer = FakeErrorSerializer(self.WidgetSerializer)
@@ -160,13 +163,30 @@ class TestFakeErrorSerializer:
         ErrorSerializer = FakeErrorSerializer(self.WidgetSerializer, extra_fields={"code": int})
         assert "code" in ErrorSerializer().fields
 
-    def test_raises_a_clear_error_for_dunder_all_fields(self):
-        class AllFieldsSerializer(serializers.Serializer):
+    def test_works_with_a_model_serializer_using_meta_exclude(self):
+        class ExcludeSerializer(serializers.ModelSerializer):
             class Meta:
+                model = Widget
+                exclude = ["owner"]
+
+        ErrorSerializer = FakeErrorSerializer(ExcludeSerializer)
+        assert set(ErrorSerializer().fields) == {
+            "id",
+            "created_at",
+            "updated_at",
+            "name",
+            "count",
+            "non_field_errors",
+        }
+
+    def test_works_with_meta_fields_dunder_all(self):
+        class AllFieldsSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = Widget
                 fields = "__all__"
 
-        with pytest.raises(ValueError, match="__all__"):
-            FakeErrorSerializer(AllFieldsSerializer)
+        ErrorSerializer = FakeErrorSerializer(AllFieldsSerializer)
+        assert "owner" in ErrorSerializer().fields
 
     def test_reusing_the_same_source_serializer_without_reuse_true_raises(self):
         FakeErrorSerializer(self.WidgetSerializer)

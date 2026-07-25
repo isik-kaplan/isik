@@ -97,3 +97,21 @@ class TestLifecycleHookOrdering:
         recorder.hook_log = []
         recorder.update(name="rec-2", _skip_hooks=True)
         assert recorder.hook_log == []
+
+    def test_update_persists_fields_a_hook_mutates_beyond_the_explicit_kwargs(self):
+        # Recorder's BEFORE_SAVE hook sets self.slug from self.name - update(name=...) only
+        # tells save() about "name", so slug must be widened into update_fields for the
+        # hook's change to actually reach the database instead of being silently dropped.
+        recorder = Recorder.objects.create(name="REC-1")
+        recorder.update(name="REC-2")
+        persisted = Recorder.objects.get(pk=recorder.pk)
+        assert persisted.name == "REC-2"
+        assert persisted.slug == "rec-2"
+
+    def test_plain_save_without_update_fields_is_unaffected_by_the_widening_logic(self):
+        recorder = Recorder.objects.create(name="REC-1")
+        recorder.name = "REC-2"
+        recorder.save()
+        persisted = Recorder.objects.get(pk=recorder.pk)
+        assert persisted.name == "REC-2"
+        assert persisted.slug == "rec-2"

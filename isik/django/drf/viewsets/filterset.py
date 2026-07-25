@@ -36,6 +36,14 @@ class FilterSetMixin:
 
     @classproperty
     def filterset_class(cls):
+        # Cached on cls.__dict__ (not a base class's), so each subclass builds and keeps its own -
+        # this is rebuilt from scratch, not shared/inherited, if a further subclass overrides
+        # filterset_fields/declared_filters/filterset_base.
+        cached = cls.__dict__.get("_filterset_class")
+        if cached is not None:
+            return cached
         meta_base = getattr(cls.filterset_base, "Meta", object)
         meta = type("Meta", (meta_base,), {"model": cls.model, "fields": cls.filterset_fields})
-        return type("AutoFilterSet", (cls.filterset_base,), {**cls.declared_filters, "Meta": meta})
+        built = type("AutoFilterSet", (cls.filterset_base,), {**cls.declared_filters, "Meta": meta})
+        cls._filterset_class = built
+        return built

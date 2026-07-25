@@ -8,6 +8,8 @@ class UsernameOREmailModelBackend(ModelBackend):
         user_model = get_user_model()
         if username is None:
             username = kwargs.get(user_model.USERNAME_FIELD)
+        if not username:
+            return None
         try:
             lookup = Q(**{user_model.EMAIL_FIELD: username}) | Q(**{user_model.USERNAME_FIELD: username})
             user = user_model._default_manager.get(lookup)

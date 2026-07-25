@@ -60,14 +60,18 @@ class ContextLocal:
                     instance = super().__new__(cls)
                     object.__setattr__(instance, "_name", name)
                     object.__setattr__(instance, "_vars", {})
+                    object.__setattr__(instance, "_vars_lock", threading.Lock())
                     cls._registry[name] = instance
         return cls._registry[name]
 
     def _get_var(self, key):
         vars_ = object.__getattribute__(self, "_vars")
         if key not in vars_:
-            name = object.__getattribute__(self, "_name")
-            vars_[key] = ContextVar(f"{name}.{key}")
+            lock = object.__getattribute__(self, "_vars_lock")
+            with lock:
+                if key not in vars_:
+                    name = object.__getattribute__(self, "_name")
+                    vars_[key] = ContextVar(f"{name}.{key}")
         return vars_[key]
 
     def get(self, key, *args):

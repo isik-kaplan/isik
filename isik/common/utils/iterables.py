@@ -24,7 +24,8 @@ def purge_iterable(iterable, items):
     """
     Remove items from an iterable
     """
-    return [item for item in iterable if item not in set(items)]
+    items = set(items)
+    return [item for item in iterable if item not in items]
 
 
 def purge_mapping(mapping, keys):

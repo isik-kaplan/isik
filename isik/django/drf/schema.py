@@ -91,14 +91,16 @@ class FakeErrorSerializer:
 
         WidgetErrorSerializer = FakeErrorSerializer(WidgetSerializer)
 
+    Field names come from instantiating `serializer_cls` and reading its resolved `.fields` -
+    works the same regardless of whether it declares `Meta.fields`, `Meta.exclude`, or is a plain
+    `Serializer` with no `Meta` at all.
+
     Subject to the same `reuse=True` requirement as FakeSerializer - the derived name can collide
     even when `extra_fields` differs between calls.
     """
 
     def __new__(cls, serializer_cls, *, extra_fields=None, reuse=False):
-        field_names = serializer_cls.Meta.fields
-        if field_names == "__all__":
-            raise ValueError("FakeErrorSerializer needs an explicit Meta.fields list, not '__all__'")
+        field_names = serializer_cls().fields.keys()
 
         def error_field():
             return serializers.ListField(child=serializers.CharField(), required=False, read_only=True)

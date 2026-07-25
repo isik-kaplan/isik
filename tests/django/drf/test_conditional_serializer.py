@@ -297,3 +297,19 @@ class TestSerializerMethodInclude:
         request = make_request("/", {"only": "owner_detail.username"})
         serializer = WidgetSerializerWithMethodField(widget, context={"request": request})
         assert serializer.data["owner_detail"] == {"username": "alice"}
+
+    def test_a_none_return_passes_through_instead_of_crashing(self, widget, make_request):
+        class NullableSerializer(ConditionalSerializerMixin, serializers.ModelSerializer):
+            owner_detail = serializers.SerializerMethodField()
+
+            class Meta:
+                model = Widget
+                fields = ["id", "name", "owner_detail"]
+
+            @serializer_method_include
+            def get_owner_detail(self, obj):
+                return None
+
+        request = make_request("/")
+        serializer = NullableSerializer(widget, context={"request": request})
+        assert serializer.data["owner_detail"] is None

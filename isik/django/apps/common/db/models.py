@@ -40,6 +40,13 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
         self._clear_watched_fk_model_cache()
         is_new = self._state.adding
 
+        # Snapshotted before the hooks below run, so that if a BEFORE_CREATE/BEFORE_UPDATE/
+        # BEFORE_SAVE hook (or full_clean()'s own field cleaning) sets a field that isn't in the
+        # caller's update_fields, its new value still reaches the database instead of being
+        # silently discarded by the restricted UPDATE below.
+        requested_update_fields = kwargs.get("update_fields")
+        before_hooks = self._field_values() if requested_update_fields is not None else None
+
         if is_new:
             self._run_hooked_methods(BEFORE_CREATE, **kwargs)
         else:
@@ -49,6 +56,9 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
 
         if not self.SKIP_FULL_CLEAN:
             self.full_clean()
+
+        if before_hooks is not None:
+            kwargs["update_fields"] = self._widen_update_fields(requested_update_fields, before_hooks)
 
         save(*args, **kwargs)
         self._run_hooked_methods(AFTER_SAVE, **kwargs)
@@ -66,6 +76,14 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
         for key, val in kwargs.items():
             setattr(self, key, val)
         return self.save(_skip_hooks=skip_hooks, update_fields=update_fields)
+
+    def _field_values(self):
+        return {field.name: getattr(self, field.attname) for field in self._meta.concrete_fields}
+
+    def _widen_update_fields(self, requested_fields, before):
+        after = self._field_values()
+        changed_by_hooks = {name for name, value in before.items() if after[name] != value}
+        return list({*requested_fields, *changed_by_hooks})
 
     def as_queryset(self):
         return self.__class__.objects.filter(id=self.id)

@@ -22,4 +22,4 @@ Builds a matching `"<Name>Error"` `FakeSerializer` from a real serializer's fiel
 WidgetErrorSerializer = FakeErrorSerializer(WidgetSerializer)
 ```
 
-- Needs an explicit `Meta.fields` list on the source serializer - raises if it's `"__all__"`.
+- Works with any serializer shape - `Meta.fields`, `Meta.fields = "__all__"`, `Meta.exclude`, or a plain `Serializer` with no `Meta` at all - since field names come from instantiating the source serializer, not from reading `Meta` directly.
