@@ -11,7 +11,7 @@ def generic_comment_serializer(model):
     `comments(tiptap=True)`), so model-level validators - including `TiptapValidator` - carry over
     automatically. Use as-is or subclass further.
 
-        CommentSerializer = generic_comment_serializer(Post.comment_model)
+        CommentSerializer = generic_comment_serializer(Post.comments.model)
     """
 
     meta_attrs = {

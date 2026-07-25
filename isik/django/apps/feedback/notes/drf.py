@@ -11,7 +11,7 @@ def generic_note_serializer(model):
     covers the object-level actions (retrieve/update/destroy); list/create still need the view's
     own `get_queryset()` filter and `perform_create()` to set `user`.
 
-        NoteSerializer = generic_note_serializer(Post.note_model)
+        NoteSerializer = generic_note_serializer(Post.notes.model)
     """
 
     meta_attrs = {

@@ -9,7 +9,7 @@ def generic_vote_serializer(model):
     `created_at`, read-only `user` (never client-writable - the view must still set it, e.g. in
     `perform_create`). Use as-is or subclass further.
 
-        VoteSerializer = generic_vote_serializer(Post.vote_model)
+        VoteSerializer = generic_vote_serializer(Post.votes.model)
     """
 
     meta_attrs = {
