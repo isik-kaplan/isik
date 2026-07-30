@@ -38,6 +38,24 @@ def test_get_paginated_response_includes_count_page_size_and_total_pages(make_re
     assert response.data["results"] == [0, 1]
 
 
+def test_page_size_is_capped_at_default_max_page_size(make_request, paginator):
+    request = make_request("/", {"page_size": 999999})
+    assert paginator.get_page_size(request) == 1000
+
+
+def test_page_size_max_is_configurable_via_settings(settings, make_request, paginator):
+    settings.DRF_PAGINATION_MAX_PAGE_SIZE = 5
+    request = make_request("/", {"page_size": 999999})
+    assert paginator.get_page_size(request) == 5
+
+
+def test_page_size_max_page_size_attribute_overrides_settings(settings, make_request, paginator):
+    settings.DRF_PAGINATION_MAX_PAGE_SIZE = 5
+    paginator.max_page_size = 10
+    request = make_request("/", {"page_size": 999999})
+    assert paginator.get_page_size(request) == 10
+
+
 def test_get_paginated_response_schema_lists_the_expected_fields():
     schema = PageNumberPagination().get_paginated_response_schema({"type": "object", "items": {}})
     assert schema["required"] == ["count", "page_size", "total_pages", "results"]
