@@ -1,4 +1,4 @@
-from isik.common.config.builder import Config, config
+from isik.common.config.builder import Config, Ref, config, ref
 from isik.common.config.casters import (
     boolean,
     caster,
@@ -14,6 +14,7 @@ from isik.common.config.exceptions import ConfigError
 __all__ = [
     "Config",
     "ConfigError",
+    "Ref",
     "boolean",
     "caster",
     "comma_separated_float_list",
@@ -21,5 +22,6 @@ __all__ = [
     "comma_separated_list",
     "config",
     "integer",
+    "ref",
     "string",
 ]

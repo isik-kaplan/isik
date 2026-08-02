@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from isik.common.config.builder import Config, _environment_key, config
+from isik.common.config.builder import Config, _environment_key, config, ref
 from isik.common.config.casters import boolean, comma_separated_list, integer, string
 from isik.common.config.exceptions import ConfigError
 
@@ -228,6 +228,140 @@ class TestEnvironmentKey:
     @given(KEY, st.lists(KEY, min_size=1, max_size=6), st.sampled_from(["__", "-"]))
     def test_prefix_is_joined_ahead_of_the_path(self, prefix, path, sep):
         assert _environment_key(prefix, path, sep) == sep.join([prefix, *path])
+
+
+class TestRef:
+    def test_missing_default_ref_falls_back_to_another_setting(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("PAGE_SIZE", "50")
+
+        result = config({
+            "PAGE_SIZE": integer(),
+            "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+        })
+
+        assert result.MAX_PAGE_SIZE == 50
+
+    def test_error_default_ref_falls_back_to_another_setting(self, monkeypatch):
+        monkeypatch.setenv("MAX_PAGE_SIZE", "not-an-int")
+        monkeypatch.setenv("PAGE_SIZE", "50")
+
+        result = config({
+            "PAGE_SIZE": integer(),
+            "MAX_PAGE_SIZE": integer(error_default=ref("PAGE_SIZE")),
+        })
+
+        assert result.MAX_PAGE_SIZE == 50
+
+    def test_ref_chain_falls_through_multiple_settings_to_a_static_default(self, monkeypatch):
+        monkeypatch.delenv("C", raising=False)
+        monkeypatch.delenv("B", raising=False)
+        monkeypatch.delenv("A", raising=False)
+
+        result = config({
+            "A": integer(missing_default=1),
+            "B": integer(missing_default=ref("A")),
+            "C": integer(missing_default=ref("B")),
+        })
+
+        assert result.C == 1
+
+    def test_ref_can_point_into_a_nested_key(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("DRF__PAGE_SIZE", "50")
+
+        result = config({
+            "DRF": {"PAGE_SIZE": integer()},
+            "MAX_PAGE_SIZE": integer(missing_default=ref("DRF", "PAGE_SIZE")),
+        })
+
+        assert result.MAX_PAGE_SIZE == 50
+
+    def test_ref_accepts_a_dotted_path_as_a_shorthand_for_nested_keys(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("DRF__PAGE_SIZE", "50")
+
+        result = config({
+            "DRF": {"PAGE_SIZE": integer()},
+            "MAX_PAGE_SIZE": integer(missing_default=ref(dot="DRF.PAGE_SIZE")),
+        })
+
+        assert result.MAX_PAGE_SIZE == 50
+
+    def test_ref_rejects_both_positional_path_and_dot(self):
+        with pytest.raises(ConfigError, match="either positional path segments or `dot="):
+            ref("DRF", dot="DRF.PAGE_SIZE")
+
+    def test_ref_rejects_a_malformed_dotted_path(self):
+        with pytest.raises(ConfigError, match="not a valid dotted path"):
+            ref(dot="DRF..PAGE_SIZE")
+
+    def test_ref_is_reachable_as_config_ref(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("PAGE_SIZE", "50")
+
+        result = config({
+            "PAGE_SIZE": integer(),
+            "MAX_PAGE_SIZE": integer(missing_default=config.ref("PAGE_SIZE")),
+        })
+
+        assert result.MAX_PAGE_SIZE == 50
+
+    def test_ref_target_missing_with_no_default_raises_config_error(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.delenv("PAGE_SIZE", raising=False)
+
+        with pytest.raises(ConfigError, match="PAGE_SIZE not found"):
+            config({
+                "PAGE_SIZE": integer(),
+                "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+            })
+
+    def test_ref_to_unknown_key_raises_config_error(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+
+        with pytest.raises(ConfigError, match="does not point to a key"):
+            config({"MAX_PAGE_SIZE": integer(missing_default=ref("NOPE"))})
+
+    def test_ref_to_a_nested_config_instead_of_a_leaf_raises_config_error(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("DRF__PAGE_SIZE", "50")
+
+        with pytest.raises(ConfigError, match="nested config"):
+            config({
+                "DRF": {"PAGE_SIZE": integer()},
+                "MAX_PAGE_SIZE": integer(missing_default=ref("DRF")),
+            })
+
+    def test_direct_self_ref_raises_config_error(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+
+        with pytest.raises(ConfigError, match="Circular ref"):
+            config({"MAX_PAGE_SIZE": integer(missing_default=ref("MAX_PAGE_SIZE"))})
+
+    def test_indirect_ref_cycle_raises_config_error(self, monkeypatch):
+        monkeypatch.delenv("A", raising=False)
+        monkeypatch.delenv("B", raising=False)
+
+        with pytest.raises(ConfigError, match="Circular ref"):
+            config({
+                "A": integer(missing_default=ref("B")),
+                "B": integer(missing_default=ref("A")),
+            })
+
+    def test_refresh_re_resolves_a_ref_default(self, monkeypatch):
+        monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("PAGE_SIZE", "50")
+        result = config({
+            "PAGE_SIZE": integer(),
+            "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+        })
+        assert result.MAX_PAGE_SIZE == 50
+
+        monkeypatch.setenv("PAGE_SIZE", "75")
+        result.refresh()
+
+        assert result.MAX_PAGE_SIZE == 75
 
 
 class TestArbitraryNestingDepth:
