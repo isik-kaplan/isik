@@ -50,3 +50,37 @@ class TestViewSetRegistryMixin:
             pass
 
         assert AbstractIntermediate not in ViewSetRegistryMixin.model_map.values()
+
+    def test_is_base_class_forks_a_private_registry_for_that_branch(self):
+        class DummyForkedModel:
+            pass
+
+        class AuthBase(ViewSetRegistryMixin, ModelViewSet):
+            is_base_class = True
+
+        class AuthWidgetViewSet(AuthBase):
+            model = DummyForkedModel
+
+        assert AuthBase.get_for_model(DummyForkedModel) is AuthWidgetViewSet
+        # The forked registry is a different dict entirely, isolated from the global one.
+        assert ViewSetRegistryMixin.get_for_model(DummyForkedModel) is None
+        assert AuthBase.model_map is not ViewSetRegistryMixin.model_map
+
+    def test_two_independent_is_base_class_hierarchies_dont_collide_on_the_same_model(self):
+        class DummySharedModel:
+            pass
+
+        class PublicBase(ViewSetRegistryMixin, ModelViewSet):
+            is_base_class = True
+
+        class TenantBase(ViewSetRegistryMixin, ModelViewSet):
+            is_base_class = True
+
+        class PublicWidgetViewSet(PublicBase):
+            model = DummySharedModel
+
+        class TenantWidgetViewSet(TenantBase):
+            model = DummySharedModel
+
+        assert PublicBase.get_for_model(DummySharedModel) is PublicWidgetViewSet
+        assert TenantBase.get_for_model(DummySharedModel) is TenantWidgetViewSet

@@ -1,6 +1,6 @@
 # base
 
-`BaseModelSerializer` composes every serializer mixin in this package onto `ModelSerializer` in one base class: `ModelSerializerRegistryMixin`, `CreateOnlyFieldsMixin`, `MetaCombiningMixin` (combining `Meta.relational_fields`), `RequestContextMixin`, `ConditionalSerializerMixin`.
+`BaseModelSerializer` composes every serializer mixin in this package onto `ModelSerializer` in one base class: `ModelSerializerRegistryMixin`, `CreateOnlyFieldsMixin`, `WriteOnlyFieldsMixin`, `FlattenedOneToOneMixin`, `MetaCombiningMixin` (combining `Meta.relational_fields`), `RequestContextMixin`, `ConditionalSerializerMixin`.
 
 ```python
 class WidgetSerializer(BaseModelSerializer):

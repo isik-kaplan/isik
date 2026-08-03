@@ -17,6 +17,15 @@ from isik.django.apps.common.skippable_validators import SkippableValidatorsMixi
 
 
 class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
+    """
+    Don't put a `classproperty` with a query-building body on a subclass of this - use a plain
+    `classmethod` instead. `django_lifecycle`'s `LifecycleModelMixin` scans class attributes via
+    `getattr(cls, name)` on every instantiation to find hook methods, which evaluates a
+    `classproperty` eagerly as a side effect regardless of whether anything asked for it. If that
+    property builds a queryset by instantiating the same model, this recurses infinitely - a
+    `django_lifecycle` behavior, not something fixable from here, just a documented trap.
+    """
+
     STR = None
     REPR = "{self.__class__.__name__}(id={self.id})"
     FIELDS = ["id", "created_at", "updated_at"]

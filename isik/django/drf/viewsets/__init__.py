@@ -4,6 +4,7 @@ from isik.django.drf.viewsets.filterset import FilterSetMixin
 from isik.django.drf.viewsets.ordering import ReverseOrderingMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
+from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
 
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "ProtectedDestroyMixin",
     "ReverseOrderingMixin",
     "ViewSetRegistryMixin",
+    "none_during_schema_generation",
 ]

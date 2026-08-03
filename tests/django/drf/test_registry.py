@@ -66,6 +66,46 @@ class TestModelSerializerRegistryMixin:
 
         assert NoMetaSerializer not in ModelSerializerRegistryMixin.model_map.values()
 
+    def test_is_base_class_forks_a_private_registry_for_that_branch(self):
+        class DummyForkedModel:
+            pass
+
+        class AuthBase(ModelSerializerRegistryMixin):
+            is_base_class = True
+
+        class AuthWidgetSerializer(AuthBase):
+            class Meta:
+                model = DummyForkedModel
+                fields = ["id"]
+
+        assert AuthBase.get_for_model(DummyForkedModel) is AuthWidgetSerializer
+        with pytest.raises(KeyError):
+            ModelSerializerRegistryMixin.get_for_model(DummyForkedModel)
+        assert AuthBase.model_map is not ModelSerializerRegistryMixin.model_map
+
+    def test_two_independent_is_base_class_hierarchies_dont_collide_on_the_same_model(self):
+        class DummySharedModel:
+            pass
+
+        class PublicBase(ModelSerializerRegistryMixin):
+            is_base_class = True
+
+        class TenantBase(ModelSerializerRegistryMixin):
+            is_base_class = True
+
+        class PublicWidgetSerializer(PublicBase):
+            class Meta:
+                model = DummySharedModel
+                fields = ["id"]
+
+        class TenantWidgetSerializer(TenantBase):
+            class Meta:
+                model = DummySharedModel
+                fields = ["id"]
+
+        assert PublicBase.get_for_model(DummySharedModel) is PublicWidgetSerializer
+        assert TenantBase.get_for_model(DummySharedModel) is TenantWidgetSerializer
+
 
 class TestModelSerializerMap:
     def test_maps_several_models_at_once(self):

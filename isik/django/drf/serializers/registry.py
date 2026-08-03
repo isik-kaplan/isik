@@ -17,26 +17,37 @@ class ModelSerializerRegistryMixin:
     instead of silently letting the second one win (matches ViewSetRegistryMixin). Set
     `exempt_from_registry = True` on a subclass that shouldn't be registered at all - e.g. a
     schema-only serializer, or an intentional second serializer for a model already registered.
+
+    Set `is_base_class = True` on a project-level intermediate to give that branch its own private
+    registry instead of sharing this one - several independent hierarchies can then each register
+    the same model without colliding (see ViewSetRegistryMixin's docstring for the matching
+    viewset-side example).
     """
 
     exempt_from_registry = False
+    is_base_class = False
     model_map = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        if cls.__dict__.get("is_base_class", False):
+            # Must happen before the `model is None` guard below - a class marking itself as a
+            # new base is almost always still abstract with no `Meta.model` of its own, which is
+            # exactly the common case this fork needs to fire for.
+            cls.model_map = {}
         if cls.exempt_from_registry:
             return
         model = getattr(getattr(cls, "Meta", None), "model", None)
         if model is None:
             return
-        if model in ModelSerializerRegistryMixin.model_map:
-            existing = ModelSerializerRegistryMixin.model_map[model]
+        if model in cls.model_map:
+            existing = cls.model_map[model]
             raise ImproperlyConfigured(f"{model} is already registered to {existing.__name__}")
-        ModelSerializerRegistryMixin.model_map[model] = cls
+        cls.model_map[model] = cls
 
     @classmethod
     def get_for_model(cls, model):
-        return ModelSerializerRegistryMixin.model_map[model]
+        return cls.model_map[model]
 
     @classmethod
     def model_serializer_map(cls, *models, ignore_missing=False):

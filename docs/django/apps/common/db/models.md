@@ -28,3 +28,9 @@ with widget.skip_full_clean():
   auto-append readonly/list-display fields.
 - `__str__` falls back to `REPR` (`"{self.__class__.__name__}(id={self.id})"`) unless the
   subclass sets `STR` to its own format string.
+- Don't put a `classproperty` with a query-building body on a subclass - use a plain `classmethod`
+  instead. `django_lifecycle`'s `LifecycleModelMixin` scans class attributes on every
+  instantiation to find hook methods, which evaluates a `classproperty` eagerly as a side effect;
+  if that property builds a queryset by instantiating the same model, this recurses infinitely.
+  This is a `django_lifecycle` behavior, not something `BaseModel` can fix - just a trap worth
+  knowing about.

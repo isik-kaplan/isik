@@ -8,3 +8,4 @@ Viewset mixins composed together in `base.py`'s `BaseModelViewSet` - registry, p
 - [filterset.md](filterset.md) - builds `filterset_class` from `filterset_fields`/`declared_filters`
 - [ordering.md](ordering.md) - auto `-field` reverse ordering counterparts
 - [protected_destroy.md](protected_destroy.md) - `ProtectedError` -> clean 400 instead of 500
+- [schema_generation.md](schema_generation.md) - `none_during_schema_generation`, safe `get_queryset()` during schema generation

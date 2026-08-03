@@ -76,3 +76,32 @@ class TestRequiredAttributesMixin:
 
             class GrandChild(Middle):
                 pass
+
+    def test_is_base_class_exempts_that_class_without_redeclaring_required_attributes(self):
+        class Base(RequiredAttributesMixin):
+            required_attributes = ["name"]
+            name = REQUIRED
+
+        class StillAbstract(Base):
+            is_base_class = True  # exempt, even though `name` is still unset
+
+        assert StillAbstract.name is REQUIRED
+
+        # A further subclass that doesn't set is_base_class itself is checked normally again.
+        with pytest.raises(TypeError, match="must define a `name` attribute"):
+
+            class Forgetful(StillAbstract):
+                pass
+
+    def test_is_base_class_exemption_does_not_apply_to_descendants(self):
+        class Base(RequiredAttributesMixin):
+            required_attributes = ["name"]
+            name = REQUIRED
+
+        class StillAbstract(Base):
+            is_base_class = True
+
+        class Named(StillAbstract):
+            name = "widget"
+
+        assert Named.name == "widget"

@@ -1,5 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
@@ -38,6 +39,15 @@ class WidgetSerializerWithOwnerInclude(BaseModelSerializer):
         relational_fields = {"owner": relational_serializer(OwnerSerializer)}
 
 
+class WidgetSerializerWithWriteOnlyCount(BaseModelSerializer):
+    exempt_from_registry = True
+
+    class Meta:
+        model = Widget
+        fields = ["id", "name", "count"]
+        write_only_fields = ["count"]
+
+
 class TestBaseModelSerializer:
     def test_registers_itself_in_the_model_registry(self):
         assert ModelSerializerRegistryMixin.get_for_model(Widget) is WidgetSerializer
@@ -49,6 +59,26 @@ class TestBaseModelSerializer:
         updated = serializer.save()
         assert updated.name == "bolt"
         assert updated.count == 2
+
+    def test_write_only_fields_still_works_through_the_composition(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+        serializer = WidgetSerializerWithWriteOnlyCount(widget, data={"name": "bolt", "count": 5})
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        assert updated.count == 5
+        assert "count" not in WidgetSerializerWithWriteOnlyCount(updated).data
+
+    def test_write_only_and_create_only_on_the_same_field_raises_at_class_definition_time(self):
+        with pytest.raises(ImproperlyConfigured, match="count"):
+
+            class ConflictingSerializer(BaseModelSerializer):
+                exempt_from_registry = True
+
+                class Meta:
+                    model = Widget
+                    fields = ["id", "name", "count"]
+                    create_only_fields = ["count"]
+                    write_only_fields = ["count"]
 
     def test_current_request_and_current_user_helpers_are_available(self):
         serializer = WidgetSerializer()

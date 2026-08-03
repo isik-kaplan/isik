@@ -50,6 +50,28 @@ class Widget(BaseModel):
         app_label = "testapp"
 
 
+class WidgetProfile(BaseModel):
+    """Reverse-O2O counterpart to Widget, for exercising FlattenedOneToOneMixin against a real
+    one-to-one relation instead of a hand-built one."""
+
+    widget = models.OneToOneField(Widget, on_delete=models.CASCADE, related_name="profile")
+    bio = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        app_label = "testapp"
+
+
+class WidgetSettings(BaseModel):
+    """Second reverse-O2O counterpart to Widget - only used to exercise
+    FlattenedOneToOneMixin's field-name-collision check against two independent accessors."""
+
+    widget = models.OneToOneField(Widget, on_delete=models.CASCADE, related_name="settings")
+    bio = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        app_label = "testapp"
+
+
 class Tag(BaseModel):
     label = models.CharField(max_length=100)
 

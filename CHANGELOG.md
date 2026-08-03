@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-03
+
 ### Added
 
 - `config.ref()` (and `ref()`/`Ref` in `isik.common.config`) lets a caster's
@@ -15,7 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   static value. Referenced settings are resolved through their own caster/environment
   variable and can chain through further refs; unknown targets, nested-config targets, and
   ref cycles raise `ConfigError`.
-- Documentation across the DRF, feedback, tags, and templated_fields modules.
+- `is_base_class = True` on `RequiredAttributesMixin`, `ViewSetRegistryMixin`, and
+  `ModelSerializerRegistryMixin` marks a class as a new base rather than a leaf: it's
+  exempted from the required-attributes check without redeclaring `required_attributes`,
+  and the two registry mixins fork a private `model_map` for that branch - so a project can
+  build several independent `BaseModelViewSet`/`BaseModelSerializer` hierarchies (e.g. one
+  per API) without them fighting over one global registry.
+- `WriteOnlyFieldsMixin` (`isik.django.drf.serializers`) - `Meta.write_only_fields` marks
+  fields settable but never serialized, the `create_only_fields` counterpart for secrets.
+  Composed into `BaseModelSerializer`. A field in both `write_only_fields` and
+  `create_only_fields` raises `ImproperlyConfigured` at class-definition time instead of an
+  opaque assertion error on the first update request.
+- `none_during_schema_generation` (`isik.django.drf.viewsets`) - decorator for a
+  `get_queryset()` override that returns `self.model.objects.none()` during
+  drf-spectacular/drf-yasg schema generation instead of running against
+  `self.request.user` (which is `AnonymousUser` at that point).
+- `FlattenedOneToOneMixin` (`isik.django.drf.serializers`) - `Meta.flattened_one_to_one_fields`
+  exposes a reverse one-to-one relation's fields as if they were declared directly on the
+  parent serializer, read and write-through (creates the related row on write if missing,
+  updates it in place otherwise, both in one atomic transaction with the parent). Composed
+  into `BaseModelSerializer`.
+- Documentation across the DRF, feedback, tags, and templated_fields modules, plus a note on
+  `BaseModel` about a `django_lifecycle`/`classproperty` interaction that can cause infinite
+  recursion.
 
 ### Fixed
 

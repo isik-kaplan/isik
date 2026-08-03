@@ -13,3 +13,4 @@ class WidgetViewSet(ModelViewSet):
 ```
 
 - `get_paginated_response_schema` is overridden to match, for drf-spectacular/OpenAPI generation to describe the actual response shape instead of DRF's default `next`/`previous`/`results`.
+- `?page_size=` is capped at 1000 by default, so a client can't request an unbounded page size. Override the cap with a `DRF_PAGINATION_MAX_PAGE_SIZE` Django setting, or set `max_page_size` directly on a subclass to skip the settings lookup entirely and hardcode a different limit.
