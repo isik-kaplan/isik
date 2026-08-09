@@ -2,6 +2,8 @@ from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import transaction
 from django.db.models.fields.reverse_related import OneToOneRel
 
+from isik.django.drf.error_handling import django_to_drf_validation_error
+
 
 def _validate_field_names(cls):
     own_meta = cls.__dict__.get("Meta")
@@ -60,7 +62,12 @@ class _OneToOneWriteMixin:
         flattened = getattr(self.Meta, "flattened_one_to_one_fields", None) or {}
         return {name: validated_data.pop(name) for name in flattened if name in validated_data}
 
+    @django_to_drf_validation_error
     def _write_flattened_one_to_one(self, parent, field_name, data):
+        # Bypasses the nested serializer's own is_valid() entirely (see the "known non-goal" on
+        # FlattenedOneToOneMixin), so full_clean() - not DRF - is what actually enforces any
+        # model-level validator/clean() on the related object. Translated here so that surfaces
+        # as a normal DRF ValidationError (400) instead of an unhandled 500.
         related = getattr(parent, field_name, None)  # None on the reverse accessor's DoesNotExist
         if related is not None:
             for attr, value in data.items():
@@ -96,7 +103,10 @@ class FlattenedOneToOneMixin(_OneToOneWriteMixin):
 
     Known non-goal: only per-field validation on the nested serializer carries over (fields are
     harvested individually, not run through the nested serializer's own `is_valid()`) -
-    `Meta.validators`/object-level `validate()` on the nested serializer class do not apply.
+    `Meta.validators`/object-level `validate()` on the nested serializer class do not apply. A
+    model-level validator/`clean()` on the related object still applies though, via `full_clean()`
+    inside its own `save()` - any Django `ValidationError` raised there is translated into a DRF
+    one (`django_to_drf_validation_error`), so it comes back as a normal 400 instead of a 500.
 
     Not combined into `MetaCombiningMixin`'s `meta_fields_to_combine` by default -
     `flattened_one_to_one_fields` is inherently per-model, unlike `relational_fields`. A project

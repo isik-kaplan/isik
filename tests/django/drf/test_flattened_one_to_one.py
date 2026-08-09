@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from isik.django.drf.serializers.flattened_one_to_one import FlattenedOneToOneMixin
 from tests.testapp.models import Widget, WidgetProfile, WidgetSettings
@@ -85,6 +86,33 @@ class TestFlattenedOneToOneMixinWrite:
         widget.refresh_from_db()
         assert widget.name == "renamed"
         assert widget.profile.bio == "untouched"
+
+
+class TestFlattenedOneToOneMixinValidationTranslation:
+    def test_a_model_level_clean_error_on_create_becomes_a_drf_validation_error(self):
+        # WidgetProfile.clean() rejects bio="banned" - a check DRF's automatic field validation
+        # has no visibility into, since it's only reachable via full_clean() inside save().
+        serializer = WidgetSerializer(data={"name": "bolt", "bio": "banned"})
+        serializer.is_valid(raise_exception=True)
+        with pytest.raises(DRFValidationError) as exc_info:
+            serializer.save()
+        assert exc_info.value.detail == {"bio": ["This bio is not allowed."]}
+
+    def test_a_model_level_clean_error_on_create_still_rolls_back_the_parent(self):
+        serializer = WidgetSerializer(data={"name": "bolt", "bio": "banned"})
+        serializer.is_valid(raise_exception=True)
+        with pytest.raises(DRFValidationError):
+            serializer.save()
+        assert not Widget.objects.filter(name="bolt").exists()
+
+    def test_a_model_level_clean_error_on_update_becomes_a_drf_validation_error(self):
+        widget = Widget.objects.create(name="bolt")
+        WidgetProfile.objects.create(widget=widget, bio="fine")
+        serializer = WidgetSerializer(widget, data={"bio": "banned"}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        with pytest.raises(DRFValidationError) as exc_info:
+            serializer.save()
+        assert exc_info.value.detail == {"bio": ["This bio is not allowed."]}
 
 
 class TestFlattenedOneToOneMixinDeleteCascade:

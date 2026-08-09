@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `action`/`created_after`/`created_before`/`object_id`/`actor` out of the box and extensible via
   `extra_history_filters`.
 
+### Fixed
+
+- `FlattenedOneToOneMixin`: a Django `ValidationError` raised by a model-level validator/`clean()`
+  on the related object (only reachable via `full_clean()` inside its own `save()`, invisible to
+  DRF's automatic per-field validation) is now translated into a DRF `ValidationError` via
+  `django_to_drf_validation_error`, instead of surfacing as an unhandled 500.
+
 ## [0.3.0] - 2026-08-03
 
 ### Added

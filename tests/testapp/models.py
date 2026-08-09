@@ -60,6 +60,13 @@ class WidgetProfile(BaseModel):
     class Meta:
         app_label = "testapp"
 
+    def clean(self):
+        # An object-level check, invisible to DRF's automatic per-field validation - exercises
+        # FlattenedOneToOneMixin's Django ValidationError -> DRF ValidationError translation for
+        # a failure that can only surface via full_clean(), not serializer.is_valid().
+        if self.bio == "banned":
+            raise ValidationError({"bio": "This bio is not allowed."})
+
 
 class WidgetSettings(BaseModel):
     """Second reverse-O2O counterpart to Widget - only used to exercise
