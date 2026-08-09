@@ -1,9 +1,5 @@
 # isik docs
 
-Contents, mirroring the `isik/` package layout. Each linked page is short: what it does, when to
-reach for it, one usage example. Folder pages (`README.md`) are one-line-per-module tables of
-contents.
-
 ## isik.common
 
 - [common/](common/README.md)
