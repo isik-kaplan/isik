@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `event_model_for`/`history_middleware_installed` (`isik.django.apps.common.db`) - resolve the
+  Event model django-pghistory generated for a `@track_events()`-tracked model, and detect
+  whether `pghistory.middleware.HistoryMiddleware` is installed.
+- `generic_history_serializer` (`isik.django.drf.serializers`) - a read-only serializer over a
+  `@track_events()`-tracked model's history: `event_id`/`event_created_at`/`action`, a SQL-computed
+  `changes` diff against the previous event of the same object, and every tracked field flattened
+  at the top level, typed to match the real model field.
+- `HistoryMixin`/`context_filter` (`isik.django.drf.viewsets`) - adds two paginated actions to a
+  `BaseModelViewSet` for a `@track_events()`-tracked model: `GET <endpoint>/{pk}/history/` (one
+  object, governed by the viewset's own permissions) and `GET <endpoint>/history/` (every
+  instance, restricted to superusers via `history_list_permission_classes`). Both filterable on
+  `action`/`created_after`/`created_before`/`object_id`/`actor` out of the box and extensible via
+  `extra_history_filters`.
+
 ## [0.3.0] - 2026-08-03
 
 ### Added

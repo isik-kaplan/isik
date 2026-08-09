@@ -17,3 +17,14 @@ class Widget(BaseModel):
 - Generates a `WidgetEvent` history model with a `pgh_label` (`"insert"`/`"update"`/`"delete"`)
   and `pgh_obj`/`pgh_obj_id` columns, populated by real Postgres triggers on `Widget` — requires
   `pghistory` and a Postgres backend; nothing fires without a real database.
+
+`event_model_for(model)` returns that generated Event model - `event_model_for(Widget) is
+WidgetEvent` - raising `ImproperlyConfigured` if `model` was never tracked. `isik.django.drf`'s
+`generic_history_serializer()`/`HistoryMixin` (see
+[drf/serializers/history.md](../../../drf/serializers/history.md)/
+[drf/viewsets/history.md](../../../drf/viewsets/history.md)) are built on top of it.
+
+`history_middleware_installed()` is `True` if `pghistory.middleware.HistoryMiddleware` (or a
+subclass) is in `settings.MIDDLEWARE` - that's what stamps `user`/`url` into pghistory's context,
+so tracked events carry an actor. Used by `HistoryMixin` to add actor filtering/serialization only
+when it'll actually have data.
