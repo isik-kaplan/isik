@@ -1,4 +1,5 @@
 import threading
+import uuid
 from contextvars import ContextVar
 
 from isik.common.utils.concurrency import ContextLocal, ThreadLocal, ThreadLock
@@ -37,7 +38,11 @@ class TestThreadLocal:
         assert seen["value"] == "unset"
 
     def test_double_checked_lock_does_not_overwrite_a_concurrently_created_entry(self, monkeypatch):
-        name = "RACE_THREAD_LOCAL"
+        # A fresh name per run, not a fixed literal - _registry is process-global and this test
+        # deliberately leaves an entry behind under it, so a fixed name would only pass the first
+        # time this test runs in a given process (e.g. under a mutation-testing tool that
+        # re-invokes pytest without restarting the process).
+        name = f"RACE_THREAD_LOCAL_{uuid.uuid4().hex}"
         sentinel = object()
         monkeypatch.setattr(
             ThreadLocal,
@@ -57,7 +62,8 @@ class TestThreadLock:
         lock.release()
 
     def test_double_checked_lock_does_not_overwrite_a_concurrently_created_entry(self, monkeypatch):
-        name = "RACE_THREAD_LOCK"
+        # A fresh name per run - see the matching ThreadLocal test's comment.
+        name = f"RACE_THREAD_LOCK_{uuid.uuid4().hex}"
         sentinel = object()
         monkeypatch.setattr(
             ThreadLock,
@@ -83,7 +89,8 @@ class TestContextLocal:
         assert local.get("missing", "fallback") == "fallback"
 
     def test_double_checked_lock_does_not_overwrite_a_concurrently_created_entry(self, monkeypatch):
-        name = "RACE_CONTEXT_LOCAL"
+        # A fresh name per run - see the matching ThreadLocal test's comment.
+        name = f"RACE_CONTEXT_LOCAL_{uuid.uuid4().hex}"
         sentinel = object()
         monkeypatch.setattr(
             ContextLocal,
@@ -93,7 +100,9 @@ class TestContextLocal:
         assert ContextLocal(name) is sentinel
 
     def test_get_var_double_checked_lock_does_not_overwrite_a_concurrently_created_var(self, monkeypatch):
-        local = ContextLocal("RACE_CONTEXT_LOCAL_GET_VAR")
+        # A fresh name per run too - local itself would otherwise be the stale instance from a
+        # previous in-process run (same singleton-by-name registry), not a new one.
+        local = ContextLocal(f"RACE_CONTEXT_LOCAL_GET_VAR_{uuid.uuid4().hex}")
         vars_ = object.__getattribute__(local, "_vars")
         sentinel = ContextVar("sentinel")
         monkeypatch.setattr(

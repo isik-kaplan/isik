@@ -14,6 +14,11 @@ class ViewSetRegistryMixin:
     abstract intermediate still relying on RequiredAttributesMixin to enforce it later) is skipped
     rather than registered under a placeholder - as is one with `exempt_from_registry = True`.
 
+    The same class body redefining itself under the same name/module (e.g. a test's inline
+    ViewSet re-executing because the test itself ran twice in one process, or a dev-server
+    autoreload) just replaces the stale entry instead of raising - only a genuinely different
+    class claiming an already-registered model is treated as a conflict.
+
     Set `is_base_class = True` on a project-level intermediate (e.g. a per-API
     `class BaseModelViewSet(_BaseModelViewSet): is_base_class = True`) to give that branch its own
     private registry instead of sharing this one - several independent hierarchies can then each
@@ -45,7 +50,8 @@ class ViewSetRegistryMixin:
             return
         if cls.model in cls.model_map:
             existing = cls.model_map[cls.model]
-            raise ImproperlyConfigured(f"{cls.model} is already registered to {existing.__name__}")
+            if (existing.__module__, existing.__qualname__) != (cls.__module__, cls.__qualname__):
+                raise ImproperlyConfigured(f"{cls.model} is already registered to {existing.__name__}")
         cls.model_map[cls.model] = cls
 
     @classmethod

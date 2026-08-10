@@ -18,6 +18,11 @@ class ModelSerializerRegistryMixin:
     `exempt_from_registry = True` on a subclass that shouldn't be registered at all - e.g. a
     schema-only serializer, or an intentional second serializer for a model already registered.
 
+    The same class body redefining itself under the same name/module (e.g. a test's inline
+    serializer re-executing because the test itself ran twice in one process, or a dev-server
+    autoreload) just replaces the stale entry instead of raising - only a genuinely different
+    class claiming an already-registered model is treated as a conflict.
+
     Set `is_base_class = True` on a project-level intermediate to give that branch its own private
     registry instead of sharing this one - several independent hierarchies can then each register
     the same model without colliding (see ViewSetRegistryMixin's docstring for the matching
@@ -42,7 +47,8 @@ class ModelSerializerRegistryMixin:
             return
         if model in cls.model_map:
             existing = cls.model_map[model]
-            raise ImproperlyConfigured(f"{model} is already registered to {existing.__name__}")
+            if (existing.__module__, existing.__qualname__) != (cls.__module__, cls.__qualname__):
+                raise ImproperlyConfigured(f"{model} is already registered to {existing.__name__}")
         cls.model_map[model] = cls
 
     @classmethod

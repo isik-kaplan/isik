@@ -42,10 +42,12 @@ def test_composes_with_is_owner_for_a_private_comment_viewset(alice, bob, post):
     alice_comment = alice.comment(post, "alice's comment")
 
     class CommentViewSet(BaseModelViewSet):
+        # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.comments.model
         endpoint = "comments"
         serializer_class = CommentSerializer
         permission_classes = [is_owner("user")]
+        exempt_from_registry = True
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)

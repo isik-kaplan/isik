@@ -1,0 +1,78 @@
+name: Mutation testing
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: isik_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: isik_test
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+
+      - name: Run mutation testing
+        run: |
+          uv run mutmut run
+
+      - name: Export stats
+        run: |
+          uv run mutmut export-cicd-stats
+
+      - name: Upload full results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-results
+          path: mutants/mutmut-cicd-stats.json
+          retention-days: 14
+
+      - name: Fail if any mutant survived
+        run: |
+          uv run python -c "
+          import json
+          stats = json.load(open('mutants/mutmut-cicd-stats.json'))
+          survived = stats['survived']
+          if survived:
+              print(f'{survived} mutant(s) survived - run \`uv run mutmut run\` locally, then')
+              print('\`uv run mutmut results\` to see which, and either add a test that kills')
+              print('each one or mark it \`# pragma: no mutate\` with a comment explaining why')
+              print('it is equivalent.')
+              raise SystemExit(1)
+          print('No mutants survived.')
+          "

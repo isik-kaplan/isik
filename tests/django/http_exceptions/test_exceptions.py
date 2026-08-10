@@ -74,12 +74,19 @@ class TestRegisterDefaultView:
 
             return HttpResponse("default")
 
-        _IsolatedException.register_default_view(view)
-        assert _IsolatedException._has_default_view() is True
+        try:
+            _IsolatedException.register_default_view(view)
+            assert _IsolatedException._has_default_view() is True
 
-        response = _IsolatedException._get_default_view_response(request=None)
-        assert response.content == b"default"
-        assert response.status_code == 599
+            response = _IsolatedException._get_default_view_response(request=None)
+            assert response.content == b"default"
+            assert response.status_code == 599
+        finally:
+            # _IsolatedException is a module-level class, and register_default_view() sets a
+            # class attribute with no counterpart to unset it - clean up so this test's effect
+            # doesn't leak into test_has_no_default_view_by_default on a second in-process run of
+            # this file (e.g. a mutation-testing tool re-invoking pytest without restarting).
+            del _IsolatedException._default_view
 
 
 class TestErrorHandlers:

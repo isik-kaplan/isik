@@ -6,6 +6,8 @@ __pycache__
 .coverage
 htmlcov
 .hypothesis
+mutants
+.mutmut-cache
 
 # IDEs & Editors
 .idea

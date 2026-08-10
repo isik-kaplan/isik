@@ -44,10 +44,15 @@ def test_composes_with_is_owner_for_a_private_bookmark_viewset(alice, bob, post)
     alice_bookmark = Post.bookmarks.model.objects.get(target=post, user=alice)
 
     class BookmarkViewSet(BaseModelViewSet):
+        # exempt_from_registry - this class body re-executes every time the test runs, and the
+        # registry is process-global; without this, a second in-process run of this test (e.g. a
+        # mutation-testing tool re-invoking pytest without restarting the process) would collide
+        # with itself instead of the actual host application.
         model = Post.bookmarks.model
         endpoint = "bookmarks"
         serializer_class = BookmarkSerializer
         permission_classes = [is_owner("user")]
+        exempt_from_registry = True
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)

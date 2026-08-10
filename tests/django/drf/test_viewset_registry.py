@@ -21,6 +21,10 @@ class DummyUnregisteredModel:
     pass
 
 
+class DummyRedefinedModel:
+    pass
+
+
 class WidgetViewSet(ViewSetRegistryMixin, ModelViewSet):
     model = DummyWidgetModel
 
@@ -44,6 +48,22 @@ class TestViewSetRegistryMixin:
             exempt_from_registry = True
 
         assert ViewSetRegistryMixin.get_for_model(DummyTagModel) is None
+
+    def test_the_same_class_body_re_registering_does_not_raise(self):
+        # Same __module__/__qualname__ every call (both defined at this one lexical spot) but a
+        # genuinely different class object each time - simulates a class body re-executing in the
+        # same process (e.g. a test rerunning under a tool that doesn't restart the interpreter).
+        def define():
+            class RedefinedViewSet(ViewSetRegistryMixin, ModelViewSet):
+                model = DummyRedefinedModel
+
+            return RedefinedViewSet
+
+        first = define()
+        second = define()
+
+        assert first is not second
+        assert ViewSetRegistryMixin.get_for_model(DummyRedefinedModel) is second
 
     def test_a_viewset_with_no_model_set_yet_is_not_registered(self):
         class AbstractIntermediate(ViewSetRegistryMixin, ModelViewSet):

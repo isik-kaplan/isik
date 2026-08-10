@@ -54,10 +54,12 @@ def test_composes_with_is_owner_for_a_private_vote_viewset(alice, bob, post):
     alice_vote = Post.votes.model.objects.get(target=post, user=alice)
 
     class VoteViewSet(BaseModelViewSet):
+        # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.votes.model
         endpoint = "votes"
         serializer_class = VoteSerializer
         permission_classes = [is_owner("user")]
+        exempt_from_registry = True
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)

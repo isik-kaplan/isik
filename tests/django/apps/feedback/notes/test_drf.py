@@ -48,10 +48,12 @@ def test_composes_with_is_owner_for_a_private_notes_viewset(alice, bob, post):
     alice_note = alice.add_note(post, "alice's private note")
 
     class NoteViewSet(BaseModelViewSet):
+        # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.notes.model
         endpoint = "notes"
         serializer_class = NoteSerializer
         permission_classes = [is_owner("user")]
+        exempt_from_registry = True
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)

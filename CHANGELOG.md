@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-10
+
 ### Added
 
 - `event_model_for`/`history_middleware_installed` (`isik.django.apps.common.db`) - resolve the
@@ -22,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instance, restricted to superusers via `history_list_permission_classes`). Both filterable on
   `action`/`created_after`/`created_before`/`object_id`/`actor` out of the box and extensible via
   `extra_history_filters`.
+- Mutation testing via `mutmut` across `isik/`, run in CI (`.github/workflows/mutation.yml`) on
+  every push/PR to `master` and gated on zero surviving mutants; genuinely equivalent mutants are
+  marked `# pragma: no mutate` instead of chased with a test.
 
 ### Fixed
 
@@ -29,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the related object (only reachable via `full_clean()` inside its own `save()`, invisible to
   DRF's automatic per-field validation) is now translated into a DRF `ValidationError` via
   `django_to_drf_validation_error`, instead of surfacing as an unhandled 500.
+- `ViewSetRegistryMixin`/`ModelSerializerRegistryMixin`: a class redefining itself under the same
+  `__module__`/`__qualname__` (e.g. the same test rerunning in one process, or dev-server
+  autoreload) no longer raises `ImproperlyConfigured` - only a genuinely different class claiming
+  an already-registered model is treated as a conflict.
 
 ## [0.3.0] - 2026-08-03
 

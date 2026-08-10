@@ -19,6 +19,10 @@ class DummyUnregisteredModel:
     pass
 
 
+class DummyRedefinedModel:
+    pass
+
+
 class WidgetSerializer(ModelSerializerRegistryMixin):
     class Meta:
         model = DummyWidgetModel
@@ -52,6 +56,24 @@ class TestModelSerializerRegistryMixin:
                 class Meta:
                     model = DummyWidgetModel
                     fields = ["id"]
+
+    def test_the_same_class_body_re_registering_does_not_raise(self):
+        # Same __module__/__qualname__ every call (both defined at this one lexical spot) but a
+        # genuinely different class object each time - simulates a class body re-executing in the
+        # same process (e.g. a test rerunning under a tool that doesn't restart the interpreter).
+        def define():
+            class RedefinedSerializer(ModelSerializerRegistryMixin):
+                class Meta:
+                    model = DummyRedefinedModel
+                    fields = ["id"]
+
+            return RedefinedSerializer
+
+        first = define()
+        second = define()
+
+        assert first is not second
+        assert ModelSerializerRegistryMixin.get_for_model(DummyRedefinedModel) is second
 
     def test_a_serializer_with_a_meta_but_no_model_is_simply_skipped(self):
         class NoModelSerializer(ModelSerializerRegistryMixin):
