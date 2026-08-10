@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-10
+
+### Fixed
+
+- `context_filter()`'s default filter (`isik.django.drf.viewsets`): `NumberFilter` cleans into a
+  `Decimal`, which psycopg's JSON parameter adapter can't serialize when comparing against a
+  pghistory context key transform - now defaults to an `IntegerField`-based filter instead.
+
+### Changed
+
+- Removed dead code exposed by mutation testing: `orm.starts_with()`'s redundant `output_field`
+  (`Case` already infers it), `AutoGenericForeignKey`'s no-op `self.name = name` and `db_index=True`
+  kwarg (both always overwritten/defaulted downstream), `CreateOnlyFieldsMixin`'s no-op
+  `required=False` (DRF's own `include_extra_kwargs()` strips it once `read_only` is set), and the
+  `target_name`/`target_related_name` defaults duplicated on `tags()`/`notes()`/`votes()`/
+  `bookmarks()`/`comments()`'s internal `_XxxField.__init__` classes (now required kwargs, since
+  their public makers always forward explicit values).
+- Closed out the mutation-testing gate added in 0.4.0 from 654 surviving mutants to zero: real
+  tests added wherever a mutation was actually observable (field-forwarding methods on the
+  votes/bookmarks/notes/comments mixins, unique-constraint/constraint-name correctness asserted
+  against live model meta instead of pre-migrated DB schema, exact error-message assertions,
+  kwargs-forwarding), everything else marked `# pragma: no mutate` only once proven equivalent.
+
 ## [0.4.0] - 2026-08-10
 
 ### Added

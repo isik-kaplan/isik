@@ -44,7 +44,7 @@ def test_disagreeing_cookie_and_header_raise_suspicious_operation(middleware, rf
         HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}=cookie-key",
         headers={settings.SESSION_HEADER_NAME: "header-key"},
     )
-    with pytest.raises(SuspiciousOperation):
+    with pytest.raises(SuspiciousOperation, match="^Session key mismatch$"):
         middleware.process_request(request)
 
 
@@ -56,5 +56,7 @@ def test_no_cookie_or_header_starts_a_new_anonymous_session(middleware, rf):
 
 def test_missing_session_header_name_setting_raises_improperly_configured(settings):
     del settings.SESSION_HEADER_NAME
-    with pytest.raises(ImproperlyConfigured, match="SESSION_HEADER_NAME"):
+    with pytest.raises(
+        ImproperlyConfigured, match="^CookieORHeaderSessionMiddleware requires settings.SESSION_HEADER_NAME"
+    ):
         CookieORHeaderSessionMiddleware(get_response=lambda request: None)

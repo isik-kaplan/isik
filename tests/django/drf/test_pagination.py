@@ -61,3 +61,29 @@ def test_get_paginated_response_schema_lists_the_expected_fields():
     assert schema["required"] == ["count", "page_size", "total_pages", "results"]
     assert set(schema["properties"]) == {"count", "page_size", "total_pages", "results"}
     assert schema["properties"]["results"] == {"type": "object", "items": {}}
+
+
+def test_get_paginated_response_schema_matches_exactly():
+    schema = PageNumberPagination().get_paginated_response_schema({"type": "object", "items": {}})
+    assert schema == {
+        "type": "object",
+        "properties": {
+            "count": {
+                "type": "integer",
+                "description": "Total number of items available.",
+                "example": 1102,
+            },
+            "page_size": {
+                "type": "integer",
+                "description": "Number of results to return per page.",
+                "example": 100,
+            },
+            "total_pages": {
+                "type": "integer",
+                "description": "Total number of pages.",
+                "example": 17,
+            },
+            "results": {"type": "object", "items": {}},
+        },
+        "required": ["count", "page_size", "total_pages", "results"],
+    }

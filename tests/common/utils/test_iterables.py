@@ -23,6 +23,11 @@ class TestFirstOf:
     def test_uses_a_custom_predicate(self):
         assert first_of([None, "a", "b"], pred=not_none) == "a"
 
+    def test_the_predicate_is_actually_used_not_just_plain_truthiness(self):
+        # filter(None, ...) (plain truthy filtering) would skip 0 as falsy and return 1 instead -
+        # this pred looks for 0 specifically, which only a real pred= passthrough finds.
+        assert first_of([1, 0, 2], pred=lambda x: x == 0) == 0
+
     @given(st.lists(st.none(), max_size=5))
     def test_all_falsy_values_return_default(self, values):
         assert first_of(values, default="fallback") == "fallback"

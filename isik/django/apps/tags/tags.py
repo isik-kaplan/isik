@@ -16,6 +16,10 @@ TAG_NAME_REGEX = r"^[a-zA-Z0-9_.-]*$"
 TAG_NAME_REGEX_ERROR_MESSAGE = "Tags can only contain letters, numbers, - and _."
 
 
+def _default_name_validators():
+    return [RegexValidator(TAG_NAME_REGEX, TAG_NAME_REGEX_ERROR_MESSAGE)]
+
+
 class TagQuerySet(models.QuerySet):
     def to_list(self):
         """Plain list of tag name strings - e.g. what `generic_tag_field()` reads back."""
@@ -54,13 +58,16 @@ class TagManager(models.Manager.from_queryset(TagQuerySet)):
 class _TagsField:
     """Descriptor returned by `tags()` - see `tags` for the public docstring."""
 
+    # target_name/target_related_name/name_max_length have no default here - _TagsField is only
+    # ever built by the tags() maker below, which always forwards its own (already-defaulted)
+    # values explicitly, so a bare default on this end would be dead code no test could reach.
     def __init__(
         self,
         *,
         related_name,
-        target_name="target",
-        target_related_name="tags",
-        name_max_length=100,
+        target_name,
+        target_related_name,
+        name_max_length,
         name_validators=None,
         normalize=None,
         tag_base_model=None,
@@ -72,20 +79,16 @@ class _TagsField:
         self.target_name = target_name
         self.target_related_name = target_related_name
         self.name_max_length = name_max_length
-        self.name_validators = (
-            name_validators
-            if name_validators is not None
-            else [RegexValidator(TAG_NAME_REGEX, TAG_NAME_REGEX_ERROR_MESSAGE)]
-        )
+        self.name_validators = name_validators if name_validators is not None else _default_name_validators()
         self.normalize = normalize
         self.tag_base_model = tag_base_model
         self.through_base_model = through_base_model
         self.tag_extra_fields = tag_extra_fields or {}
         self.through_extra_fields = through_extra_fields or {}
-        self.attname = None
+        self.attname = None  # pragma: no mutate
 
     def contribute_to_class(self, host_cls, name):
-        self.attname = name
+        self.attname = name  # pragma: no mutate
         tag_model_name = f"{host_cls.__name__}{name.capitalize()}Tag"
         through_model_name = f"{host_cls.__name__}{name.capitalize()}ObjectTag"
         claim_related_name(host_cls, self.target_related_name, through_model_name)

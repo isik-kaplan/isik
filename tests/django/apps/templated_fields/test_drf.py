@@ -74,9 +74,7 @@ class TestWriting:
 
     def test_writing_a_blank_value_clears_the_field_without_running_it_through_validate_syntax(self, post):
         Serializer = _serializer_cls()
-        serializer = Serializer(
-            post, data={"title": post.title, "default_text": "", "greeting": post.greeting}
-        )
+        serializer = Serializer(post, data={"title": post.title, "default_text": "", "greeting": post.greeting})
         assert serializer.is_valid(), serializer.errors
         serializer.save()
         assert post.default_text == ""

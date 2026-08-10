@@ -59,6 +59,29 @@ class WidgetSerializerWithMethodField(ConditionalSerializerMixin, serializers.Mo
         return OwnerSerializer(obj.owner, context=self.context)
 
 
+class TestSerializerMethodIncludeFieldNameDerivation:
+    """A fresh decorated method defined inside the test, not WidgetSerializerWithMethodField's
+    module-level get_owner_detail - the decorator runs once at class-body execution time (import),
+    so a module-level use would never observe a broken field_name derivation under a tool that
+    reruns pytest in the same process (e.g. mutation testing)."""
+
+    def test_field_name_strips_the_get_prefix_for_the_path_override(self, widget, make_request):
+        class FreshSerializer(ConditionalSerializerMixin, serializers.ModelSerializer):
+            owner_detail = serializers.SerializerMethodField()
+
+            class Meta:
+                model = Widget
+                fields = ["id", "owner_detail"]
+
+            @serializer_method_include
+            def get_owner_detail(self, obj):
+                return OwnerSerializer(obj.owner, context=self.context)
+
+        request = make_request("/", {"only": "owner_detail.username"})
+        serializer = FreshSerializer(widget, context={"request": request})
+        assert serializer.data["owner_detail"] == {"username": widget.owner.username}
+
+
 @pytest.fixture
 def make_request():
     factory = APIRequestFactory()
@@ -148,6 +171,13 @@ class TestRelationalSerializer:
     def test_each_call_returns_a_fresh_instance(self):
         factory = relational_serializer(OwnerSerializer)
         assert factory() is not factory()
+
+    def test_positional_args_reach_the_underlying_serializer(self, django_user_model):
+        # OwnerSerializer's first positional arg is `instance` (ModelSerializer's own) - passing
+        # it positionally through relational_serializer has to actually reach the constructor.
+        alice = django_user_model.objects.create_user(username="alice", password="password")
+        instance = relational_serializer(OwnerSerializer, alice)()
+        assert instance.instance is alice
 
 
 class TestDottedIncludes:
@@ -269,6 +299,20 @@ class TestExcludeFilter:
         request = make_request("/", {"include": "owner", "exclude": "owner.username"})
         serializer = WidgetSerializer(widget, context={"request": request})
         assert serializer.data["owner"] == {"id": widget.owner_id}
+
+    def test_a_field_literally_named_with_a_dot_is_never_treated_as_its_own_to_exclude(self, make_request):
+        # A dot always means "reach past me into a nested field" - a top-level field whose own
+        # name happens to contain one (only reachable by bypassing normal class-body syntax, e.g.
+        # via a dynamically built serializer) must stay un-excludable, not be mistaken for a path
+        # into some deeper serializer that doesn't exist.
+        DottedSerializer = type(
+            "DottedSerializer",
+            (ConditionalSerializerMixin, serializers.Serializer),
+            {"a.b": serializers.CharField(default="x"), "normal": serializers.CharField(default="y")},
+        )
+        request = make_request("/", {"exclude": "a.b"})
+        serializer = DottedSerializer(context={"request": request})
+        assert set(serializer.fields) == {"a.b", "normal"}
 
 
 class TestSerializerMethodInclude:

@@ -2,6 +2,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.test import override_settings
 
+from isik.django.apps.templated_fields.delimiters import TemplateDelimiters
 from isik.django.apps.templated_fields.field import TemplateCharField, TemplateString, TemplateTextField
 from isik.django.apps.templated_fields.policy import TemplatePolicy
 from tests.testapp.models import TemplatedPost, default_text_context
@@ -92,7 +93,7 @@ class TestResourceLimitsEnforcedThroughFieldValidate:
         field = TemplateCharField(
             max_length=500, available=default_text_context, policy=TemplatePolicy(max_source_length=5)
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="over the 5 limit"):
             field.clean("x" * 100, None)
 
     def test_a_template_within_the_source_length_limit_is_accepted(self):
@@ -107,6 +108,13 @@ class TestResourceLimitsEnforcedThroughFieldValidate:
         # bypassing that model-level skip.
         field = TemplateCharField(max_length=500, available=default_text_context, blank=True)
         assert field.clean("", None) == ""
+
+
+def test_positional_args_still_reach_the_underlying_django_field():
+    # CharField's own first positional arg is verbose_name - available/policy/etc. are all
+    # keyword-only on our side, but *args still has to reach super().__init__() untouched.
+    field = TemplateCharField("Default Text", max_length=500, available=default_text_context)
+    assert field.verbose_name == "Default Text"
 
 
 class TestUndefinedResolution:
@@ -143,14 +151,21 @@ class TestDeconstruct:
     roundtrip - what migration serialization actually relies on."""
 
     def test_char_field_deconstruct_roundtrips(self):
+        custom_delimiters = TemplateDelimiters(variable_start_string="<<", variable_end_string=">>")
         field = TemplateCharField(
-            max_length=123, available=default_text_context, policy=TemplatePolicy.PERMISSIVE(), undefined="blank"
+            max_length=123,
+            available=default_text_context,
+            policy=TemplatePolicy.PERMISSIVE(),
+            delimiters=custom_delimiters,
+            undefined="blank",
         )
         _name, _path, args, kwargs = field.deconstruct()
+        assert kwargs["delimiters"] == custom_delimiters
         reconstructed = TemplateCharField(*args, **kwargs)
         assert reconstructed.max_length == 123
         assert reconstructed.available is default_text_context
         assert reconstructed.policy == TemplatePolicy.PERMISSIVE()
+        assert reconstructed.delimiters == custom_delimiters
         assert reconstructed.undefined == "blank"
 
     def test_text_field_deconstruct_roundtrips(self):

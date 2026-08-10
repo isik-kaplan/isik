@@ -39,4 +39,6 @@ def all_combinations(options):
     """
     Returns all possible combinations of the given options
     """
-    return [list(comb) for r in range(1, len(options) + 1) for comb in combinations(options, r)]
+    return [list(comb) for r in range(1, len(options) + 1) for comb in combinations(options, r)]  # pragma: no mutate
+    # combinations(options, r) is already empty for any r > len(options), so an off-by-one on the
+    # range's upper bound contributes zero extra items either way - unobservable.

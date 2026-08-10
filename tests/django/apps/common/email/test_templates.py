@@ -14,6 +14,11 @@ def test_mjml_template_renders_context_and_compiles_to_html():
     assert "Welcome, Alice!" in result
 
 
+def test_mjml_template_strips_comments():
+    result = mjml_template("with_comment.mjml", {"name": "Alice"})
+    assert "a comment that disable_comments" not in result
+
+
 def test_text_template_forwards_the_request_so_context_processors_fire():
     request = RequestFactory().get("/hello/")
     result = text_template("request_aware.txt", {}, request)

@@ -5,7 +5,7 @@ from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMi
 
 class TestRequiredAttributesMixin:
     def test_raises_when_a_required_attribute_is_left_unset(self):
-        with pytest.raises(TypeError, match="must define a `name` attribute"):
+        with pytest.raises(TypeError, match="^Forgetful must define a `name` attribute$"):
 
             class Base(RequiredAttributesMixin):
                 required_attributes = ["name"]

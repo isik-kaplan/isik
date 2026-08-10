@@ -55,7 +55,7 @@ def test_raises_creates_a_callable_that_raises_on_call():
 
 class TestRequireExclusiveKeys:
     def test_raises_when_no_conditions_given(self):
-        with pytest.raises(ValueError, match="At least one condition"):
+        with pytest.raises(ValueError, match="^At least one condition dict must be provided\\.$"):
             require_exclusive_keys()
 
     def test_matching_a_single_condition_calls_the_function(self):

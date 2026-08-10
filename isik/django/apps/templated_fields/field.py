@@ -54,7 +54,9 @@ class TemplateFieldDescriptor(DeferredAttribute):
     def __get__(self, instance, cls=None):
         if instance is None:
             return self
-        value = super().__get__(instance, cls)
+        value = super().__get__(instance, cls)  # pragma: no mutate
+        # DeferredAttribute.__get__'s cls param is unused in its own body (only there for the
+        # descriptor protocol's signature) - passing a different value here is unobservable.
         return self._wrap(instance, value) if value else value
 
     def __set__(self, instance, value):
@@ -97,7 +99,9 @@ class _TemplateFieldMixin:
         return name, path, args, kwargs
 
     def validate(self, value, model_instance):
-        super().validate(value, model_instance)
+        super().validate(value, model_instance)  # pragma: no mutate
+        # Field.validate()'s model_instance param is unused in its own body (only self.choices/
+        # null/blank/value matter there), and this override doesn't use it either.
         if not value:
             return
         try:

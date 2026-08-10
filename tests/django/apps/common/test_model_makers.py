@@ -126,6 +126,55 @@ class TestExposeAndResolveField:
             _model_makers.resolve_field(Host(), None, _Marker, "thingable")
 
     @isolate_apps("tests.testapp")
+    def test_resolve_field_does_not_double_count_a_name_a_subclass_shadows(self):
+        # `seen` has to actually track the real attr_name - if it always recorded the same stand-in
+        # value instead, the base class's own same-named attr would never register as "already
+        # seen", and a field the subclass overrides would be counted twice (once per class in the
+        # mro), wrongly tripping the "multiple X fields" ambiguity error below.
+        class Base(models.Model):
+            class Meta:
+                app_label = "testapp"
+                abstract = True
+
+            thing = _Descriptor()
+
+        Base.thing.config = _Marker()
+
+        class Host(Base):
+            class Meta:
+                app_label = "testapp"
+
+        overriding_descriptor = _Descriptor()
+        _model_makers.expose(Host, "thing", overriding_descriptor, generated_model=None, config=_Marker())
+
+        assert _model_makers.resolve_field(Host(), None, _Marker, "thingable") is overriding_descriptor
+
+    @isolate_apps("tests.testapp")
+    def test_resolve_field_keeps_scanning_a_classs_own_attrs_past_one_shadowed_by_a_subclass(self):
+        # An attr name already in `seen` (because a subclass shadows it) has to be skipped with
+        # `continue`, not `break` - the real field lives right after it in Base's own __dict__
+        # order, and a `break` there would stop scanning Base entirely before ever reaching it.
+        class Base(models.Model):
+            class Meta:
+                app_label = "testapp"
+                abstract = True
+
+            shadowed = "base value"
+
+        descriptor = _Descriptor()
+        config = _Marker()
+
+        class Host(Base):
+            class Meta:
+                app_label = "testapp"
+
+            shadowed = "host value"
+
+        _model_makers.expose(Base, "real_field", descriptor, generated_model=None, config=config)
+
+        assert _model_makers.resolve_field(Host(), None, _Marker, "thingable") is descriptor
+
+    @isolate_apps("tests.testapp")
     def test_resolve_field_uses_the_explicit_field_without_scanning(self):
         class Host(models.Model):
             class Meta:

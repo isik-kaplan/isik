@@ -2,12 +2,23 @@ import jinja2
 import pytest
 from jinja2.exceptions import SecurityError, TemplateAssertionError
 
+from isik.django.apps.templated_fields import engine
 from isik.django.apps.templated_fields.delimiters import TemplateDelimiters
 from isik.django.apps.templated_fields.engine import TemplateSecurityError, render, validate_syntax
 from isik.django.apps.templated_fields.policy import TemplateFeature, TemplatePolicy
 
 
 DEFAULT_DELIMITERS = TemplateDelimiters()
+
+
+@pytest.fixture(autouse=True)
+def _reset_engine_caches():
+    # _build_environment/_compile are module-level @lru_cache-d, keyed on (delimiters, policy,
+    # ..., source) equality, not identity - two tests (or two reruns of the same test under a
+    # tool that reuses the process, e.g. mutation testing) using an equal cache key would
+    # otherwise silently reuse whatever env/compiled template the first call built.
+    engine._build_environment.cache_clear()
+    engine._compile.cache_clear()
 
 
 def _render(source, *, policy=None, context=None, undefined="strict", delimiters=None):
@@ -33,7 +44,7 @@ class TestPlainOutputAndComments:
 
 class TestFeatureGating:
     def test_for_loop_rejected_under_variables_only(self):
-        with pytest.raises(TemplateSecurityError, match="TemplateFeature.FOR_LOOP"):
+        with pytest.raises(TemplateSecurityError, match=r"^For requires TemplateFeature\.FOR_LOOP, not enabled"):
             _render("{% for x in xs %}{{ x }}{% endfor %}", policy=TemplatePolicy.VARIABLES_ONLY(), context={"xs": [1]})
 
     def test_for_loop_allowed_under_standard(self):
@@ -81,8 +92,13 @@ class TestAlwaysBlocked:
         ],
     )
     def test_rejected_even_under_permissive(self, source):
-        with pytest.raises(TemplateSecurityError):
+        with pytest.raises(TemplateSecurityError, match="is never allowed in a template field"):
             _render(source, policy=TemplatePolicy.PERMISSIVE())
+
+    def test_the_error_names_the_actual_blocked_node_type(self):
+        # Not just "NoneType" or some other stand-in - type(node), not type(None).
+        with pytest.raises(TemplateSecurityError, match=r"^Include is never allowed in a template field$"):
+            _render("{% include 'x.html' %}", policy=TemplatePolicy.PERMISSIVE())
 
 
 class TestSandboxing:
@@ -172,10 +188,19 @@ class TestResourceLimits:
         policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_loop_iterations=10)
         assert _render("{% for i in range(3) %}{{ i }}{% endfor %}", policy=policy) == "012"
 
+    def test_max_loop_iterations_exactly_at_the_limit_does_not_raise(self):
+        # > vs >= - a range whose length exactly equals the limit must still be allowed.
+        policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_loop_iterations=3)
+        assert _render("{% for i in range(3) %}{{ i }}{% endfor %}", policy=policy) == "012"
+
     def test_max_render_length_aborts_a_runaway_loop(self):
         policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_render_length=5, max_loop_iterations=None)
         with pytest.raises(TemplateSecurityError, match="exceeded the 5 char limit"):
             _render("{% for i in range(1000) %}x{% endfor %}", policy=policy)
+
+    def test_max_render_length_exactly_at_the_limit_does_not_raise(self):
+        policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_render_length=5, max_loop_iterations=None)
+        assert _render("{% for i in range(5) %}x{% endfor %}", policy=policy) == "xxxxx"
 
     def test_max_render_length_none_does_not_cap_output(self):
         policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_render_length=None, max_loop_iterations=None)

@@ -17,9 +17,7 @@ def _validate_field_names(cls):
         try:
             relation = model._meta.get_field(field_name)
         except FieldDoesNotExist:
-            raise ImproperlyConfigured(
-                f"{cls.__name__}: '{field_name}' isn't a field on {model.__name__}."
-            ) from None
+            raise ImproperlyConfigured(f"{cls.__name__}: '{field_name}' isn't a field on {model.__name__}.") from None
         if not isinstance(relation, OneToOneRel):
             raise ImproperlyConfigured(
                 f"{cls.__name__}: '{field_name}' isn't a reverse one-to-one relation on {model.__name__}."

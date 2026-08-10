@@ -1,6 +1,9 @@
 import pytest
+from django.db import models
+from django.test.utils import isolate_apps
 from rest_framework.test import APIRequestFactory
 
+from isik.django.apps.feedback.comments import comments
 from isik.django.apps.feedback.comments.drf import generic_comment_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets.base import BaseModelViewSet
@@ -80,3 +83,21 @@ def test_composes_with_is_owner_for_a_private_comment_viewset(alice, bob, post):
     response = call("delete", "destroy", alice)
     assert response.status_code == 204
     assert not Post.comments.model.objects.filter(pk=alice_comment.pk).exists()
+
+
+@isolate_apps("tests.testapp")
+def test_meta_fields_and_read_only_fields_are_exact():
+    # A fresh Host, not Post.comments - Post-based CommentSerializer is built once at module
+    # scope (see the comment above) and would never observe a broken generic_comment_serializer()
+    # under a tool that reruns pytest in the same process (e.g. mutation testing).
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        comments = comments(user_related_name="host_comments")
+
+    Serializer = generic_comment_serializer(Host.comments.model)
+    assert Serializer.Meta.fields == ["id", "body", "created_at", "updated_at", "user"]
+    assert Serializer.Meta.read_only_fields == ["user", "created_at", "updated_at"]
+    assert Serializer.Meta.model is Host.comments.model
+    assert Serializer.__name__ == f"{Host.comments.model.__name__}Serializer"

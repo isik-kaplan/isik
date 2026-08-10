@@ -6,6 +6,7 @@ from django.test.utils import isolate_apps
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from isik.django.apps.common._model_makers import claim_related_name
 from isik.django.apps.feedback.bookmarks import bookmarks
 from isik.django.apps.feedback.votes import votes
 from tests.testapp.models import Article, EmailUser, Post
@@ -71,8 +72,133 @@ def test_any_sequence_of_actions_never_leaves_more_than_one_row(actions, alice, 
 
 def test_bookmarking_something_never_attached_raises(alice):
     article = Article.objects.create(title="a")
-    with pytest.raises(TypeError, match="not bookmarkable"):
+    with pytest.raises(TypeError, match="^Article is not bookmarkable"):
         alice.bookmark(article)
+
+
+def test_unbookmarking_something_never_attached_raises(alice):
+    article = Article.objects.create(title="a")
+    with pytest.raises(TypeError, match="^Article is not bookmarkable"):
+        alice.unbookmark(article)
+
+
+def test_toggling_something_never_attached_raises(alice):
+    article = Article.objects.create(title="a")
+    with pytest.raises(TypeError, match="^Article is not bookmarkable"):
+        alice.toggle_bookmark(article)
+
+
+def test_is_bookmarked_on_something_never_attached_raises(alice):
+    article = Article.objects.create(title="a")
+    with pytest.raises(TypeError, match="^Article is not bookmarkable"):
+        alice.is_bookmarked(article)
+
+
+@isolate_apps("tests.testapp")
+def test_toggle_bookmark_passes_its_own_explicit_field_through_instead_of_re_resolving(alice):
+    # A host with two attachments - re-resolving field from scratch instead of using what was
+    # passed in would hit the "multiple bookmarkable fields" ambiguity error here.
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = bookmarks(
+            user_related_name="host_first_bookmarks", target_related_name="first_bookmarks", user_model=EmailUser
+        )
+        second = bookmarks(
+            user_related_name="host_second_bookmarks", target_related_name="second_bookmarks", user_model=EmailUser
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    alice.toggle_bookmark(host, field=Host.first)
+    assert Host.first.model.objects.filter(target=host, user=alice).exists()
+
+
+@isolate_apps("tests.testapp")
+def test_unbookmark_passes_its_own_explicit_field_through_instead_of_re_resolving(alice):
+    # toggle_bookmark only ever reaches unbookmark's own resolve_field call when the object is
+    # already bookmarked (see the mixin's if/else) - the sibling toggle test above never gets
+    # there, since alice hasn't bookmarked anything yet at that point.
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = bookmarks(
+            user_related_name="host_first_unbookmarks", target_related_name="first_unbookmarks", user_model=EmailUser
+        )
+        second = bookmarks(
+            user_related_name="host_second_unbookmarks",
+            target_related_name="second_unbookmarks",
+            user_model=EmailUser,
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    Host.first.model.objects.create(target=host, user=alice)
+    alice.unbookmark(host, field=Host.first)
+    assert not Host.first.model.objects.filter(target=host, user=alice).exists()
+
+
+@isolate_apps("tests.testapp")
+def test_defaults_and_wiring():
+    # DefaultBookmarksHost, not Host - other isolate_apps tests in this file/test_drf.py also
+    # define a class literally named Host with the default target_related_name, and
+    # claim_related_name()'s registry is keyed by app_label+class name, process-global.
+    class DefaultBookmarksHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        stars = bookmarks(user_related_name="host_star_bookmarks", user_model=EmailUser)
+
+    # target_name defaults to "target"
+    target_field = DefaultBookmarksHost.stars.model._meta.get_field("target")
+    assert target_field.related_model is DefaultBookmarksHost
+
+    # target_related_name defaults to "bookmarks" - claim_related_name() actually recorded it
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_related_name(DefaultBookmarksHost, "bookmarks", "somebody-else")
+
+    # the user FK's related_name is wired to user_related_name, not dropped/None
+    user_field = DefaultBookmarksHost.stars.model._meta.get_field("user")
+    assert user_field.remote_field.related_name == "host_star_bookmarks"
+
+
+@isolate_apps("tests.testapp")
+def test_the_maker_forwards_an_explicit_target_name_instead_of_always_using_the_default():
+    class ExplicitTargetNameHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        stars = bookmarks(user_related_name="explicit_target_name_bookmarks", target_name="host", user_model=EmailUser)
+
+    field = ExplicitTargetNameHost.stars.model._meta.get_field("host")
+    assert field.related_model is ExplicitTargetNameHost
+
+
+@isolate_apps("tests.testapp")
+def test_the_generated_model_carries_a_unique_constraint_on_target_and_user():
+    # Asserts against the live _meta.constraints, not just DB-level enforcement - the DB schema
+    # for module-level models like Post is built from migrations generated once, so it would keep
+    # enforcing this constraint even if meta_attrs stopped carrying it into the model class.
+    class ConstraintHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        stars = bookmarks(user_related_name="constraint_host_bookmarks", user_model=EmailUser)
+
+    (constraint,) = ConstraintHost.stars.model._meta.constraints
+    assert isinstance(constraint, models.UniqueConstraint)
+    assert set(constraint.fields) == {"target", "user"}
+    assert constraint.name == "unique_constrainthoststarsbookmark_per_user"
 
 
 def test_the_unique_constraint_is_enforced_at_the_database_level_too(alice, post):

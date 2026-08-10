@@ -22,3 +22,4 @@ class TestSentinel:
         assert Sentinel("EQ_SENTINEL") == same
         assert Sentinel("EQ_SENTINEL") != other
         assert hash(Sentinel("EQ_SENTINEL")) == hash(same)
+        assert hash(Sentinel("EQ_SENTINEL")) != hash(other)

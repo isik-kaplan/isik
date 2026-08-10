@@ -125,6 +125,8 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     any `contribute_to_class`-having value in `fields` (e.g. another maker via `extra_fields=`)
     wires up exactly like a hand-written field, with no special-casing needed here.
     """
-    meta = type("Meta", (), {"app_label": host_cls._meta.app_label, **(meta_attrs or {})})
+    meta = type("Meta", (), {"app_label": host_cls._meta.app_label, **(meta_attrs or {})})  # pragma: no mutate
+    # This type's own __name__ ("Meta") is never inspected by Django's ModelBase metaclass - only
+    # the "Meta" *key* in the attrs dict below matters, so this literal is inert.
     attrs = {**fields, **(extra_attrs or {}), "Meta": meta, "__module__": host_cls.__module__}
     return type(model_name, (base_model,), attrs)

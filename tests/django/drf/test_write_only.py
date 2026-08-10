@@ -37,6 +37,18 @@ class TestWriteOnlyFieldsMixin:
                     create_only_fields = ["count"]
                     write_only_fields = ["count"]
 
+    def test_disjoint_write_only_and_create_only_fields_do_not_raise(self):
+        # & (intersection), not | (union) - two non-empty but non-overlapping lists must not be
+        # flagged just because neither is empty.
+        class DisjointSerializer(WriteOnlyFieldsMixin, serializers.ModelSerializer):
+            class Meta:
+                model = Widget
+                fields = ["id", "name", "count"]
+                create_only_fields = ["name"]
+                write_only_fields = ["count"]
+
+        DisjointSerializer()  # just needs to not raise at class-definition time
+
     def test_no_meta_at_all_does_not_crash(self):
         class NoMetaSerializer(WriteOnlyFieldsMixin, serializers.Serializer):
             name = serializers.CharField()

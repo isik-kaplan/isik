@@ -7,6 +7,7 @@ from django.test.utils import isolate_apps
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from isik.django.apps.common._model_makers import claim_related_name
 from isik.django.apps.feedback.bookmarks import bookmarks
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
 from tests.testapp.models import Article, EmailUser, MultiVoteHost, Post
@@ -75,6 +76,29 @@ def test_unvote_without_a_prior_vote_is_a_no_op(alice, post):
     assert not Post.votes.model.objects.filter(target=post, user=alice).exists()
 
 
+@isolate_apps("tests.testapp")
+def test_unvote_passes_its_own_explicit_field_through_instead_of_re_resolving(alice):
+    # A host with two attachments - re-resolving field from scratch instead of using what was
+    # passed in would hit the "multiple voteable fields" ambiguity error here. upvote()/downvote()
+    # share _set_vote() so this only needs checking for unvote()'s own separate resolve_field call.
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = votes(user_related_name="host_first_votes", target_related_name="first_votes", user_model=EmailUser)
+        second = votes(user_related_name="host_second_votes", target_related_name="second_votes", user_model=EmailUser)
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    Host.first.model.objects.create(target=host, user=alice, value=1)
+    alice.unvote(host, field=Host.first)
+    assert not Host.first.model.objects.filter(target=host, user=alice).exists()
+
+
 def test_two_different_users_each_get_their_own_row(alice, bob, post):
     alice.upvote(post)
     bob.downvote(post)
@@ -83,13 +107,23 @@ def test_two_different_users_each_get_their_own_row(alice, bob, post):
 
 def test_voting_on_something_that_never_had_votes_attached_raises(alice):
     article = Article.objects.create(title="a")
-    with pytest.raises(TypeError, match="not voteable"):
+    with pytest.raises(TypeError, match="^Article is not voteable"):
         alice.upvote(article)
 
 
 def test_voting_on_a_plain_object_raises(alice):
-    with pytest.raises(TypeError, match="not voteable"):
+    with pytest.raises(TypeError, match="^object is not voteable"):
         alice.upvote(object())
+
+
+def test_downvoting_something_never_attached_raises(alice):
+    with pytest.raises(TypeError, match="^object is not voteable"):
+        alice.downvote(object())
+
+
+def test_unvoting_something_never_attached_raises(alice):
+    with pytest.raises(TypeError, match="^object is not voteable"):
+        alice.unvote(object())
 
 
 def test_the_unique_constraint_is_enforced_at_the_database_level_too(alice, post):
@@ -102,6 +136,40 @@ def test_a_value_outside_the_choices_fails_full_clean(alice, post):
     vote = Post.votes.model(target=post, user=alice, value=5)
     with pytest.raises(ValidationError, match="not a valid choice"):
         vote.full_clean()
+
+
+@isolate_apps("tests.testapp")
+def test_the_generated_value_field_carries_the_up_down_choices_freshly_built():
+    # Post.votes was built once at module import time - a mutation to how contribute_to_class()
+    # builds the value field's choices wouldn't be observable through a model already constructed
+    # before the mutation was selected (same reasoning as test_unvote_passes_its_own... above,
+    # applied to model construction instead of method dispatch). ChoicesHost, not Host - other
+    # isolate_apps tests in this file also define a class literally named Host with the default
+    # target_related_name, and claim_related_name()'s registry is keyed by app_label+class name.
+    class ChoicesHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        stars = votes(user_related_name="choices_host_votes", user_model=EmailUser)
+
+    assert ChoicesHost.stars.model._meta.get_field("value").choices == [(1, "up"), (-1, "down")]
+
+
+@isolate_apps("tests.testapp")
+def test_the_generated_model_carries_a_unique_constraint_on_target_and_user():
+    # Asserts against the live _meta.constraints, not just DB-level enforcement - the DB schema
+    # for module-level models like Post is built from migrations generated once, so it would keep
+    # enforcing this constraint even if meta_attrs stopped carrying it into the model class.
+    class ConstraintHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        stars = votes(user_related_name="constraint_host_votes", user_model=EmailUser)
+
+    (constraint,) = ConstraintHost.stars.model._meta.constraints
+    assert isinstance(constraint, models.UniqueConstraint)
+    assert set(constraint.fields) == {"target", "user"}
+    assert constraint.name == "unique_constrainthoststarsvote_per_user"
 
 
 @isolate_apps("tests.testapp")
@@ -188,6 +256,27 @@ def test_reusing_a_target_related_name_on_the_same_host_raises():
 
             first = votes(user_related_name="colliding_vote_fields_first", target_related_name="shared")
             second = votes(user_related_name="colliding_vote_fields_second", target_related_name="shared")
+
+
+@isolate_apps("tests.testapp")
+def test_defaults_and_wiring():
+    class DefaultVotesHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        entries = votes(user_related_name="host_vote_entries", user_model=EmailUser)
+
+    # target_name defaults to "target"
+    target_field = DefaultVotesHost.entries.model._meta.get_field("target")
+    assert target_field.related_model is DefaultVotesHost
+
+    # target_related_name defaults to "votes" - claim_related_name() actually recorded it
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_related_name(DefaultVotesHost, "votes", "somebody-else")
+
+    # the user FK's related_name is wired to user_related_name, not dropped/None
+    user_field = DefaultVotesHost.entries.model._meta.get_field("user")
+    assert user_field.remote_field.related_name == "host_vote_entries"
 
 
 def _create_tables(*models_):

@@ -4,6 +4,12 @@ from itertools import chain
 from django.utils.module_loading import import_string
 
 
+def _first_segment(path):
+    return path.split(".", 1)[0]  # pragma: no mutate
+    # maxsplit=1 vs. any other value (2, unlimited) never changes the result: [0] always takes
+    # everything before the first separator, identical no matter how many further splits happen.
+
+
 class ConditionalSerializerMixin:
     """
     Controls which fields show up based on `?include=`, `?only=`, and `?exclude=`.
@@ -66,7 +72,7 @@ class ConditionalSerializerMixin:
         stays visible even when only a deeper path (e.g. `only=owner.username`) mentions it."""
         own_path = self._own_path()
         prefix = f"{own_path}." if own_path else ""
-        return {path[len(prefix) :].split(".", 1)[0] for path in self._query_set(key) if path.startswith(prefix)}
+        return {_first_segment(path[len(prefix) :]) for path in self._query_set(key) if path.startswith(prefix)}
 
     def _own_names(self, key):
         """Values that name one of my own fields exactly - unlike `_scoped_names`, a path

@@ -1,5 +1,6 @@
 """HistoryMixin + context_filter() - see each one's own docstring."""
 
+from django import forms
 from django.db.models.fields.json import KeyTransform
 from django.utils.functional import classproperty
 from django_filters.rest_framework import CharFilter, ChoiceFilter, DateTimeFilter, FilterSet, NumberFilter
@@ -12,7 +13,14 @@ from isik.django.drf.permissions import IsSuperUser
 from isik.django.drf.serializers.history import generic_history_serializer
 
 
-def context_filter(key, filter_cls=NumberFilter, **kwargs):
+class _JSONContextNumberFilter(NumberFilter):
+    # NumberFilter's default field_class (forms.DecimalField) cleans values into Decimal, which
+    # psycopg's JSON parameter adapter can't serialize when comparing against a pghistory context
+    # key transform - forms.IntegerField cleans into a plain int instead, which it can.
+    field_class = forms.IntegerField
+
+
+def context_filter(key, filter_cls=_JSONContextNumberFilter, **kwargs):
     """Filter over a key in pghistory's context JSON - e.g. `context_filter("org_id")`."""
     kwargs.setdefault("field_name", f"pgh_context__{key}")
     return filter_cls(**kwargs)

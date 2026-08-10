@@ -83,7 +83,11 @@ class TestTransformExceptions:
             parse_b(1)
 
     def test_missing_transform_raises_a_clear_error_used_as_a_bare_context_manager(self):
-        with pytest.raises(TypeError, match="no transform set"):
+        with pytest.raises(
+            TypeError,
+            match="^TransformExceptions has no transform set - "
+            r"pass transform=\.\.\. or decorate a transform function with it first\.$",
+        ):
             with TransformExceptions(ValueError):
                 raise ValueError("boom")
 

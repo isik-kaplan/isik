@@ -37,7 +37,9 @@ class TestViewSetRegistryMixin:
         assert ViewSetRegistryMixin.get_for_model(DummyUnregisteredModel) is None
 
     def test_registering_a_second_viewset_for_the_same_model_raises(self):
-        with pytest.raises(ImproperlyConfigured):
+        with pytest.raises(
+            ImproperlyConfigured, match="^<class '.*DummyWidgetModel'> is already registered to WidgetViewSet$"
+        ):
 
             class AnotherWidgetViewSet(ViewSetRegistryMixin, ModelViewSet):
                 model = DummyWidgetModel

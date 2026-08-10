@@ -5,6 +5,7 @@ from django.db.utils import DataError
 from django.test import override_settings
 from django.test.utils import isolate_apps
 
+from isik.django.apps.common._model_makers import claim_related_name
 from isik.django.apps.common.db.models import BaseModel
 from isik.django.apps.feedback.notes import notes
 from isik.django.apps.feedback.votes import votes
@@ -70,8 +71,14 @@ def test_each_note_is_independently_deletable(alice, post):
 
 def test_noting_something_never_attached_raises(alice):
     article = Article.objects.create(title="a")
-    with pytest.raises(TypeError, match="not noteable"):
+    with pytest.raises(TypeError, match="^Article is not noteable"):
         alice.add_note(article, "x")
+
+
+def test_notes_on_something_never_attached_raises(alice):
+    article = Article.objects.create(title="a")
+    with pytest.raises(TypeError, match="^Article is not noteable"):
+        alice.notes_on(article)
 
 
 def test_base_model_kwarg_lets_the_generated_model_inherit_a_custom_base():
@@ -172,6 +179,75 @@ def test_reusing_a_target_related_name_on_the_same_host_raises():
 
             first = notes(user_related_name="colliding_note_fields_first", target_related_name="shared")
             second = notes(user_related_name="colliding_note_fields_second", target_related_name="shared")
+
+
+@isolate_apps("tests.testapp")
+def test_defaults_and_wiring():
+    class DefaultNotesHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        entries = notes(user_related_name="host_note_entries", user_model=EmailUser)
+
+    # target_name defaults to "target"
+    target_field = DefaultNotesHost.entries.model._meta.get_field("target")
+    assert target_field.related_model is DefaultNotesHost
+
+    # target_related_name defaults to "notes" - claim_related_name() actually recorded it
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_related_name(DefaultNotesHost, "notes", "somebody-else")
+
+    # the user FK's related_name is wired to user_related_name, not dropped/None
+    user_field = DefaultNotesHost.entries.model._meta.get_field("user")
+    assert user_field.remote_field.related_name == "host_note_entries"
+
+
+@isolate_apps("tests.testapp")
+def test_notes_maker_forwards_an_explicit_target_related_name_not_the_default():
+    class ExplicitTargetRelatedNameHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        entries = notes(user_related_name="explicit_host_note_entries", target_related_name="totally_custom_notes")
+
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_related_name(ExplicitTargetRelatedNameHost, "totally_custom_notes", "somebody-else")
+    # the default "notes" was never claimed - confirms the explicit value replaced it, not just
+    # got dropped in favor of _NotesField.__init__'s own "notes" default.
+    claim_related_name(ExplicitTargetRelatedNameHost, "notes", "somebody-else")
+
+
+@isolate_apps("tests.testapp")
+def test_notes_maker_forwards_an_explicit_target_name():
+    class ExplicitTargetNameHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        entries = notes(user_related_name="explicit_target_name_host_entries", target_name="host")
+
+    field = ExplicitTargetNameHost.entries.model._meta.get_field("host")
+    assert field.related_model is ExplicitTargetNameHost
+
+
+@isolate_apps("tests.testapp")
+def test_add_note_and_notes_on_pass_their_own_explicit_field_through_instead_of_re_resolving(alice):
+    # A host with two attachments - re-resolving field from scratch instead of using what was
+    # passed in would hit the "multiple noteable fields" ambiguity error here.
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = notes(user_related_name="host_first_notes", target_related_name="first_notes", user_model=EmailUser)
+        second = notes(user_related_name="host_second_notes", target_related_name="second_notes", user_model=EmailUser)
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    alice.add_note(host, "hi", field=Host.first)
+    assert list(alice.notes_on(host, field=Host.first).values_list("body", flat=True)) == ["hi"]
 
 
 @isolate_apps("tests.testapp")

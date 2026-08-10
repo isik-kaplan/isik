@@ -48,11 +48,25 @@ class TestReverseOrderingMixin:
         assert WidgetViewSet.ordering_fields == ["created_at", "-created_at"]
 
     def test_raises_if_ordering_fields_set_without_ordering_filter(self):
-        with pytest.raises(ImproperlyConfigured, match="OrderingFilter"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^BrokenViewSet sets ordering_fields but OrderingFilter \(or a subclass\) is "
+            r"not in filter_backends - add it to REST_FRAMEWORK\['DEFAULT_FILTER_BACKENDS'\] "
+            r"or set filter_backends directly\.$",
+        ):
 
             class BrokenViewSet(ReverseOrderingMixin):
                 ordering_fields = ["created_at"]
                 filter_backends = []
+
+    def test_raises_if_filter_backends_is_not_set_at_all(self):
+        # getattr(cls, "filter_backends", ...)'s own default has to be an empty iterable, not
+        # missing/None - a class that never sets filter_backends at all must still raise
+        # ImproperlyConfigured, not crash with a TypeError trying to iterate it.
+        with pytest.raises(ImproperlyConfigured, match="OrderingFilter"):
+
+            class NoBackendsAttributeViewSet(ReverseOrderingMixin):
+                ordering_fields = ["created_at"]
 
     def test_a_backend_subclass_satisfies_the_check(self):
         class CustomOrderingFilter(OrderingFilter):

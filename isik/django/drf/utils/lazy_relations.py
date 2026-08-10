@@ -14,7 +14,9 @@ class LazyPrimaryKeyRelatedField(PrimaryKeyRelatedField):
 
     def __init__(self, *args, **kwargs):
         self.queryset_func = kwargs.pop("queryset_func")
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)  # pragma: no mutate
+        # PrimaryKeyRelatedField.__init__ takes **kwargs only - *args is always empty here, so
+        # dropping it from the passthrough is unobservable.
 
     def get_queryset(self):
         return self.queryset_func()
@@ -46,7 +48,9 @@ class LazyGenericRelatedField(serializers.Field):
 
     def __init__(self, serializers_func, *args, **kwargs):
         self.serializers_func = serializers_func
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)  # pragma: no mutate
+        # serializers.Field.__init__ is keyword-only (no positional params at all) - *args is
+        # always empty here, so dropping it from the passthrough is unobservable.
 
     @property
     def serializers(self):

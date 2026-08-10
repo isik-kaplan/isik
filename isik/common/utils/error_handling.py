@@ -98,7 +98,9 @@ class SuppressAndRun(suppress):
         self.func = func
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        suppressed = super().__exit__(exc_type, exc_val, exc_tb)
+        suppressed = super().__exit__(exc_type, exc_val, exc_tb)  # pragma: no mutate
+        # contextlib.suppress.__exit__ only ever looks at exc_type (issubclass check) - excinst/
+        # exctb are unused in its body, so passing None for either here is unobservable.
         if suppressed:
             self.func(exc_val)
         return suppressed

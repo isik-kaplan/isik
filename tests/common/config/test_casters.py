@@ -30,6 +30,17 @@ def test_caster_sets_missing_default_only_when_given():
     assert shout(missing_default="fallback").missing_default == "fallback"
 
 
+def test_caster_distinguishes_an_explicit_none_default_from_not_given_at_all():
+    # The internal "not given" sentinel has to be something no caller could ever pass for real -
+    # if it were None, missing_default=None (a deliberate "fall back to None") would be
+    # indistinguishable from omitting missing_default entirely.
+    @caster
+    def shout(value):
+        return value.upper()
+
+    assert shout(missing_default=None).missing_default is None
+
+
 def test_caster_sets_error_default_only_when_given():
     @caster
     def shout(value):

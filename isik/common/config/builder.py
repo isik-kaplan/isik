@@ -114,7 +114,7 @@ def _resolve_ref_caster(root_schema, path):
     return node
 
 
-def _fallback(caster, attr_name, path, root_schema, prefix, sep, seen, on_missing):
+def _fallback(caster, attr_name, root_schema, prefix, sep, seen, on_missing):
     default = getattr(caster, attr_name, _MISSING)
     if default is _MISSING:
         raise on_missing() from None
@@ -139,7 +139,6 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
         return _fallback(
             caster,
             "missing_default",
-            path,
             root_schema,
             prefix,
             sep,
@@ -157,7 +156,6 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
             return _fallback(
                 caster,
                 "error_default",
-                path,
                 root_schema,
                 prefix,
                 sep,

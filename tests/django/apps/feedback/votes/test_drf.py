@@ -1,6 +1,9 @@
 import pytest
+from django.db import models
+from django.test.utils import isolate_apps
 from rest_framework.test import APIRequestFactory
 
+from isik.django.apps.feedback.votes import votes
 from isik.django.apps.feedback.votes.drf import generic_vote_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets.base import BaseModelViewSet
@@ -87,3 +90,21 @@ def test_composes_with_is_owner_for_a_private_vote_viewset(alice, bob, post):
 
     assert call("delete", "destroy", alice).status_code == 204
     assert not Post.votes.model.objects.filter(pk=alice_vote.pk).exists()
+
+
+@isolate_apps("tests.testapp")
+def test_meta_fields_and_read_only_fields_are_exact():
+    # A fresh Host, not Post.votes - Post-based VoteSerializer is built once at module scope (see
+    # the comment above) and would never observe a broken generic_vote_serializer() under a tool
+    # that reruns pytest in the same process (e.g. mutation testing).
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        votes = votes(user_related_name="host_votes")
+
+    Serializer = generic_vote_serializer(Host.votes.model)
+    assert Serializer.Meta.fields == ["id", "value", "created_at", "user"]
+    assert Serializer.Meta.read_only_fields == ["user", "created_at"]
+    assert Serializer.Meta.model is Host.votes.model
+    assert Serializer.__name__ == f"{Host.votes.model.__name__}Serializer"

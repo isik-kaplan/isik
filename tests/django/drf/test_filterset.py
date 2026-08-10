@@ -68,12 +68,27 @@ class TestFilterSetMixin:
         assert PlainViewSet.filterset_class.Meta.fields == {}
 
     def test_raises_if_filterset_fields_set_without_django_filter_backend(self):
-        with pytest.raises(ImproperlyConfigured, match="DjangoFilterBackend"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^BrokenViewSet sets filterset_fields/declared_filters but DjangoFilterBackend "
+            r"\(or a subclass\) is not in filter_backends - add it to "
+            r"REST_FRAMEWORK\['DEFAULT_FILTER_BACKENDS'\] or set filter_backends directly\.$",
+        ):
 
             class BrokenViewSet(FilterSetMixin):
                 model = Widget
                 filterset_fields = ["name"]
                 filter_backends = []
+
+    def test_raises_if_filter_backends_is_not_set_at_all(self):
+        # getattr(cls, "filter_backends", ...)'s own default has to be an empty iterable, not
+        # missing/None - a class that never sets filter_backends at all must still raise
+        # ImproperlyConfigured, not crash with a TypeError trying to iterate it.
+        with pytest.raises(ImproperlyConfigured, match="DjangoFilterBackend"):
+
+            class NoBackendsAttributeViewSet(FilterSetMixin):
+                model = Widget
+                filterset_fields = ["name"]
 
     def test_raises_if_declared_filters_set_without_django_filter_backend(self):
         with pytest.raises(ImproperlyConfigured, match="DjangoFilterBackend"):

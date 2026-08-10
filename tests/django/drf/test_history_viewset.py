@@ -1,3 +1,4 @@
+import pghistory
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
@@ -49,6 +50,19 @@ def call_history_list(viewset_cls, user=None, **query_params):
     if user is not None:
         request.user = user
     return viewset_cls.as_view({"get": "history_list"})(request)
+
+
+@pytest.fixture(autouse=True)
+def _reset_widget_viewset_history_caches():
+    # WidgetViewSet is module-level, so history_filterset_class/history_serializer_class's
+    # classproperty caching (build once, reuse for the class's whole lifetime - correct in
+    # production) would otherwise mean default_history_filters()/generic_history_serializer()
+    # only ever actually runs once per interpreter, on whichever test happens to touch it first -
+    # invisible under a normal test run, but it means a tool that reruns pytest in the same
+    # process never re-exercises either function after that first call. Reset before every test.
+    for attr in ("_history_filterset_class", "_history_serializer_class"):
+        if attr in WidgetViewSet.__dict__:
+            delattr(WidgetViewSet, attr)
 
 
 class TestHistoryMixin:
@@ -108,6 +122,10 @@ class TestHistoryMixin:
 
         assert [event["action"] for event in response.data] == ["insert"]
 
+    def test_action_choices_are_exactly_insert_update_delete(self):
+        action_filter = WidgetViewSet.history_filterset_class.base_filters["action"]
+        assert action_filter.extra["choices"] == [("insert", "insert"), ("update", "update"), ("delete", "delete")]
+
     def test_filters_by_created_after_and_created_before(self):
         widget = Widget.objects.create(name="bolt", count=1)
         widget.update(count=2)
@@ -117,6 +135,9 @@ class TestHistoryMixin:
         assert call_history(WidgetViewSet, widget, created_after=far_future).data == []
         assert call_history(WidgetViewSet, widget, created_before=far_past).data == []
         assert len(call_history(WidgetViewSet, widget, created_after=far_past).data) == 2
+        # created_before has to be an inclusive range (lookup_expr="lte"), not an exact match -
+        # far_future never equals a real event timestamp, so an exact match would wrongly find 0.
+        assert len(call_history(WidgetViewSet, widget, created_before=far_future).data) == 2
 
     def test_actor_filter_is_absent_by_default(self):
         assert "actor" not in WidgetViewSet.history_filterset_class.base_filters
@@ -129,6 +150,24 @@ class TestHistoryMixin:
 
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             assert "actor" in MiddlewareWidgetViewSet.history_filterset_class.base_filters
+
+    def test_actor_id_reflects_the_pghistory_context_user_and_is_filterable(self):
+        class ActorWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "actor-widgets"
+            exempt_from_registry = True
+
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            widget = Widget.objects.create(name="bolt", count=1)
+            with pghistory.context(user=7):
+                widget.update(count=2)
+
+            response = call_history(ActorWidgetViewSet, widget)
+            actor_by_action = {event["action"]: event["actor_id"] for event in response.data}
+            assert actor_by_action == {"insert": None, "update": "7"}
+
+            filtered = call_history(ActorWidgetViewSet, widget, actor=7)
+            assert [event["action"] for event in filtered.data] == ["update"]
 
     def test_extra_history_filters_adds_without_dropping_the_built_ins(self):
         class OrgWidgetViewSet(WidgetViewSet):

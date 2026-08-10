@@ -68,7 +68,11 @@ def test_missing_variable_uses_missing_default(monkeypatch):
 def test_unparseable_value_without_a_default_raises_config_error(monkeypatch):
     monkeypatch.setenv("FLAG", "not-a-bool")
 
-    with pytest.raises(ConfigError, match="Error while parsing"):
+    with pytest.raises(
+        ConfigError,
+        match=r"^Error while parsing FLAG='not-a-bool' with '.*'\."
+        r" Please check the value and the caster or provide an `error_default` to your caster\.$",
+    ):
         config({"FLAG": boolean()})
 
 
@@ -89,7 +93,9 @@ def test_falsy_missing_default_is_still_used(monkeypatch):
 
 
 def test_value_that_is_neither_a_mapping_nor_callable_raises_config_error():
-    with pytest.raises(ConfigError, match="must be callables or other mappings"):
+    with pytest.raises(
+        ConfigError, match=r"^Values either must be callables or other mappings, not <class 'str'>\. Key=BAD\.$"
+    ):
         config({"BAD": "not-callable-or-dict"})
 
 
@@ -109,7 +115,7 @@ def test_config_supports_both_attribute_and_item_access(monkeypatch):
 class TestMissingAttributeAccess:
     def test_missing_attribute_raises_attribute_error_not_key_error(self):
         result = config({})
-        with pytest.raises(AttributeError):
+        with pytest.raises(AttributeError, match="^MISSING$"):
             _ = result.MISSING
 
     def test_hasattr_returns_false_instead_of_raising(self):
@@ -235,10 +241,12 @@ class TestRef:
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("PAGE_SIZE", "50")
 
-        result = config({
-            "PAGE_SIZE": integer(),
-            "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "PAGE_SIZE": integer(),
+                "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+            }
+        )
 
         assert result.MAX_PAGE_SIZE == 50
 
@@ -246,23 +254,37 @@ class TestRef:
         monkeypatch.setenv("MAX_PAGE_SIZE", "not-an-int")
         monkeypatch.setenv("PAGE_SIZE", "50")
 
-        result = config({
-            "PAGE_SIZE": integer(),
-            "MAX_PAGE_SIZE": integer(error_default=ref("PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "PAGE_SIZE": integer(),
+                "MAX_PAGE_SIZE": integer(error_default=ref("PAGE_SIZE")),
+            }
+        )
 
         assert result.MAX_PAGE_SIZE == 50
+
+    def test_error_default_ref_respects_the_configs_prefix(self, monkeypatch):
+        # error_default's own _fallback() call is a separate code path from missing_default's -
+        # test_ref_chain_respects_the_configs_prefix above only covers missing_default.
+        monkeypatch.setenv("APP1__A", "not-an-int")
+        monkeypatch.setenv("APP1__B", "5")
+
+        result = config({"A": integer(error_default=ref("B")), "B": integer()}, prefix="APP1")
+
+        assert result.A == 5
 
     def test_ref_chain_falls_through_multiple_settings_to_a_static_default(self, monkeypatch):
         monkeypatch.delenv("C", raising=False)
         monkeypatch.delenv("B", raising=False)
         monkeypatch.delenv("A", raising=False)
 
-        result = config({
-            "A": integer(missing_default=1),
-            "B": integer(missing_default=ref("A")),
-            "C": integer(missing_default=ref("B")),
-        })
+        result = config(
+            {
+                "A": integer(missing_default=1),
+                "B": integer(missing_default=ref("A")),
+                "C": integer(missing_default=ref("B")),
+            }
+        )
 
         assert result.C == 1
 
@@ -270,40 +292,67 @@ class TestRef:
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("DRF__PAGE_SIZE", "50")
 
-        result = config({
-            "DRF": {"PAGE_SIZE": integer()},
-            "MAX_PAGE_SIZE": integer(missing_default=ref("DRF", "PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "DRF": {"PAGE_SIZE": integer()},
+                "MAX_PAGE_SIZE": integer(missing_default=ref("DRF", "PAGE_SIZE")),
+            }
+        )
 
         assert result.MAX_PAGE_SIZE == 50
+
+    def test_ref_from_inside_a_nested_config_resolves_against_the_root_schema(self, monkeypatch):
+        # A ref() inside a nested dict still addresses paths from the outermost schema, not the
+        # nested one it's declared in - PAGE_SIZE here is a sibling of DRF, not a child of it.
+        monkeypatch.delenv("DRF__MAX_PAGE_SIZE", raising=False)
+        monkeypatch.setenv("PAGE_SIZE", "50")
+
+        result = config(
+            {
+                "PAGE_SIZE": integer(),
+                "DRF": {"MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE"))},
+            }
+        )
+
+        assert result.DRF.MAX_PAGE_SIZE == 50
 
     def test_ref_accepts_a_dotted_path_as_a_shorthand_for_nested_keys(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("DRF__PAGE_SIZE", "50")
 
-        result = config({
-            "DRF": {"PAGE_SIZE": integer()},
-            "MAX_PAGE_SIZE": integer(missing_default=ref(dot="DRF.PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "DRF": {"PAGE_SIZE": integer()},
+                "MAX_PAGE_SIZE": integer(missing_default=ref(dot="DRF.PAGE_SIZE")),
+            }
+        )
 
         assert result.MAX_PAGE_SIZE == 50
 
     def test_ref_rejects_both_positional_path_and_dot(self):
-        with pytest.raises(ConfigError, match="either positional path segments or `dot="):
+        with pytest.raises(
+            ConfigError, match=r"^ref\(\) accepts either positional path segments or `dot=`, not both\.$"
+        ):
             ref("DRF", dot="DRF.PAGE_SIZE")
 
     def test_ref_rejects_a_malformed_dotted_path(self):
         with pytest.raises(ConfigError, match="not a valid dotted path"):
             ref(dot="DRF..PAGE_SIZE")
 
+    def test_ref_rejects_an_empty_path(self):
+        with pytest.raises(ConfigError, match=r"^ref\(\) requires at least one path segment\.$"):
+            ref()
+
     def test_ref_is_reachable_as_config_ref(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("PAGE_SIZE", "50")
 
-        result = config({
-            "PAGE_SIZE": integer(),
-            "MAX_PAGE_SIZE": integer(missing_default=config.ref("PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "PAGE_SIZE": integer(),
+                "MAX_PAGE_SIZE": integer(missing_default=config.ref("PAGE_SIZE")),
+            }
+        )
 
         assert result.MAX_PAGE_SIZE == 50
 
@@ -312,10 +361,12 @@ class TestRef:
         monkeypatch.delenv("PAGE_SIZE", raising=False)
 
         with pytest.raises(ConfigError, match="PAGE_SIZE not found"):
-            config({
-                "PAGE_SIZE": integer(),
-                "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
-            })
+            config(
+                {
+                    "PAGE_SIZE": integer(),
+                    "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+                }
+            )
 
     def test_ref_to_unknown_key_raises_config_error(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
@@ -328,34 +379,57 @@ class TestRef:
         monkeypatch.setenv("DRF__PAGE_SIZE", "50")
 
         with pytest.raises(ConfigError, match="nested config"):
-            config({
-                "DRF": {"PAGE_SIZE": integer()},
-                "MAX_PAGE_SIZE": integer(missing_default=ref("DRF")),
-            })
+            config(
+                {
+                    "DRF": {"PAGE_SIZE": integer()},
+                    "MAX_PAGE_SIZE": integer(missing_default=ref("DRF")),
+                }
+            )
 
     def test_direct_self_ref_raises_config_error(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
 
-        with pytest.raises(ConfigError, match="Circular ref"):
+        with pytest.raises(ConfigError, match=r"^Circular ref\(\) chain: MAX_PAGE_SIZE -> MAX_PAGE_SIZE\.$"):
             config({"MAX_PAGE_SIZE": integer(missing_default=ref("MAX_PAGE_SIZE"))})
+
+    def test_circular_chain_message_joins_a_nested_paths_own_segments_with_dots(self, monkeypatch):
+        # A single-segment path (like the direct-self-ref test above) can't distinguish the "."
+        # separator from any other one - only a nested path actually has more than one segment to
+        # join.
+        monkeypatch.delenv("APP1__DATABASE__PORT", raising=False)
+
+        with pytest.raises(ConfigError, match=r"^Circular ref\(\) chain: DATABASE\.PORT -> DATABASE\.PORT\.$"):
+            config({"DATABASE": {"PORT": integer(missing_default=ref(dot="DATABASE.PORT"))}})
+
+    def test_ref_chain_respects_the_configs_prefix(self, monkeypatch):
+        monkeypatch.delenv("APP1__A", raising=False)
+        monkeypatch.setenv("APP1__B", "5")
+
+        result = config({"A": integer(missing_default=ref("B")), "B": integer()}, prefix="APP1")
+
+        assert result.A == 5
 
     def test_indirect_ref_cycle_raises_config_error(self, monkeypatch):
         monkeypatch.delenv("A", raising=False)
         monkeypatch.delenv("B", raising=False)
 
         with pytest.raises(ConfigError, match="Circular ref"):
-            config({
-                "A": integer(missing_default=ref("B")),
-                "B": integer(missing_default=ref("A")),
-            })
+            config(
+                {
+                    "A": integer(missing_default=ref("B")),
+                    "B": integer(missing_default=ref("A")),
+                }
+            )
 
     def test_refresh_re_resolves_a_ref_default(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("PAGE_SIZE", "50")
-        result = config({
-            "PAGE_SIZE": integer(),
-            "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
-        })
+        result = config(
+            {
+                "PAGE_SIZE": integer(),
+                "MAX_PAGE_SIZE": integer(missing_default=ref("PAGE_SIZE")),
+            }
+        )
         assert result.MAX_PAGE_SIZE == 50
 
         monkeypatch.setenv("PAGE_SIZE", "75")

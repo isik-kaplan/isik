@@ -28,8 +28,7 @@ class WriteOnlyFieldsMixin:
         )
         if overlap:
             raise ImproperlyConfigured(
-                f"{cls.__name__}: {sorted(overlap)} can't be in both "
-                f"write_only_fields and create_only_fields."
+                f"{cls.__name__}: {sorted(overlap)} can't be in both write_only_fields and create_only_fields."
             )
 
     def get_extra_kwargs(self):

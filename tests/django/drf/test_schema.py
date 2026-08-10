@@ -80,6 +80,16 @@ class TestFakeSerializer:
         assert field.read_only is True
         assert field.required is False
 
+    def test_required_false_is_applied_even_when_read_only_is_left_at_its_own_default(self):
+        # read_only=True (above) makes DRF's own Field.__init__ default required to False anyway,
+        # even without our required=False kwarg reaching it - masking a broken passthrough. A
+        # non-read-only field defaults to required=True on its own, so this is the case that
+        # actually distinguishes "required=False was applied" from "DRF's own default happened to
+        # agree".
+        Fake = FakeSerializer("Fake", {"name": str}, required=False)
+        field = Fake().fields["name"]
+        assert field.required is False
+
     def test_field_kwargs_overrides_read_only_required_per_field(self):
         Fake = FakeSerializer(
             "Fake",

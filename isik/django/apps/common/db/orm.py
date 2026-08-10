@@ -1,15 +1,13 @@
 from contextlib import suppress
 
 from django.core.exceptions import ValidationError
-from django.db.models import BooleanField, Case, Value, When
+from django.db.models import Case, Value, When
 
 
 def starts_with(field, prefix):
-    return Case(
-        When(**{f"{field}__startswith": prefix}, then=Value(True)),
-        default=Value(False),
-        output_field=BooleanField(),
-    )
+    # No explicit output_field - Case's own resolution already infers BooleanField unambiguously
+    # from the Value(True)/Value(False) branches, so passing one explicitly is pure dead weight.
+    return Case(When(**{f"{field}__startswith": prefix}, then=Value(True)), default=Value(False))
 
 
 def get_object_or_none(model, **kwargs):

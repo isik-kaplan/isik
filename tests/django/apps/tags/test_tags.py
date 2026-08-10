@@ -1,15 +1,18 @@
+import uuid
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection, models
 from django.db.utils import IntegrityError
+from django.test import override_settings
 from django.test.utils import isolate_apps
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from isik.django.apps.common._model_makers import claim_related_name, resolve_field
 from isik.django.apps.common.db.models import BaseModel
-from isik.django.apps.tags.tags import TaggableMixin, TagQuerySet, tags
+from isik.django.apps.tags.tags import TAG_NAME_REGEX_ERROR_MESSAGE, TaggableMixin, TagQuerySet, _TagsField, tags
 from tests.testapp.models import Post
 
 
@@ -102,6 +105,18 @@ def test_related_name_reverse_accessor_reaches_back_to_the_hosts(post):
     assert set(tag.posts_with_topic.all()) == {post, other}
 
 
+class TestCreateDedup:
+    def test_create_reuses_an_existing_row_via_the_filter_check_alone(self, django_assert_num_queries):
+        # If the filter-then-create dedup check filtered on the wrong value, it would never find
+        # the existing row up front - it would fall through to super().create(), hit the `name`
+        # unique constraint, and only recover via the except IntegrityError branch's own get().
+        # Both paths return the same row, so only the query count tells them apart.
+        Tag = Post.topics.model
+        Tag.objects.create(name="python")
+        with django_assert_num_queries(1):
+            Tag.objects.create(name="python")
+
+
 class TestCreateRaceCondition:
     def test_create_recovers_from_a_duplicate_insert_racing_past_the_filter_check(self):
         # create()'s dedup check is filter-then-create, not an atomic get_or_create() - if two
@@ -150,6 +165,59 @@ class TestMultipleAttachmentsOnTheSameHost:
                 labels = tags(related_name="host_labels")
 
 
+class TestDefaults:
+    @isolate_apps("tests.testapp")
+    def test_related_name_reaches_the_m2m_field(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        assert Host._meta.get_field("topics").remote_field.related_name == "host_topics"
+
+    @isolate_apps("tests.testapp")
+    def test_target_name_defaults_to_target(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        field = Host.topics.through._meta.get_field("target")
+        assert field.related_model is Host
+
+    @isolate_apps("tests.testapp")
+    def test_target_related_name_defaults_to_tags(self):
+        # A uuid-suffixed class name, not a plain "Host" - claim_related_name()'s registry is
+        # keyed by app_label+class name, process-global, and never cleared between tests. A fixed
+        # name would let a stale claim of "tags" left behind by an *earlier* mutant's run of this
+        # same test (under a mutation testing tool that re-invokes pytest in the same process)
+        # linger and mask whether *this* run's own target_related_name default was ever reached.
+        Host = type(
+            f"Host{uuid.uuid4().hex}",
+            (models.Model,),
+            {
+                "__module__": __name__,
+                "Meta": type("Meta", (), {"app_label": "testapp"}),
+                "topics": tags(related_name="host_topics"),
+            },
+        )
+
+        with pytest.raises(ValueError, match="already claimed"):
+            claim_related_name(Host, "tags", "somebody-else")
+
+    @isolate_apps("tests.testapp")
+    def test_name_max_length_defaults_to_100(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        assert Host.topics.model._meta.get_field("name").max_length == 100
+
+
 class TestBaseModelKwarg:
     @isolate_apps("tests.testapp")
     def test_tag_and_through_base_model_kwargs_are_applied_independently(self):
@@ -160,6 +228,30 @@ class TestBaseModelKwarg:
             topics = tags(related_name="host_topics", tag_base_model=BaseModel, through_base_model=BaseModel)
 
         assert issubclass(Host.topics.model, BaseModel)
+        assert issubclass(Host.topics.through, BaseModel)
+
+    @isolate_apps("tests.testapp")
+    def test_tag_base_model_falls_back_to_the_tags_tag_base_model_setting(self):
+        with override_settings(TAGS_TAG_BASE_MODEL="isik.django.apps.common.db.models.BaseModel"):
+
+            class Host(models.Model):
+                class Meta:
+                    app_label = "testapp"
+
+                topics = tags(related_name="host_topics")
+
+        assert issubclass(Host.topics.model, BaseModel)
+
+    @isolate_apps("tests.testapp")
+    def test_through_base_model_falls_back_to_the_tags_through_base_model_setting(self):
+        with override_settings(TAGS_THROUGH_BASE_MODEL="isik.django.apps.common.db.models.BaseModel"):
+
+            class Host(models.Model):
+                class Meta:
+                    app_label = "testapp"
+
+                topics = tags(related_name="host_topics")
+
         assert issubclass(Host.topics.through, BaseModel)
 
 
@@ -184,6 +276,41 @@ class TestNamingAndExtraFieldsKwargs:
             topics = tags(related_name="host_topics", name_max_length=20)
 
         assert Host.topics.model._meta.get_field("name").max_length == 20
+
+    @isolate_apps("tests.testapp")
+    def test_target_related_name_wires_the_through_models_host_fk_reverse_accessor(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics", target_related_name="my_tag_links")
+
+        field = Host.topics.through._meta.get_field("target")
+        assert field.remote_field.related_name == "my_tag_links"
+
+    @isolate_apps("tests.testapp")
+    def test_m2m_field_is_blank_true(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        assert Host._meta.get_field("topics").blank is True
+
+    @isolate_apps("tests.testapp")
+    def test_config_is_wired_to_the_tags_field_instance_not_none(self):
+        # A fresh Host, not Post - Post.topics.config was built once at module-import time and
+        # would never observe a broken config=self here even under a normal test run.
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+            labels = tags(related_name="host_labels", target_related_name="host_labels_tags")
+
+        with pytest.raises(TypeError, match="multiple taggable fields"):
+            resolve_field(Host(), None, _TagsField, "taggable")
 
     @isolate_apps("tests.testapp")
     def test_tag_extra_fields_are_added_to_the_generated_tag_model(self):
@@ -247,8 +374,9 @@ class TestNormalize:
 class TestNameValidation:
     def test_default_regex_rejects_disallowed_characters(self):
         tag = Post.topics.model(name="not valid!")
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             tag.full_clean()
+        assert exc_info.value.message_dict["name"] == [TAG_NAME_REGEX_ERROR_MESSAGE]
 
     def test_default_regex_accepts_letters_digits_dash_underscore_dot(self):
         tag = Post.topics.model(name="valid-Tag_1.0")
@@ -265,6 +393,24 @@ class TestNameValidation:
         _create_tables(Host.topics.model)
         tag = Host.topics.model(name="anything at all!! 123")
         tag.full_clean(exclude=[f.name for f in Host.topics.model._meta.get_fields() if f.name != "name"])
+
+    @isolate_apps("tests.testapp")
+    def test_default_regex_and_message_are_built_fresh_not_read_off_a_module_level_model(self):
+        # Post.topics's validators were built once at module import time - a mutation to how
+        # _TagsField.__init__ builds the default RegexValidator wouldn't be observable through a
+        # model that was already constructed before the mutation was selected. A fresh Host built
+        # here, inside the test body, always re-runs that construction under the active mutation.
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        _create_tables(Host.topics.model)
+        tag = Host.topics.model(name="not valid!")
+        with pytest.raises(ValidationError) as exc_info:
+            tag.full_clean()
+        assert exc_info.value.message_dict["name"] == [TAG_NAME_REGEX_ERROR_MESSAGE]
 
     def test_get_tag_enforces_the_default_regex_too(self):
         # get_tag() is the choke point every write path funnels through (add_tag/set_tags/
@@ -314,6 +460,53 @@ class TestUniqueConstraintOnThrough:
         with pytest.raises(IntegrityError):
             Post.topics.through.objects.create(tag=tag, target=post)
 
+    @isolate_apps("tests.testapp")
+    def test_freshly_built_through_model_enforces_the_constraint_too(self):
+        # Post.topics.through's constraint is baked into an already-applied migration, so it'd
+        # enforce uniqueness at the DB level even if contribute_to_class stopped building one -
+        # a fresh Host here has its table created from the live model definition instead.
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        _create_tables(Host, Host.topics.model, Host.topics.through)
+        host = Host.objects.create()
+        tag = Host.topics.model.objects.get_tag("python")
+        Host.topics.through.objects.create(tag=tag, target=host)
+        with pytest.raises(IntegrityError):
+            Host.topics.through.objects.create(tag=tag, target=host)
+
+    @isolate_apps("tests.testapp")
+    def test_constraint_name_is_lowercased(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        (constraint,) = Host.topics.through._meta.constraints
+        assert constraint.name == "unique_hosttopicsobjecttag"
+
+    @isolate_apps("tests.testapp")
+    def test_the_tag_models_own_name_field_is_unique_freshly_built(self):
+        # Post.topics's name field was built once at module import time - a mutation to how
+        # contribute_to_class() builds it (unique=True dropped/flipped) wouldn't be observable
+        # through a model already constructed before the mutation was selected.
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            topics = tags(related_name="host_topics")
+
+        field = Host.topics.model._meta.get_field("name")
+        assert field.unique is True
+        assert field.max_length == 100
+        # The validators kwarg itself (dropped vs. kept) is covered behaviorally by
+        # test_default_regex_and_message_are_built_fresh_not_read_off_a_module_level_model above -
+        # field.validators is non-empty either way once max_length auto-adds its own.
+
 
 class TestTaggableMixinIsRequiredExplicitly:
     def test_a_plain_class_without_the_mixin_has_no_tag_verbs(self):
@@ -332,8 +525,29 @@ class TestTaggableMixinIsRequiredExplicitly:
         class Thing(TaggableMixin):
             pass
 
-        with pytest.raises(TypeError, match="not taggable"):
+        with pytest.raises(TypeError, match="^Thing is not taggable"):
             Thing().add_tag("x")
+
+    def test_removing_from_something_never_attached_raises(self):
+        class Thing(TaggableMixin):
+            pass
+
+        with pytest.raises(TypeError, match="^Thing is not taggable"):
+            Thing().remove_tag("x")
+
+    def test_setting_tags_on_something_never_attached_raises(self):
+        class Thing(TaggableMixin):
+            pass
+
+        with pytest.raises(TypeError, match="^Thing is not taggable"):
+            Thing().set_tags(["x"])
+
+    def test_tag_names_on_something_never_attached_raises(self):
+        class Thing(TaggableMixin):
+            pass
+
+        with pytest.raises(TypeError, match="^Thing is not taggable"):
+            Thing().tag_names()
 
 
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)

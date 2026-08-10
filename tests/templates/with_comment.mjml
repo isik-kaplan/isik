@@ -1,0 +1,10 @@
+<mjml>
+  <mj-body>
+    <!-- a comment that disable_comments=True should strip from the output -->
+    <mj-section>
+      <mj-column>
+        <mj-text>Welcome, {{ name }}!</mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

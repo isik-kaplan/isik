@@ -101,7 +101,7 @@ class TestMetaCombiningMixin:
         assert Child.Meta.fields == ["id", "name"]
 
     def test_an_unsupported_attribute_type_raises_type_error(self):
-        with pytest.raises(TypeError, match="only supports list or dict"):
+        with pytest.raises(TypeError, match="^meta_fields_to_combine only supports list or dict attributes$"):
 
             class Base(MetaCombiningMixin, serializers.Serializer):
                 meta_fields_to_combine = ["count"]
@@ -112,3 +112,19 @@ class TestMetaCombiningMixin:
             class Child(Base):
                 class Meta:
                     count = 2
+
+    def test_continues_past_a_field_with_no_base_value_to_combine_a_later_one(self):
+        # continue, not break - a field earlier in meta_fields_to_combine having no base value at
+        # all must not stop a later field in the same list from being combined.
+        class Base(MetaCombiningMixin, serializers.Serializer):
+            meta_fields_to_combine = ["relational_fields", "fields"]
+
+            class _Meta:
+                # relational_fields deliberately absent - fields is what should still get combined.
+                fields = ["id"]
+
+        class Child(Base):
+            class Meta:
+                fields = ["name"]
+
+        assert Child.Meta.fields == ["id", "name"]

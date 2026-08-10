@@ -50,7 +50,9 @@ class TestModelSerializerRegistryMixin:
             ModelSerializerRegistryMixin.get_for_model(DummyUnregisteredModel)
 
     def test_registering_a_second_serializer_for_the_same_model_raises(self):
-        with pytest.raises(ImproperlyConfigured):
+        with pytest.raises(
+            ImproperlyConfigured, match="^<class '.*DummyWidgetModel'> is already registered to WidgetSerializer$"
+        ):
 
             class AnotherWidgetSerializer(ModelSerializerRegistryMixin):
                 class Meta:

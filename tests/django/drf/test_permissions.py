@@ -97,6 +97,15 @@ class TestIsAuthenticatedANDSignupCompleted:
         with pytest.raises(ImproperlyConfigured, match="SIGNUP_COMPLETED_FIELD"):
             IsAuthenticatedANDSignupCompleted().has_permission(request, view=None)
 
+    def test_denies_when_the_named_field_itself_is_missing_from_the_user(self, rf, django_user_model):
+        # SIGNUP_COMPLETED_FIELD names a real field ("is_active"), but the field it points at
+        # doesn't have to exist - getattr()'s own fallback has to default to denying, not granting.
+        user = django_user_model.objects.create_user(username="alice", password="password")
+        user.SIGNUP_COMPLETED_FIELD = "no_such_attribute"
+        request = rf.get("/")
+        request.user = user
+        assert IsAuthenticatedANDSignupCompleted().has_permission(request, view=None) is False
+
 
 class TestIsOwner:
     def test_allows_when_the_owner_field_matches_the_requesting_user(self, rf, django_user_model):
@@ -124,8 +133,21 @@ class TestIsOwner:
         permission_cls = is_owner("owner")
         assert permission_cls().has_object_permission(request, view=None, obj=widget) is False
 
+    def test_denies_instead_of_raising_when_the_object_has_no_such_attribute_at_all(self, rf, django_user_model):
+        # Not the same as owner_field being None (see above) - this object doesn't have the
+        # attribute at all, which getattr()'s default is the only thing standing between this and
+        # an uncaught AttributeError.
+        user = django_user_model.objects.create_user(username="alice", password="password")
+        request = rf.get("/")
+        request.user = user
+        permission_cls = is_owner("nonexistent_field")
+        assert permission_cls().has_object_permission(request, view=None, obj=object()) is False
+
     def test_generated_class_name_includes_the_owner_field(self):
         assert is_owner("owner").__name__ == "IsOwnerPermission(owner_field=owner)"
+
+    def test_denial_message(self):
+        assert is_owner("owner").message == "User is not the owner of the object"
 
 
 class TestPreventActions:
@@ -142,11 +164,29 @@ class TestPreventActions:
         assert "create" in permission_cls.__name__
         assert "destroy" in permission_cls.__name__
 
+    def test_denial_message(self):
+        assert prevent_actions("create", "destroy").message == "Actions should not be: ('create', 'destroy')"
+
 
 class TestUserProperty:
     def test_requires_exactly_one_of_property_or_attribute(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="^user_property requires exactly one of property_ or attribute$"):
             user_property()
+
+    def test_generated_class_name_and_default_message_use_the_attribute_name(self):
+        permission_cls = user_property(attribute="is_verified")
+        assert permission_cls.__name__ == "UserAttributePermission(property=is_verified)"
+        assert permission_cls.message == "User property is_verified is False"
+
+    def test_generated_class_name_and_default_message_use_the_property_name(self):
+        class User:
+            @property
+            def is_verified(self):
+                return True
+
+        permission_cls = user_property(property_=User.is_verified)
+        assert permission_cls.__name__ == "UserAttributePermission(property=is_verified)"
+        assert permission_cls.message == "User property is_verified is False"
 
     def test_rejects_both_property_and_attribute_together(self):
         class User:

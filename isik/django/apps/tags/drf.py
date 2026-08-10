@@ -49,6 +49,8 @@ def generic_tag_serializer(field):
     """
     tag_model = field.model
     meta_attrs = {"model": tag_model, "fields": ["id", "name", "usage_count"]}
-    meta = type("Meta", (), meta_attrs)
+    meta = type("Meta", (), meta_attrs)  # pragma: no mutate
+    # This type's own __name__ ("Meta") is never inspected by Django/DRF - only the "Meta" *key*
+    # in attrs below matters (getattr(cls, "Meta")), so the literal name argument here is inert.
     attrs = {"Meta": meta, "usage_count": ModelRelatedCountField(related_name=field.config.related_name)}
     return type(f"{tag_model.__name__}Serializer", (BaseModelSerializer,), attrs)

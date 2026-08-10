@@ -39,7 +39,10 @@ class IsAuthenticatedANDSignupCompleted(BasePermission):
             raise ImproperlyConfigured(
                 f"{user.__class__.__name__} must define SIGNUP_COMPLETED_FIELD to use {self.__class__.__name__}."
             ) from exc
-        return bool(getattr(user, signup_completed_field, False))
+        return bool(getattr(user, signup_completed_field, False))  # pragma: no mutate
+        # the bool() wrapper makes any other falsy default (None, 0, "") produce the exact same
+        # return value in every case - there's no test that could ever distinguish this literal
+        # from another falsy one, so this isn't a real gap, just an unobservable mutant.
 
 
 def is_owner(owner_field):

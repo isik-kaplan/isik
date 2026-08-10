@@ -8,6 +8,7 @@ from django.db.utils import DataError
 from django.test import override_settings
 from django.test.utils import isolate_apps
 
+from isik.django.apps.common._model_makers import claim_related_name
 from isik.django.apps.feedback.comments import comments
 from tests.testapp.models import Article, EmailUser, Post
 
@@ -55,14 +56,93 @@ def test_comments_on_mixin_method_returns_every_comment_regardless_of_author(ali
 
 
 def test_commenting_on_something_never_attached_raises(alice):
-    with pytest.raises(TypeError, match="not commentable"):
+    with pytest.raises(TypeError, match="^object is not commentable"):
         alice.comment(object(), "x")
+
+
+def test_comments_on_something_never_attached_raises(alice):
+    with pytest.raises(TypeError, match="^object is not commentable"):
+        alice.comments_on(object())
 
 
 def test_min_length_is_enforced(alice, post):
     comment = Post.comments.model(target=post, user=alice, body="")
     with pytest.raises(ValidationError):
         comment.full_clean()
+
+
+@isolate_apps("tests.testapp")
+def test_comment_min_length_defaults_to_1_not_2(alice):
+    # Post.comments was built once at module import time - a mutation to comment_min_length's
+    # default wouldn't be observable through a model already constructed before the mutation was
+    # selected. A single-character body distinguishes min_length=1 (passes) from min_length=2
+    # (fails) - unlike the existing empty-body test above, which fails identically either way.
+    # MinLengthHost, not Host - other isolate_apps tests in this file/test_drf.py also define a
+    # class literally named Host with the default target_related_name, and
+    # claim_related_name()'s registry is keyed by app_label+class name, process-global.
+    class MinLengthHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        notes = comments(user_related_name="min_length_host_comments", user_model=EmailUser)
+
+    with connection.schema_editor() as editor:
+        editor.create_model(MinLengthHost)
+        editor.create_model(MinLengthHost.notes.model)
+
+    host = MinLengthHost.objects.create()
+    comment = MinLengthHost.notes.model(target=host, user=alice, body="x")
+    comment.full_clean()
+
+
+@isolate_apps("tests.testapp")
+def test_comments_on_passes_its_own_explicit_field_through_instead_of_re_resolving(alice):
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = comments(
+            user_related_name="host_first_comments", target_related_name="first_comments", user_model=EmailUser
+        )
+        second = comments(
+            user_related_name="host_second_comments", target_related_name="second_comments", user_model=EmailUser
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    Host.first.model.objects.create(target=host, user=alice, body="hi")
+    assert {c.body for c in alice.comments_on(host, field=Host.first)} == {"hi"}
+
+
+@isolate_apps("tests.testapp")
+def test_comment_passes_its_own_explicit_field_through_instead_of_re_resolving(alice):
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = comments(
+            user_related_name="host_first_comment_writes",
+            target_related_name="first_comment_writes",
+            user_model=EmailUser,
+        )
+        second = comments(
+            user_related_name="host_second_comment_writes",
+            target_related_name="second_comment_writes",
+            user_model=EmailUser,
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    alice.comment(host, "hi", field=Host.first)
+    assert Host.first.model.objects.filter(target=host, user=alice, body="hi").exists()
 
 
 class TestVotesAttachedViaExtraFields:
@@ -190,6 +270,27 @@ def test_reusing_a_target_related_name_on_the_same_host_raises():
             second = comments(user_related_name="colliding_comment_fields_second", target_related_name="shared")
 
 
+@isolate_apps("tests.testapp")
+def test_defaults_and_wiring():
+    class DefaultCommentsHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        entries = comments(user_related_name="host_comment_entries", user_model=EmailUser)
+
+    # target_name defaults to "target"
+    target_field = DefaultCommentsHost.entries.model._meta.get_field("target")
+    assert target_field.related_model is DefaultCommentsHost
+
+    # target_related_name defaults to "comments" - claim_related_name() actually recorded it
+    with pytest.raises(ValueError, match="already claimed"):
+        claim_related_name(DefaultCommentsHost, "comments", "somebody-else")
+
+    # the user FK's related_name is wired to user_related_name, not dropped/None
+    user_field = DefaultCommentsHost.entries.model._meta.get_field("user")
+    assert user_field.remote_field.related_name == "host_comment_entries"
+
+
 class TestBaseModelResolution:
     @isolate_apps("tests.testapp")
     def test_explicit_base_model_kwarg_lets_the_generated_comment_model_inherit_a_custom_base(self):
@@ -290,6 +391,28 @@ class TestPlainTextMaxLength:
 
         comment = MaxLengthCommentHost.comments.model(target=host, user=alice, body="x" * 10)
         comment.full_clean()
+
+    @isolate_apps("tests.testapp")
+    def test_min_length_is_still_enforced_when_comment_max_length_is_also_set(self, alice):
+        # The CharField branch (comment_max_length set) builds its own validators list separately
+        # from the TextField branch - dropping it there wouldn't be caught by the plain
+        # test_min_length_is_enforced (unbounded, TextField branch) above.
+        class MaxLengthCommentHost(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            comments = comments(
+                user_related_name="min_length_with_max_length_host_comments",
+                user_model=EmailUser,
+                comment_max_length=10,
+            )
+
+        _create_tables(MaxLengthCommentHost, MaxLengthCommentHost.comments.model)
+        host = MaxLengthCommentHost.objects.create()
+
+        comment = MaxLengthCommentHost.comments.model(target=host, user=alice, body="")
+        with pytest.raises(ValidationError):
+            comment.full_clean()
 
     @isolate_apps("tests.testapp")
     def test_a_body_over_the_configured_max_length_is_rejected_at_the_database_level(self, alice):

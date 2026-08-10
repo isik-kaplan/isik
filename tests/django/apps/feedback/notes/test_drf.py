@@ -129,3 +129,21 @@ class TestBodyMaxLengthEnforcement:
         Serializer = generic_note_serializer(MaxLengthNoteHost.notes.model)
         serializer = Serializer(data={"body": "x" * 5})
         assert serializer.is_valid(), serializer.errors
+
+
+@isolate_apps("tests.testapp")
+def test_meta_fields_and_read_only_fields_are_exact():
+    # A fresh Host, not Post.notes - Post-based NoteSerializer is built once at module scope (see
+    # the comment above) and would never observe a broken generic_note_serializer() under a tool
+    # that reruns pytest in the same process (e.g. mutation testing).
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        notes = notes(user_related_name="host_notes")
+
+    Serializer = generic_note_serializer(Host.notes.model)
+    assert Serializer.Meta.fields == ["id", "body", "created_at", "updated_at", "user"]
+    assert Serializer.Meta.read_only_fields == ["user", "created_at", "updated_at"]
+    assert Serializer.Meta.model is Host.notes.model
+    assert Serializer.__name__ == f"{Host.notes.model.__name__}Serializer"

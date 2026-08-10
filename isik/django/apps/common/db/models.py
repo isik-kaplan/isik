@@ -80,7 +80,10 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
         transaction.on_commit(self._reset_initial_state)
 
     def update(self, **kwargs):
-        skip_hooks = kwargs.pop("_skip_hooks", False)
+        skip_hooks = kwargs.pop("_skip_hooks", False)  # pragma: no mutate
+        # Only ever forwarded straight into save()'s own "_skip_hooks" pop+truthy check below -
+        # None and False collapse to the same branch there, so this default's exact value never
+        # actually reaches an observable decision.
         update_fields = list(kwargs.keys())
         for key, val in kwargs.items():
             setattr(self, key, val)

@@ -78,7 +78,12 @@ class TestContextLocal:
         assert ContextLocal("SAME_CONTEXT_LOCAL") is ContextLocal("SAME_CONTEXT_LOCAL")
 
     def test_set_get_and_reset_roundtrip(self):
-        local = ContextLocal("ROUNDTRIP_CONTEXT_LOCAL")
+        # A fresh name per run - ContextLocal is a process-global singleton-by-name registry, and
+        # _get_var() only actually builds a new ContextVar the first time a given (name, key)
+        # combination is seen - a fixed name would silently skip that code path on a second
+        # in-process run of this test (e.g. a mutation-testing tool re-invoking pytest without
+        # restarting).
+        local = ContextLocal(f"ROUNDTRIP_CONTEXT_LOCAL_{uuid.uuid4().hex}")
         token = local.set("key", "value")
         assert local.get("key") == "value"
         local.reset("key", token)

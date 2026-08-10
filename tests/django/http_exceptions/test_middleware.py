@@ -43,6 +43,11 @@ class TestRequestContextMiddleware:
             middleware(rf.get("/"))
         assert get_current_request() is None
 
+    def test_passes_the_real_request_through_to_get_response(self, rf):
+        middleware = RequestContextMiddleware(lambda request: HttpResponse(request.path))
+        response = middleware(rf.get("/some/path"))
+        assert response.content == b"/some/path"
+
 
 class _IsolatedException(HTTPException):
     """A dedicated HTTPException subclass so tests don't share _error_handlers with the rest of the suite."""
@@ -57,6 +62,11 @@ class TestExceptionHandlerMiddleware:
         middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse("ok"))
         response = middleware(rf.get("/"))
         assert response.content == b"ok"
+
+    def test_call_passes_the_real_request_through_to_get_response(self, rf):
+        middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse(request.path))
+        response = middleware(rf.get("/some/path"))
+        assert response.content == b"/some/path"
 
     def test_process_exception_ignores_non_http_exceptions(self, rf):
         middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse())
@@ -76,13 +86,13 @@ class TestExceptionHandlerMiddleware:
 
     def test_process_exception_uses_the_registered_default_view(self, rf):
         def default_view(request):
-            return HttpResponse("from default view")
+            return HttpResponse(f"from default view: {request.path}")
 
         _IsolatedException.register_default_view(default_view)
         try:
             middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse())
-            response = middleware.process_exception(rf.get("/"), _IsolatedException())
-            assert response.content == b"from default view"
+            response = middleware.process_exception(rf.get("/some/path"), _IsolatedException())
+            assert response.content == b"from default view: /some/path"
             assert response.status_code == 598
         finally:
             del _IsolatedException._default_view

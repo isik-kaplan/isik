@@ -60,16 +60,19 @@ class TestParseAndCheckSuccessCases:
 
 class TestParseAndCheckErrorCases:
     def test_not_a_dict_at_all(self):
-        with pytest.raises(ValidationError, match="JSON object"):
+        with pytest.raises(ValidationError) as exc_info:
             tiptap.parse_and_check("just a string", schema_path=SCHEMA_PATH)
+        assert exc_info.value.messages == ["Tiptap document must be a JSON object."]
 
     def test_missing_top_level_type(self):
-        with pytest.raises(ValidationError, match="doc"):
+        with pytest.raises(ValidationError) as exc_info:
             tiptap.parse_and_check({"content": []}, schema_path=SCHEMA_PATH)
+        assert exc_info.value.messages == ["Tiptap document must have a top-level type of 'doc'."]
 
     def test_top_level_type_is_not_doc(self):
-        with pytest.raises(ValidationError, match="doc"):
+        with pytest.raises(ValidationError) as exc_info:
             tiptap.parse_and_check(paragraph(text("x")), schema_path=SCHEMA_PATH)
+        assert exc_info.value.messages == ["Tiptap document must have a top-level type of 'doc'."]
 
     def test_unknown_node_type(self):
         value = doc({"type": "table", "content": []})
@@ -105,8 +108,19 @@ class TestParseAndCheckErrorCases:
 
     def test_no_schema_configured_at_all(self):
         with override_settings(FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH=None):
-            with pytest.raises(ValidationError, match="No Tiptap schema configured"):
+            with pytest.raises(ValidationError) as exc_info:
                 tiptap.parse_and_check(doc(paragraph(text("x"))))
+        assert exc_info.value.messages == [
+            "No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly."
+        ]
+
+    def test_the_setting_not_being_defined_at_all_is_treated_the_same_as_none(self, settings):
+        # getattr(settings, "...", None)'s own default has to be an empty/falsy fallback, not
+        # missing entirely - a settings module that never defines this at all (as opposed to
+        # defining it as None) must still raise ValidationError, not crash with AttributeError.
+        del settings.FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH
+        with pytest.raises(ValidationError, match="No Tiptap schema configured"):
+            tiptap.parse_and_check(doc(paragraph(text("x"))))
 
     def test_schema_file_does_not_exist(self):
         with pytest.raises(FileNotFoundError):
@@ -155,6 +169,10 @@ class TestGetMentions:
 
     def test_a_non_dict_child_in_content_is_skipped_instead_of_raising(self):
         value = doc(paragraph("not a node", {"type": "mention", "attrs": {"id": "user:1"}}))
+        assert tiptap.get_mentions(value) == ["user:1"]
+
+    def test_a_mention_node_with_no_attrs_key_at_all_is_skipped_instead_of_raising(self):
+        value = doc(paragraph({"type": "mention"}, {"type": "mention", "attrs": {"id": "user:1"}}))
         assert tiptap.get_mentions(value) == ["user:1"]
 
     def test_a_mention_missing_its_id_attr_contributes_nothing(self):

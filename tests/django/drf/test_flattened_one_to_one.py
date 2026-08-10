@@ -33,6 +33,25 @@ class TestFlattenedOneToOneMixinRead:
         WidgetProfile.objects.create(widget=widget, bio="a bolt")
         assert WidgetSerializer(widget).data == {"id": str(widget.id), "name": "bolt", "bio": "a bolt"}
 
+    def test_a_nested_fields_own_positional_constructor_args_survive_reconstruction(self):
+        # ChoiceField takes `choices` positionally - dropping the reconstructed field's *_args
+        # would silently lose it (TypeError: missing choices, since it has no default).
+        class ChoiceProfileSerializer(serializers.ModelSerializer):
+            mood = serializers.ChoiceField(["good", "bad"])
+
+            class Meta:
+                model = WidgetProfile
+                fields = ["bio", "mood"]
+
+        class ChoiceWidgetSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
+            class Meta:
+                model = Widget
+                fields = ["id", "name"]
+                flattened_one_to_one_fields = {"profile": ChoiceProfileSerializer}
+
+        widget = Widget.objects.create(name="bolt")
+        assert ChoiceWidgetSerializer(widget).fields["mood"].choices == {"good": "good", "bad": "bad"}
+
 
 class TestFlattenedOneToOneMixinWrite:
     def test_create_creates_both_the_parent_and_the_related_row(self):
@@ -130,7 +149,10 @@ class TestFlattenedOneToOneMixinValidation:
                 model = WidgetSettings
                 fields = ["bio"]
 
-        with pytest.raises(ImproperlyConfigured, match="declared by both"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"flattened field '.+' is declared by both 'profile' and 'settings'\.$",
+        ):
 
             class ConflictingSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
                 class Meta:
@@ -149,6 +171,16 @@ class TestFlattenedOneToOneMixinValidation:
                     model = Widget
                     fields = ["id", "name"]
                     flattened_one_to_one_fields = {"nope": WidgetProfileSerializer}
+
+    def test_a_meta_with_no_model_attribute_is_simply_skipped(self):
+        # getattr(own_meta, "model", ...)'s own default has to be an empty/falsy fallback, not
+        # missing entirely - a Meta that never sets model at all (as opposed to Meta being absent
+        # entirely, already covered elsewhere) must not crash building the class.
+        class NoModelMetaSerializer(FlattenedOneToOneMixin, serializers.Serializer):
+            class Meta:
+                flattened_one_to_one_fields = {"profile": WidgetProfileSerializer}
+
+        assert not hasattr(NoModelMetaSerializer.Meta, "model")
 
     def test_a_field_name_that_is_not_a_reverse_one_to_one_relation_raises(self):
         with pytest.raises(ImproperlyConfigured, match="isn't a reverse one-to-one relation"):
