@@ -149,6 +149,38 @@ def test_unbookmark_passes_its_own_explicit_field_through_instead_of_re_resolvin
 
 
 @isolate_apps("tests.testapp")
+def test_toggle_bookmark_passes_its_own_explicit_field_through_to_unbookmark_too(alice):
+    # The toggle test above only ever exercises toggle_bookmark's bookmark() branch (alice hasn't
+    # bookmarked anything yet there) - this one pre-bookmarks first, so toggle takes the
+    # unbookmark() branch instead, and that forward needs its own coverage: re-resolving from
+    # scratch instead of forwarding field would hit the "multiple bookmarkable fields" error here.
+    class Host(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        first = bookmarks(
+            user_related_name="host_first_toggle_unbookmarks",
+            target_related_name="first_toggle_unbookmarks",
+            user_model=EmailUser,
+        )
+        second = bookmarks(
+            user_related_name="host_second_toggle_unbookmarks",
+            target_related_name="second_toggle_unbookmarks",
+            user_model=EmailUser,
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(Host)
+        editor.create_model(Host.first.model)
+        editor.create_model(Host.second.model)
+
+    host = Host.objects.create()
+    Host.first.model.objects.create(target=host, user=alice)
+    alice.toggle_bookmark(host, field=Host.first)
+    assert not Host.first.model.objects.filter(target=host, user=alice).exists()
+
+
+@isolate_apps("tests.testapp")
 def test_defaults_and_wiring():
     # DefaultBookmarksHost, not Host - other isolate_apps tests in this file/test_drf.py also
     # define a class literally named Host with the default target_related_name, and

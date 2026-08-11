@@ -201,6 +201,33 @@ class TestTiptapEndToEnd:
             comment.full_clean()
 
 
+@isolate_apps("tests.testapp")
+def test_tiptap_min_length_is_forwarded_to_the_validator(alice):
+    # Article.comments (module-level) is built once at import time, before mutmut selects a given
+    # mutant - a dropped min_length kwarg on the tiptap path wouldn't show up through it. Build a
+    # tiptap-enabled host fresh here instead, at test-execution time, so the wiring is exercised.
+    class TiptapMinLengthHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        notes = comments(
+            user_related_name="tiptap_min_length_host_comments",
+            user_model=EmailUser,
+            tiptap=True,
+            comment_min_length=5,
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(TiptapMinLengthHost)
+        editor.create_model(TiptapMinLengthHost.notes.model)
+
+    host = TiptapMinLengthHost.objects.create()
+    body = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "hi"}]}]}
+    comment = TiptapMinLengthHost.notes.model(target=host, user=alice, body=body)
+    with pytest.raises(ValidationError, match="at least 5"):
+        comment.full_clean()
+
+
 class TestCascadeDelete:
     def test_deleting_the_host_cascades_to_its_comments(self, alice, post):
         alice.comment(post, "nice post")

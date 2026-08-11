@@ -53,3 +53,15 @@ def test_accepts_the_username_field_name_via_kwargs(user):
     backend = UsernameOREmailModelBackend()
     kwargs = {user_model.USERNAME_FIELD: getattr(user, user_model.USERNAME_FIELD)}
     assert backend.authenticate(None, password="password", **kwargs) == user
+
+
+def test_matches_by_either_the_username_field_or_the_email_field_not_both(monkeypatch, user):
+    # EmailUser's EMAIL_FIELD ("email", inherited from AbstractUser) happens to equal its own
+    # USERNAME_FIELD override ("email" too) - every other test here authenticates by a value
+    # that satisfies both sides of the lookup at once, so an OR-vs-AND regression wouldn't show up
+    # through them. Point EMAIL_FIELD at the model's separate "username" field instead, so a value
+    # that matches only that side (not USERNAME_FIELD/"email") proves the lookup is really OR.
+    user_model = get_user_model()
+    monkeypatch.setattr(user_model, "EMAIL_FIELD", "username")
+    backend = UsernameOREmailModelBackend()
+    assert backend.authenticate(None, username=user.username, password="password") == user
