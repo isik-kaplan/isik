@@ -54,6 +54,14 @@ jobs:
         run: |
           uv run mutmut export-cicd-stats
 
+      # TEMPORARY diagnostic - identifies exactly which mutants survive on a flaky CI run instead
+      # of just the count, so runs can be compared. Remove once the flakiness is root-caused.
+      - name: List survivors
+        if: always()
+        run: |
+          nproc
+          uv run mutmut results
+
       - name: Upload full results
         if: always()
         uses: actions/upload-artifact@v4
