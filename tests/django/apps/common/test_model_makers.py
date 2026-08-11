@@ -9,9 +9,7 @@ from isik.django.apps.common import _model_makers
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture(autouse=True)
-def _reset_claimed_names():
-    _model_makers._claimed_related_names.clear()
+# _reset_claimed_related_names in tests/conftest.py resets this globally, for every test.
 
 
 class TestResolveBaseModel:

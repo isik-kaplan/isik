@@ -93,6 +93,11 @@ class TestContextLocal:
         local = ContextLocal("DEFAULT_CONTEXT_LOCAL")
         assert local.get("missing", "fallback") == "fallback"
 
+    def test_get_var_names_the_contextvar_after_its_own_namespace_and_key(self):
+        name = f"NAMED_CONTEXT_LOCAL_{uuid.uuid4().hex}"
+        local = ContextLocal(name)
+        assert local._get_var("key").name == f"{name}.key"
+
     def test_double_checked_lock_does_not_overwrite_a_concurrently_created_entry(self, monkeypatch):
         # A fresh name per run - see the matching ThreadLocal test's comment.
         name = f"RACE_CONTEXT_LOCAL_{uuid.uuid4().hex}"

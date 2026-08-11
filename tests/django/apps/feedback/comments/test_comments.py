@@ -10,6 +10,7 @@ from django.test.utils import isolate_apps
 
 from isik.django.apps.common._model_makers import claim_related_name
 from isik.django.apps.feedback.comments import comments
+from isik.django.apps.feedback.votes import votes
 from tests.testapp.models import Article, EmailUser, Post
 
 
@@ -228,6 +229,32 @@ def test_tiptap_min_length_is_forwarded_to_the_validator(alice):
         comment.full_clean()
 
 
+@isolate_apps("tests.testapp")
+def test_tiptap_max_length_is_forwarded_to_the_validator(alice):
+    # Same reasoning as test_tiptap_min_length_is_forwarded_to_the_validator above - Article's
+    # module-level tiptap comments field can't observe a dropped max_length kwarg here either.
+    class TiptapMaxLengthHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        notes = comments(
+            user_related_name="tiptap_max_length_host_comments",
+            user_model=EmailUser,
+            tiptap=True,
+            comment_max_length=5,
+        )
+
+    with connection.schema_editor() as editor:
+        editor.create_model(TiptapMaxLengthHost)
+        editor.create_model(TiptapMaxLengthHost.notes.model)
+
+    host = TiptapMaxLengthHost.objects.create()
+    body = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "too long"}]}]}
+    comment = TiptapMaxLengthHost.notes.model(target=host, user=alice, body=body)
+    with pytest.raises(ValidationError, match="at most 5"):
+        comment.full_clean()
+
+
 class TestCascadeDelete:
     def test_deleting_the_host_cascades_to_its_comments(self, alice, post):
         alice.comment(post, "nice post")
@@ -253,6 +280,37 @@ class TestCascadeDelete:
         post.delete()
         assert not Post.comments.model.objects.filter(pk=comment.pk).exists()
         assert not Post.comments.model.votes.model.objects.filter(user=alice).exists()
+
+
+@isolate_apps("tests.testapp")
+def test_extra_fields_can_attach_a_maker_to_the_generated_comment_model(alice):
+    """comments() merges other makers' fields in via extra_fields=, per its own docstring example
+    (`comments(extra_fields={"votes": votes(...)})`) - Post.comments (module-level) already opts
+    into this in tests/testapp/models.py, but built once at import time it can't observe a dropped
+    extra_fields kwarg here."""
+
+    class CommentExtraFieldsHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        comments = comments(
+            user_related_name="comment_extra_fields_host_comments",
+            user_model=EmailUser,
+            extra_fields={
+                "votes": votes(user_related_name="comment_extra_fields_host_comment_votes", user_model=EmailUser)
+            },
+        )
+
+    _create_tables(
+        CommentExtraFieldsHost, CommentExtraFieldsHost.comments.model, CommentExtraFieldsHost.comments.model.votes.model
+    )
+
+    host = CommentExtraFieldsHost.objects.create()
+    comment = alice.comment(host, "nice")
+
+    assert hasattr(CommentExtraFieldsHost.comments.model, "votes")
+    alice.upvote(comment)
+    assert CommentExtraFieldsHost.comments.model.votes.model.objects.filter(target=comment, user=alice).exists()
 
 
 def _create_tables(*models_):
@@ -423,7 +481,9 @@ class TestPlainTextMaxLength:
     def test_min_length_is_still_enforced_when_comment_max_length_is_also_set(self, alice):
         # The CharField branch (comment_max_length set) builds its own validators list separately
         # from the TextField branch - dropping it there wouldn't be caught by the plain
-        # test_min_length_is_enforced (unbounded, TextField branch) above.
+        # test_min_length_is_enforced (unbounded, TextField branch) above. comment_min_length=2
+        # with a 1-char (non-blank) body specifically exercises MinLengthValidator - an empty body
+        # would be rejected by CharField's own blank=False check regardless of validators=.
         class MaxLengthCommentHost(models.Model):
             class Meta:
                 app_label = "testapp"
@@ -431,14 +491,15 @@ class TestPlainTextMaxLength:
             comments = comments(
                 user_related_name="min_length_with_max_length_host_comments",
                 user_model=EmailUser,
+                comment_min_length=2,
                 comment_max_length=10,
             )
 
         _create_tables(MaxLengthCommentHost, MaxLengthCommentHost.comments.model)
         host = MaxLengthCommentHost.objects.create()
 
-        comment = MaxLengthCommentHost.comments.model(target=host, user=alice, body="")
-        with pytest.raises(ValidationError):
+        comment = MaxLengthCommentHost.comments.model(target=host, user=alice, body="x")
+        with pytest.raises(ValidationError, match="at least 2"):
             comment.full_clean()
 
     @isolate_apps("tests.testapp")

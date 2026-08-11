@@ -19,9 +19,9 @@ from isik.django.apps.common._model_makers import (
 class _CommentsField:
     """Descriptor returned by `comments()` - see `comments` for the public docstring."""
 
-    # target_name/target_related_name have no default here - _CommentsField is only ever built by
-    # the comments() maker below, which always forwards its own (already-defaulted) values
-    # explicitly, so a bare default on this end would be dead code no test could reach.
+    # tiptap/comment_min_length/comment_max_length/tiptap_schema_path have no default here - like
+    # target_name/target_related_name, _CommentsField is only ever built by the comments() maker
+    # below, which always forwards its own (already-defaulted) values explicitly.
     def __init__(
         self,
         *,
@@ -31,10 +31,10 @@ class _CommentsField:
         user_model=None,
         base_model=None,
         extra_fields=None,
-        tiptap=False,
-        comment_min_length=1,
-        comment_max_length=None,
-        tiptap_schema_path=None,
+        tiptap,
+        comment_min_length,
+        comment_max_length,
+        tiptap_schema_path,
     ):
         self.user_related_name = user_related_name
         self.target_name = target_name
