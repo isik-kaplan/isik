@@ -42,8 +42,6 @@ class ViewSetRegistryMixin:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if cls.__dict__.get("is_base_class", False):  # pragma: no mutate
-            # Only used in a plain `if` truthiness check below - None and False are both falsy
-            # and behave identically here, so this default's exact value is unobservable.
             # Must happen before the `not cls.model` guard below - a class marking itself as a
             # new base is almost always still abstract with no `model` of its own, which is
             # exactly the common case this fork needs to fire for.

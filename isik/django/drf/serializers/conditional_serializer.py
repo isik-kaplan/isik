@@ -6,8 +6,6 @@ from django.utils.module_loading import import_string
 
 def _first_segment(path):
     return path.split(".", 1)[0]  # pragma: no mutate
-    # maxsplit=1 vs. any other value (2, unlimited) never changes the result: [0] always takes
-    # everything before the first separator, identical no matter how many further splits happen.
 
 
 class ConditionalSerializerMixin:

@@ -13,9 +13,6 @@ class MediaWhiteNoiseMiddleware(WhiteNoise):
 
         static_prefix = urlparse(settings.MEDIA_URL or "").path
         script_prefix = get_script_prefix().rstrip("/")  # pragma: no mutate
-        # rstrip("/") vs rstrip() (Django's script prefix never has trailing whitespace to strip
-        # differently) only changes whether the leading "/" of what's left is stripped here or by
-        # ensure_leading_trailing_slash() below - either way the final static_prefix is identical.
         if script_prefix and static_prefix.startswith(script_prefix):
             static_prefix = static_prefix[len(script_prefix) :]
         static_prefix = ensure_leading_trailing_slash(static_prefix)
@@ -40,9 +37,6 @@ class MediaWhiteNoiseMiddleware(WhiteNoise):
         response = static_file.get_response(request.method, request.META)
         http_response = WhiteNoiseFileResponse(response.file or (), status=int(response.status))
         del http_response["content-type"]  # pragma: no mutate
-        # Django's response headers are a case-insensitive mapping, so a case-variant of this
-        # literal (e.g. "Content-Type") deletes the exact same header - only a wrong key entirely
-        # would matter, and that's what test_a_304_response_has_no_content_type_header covers.
         for key, value in response.headers:
             http_response[key] = value
         return http_response

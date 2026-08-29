@@ -5,8 +5,6 @@ from django.db.models import Case, Value, When
 
 
 def starts_with(field, prefix):
-    # No explicit output_field - Case's own resolution already infers BooleanField unambiguously
-    # from the Value(True)/Value(False) branches, so passing one explicitly is pure dead weight.
     return Case(When(**{f"{field}__startswith": prefix}, then=Value(True)), default=Value(False))
 
 

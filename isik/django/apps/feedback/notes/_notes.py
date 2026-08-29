@@ -15,9 +15,6 @@ from isik.django.apps.common._model_makers import (
 class _NotesField:
     """Descriptor returned by `notes()` - see `notes` for the public docstring."""
 
-    # target_name/target_related_name have no default here - _NotesField is only ever built by the
-    # notes() maker below, which always forwards its own (already-defaulted) values explicitly, so
-    # a bare default on this end would be dead code no test could reach.
     def __init__(
         self,
         *,

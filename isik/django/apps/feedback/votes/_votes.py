@@ -15,9 +15,6 @@ from isik.django.apps.common._model_makers import (
 class _VotesField:
     """Descriptor returned by `votes()` - see `votes` for the public docstring."""
 
-    # target_name/target_related_name have no default here - _VotesField is only ever built by the
-    # votes() maker below, which always forwards its own (already-defaulted) values explicitly, so
-    # a bare default on this end would be dead code no test could reach.
     def __init__(
         self,
         *,

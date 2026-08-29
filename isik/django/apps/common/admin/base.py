@@ -87,8 +87,6 @@ class BaseAdmin(DjangoObjectActions, DALFModelAdmin):
         for field in fields:
             setattr(obj, field, request.user)
         return super().save_model(request, obj, form, change)  # pragma: no mutate
-        # ModelAdmin.save_model()'s own body is just obj.save() - request/form/change are unused
-        # in it, so passing a different value for any of them here is unobservable.
 
     @with_attrs(thread_lock=ThreadLock("BaseAdmin.formfield_for_manytomany"))
     def formfield_for_manytomany(self, db_field, request, **kwargs):

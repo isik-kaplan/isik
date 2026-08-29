@@ -218,14 +218,28 @@ class TestDefaults:
         assert Host.topics.model._meta.get_field("name").max_length == 100
 
 
+def _host_model(**tags_kwargs):
+    """A fresh, uniquely-named Host - BaseModel now carries pgtrigger triggers itself (see
+    isik/django/apps/common/db/models.py), and pgtrigger's registry is process-global and keyed
+    by db_table/trigger name, so a fixed "Host" class name would collide with itself on a second
+    in-process run of a test using it (e.g. a mutation-testing tool re-invoking pytest without
+    restarting) - the same reason tests/django/apps/common/db/test_history.py uuid-suffixes its
+    own throwaway tracked models."""
+    return type(
+        f"Host{uuid.uuid4().hex[:8]}",
+        (models.Model,),
+        {
+            "__module__": __name__,
+            "Meta": type("Meta", (), {"app_label": "testapp"}),
+            "topics": tags(related_name="host_topics", **tags_kwargs),
+        },
+    )
+
+
 class TestBaseModelKwarg:
     @isolate_apps("tests.testapp")
     def test_tag_and_through_base_model_kwargs_are_applied_independently(self):
-        class Host(models.Model):
-            class Meta:
-                app_label = "testapp"
-
-            topics = tags(related_name="host_topics", tag_base_model=BaseModel, through_base_model=BaseModel)
+        Host = _host_model(tag_base_model=BaseModel, through_base_model=BaseModel)
 
         assert issubclass(Host.topics.model, BaseModel)
         assert issubclass(Host.topics.through, BaseModel)
@@ -233,24 +247,14 @@ class TestBaseModelKwarg:
     @isolate_apps("tests.testapp")
     def test_tag_base_model_falls_back_to_the_tags_tag_base_model_setting(self):
         with override_settings(TAGS_TAG_BASE_MODEL="isik.django.apps.common.db.models.BaseModel"):
-
-            class Host(models.Model):
-                class Meta:
-                    app_label = "testapp"
-
-                topics = tags(related_name="host_topics")
+            Host = _host_model()
 
         assert issubclass(Host.topics.model, BaseModel)
 
     @isolate_apps("tests.testapp")
     def test_through_base_model_falls_back_to_the_tags_through_base_model_setting(self):
         with override_settings(TAGS_THROUGH_BASE_MODEL="isik.django.apps.common.db.models.BaseModel"):
-
-            class Host(models.Model):
-                class Meta:
-                    app_label = "testapp"
-
-                topics = tags(related_name="host_topics")
+            Host = _host_model()
 
         assert issubclass(Host.topics.through, BaseModel)
 

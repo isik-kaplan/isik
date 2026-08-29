@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection, models
@@ -342,13 +344,22 @@ class TestBaseModelResolution:
         with override_settings(FEEDBACK_VOTES_BASE_MODEL="isik.django.apps.common.db.models.BaseModel"):
             from isik.django.apps.common.db.models import BaseModel
 
-            class SettingBaseVoteHost(models.Model):
-                class Meta:
-                    app_label = "testapp"
+            # A fresh, uniquely-named host - BaseModel now carries pgtrigger triggers of its own
+            # (isik/django/apps/common/db/models.py), and pgtrigger's registry is process-global
+            # and keyed by db_table/trigger name, so a fixed class name would collide with itself
+            # on a second in-process run of this test (e.g. a mutation-testing tool re-invoking
+            # pytest without restarting).
+            SettingBaseVoteHost = type(
+                f"SettingBaseVoteHost{uuid.uuid4().hex[:8]}",
+                (models.Model,),
+                {
+                    "__module__": __name__,
+                    "Meta": type("Meta", (), {"app_label": "testapp"}),
+                    "votes": votes(user_related_name="setting_base_vote_host_votes"),
+                },
+            )
 
-                votes = votes(user_related_name="setting_base_vote_host_votes")
-
-            assert issubclass(SettingBaseVoteHost.votes.model, BaseModel)
+        assert issubclass(SettingBaseVoteHost.votes.model, BaseModel)
 
     @isolate_apps("tests.testapp")
     def test_a_non_abstract_base_model_raises_type_error(self):

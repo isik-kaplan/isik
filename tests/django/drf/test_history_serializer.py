@@ -114,7 +114,10 @@ def test_meta_field_names_are_renamed_and_tracked_fields_are_flattened(alice):
     assert insert["id"] == str(widget.pk)
 
     assert update["action"] == "update"
-    assert update["changes"] == {"count": [1, 5]}
+    # updated_at moves too - BaseModel's own trigger stamps it on every UPDATE (see
+    # isik/django/apps/common/db/models.py), including the widget.update() above.
+    assert update["changes"]["count"] == [1, 5]
+    assert "updated_at" in update["changes"]
     assert update["count"] == 5
 
 

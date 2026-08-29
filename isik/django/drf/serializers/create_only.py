@@ -17,7 +17,5 @@ class CreateOnlyFieldsMixin:
         if self.instance and create_only_fields:
             for field in create_only_fields:
                 kwargs.setdefault(field, {})
-                # No need to also set required=False here - ModelSerializer.include_extra_kwargs()
-                # unconditionally strips 'required' from extra_kwargs whenever read_only is set.
                 kwargs[field]["read_only"] = True
         return kwargs

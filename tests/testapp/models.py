@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django_lifecycle import AFTER_CREATE, AFTER_SAVE, AFTER_UPDATE, BEFORE_CREATE, BEFORE_SAVE, BEFORE_UPDATE, hook
 
-from isik.django.apps.common.db import BaseModel, track_events
+from isik.django.apps.common.db import BaseModel, ContextField, track_events
 from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
@@ -45,6 +45,42 @@ class Widget(BaseModel):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+
+    class Meta:
+        app_label = "testapp"
+
+
+@track_events(
+    context_fields=[
+        ContextField(
+            "actor",
+            context_key="user",
+            cast="bigint",
+            field=models.ForeignKey(
+                settings.AUTH_USER_MODEL, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+            ),
+        ),
+        # No FK target of its own on purpose - stands in for a value with nowhere to point (e.g.
+        # a schema/tenant name string rather than a row), still stamped the same way.
+        ContextField("actor_schema", context_key="schema", cast="text", field=models.TextField(null=True)),
+        ContextField(
+            "tenant",
+            context_key="organization",
+            cast="bigint",
+            field=models.ForeignKey(
+                settings.AUTH_USER_MODEL, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+            ),
+        ),
+    ],
+    meta={"indexes": [models.Index(fields=["tenant", "actor"], name="ctx_widget_tenant_actor_idx")]},
+)
+class ContextTrackedWidget(BaseModel):
+    """Exercises `ContextField` - real, indexed `actor`/`actor_schema`/`tenant` columns on its
+    event model, stamped from pghistory's own request context instead of a JSON lookup, plus a
+    composite index across two of them (`meta={"indexes": [...]}` composes with `context_fields=`
+    for free - both just feed the same `create_event_model()` call)."""
+
+    name = models.CharField(max_length=100)
 
     class Meta:
         app_label = "testapp"

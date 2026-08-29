@@ -81,8 +81,6 @@ class AutoGenericForeignKey(GenericForeignKey):
         self.ct_field_name = f"{name}_content_type"
         self.fk_field_name = f"{name}_object_id"
 
-        # No explicit db_index - ForeignKey.__init__ itself does
-        # kwargs.setdefault("db_index", True), so passing it explicitly is pure dead weight.
         content_type_field = models.ForeignKey(
             ContentType,
             related_name=f"{cls.__name__.lower()}_{name}+",
@@ -98,7 +96,3 @@ class AutoGenericForeignKey(GenericForeignKey):
         self.fk_field = self.fk_field_name
 
         super().contribute_to_class(cls, name)  # pragma: no mutate
-        # Field.set_attributes_from_name() (reached via this super() call) does
-        # `self.name = self.name or name` - self.name is still None at this point (its class-level
-        # default, never set explicitly by this class), so whatever's passed as `name` here is the
-        # only thing that ever actually resolves it.

@@ -28,16 +28,10 @@ class ProtectedDestroyMixin:
     def _protecting_field_name(protected_object, instance):
         for field in type(protected_object)._meta.get_fields():
             if not getattr(field, "is_relation", False) or not getattr(field, "concrete", False):  # pragma: no mutate
-                # is_relation/concrete are standard attributes Django sets on every Field/relation
-                # descriptor from _meta.get_fields() (defaulting to False on the base Field class
-                # itself) - never actually missing, so these getattr() defaults are unreachable.
                 continue
             if field.related_model is not type(instance):
                 continue
             fk_value = getattr(protected_object, field.attname, None)  # pragma: no mutate
-            # field is concrete+relational (checked above), so attname is a real descriptor Django
-            # put on this exact class via contribute_to_class() - always present on any instance
-            # of it, even lazily-loaded/deferred ones, so this default can never be consulted.
             if fk_value == instance.pk:
                 return field.name
         return None

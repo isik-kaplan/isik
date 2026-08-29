@@ -58,9 +58,6 @@ class TagManager(models.Manager.from_queryset(TagQuerySet)):
 class _TagsField:
     """Descriptor returned by `tags()` - see `tags` for the public docstring."""
 
-    # target_name/target_related_name/name_max_length have no default here - _TagsField is only
-    # ever built by the tags() maker below, which always forwards its own (already-defaulted)
-    # values explicitly, so a bare default on this end would be dead code no test could reach.
     def __init__(
         self,
         *,

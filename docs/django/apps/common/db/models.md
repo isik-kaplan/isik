@@ -5,6 +5,13 @@
 wired into `save()`, and field validators wrapped via `SkippableValidatorsMixin` so they can be
 selectively bypassed. `full_clean()` runs on every `save()` unless bypassed.
 
+`created_at`/`updated_at` are maintained by the database, not Django: `created_at` gets
+`db_default=Now()` plus a trigger refusing any UPDATE that changes it, and `updated_at` is stamped
+by a `BEFORE UPDATE` trigger on every UPDATE, including `QuerySet.update()`/`bulk_update()`/raw
+SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever covered. Requires
+`pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `BaseModel` raises
+`ImproperlyConfigured` at import time if it's missing.
+
 ```python
 from isik.django.apps.common.db import BaseModel
 

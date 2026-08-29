@@ -1,10 +1,46 @@
-import pytest
-from django.core.exceptions import ValidationError
+from unittest.mock import patch
 
+import pgtrigger
+import pytest
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+
+from isik.django.apps.common.db import models as base_models
 from tests.testapp.models import Recorder, Widget
 
 
 pytestmark = pytest.mark.django_db
+
+
+def test_check_pgtrigger_installed_raises_when_pgtrigger_is_not_in_installed_apps(monkeypatch):
+    monkeypatch.setattr(base_models.django_apps, "is_installed", lambda app_name: False)
+    with pytest.raises(ImproperlyConfigured) as exc_info:
+        base_models._check_pgtrigger_installed()
+    assert str(exc_info.value) == (
+        "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
+        "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
+        "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+    )
+
+
+def test_check_pgtrigger_installed_is_a_noop_when_pgtrigger_is_installed():
+    base_models._check_pgtrigger_installed()  # pgtrigger is genuinely installed in tests - no raise
+
+
+def test_timestamp_triggers_protects_created_at_and_stamps_updated_at():
+    protect_created_at, stamp_updated_at = base_models._timestamp_triggers()
+
+    assert protect_created_at.name == "protect_created_at"
+    assert protect_created_at.fields == ["created_at"]
+
+    assert stamp_updated_at.name == "stamp_updated_at"
+    assert stamp_updated_at.when == pgtrigger.Before
+    assert stamp_updated_at.operation == pgtrigger.Update
+    assert stamp_updated_at.func == "NEW.updated_at = NOW(); RETURN NEW;"
+
+
+def test_timestamp_triggers_are_registered_on_every_concrete_basemodel_subclass():
+    trigger_names = {trigger.name for trigger in Widget._meta.triggers}
+    assert {"protect_created_at", "stamp_updated_at"} <= trigger_names
 
 
 def test_save_runs_full_clean_and_rejects_invalid_field_values():
@@ -38,6 +74,13 @@ def test_update_sets_attributes_and_persists_them():
     widget = Widget.objects.create(name="bolt", count=1)
     widget.update(count=9)
     assert Widget.objects.get(pk=widget.pk).count == 9
+
+
+def test_update_passes_only_the_changed_kwargs_as_update_fields():
+    widget = Widget.objects.create(name="bolt", count=1)
+    with patch.object(Widget, "save", autospec=True, side_effect=Widget.save) as spy:
+        widget.update(count=9)
+    assert spy.call_args.kwargs["update_fields"] == ["count"]
 
 
 def test_update_with_skip_hooks_still_runs_full_clean():

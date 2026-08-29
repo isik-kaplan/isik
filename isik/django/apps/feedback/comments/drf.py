@@ -20,6 +20,4 @@ def generic_comment_serializer(model):
         "read_only_fields": ["user", "created_at", "updated_at"],
     }
     meta = type("Meta", (), meta_attrs)  # pragma: no mutate
-    # This type's own __name__ ("Meta") is never inspected by Django/DRF - only the "Meta" *key*
-    # in the returned attrs dict matters (getattr(cls, "Meta")), so this literal is inert.
     return type(f"{model.__name__}Serializer", (BaseModelSerializer,), {"Meta": meta})

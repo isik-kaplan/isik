@@ -12,12 +12,6 @@ class SkippableValidatorsMixin:
         super().__init_subclass__(**kwargs)
         # _meta isn't attached yet here - the actual wrapping happens on class_prepared once it is.
         weak = False  # pragma: no mutate
-        # The connected function is SkippableValidatorsMixin._wrap_field_validators itself, a
-        # module-level staticmethod that lives in the class's own __dict__ for the life of the
-        # process - a weak reference to it would never actually go dead, so weak=True/None/omitted
-        # is unobservable here (still worth being explicit, since a receiver silently dying under
-        # weak=True is the usual footgun this guards against - just not one reachable through this
-        # particular, permanently-referenced function).
         class_prepared.connect(cls._wrap_field_validators, sender=cls, weak=weak)  # pragma: no mutate
 
     @staticmethod
@@ -34,5 +28,3 @@ class SkippableValidatorsMixin:
 
 def _is_skippable(v):
     return getattr(v, "_is_skippable", False)  # pragma: no mutate
-    # Only used as a truthy check - None and False are both falsy and select the same branch, so
-    # this default's exact value is unobservable.

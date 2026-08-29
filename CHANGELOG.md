@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-29
+
+### Added
+
+- `ContextField`/`track_events(context_fields=[...])` (`isik.django.apps.common.db`) - real,
+  indexed columns on a `@track_events()` event model, stamped from `pghistory.context()`/
+  `HistoryMiddleware`'s own request-scoped context via one combined `BEFORE INSERT` trigger,
+  instead of a `pgh_context__<key>` JSON lookup done at query time. Composes with
+  `track_events(meta={"indexes": [...]})` for a composite index across multiple context fields -
+  nothing isik-specific, `meta=` and `context_fields=` both just feed the same
+  `pghistory.track()`/`create_event_model()` call.
+
+### Changed
+
+- `BaseModel.created_at`/`updated_at` (`isik.django.apps.common.db`) are now maintained at the
+  database level instead of Django's `auto_now_add`/`auto_now`, which only fire from
+  `Model.save()` and left `updated_at` silently stale after `QuerySet.update()`/`bulk_update()`/
+  raw SQL. `created_at` gets `db_default=Now()` plus a trigger refusing any UPDATE that changes
+  it; `updated_at` is stamped by a `BEFORE UPDATE` trigger on every UPDATE regardless of how it
+  was issued. **Breaking**: requires `pgtrigger` in `INSTALLED_APPS` (already installs as
+  `django-pghistory`'s dependency) - `BaseModel` raises `ImproperlyConfigured` at import time if
+  it's missing. No migration path is provided for existing rows; a project adopting this takes
+  its own migration.
+
 ## [0.4.1] - 2026-08-10
 
 ### Fixed

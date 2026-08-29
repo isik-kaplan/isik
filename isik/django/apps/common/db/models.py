@@ -1,7 +1,12 @@
 from contextlib import contextmanager
 from uuid import uuid4
 
+import pgtrigger
+from django.apps import apps as django_apps
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models, transaction
+from django.db.models.functions import Now
+from django.db.models.signals import class_prepared
 from django.utils.translation import gettext as _
 from django_lifecycle import (
     AFTER_CREATE,
@@ -14,6 +19,21 @@ from django_lifecycle import (
 )
 
 from isik.django.apps.common.skippable_validators import SkippableValidatorsMixin
+
+
+def _check_pgtrigger_installed():
+    # pgtrigger.register() below (called for every BaseModel subclass) is a no-op without
+    # pgtrigger's AppConfig - it's what makes the trigger registry migration-aware in the first
+    # place. Without this check, subclassing BaseModel would just silently get no triggers.
+    if not django_apps.is_installed("pgtrigger"):
+        raise ImproperlyConfigured(
+            "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
+            "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
+            "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+        )
+
+
+_check_pgtrigger_installed()
 
 
 class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
@@ -32,8 +52,8 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
     SKIP_FULL_CLEAN = False
 
     id = models.UUIDField(primary_key=True, db_index=True, editable=False, default=uuid4, verbose_name=_("ID"))
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name=_("Created At"))
-    updated_at = models.DateTimeField(auto_now=True, db_index=True, verbose_name=_("Updated At"))
+    created_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Created At"))
+    updated_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Updated At"))
 
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -81,9 +101,6 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
 
     def update(self, **kwargs):
         skip_hooks = kwargs.pop("_skip_hooks", False)  # pragma: no mutate
-        # Only ever forwarded straight into save()'s own "_skip_hooks" pop+truthy check below -
-        # None and False collapse to the same branch there, so this default's exact value never
-        # actually reaches an observable decision.
         update_fields = list(kwargs.keys())
         for key, val in kwargs.items():
             setattr(self, key, val)
@@ -117,3 +134,36 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
 
     class Meta:
         abstract = True
+
+
+def _timestamp_triggers():
+    return [
+        # db_default=Now() only fires on INSERT - nothing stops a later UPDATE from changing
+        # created_at, so it also needs protecting at the row level.
+        pgtrigger.ReadOnly(name="protect_created_at", fields=["created_at"]),
+        # db_default=Now() covers the initial value; this keeps it current on every UPDATE,
+        # including QuerySet.update()/bulk_update() and raw SQL, none of which auto_now touches.
+        pgtrigger.Trigger(
+            name="stamp_updated_at",
+            when=pgtrigger.Before,
+            operation=pgtrigger.Update,
+            func="NEW.updated_at = NOW(); RETURN NEW;",
+        ),
+    ]
+
+
+def _register_timestamp_triggers(sender, **kwargs):
+    # Declaring these on BaseModel's own Meta.triggers wouldn't reach subclasses - Django only
+    # inherits an abstract base's Meta into a subclass that writes `class Meta(BaseModel.Meta)`,
+    # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
+    # via pgtrigger.register() on every concrete subclass instead needs no such cooperation.
+    if issubclass(sender, BaseModel) and not sender._meta.abstract:  # pragma: no mutate
+        # class_prepared fires exactly once per model class, ever - a mutation here is provably
+        # caught by test_timestamp_triggers_are_registered_on_every_concrete_basemodel_subclass
+        # under plain pytest, but not under mutmut: whichever variant is active the one time this
+        # runs for a given class in a worker process is what that class is permanently stuck with,
+        # regardless of which mutant mutmut later considers "active" for a later test.
+        pgtrigger.register(*_timestamp_triggers())(sender)
+
+
+class_prepared.connect(_register_timestamp_triggers, dispatch_uid="isik_base_model_timestamp_triggers")
