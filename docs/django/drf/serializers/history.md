@@ -34,4 +34,21 @@ WidgetHistorySerializer(some_queryset, many=True).data
   isn't a collision - it's the same fact the JSON-derived `actor_id` above would otherwise stand
   in for, just as a real, typed column, so it wins instead of raising.
 
+## Withholding a field - `withhold=`
+
+`generic_history_serializer(model, withhold=["password"])` keeps a tracked field out of the
+flattened output entirely, while `changes` still records that it changed at that event - just with
+its `[old, new]` pair replaced by `[None, None]` instead of the real values. This is a different
+question from `track_events(exclude=[...])`, which drops a field from the event table itself:
+whether a value is in the log is retention, whether an API renders it is exposure, and a field can
+reasonably want yes to the first and no to the second - a password hash is worth knowing changed,
+never worth serving. `withhold` is one name at a time, explicit - isik never guesses at what
+"looks sensitive"; only the consuming project knows which of its own fields that is.
+
+```python
+generic_history_serializer(User, withhold=["password"])
+# {"event_id": 4, "action": "update", "changes": {"password": [None, None]}, ...}
+# ("password" itself is absent from the flattened output, not merely null)
+```
+
 See [`HistoryMixin`](../viewsets/history.md) for exposing this over a viewset action.

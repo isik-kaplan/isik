@@ -6,6 +6,7 @@ from django.utils.functional import classproperty
 from django_filters.rest_framework import CharFilter, ChoiceFilter, DateTimeFilter, FilterSet, NumberFilter
 from pghistory.models import Events
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
@@ -21,9 +22,34 @@ class _JSONContextNumberFilter(NumberFilter):
 
 
 def context_filter(key, filter_cls=_JSONContextNumberFilter, **kwargs):
-    """Filter over a key in pghistory's context JSON - e.g. `context_filter("org_id")`."""
+    """
+    Filter over a key in pghistory's context JSON - e.g. `context_filter("org_id")`.
+
+    Defaults to an integer-typed filter, since that's the common case (an auto-incrementing user
+    pk). A project whose actor pks are some other type (e.g. UUID) passes its own `filter_cls`
+    (any django-filter `Filter` subclass) rather than isik guessing - override the built-in
+    `"actor"` entry the same way any other filter is overridden:
+
+        extra_history_filters = {"actor": context_filter("user", filter_cls=CharFilter)}
+    """
     kwargs.setdefault("field_name", f"pgh_context__{key}")
     return filter_cls(**kwargs)
+
+
+class _StrictFilterSet(FilterSet):
+    """
+    Raises instead of silently ignoring a value that fails a declared filter's own validation
+    (e.g. `?created_after=not-a-date`, or `?actor=<uuid>` against the integer-typed default) -
+    django-filter's own default just drops the offending value from `cleaned_data` and filters on
+    whatever is left, which reads as "found nothing more to filter" rather than "this parameter
+    was rejected". A caller passing a bad filter value gets a 400 naming it instead of a
+    200 they'd have to notice was wrongly unfiltered.
+    """
+
+    def filter_queryset(self, queryset):
+        if self.form.errors:
+            raise ValidationError(self.form.errors)
+        return super().filter_queryset(queryset)
 
 
 class HistoryMixin:
@@ -65,10 +91,24 @@ class HistoryMixin:
 
     Override `default_history_filters()` instead to replace the built-in set entirely -
     `extra_history_filters` still layers on top of whatever that returns.
+
+    `history_withhold` names tracked fields to keep out of both endpoints' output entirely, while
+    still recording them - see `generic_history_serializer()`'s own `withhold=` for what that
+    means for `changes`.
+
+    `history_list_scoped_to_queryset` (default `False`, preserving today's behavior) restricts
+    `GET <endpoint>/history/` to events for objects `self.get_queryset()` would return, instead of
+    every instance of the model regardless of scope. Leave it off when `history_list_permission_
+    classes` is already the intended security boundary (e.g. `IsSuperUser` seeing everything is
+    the point); turn it on when a viewset's `get_queryset()` is itself the boundary (e.g. scoped to
+    the caller's own organization) - without it, the cross-object endpoint answers for objects the
+    per-object one would 404 on.
     """
 
     extra_history_filters = {}
     history_list_permission_classes = [IsSuperUser]
+    history_withhold = ()
+    history_list_scoped_to_queryset = False
 
     @classmethod
     def default_history_filters(cls):
@@ -94,7 +134,7 @@ class HistoryMixin:
             return cached
         filters = {**cls.default_history_filters(), **cls.extra_history_filters}
         meta = type("Meta", (), {"model": Events, "fields": []})
-        built = type("AutoHistoryFilterSet", (FilterSet,), {**filters, "Meta": meta})
+        built = type("AutoHistoryFilterSet", (_StrictFilterSet,), {**filters, "Meta": meta})
         cls._history_filterset_class = built
         return built
 
@@ -103,7 +143,7 @@ class HistoryMixin:
         cached = cls.__dict__.get("_history_serializer_class")
         if cached is not None:
             return cached
-        built = generic_history_serializer(cls.model)
+        built = generic_history_serializer(cls.model, withhold=cls.history_withhold)
         cls._history_serializer_class = built
         return built
 
@@ -124,7 +164,10 @@ class HistoryMixin:
         return self._history_base_queryset().tracks(obj).order_by("-pgh_id")
 
     def get_all_history_queryset(self):
-        return self._history_base_queryset().order_by("-pgh_id")
+        queryset = self._history_base_queryset()
+        if self.history_list_scoped_to_queryset:
+            queryset = queryset.tracks(self.get_queryset())
+        return queryset.order_by("-pgh_id")
 
     def _history_response(self, request, queryset):
         queryset = self.history_filterset_class(request.query_params, queryset=queryset).qs
@@ -133,14 +176,24 @@ class HistoryMixin:
         return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
 
     @action(detail=True, methods=["get"])
-    def history(self, request, pk=None):
+    def history(self, request, *args, **kwargs):
+        """One object's history, paginated, newest first - see HistoryMixin's own docstring for
+        query params. `*args, **kwargs` rather than a hardcoded `pk=None`: a viewset with a custom
+        `lookup_field` (e.g. `lookup_field = "schema_name"`) is dispatched with that name instead,
+        and `self.get_object()` below reads it off `self.kwargs`, not this method's arguments."""
         return self._history_response(request, self.get_history_queryset(self.get_object()))
 
     @action(detail=False, methods=["get"], url_path="history", url_name="history-list")
     def history_list(self, request):
+        """History across every instance of the model (or scoped to `self.get_queryset()` - see
+        `history_list_scoped_to_queryset`), paginated, newest first, restricted by
+        `history_list_permission_classes` - see HistoryMixin's own docstring for query params."""
         return self._history_response(request, self.get_all_history_queryset())
 
     def get_permissions(self):
+        # A subclass that overrides get_permissions() without calling super() loses this branch
+        # silently, and loses it open - falling back to whatever the rest of the viewset grants.
+        # Call super().get_permissions() from any override that needs to add to this, not replace it.
         if self.action == "history_list":
             return [permission() for permission in self.history_list_permission_classes]
         return super().get_permissions()

@@ -37,7 +37,11 @@ GET /widgets/history/?object_id=3&action=update
   context user - only added if `pghistory.middleware.HistoryMiddleware`, or a subclass, is
   installed). `actor_id`'s value is annotated from `pgh_context` JSON unless the model was tracked
   with an `actor` [`ContextField`](../../apps/common/db/history.md#real-indexed-columns-from-context---contextfield),
-  in which case that real column is used instead and the annotation is skipped.
+  in which case that real column is used instead and the annotation is skipped. A value that fails
+  a filter's own validation (e.g. `?created_after=not-a-date`) raises a 400 naming it rather than
+  silently filtering on whatever else was valid - `context_filter()` defaults to an integer-typed
+  `actor` filter, so a project whose actor pks aren't integers (e.g. UUID) needs its own
+  `filter_cls` (see `context_filter()`'s own docstring) or that filter alone raises on every value.
 - `extra_history_filters` is your own extension point, merged on top of the built-ins - a matching
   key overrides one, a new key just adds one. `context_filter(key)` builds a filter over a key in
   pghistory's context JSON, without needing to know the `pgh_context__<key>` field-name
@@ -51,6 +55,15 @@ GET /widgets/history/?object_id=3&action=update
 
 - Override `default_history_filters()` instead to replace the built-in set entirely -
   `extra_history_filters` still layers on top of whatever that returns.
+- `history_withhold = [...]` names tracked fields to keep out of both endpoints' output entirely -
+  forwarded straight into `generic_history_serializer(cls.model, withhold=cls.history_withhold)`,
+  see its own docstring for what that does to `changes`.
+- `history_list_scoped_to_queryset = True` restricts `GET <endpoint>/history/` to events for
+  objects `self.get_queryset()` would return, instead of every instance of the model regardless of
+  scope (the default, unaffected unless you opt in). Turn it on when a viewset's `get_queryset()`
+  is itself the security boundary (e.g. scoped to the caller's own organization) rather than
+  `history_list_permission_classes` alone - without it, the cross-object endpoint answers for
+  objects the per-object one would 404 on.
 - `history_filterset_class`/`history_serializer_class` are `classproperty`s cached on the class
   (same pattern as `FilterSetMixin.filterset_class`), not rebuilt on every request.
 - Wired through `get_serializer_class()` (the hook drf-spectacular's `AutoSchema` already reads),
@@ -60,3 +73,8 @@ GET /widgets/history/?object_id=3&action=update
   no longer find the row) even though the delete event itself is recorded - `GET
   <endpoint>/history/?object_id=<pk>` still reaches it, since that endpoint doesn't require the
   object to still exist.
+- `history()`'s own lookup works with a custom `lookup_field`/`lookup_url_kwarg` - it reads the
+  object through `self.get_object()`, not a hardcoded `pk`.
+- Overriding `get_permissions()` on a subclass without calling `super().get_permissions()` silently
+  drops `history_list_permission_classes` enforcement (and drops it open, not closed) - call
+  `super()` from any override that needs to add to it rather than replace it.

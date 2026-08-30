@@ -156,16 +156,28 @@ def test_tracked_field_allow_null_reflects_the_real_model_field_nullability():
 
 class TestChangesField:
     def test_drops_keys_named_in_context_field_names(self):
-        field = _ChangesField(context_field_names={"actor_id"})
+        field = _ChangesField(context_field_names={"actor_id"}, withhold_names=frozenset())
         assert field.to_representation({"actor_id": [1, 2], "name": ["a", "b"]}) == {"name": ["a", "b"]}
 
     def test_returns_none_when_filtering_leaves_nothing(self):
-        field = _ChangesField(context_field_names={"actor_id"})
+        field = _ChangesField(context_field_names={"actor_id"}, withhold_names=frozenset())
         assert field.to_representation({"actor_id": [1, 2]}) is None
 
-    def test_is_a_noop_with_no_context_field_names(self):
-        field = _ChangesField(context_field_names=frozenset())
+    def test_is_a_noop_with_no_context_field_names_or_withhold_names(self):
+        field = _ChangesField(context_field_names=frozenset(), withhold_names=frozenset())
         assert field.to_representation({"name": ["a", "b"]}) == {"name": ["a", "b"]}
+
+    def test_nulls_out_a_withheld_keys_pair_instead_of_dropping_it(self):
+        field = _ChangesField(context_field_names=frozenset(), withhold_names={"password"})
+        result = field.to_representation({"password": ["old-hash", "new-hash"], "name": ["a", "b"]})
+        assert result == {"password": [None, None], "name": ["a", "b"]}
+
+    def test_a_withheld_key_takes_priority_over_a_context_field_name(self):
+        # Pathological (a field can't really be both), but the precedence should still be
+        # deterministic: context-field dropping runs first, so a name in both sets is dropped, not
+        # nulled - withhold_names is never even consulted for it.
+        field = _ChangesField(context_field_names={"actor_id"}, withhold_names={"actor_id"})
+        assert field.to_representation({"actor_id": [1, 2]}) is None
 
 
 class TestContextFieldsAndActorIdCompose:
@@ -248,3 +260,48 @@ class TestContextFieldsAndActorIdCompose:
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
         assert data[1]["changes"].keys() == {"updated_at"}
+
+
+class TestWithhold:
+    """generic_history_serializer(model, withhold=[...]) - an explicit, per-field opt-in (never
+    isik guessing at what "looks sensitive") for a value worth knowing changed but never worth
+    serving - see the function's own docstring."""
+
+    def test_a_withheld_field_is_absent_from_the_flattened_output(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        Serializer = generic_history_serializer(Widget, withhold=["count"])
+        data = Serializer(history_for(Widget, widget), many=True).data
+
+        assert "count" not in data[0]
+        assert set(Serializer().fields) - {"count"} == set(generic_history_serializer(Widget)().fields) - {"count"}
+
+    def test_changes_nulls_out_a_withheld_fields_pair_but_keeps_the_key(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=5, name="nut")
+
+        Serializer = generic_history_serializer(Widget, withhold=["count"])
+        data = Serializer(history_for(Widget, widget), many=True).data
+
+        update = data[1]
+        assert update["changes"]["count"] == [None, None]
+        assert update["changes"]["name"] == ["bolt", "nut"]
+
+    @isolate_apps("tests.testapp")
+    def test_a_withheld_field_never_reaches_the_collision_check(self):
+        # "action" would collide with generic_history_serializer()'s own reserved name if it were
+        # a real tracked field - withholding it removes it before that check ever runs.
+        model_name = f"WithholdActionWidget{uuid.uuid4().hex[:8]}"
+        attrs = {
+            "action": models.CharField(max_length=10),
+            "__module__": __name__,
+            "Meta": type("Meta", (), {"app_label": "testapp"}),
+        }
+        WithholdActionWidget = track_events()(type(model_name, (models.Model,), attrs))
+        generic_history_serializer(WithholdActionWidget, withhold=["action"])
+
+    def test_withhold_is_empty_by_default(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+        Serializer = generic_history_serializer(Widget)
+        data = Serializer(history_for(Widget, widget), many=True).data
+        assert data[0]["count"] == 1

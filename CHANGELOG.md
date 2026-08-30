@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-30
+
+### Added
+
+- `generic_history_serializer(model, withhold=[...])` (`isik.django.drf.serializers`) - keeps a
+  named tracked field out of the flattened output entirely, while `changes` still records that it
+  changed at that event with its `[old, new]` pair nulled instead of the field's real values.
+  Different from `track_events(exclude=[...])`, which drops a field from the event table itself -
+  this is about API exposure, not retention. Explicit, one field name at a time; isik never
+  guesses at what "looks sensitive". `HistoryMixin.history_withhold` forwards into it.
+- `HistoryMixin.history_list_scoped_to_queryset` (`isik.django.drf.viewsets`, default `False`) -
+  restricts `GET <endpoint>/history/` to events for objects `self.get_queryset()` would return,
+  for a viewset whose `get_queryset()` is itself a security boundary rather than a convenience.
+
+### Fixed
+
+- `HistoryMixin.history()` hardcoded a `pk=None` parameter, so a viewset with a custom
+  `lookup_field` (e.g. `lookup_field = "schema_name"`) raised `TypeError` before reaching a line
+  of it - a 500, not a 4xx. Now takes `*args, **kwargs` like any other DRF detail action.
+  `history()`/`history_list()` also gained their own docstrings, instead of falling back to the
+  viewset's when a schema generator asks for one.
+- `HistoryMixin`'s auto-built `FilterSet` silently ignored a value that failed a declared filter's
+  own validation (e.g. `?created_after=not-a-date`, or `?actor=<uuid>` against the built-in
+  integer-typed filter) and just answered as if unfiltered - django-filter's own default behavior.
+  It now raises a 400 naming the rejected value instead. `context_filter()`'s own docstring points
+  at `filter_cls=` for a project whose actor pks aren't integers, rather than isik guessing a type.
+
 ## [0.5.1] - 2026-08-30
 
 ### Fixed

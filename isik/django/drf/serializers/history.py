@@ -39,20 +39,27 @@ _META_FIELD_NAMES = {"event_id", "event_created_at", "action", "changes", "actor
 
 
 class _ChangesField(serializers.JSONField):
-    """`pgh_diff`, minus any keys a `ContextField` put there - see generic_history_serializer()'s
-    own docstring for why those aren't a real change to the object."""
+    """`pgh_diff`, minus any keys a `ContextField` put there (see generic_history_serializer()'s
+    own docstring for why those aren't a real change to the object), and with any `withhold=`
+    key's `[old, new]` pair replaced by `[None, None]` - present, so the event is still visible and
+    datable as touching that field, with none of the actual value in it."""
 
-    def __init__(self, *, context_field_names, **kwargs):
+    def __init__(self, *, context_field_names, withhold_names, **kwargs):
         self._context_field_names = context_field_names
+        self._withhold_names = withhold_names
         super().__init__(**kwargs)
 
     def to_representation(self, value):
         diff = super().to_representation(value)
-        filtered = {key: change for key, change in diff.items() if key not in self._context_field_names}
-        return filtered or None
+        result = {}
+        for key, change in diff.items():
+            if key in self._context_field_names:
+                continue
+            result[key] = [None, None] if key in self._withhold_names else change
+        return result or None
 
 
-def generic_history_serializer(model):
+def generic_history_serializer(model, *, withhold=()):
     """
     Builds a read-only `Serializer` for the history of a model tracked with `@track_events()` -
     `event_id`, `event_created_at`, `action` ("insert"/"update"/"delete"), `changes` (a dict of
@@ -76,14 +83,30 @@ def generic_history_serializer(model):
     differs from the previous event (e.g. `{"actor_id": [alice.pk, bob.pk]}`), even though nothing
     about the tracked object itself changed - it's who acted, not what changed.
 
+    `withhold` names tracked fields (by their output name, e.g. `"owner_id"` for a `ForeignKey`
+    named `owner`) to keep out of the flattened output entirely, while `changes` still records
+    that the field changed at that event, just with its `[old, new]` pair nulled out. This is a
+    different question from `track_events(exclude=[...])`, which drops a field from the event
+    table itself: whether a value is in the log is retention, whether an API renders it is
+    exposure, and a field can reasonably want yes to the first and no to the second - a password
+    hash is worth knowing changed, never worth serving. `withhold` is deliberately explicit, one
+    name at a time, rather than isik guessing at what "looks sensitive" - only the consuming
+    project knows which of its own fields that is.
+
+        generic_history_serializer(User, withhold=["password"])
+        # {"event_id": 4, "action": "update", "changes": {"password": [None, None]}, ...}
+        # ("password" itself is absent from the flattened output, not merely null)
+
     Raises `ImproperlyConfigured` if a tracked field is itself named `event_id`/`event_created_at`/
     `action`/`changes`/`actor_id` - rather than silently letting one clobber the other. Exception:
     an `actor_id` produced by a `ContextField` (see `track_events(context_fields=[...])`) isn't a
     collision - it's the same fact `actor_id` would otherwise annotate from JSON, just as a real,
-    typed column, so it wins instead of raising.
+    typed column, so it wins instead of raising. A withheld field never reaches this check either -
+    it's already gone from the output, so there's nothing left for it to collide with.
     """
     event_model = event_model_for(model)
-    tracked = _tracked_fields(event_model)
+    withhold_names = frozenset(withhold)
+    tracked = {name: field for name, field in _tracked_fields(event_model).items() if name not in withhold_names}
     context_field_names = getattr(event_model, "pgh_context_field_names", frozenset())
     collisions = (_META_FIELD_NAMES & tracked.keys()) - context_field_names
     if collisions:
@@ -98,7 +121,11 @@ def generic_history_serializer(model):
         "event_created_at": serializers.DateTimeField(source="pgh_created_at", read_only=True),
         "action": serializers.CharField(source="pgh_label", read_only=True),
         "changes": _ChangesField(
-            source="pgh_diff", read_only=True, allow_null=True, context_field_names=context_field_names
+            source="pgh_diff",
+            read_only=True,
+            allow_null=True,
+            context_field_names=context_field_names,
+            withhold_names=withhold_names,
         ),
         **tracked,
     }

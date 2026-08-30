@@ -244,6 +244,47 @@ class TestHistoryMixin:
         assert urls_by_name["widget-history"] == r"^widgets/(?P<pk>[^/.]+)/history/$"
         assert urls_by_name["widget-history-list"] == r"^widgets/history/$"
 
+    def test_history_works_with_a_custom_lookup_field(self):
+        # history()'s signature used to hardcode pk=None, so a viewset with a custom lookup_field
+        # raised TypeError before reaching a line of it - a 500, not a 4xx.
+        class SlugWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "slug-widgets"
+            exempt_from_registry = True
+            lookup_field = "name"
+
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        request = APIRequestFactory().get(f"/slug-widgets/{widget.name}/history/")
+        response = SlugWidgetViewSet.as_view({"get": "history"})(request, name=widget.name)
+
+        assert response.status_code == 200
+        assert response.data[0]["action"] == "insert"
+
+    def test_invalid_filter_value_raises_instead_of_silently_filtering_nothing(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        response = call_history(WidgetViewSet, widget, created_after="not-a-date")
+
+        assert response.status_code == 400
+        assert "created_after" in response.data
+
+    def test_history_withhold_removes_the_field_from_both_endpoints(self):
+        class WithholdCountViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "withhold-widgets"
+            exempt_from_registry = True
+            history_withhold = ["count"]
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=5)
+
+        response = call_history(WithholdCountViewSet, widget)
+
+        assert "count" not in response.data[0]
+        # Newest first - index 0 is the update event, whose diff still names "count".
+        assert response.data[0]["changes"]["count"] == [None, None]
+
 
 class TestHistoryList:
     def test_superuser_can_access(self, superuser):
@@ -356,3 +397,38 @@ class TestHistoryList:
         Widget.objects.create(name="bolt", count=1)
         response = call_history_list(OpenHistoryWidgetViewSet, user=alice)
         assert response.status_code == 200
+
+    def test_history_list_is_unscoped_by_default_even_with_a_narrowing_get_queryset(self, superuser):
+        class NarrowWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "narrow-widgets"
+            exempt_from_registry = True
+
+            def get_queryset(self):
+                return self.model.objects.none()
+
+        first = Widget.objects.create(name="bolt", count=1)
+        second = Widget.objects.create(name="nut", count=1)
+
+        response = call_history_list(NarrowWidgetViewSet, user=superuser)
+
+        object_ids = {event["id"] for event in response.data}
+        assert object_ids == {str(first.pk), str(second.pk)}
+
+    def test_history_list_scoped_to_queryset_restricts_to_get_queryset(self, superuser):
+        class ScopedListWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "scoped-list-widgets"
+            exempt_from_registry = True
+            history_list_scoped_to_queryset = True
+
+            def get_queryset(self):
+                return self.model.objects.filter(name="bolt")
+
+        visible = Widget.objects.create(name="bolt", count=1)
+        Widget.objects.create(name="nut", count=1)
+
+        response = call_history_list(ScopedListWidgetViewSet, user=superuser)
+
+        object_ids = {event["id"] for event in response.data}
+        assert object_ids == {str(visible.pk)}
