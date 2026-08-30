@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `context_field_filter(event_model, name)` (`isik.django.drf.viewsets`) - filters `HistoryMixin`'s
+  history endpoints on a `ContextField`'s own real, indexed column instead of a `pgh_context` JSON
+  lookup (`context_filter()`). `HistoryMixin`'s built-in `actor` filter uses it automatically
+  whenever the tracked model has an `actor` `ContextField`, and unlike the JSON-based fallback,
+  needs no `pghistory.middleware.HistoryMiddleware` installed.
+
+### Fixed
+
+- `HistoryMixin.check_permissions()` now enforces `history_list_permission_classes` directly
+  (moved off `get_permissions()`, which a subclass is far more likely to override wholesale for
+  unrelated reasons and silently drop the check by doing so).
+- `HistoryMixin.history()`'s docstring no longer leaks its own implementation rationale into the
+  public API description a schema generator publishes - trimmed to the one sentence a caller needs.
+
 ## [0.5.2] - 2026-08-30
 
 ### Added

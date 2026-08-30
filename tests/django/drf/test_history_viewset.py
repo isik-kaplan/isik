@@ -8,9 +8,11 @@ from rest_framework.permissions import BasePermission
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
 
+from isik.django.apps.common.db.history import event_model_for
 from isik.django.drf.pagination import PageNumberPagination
+from isik.django.drf.viewsets import history as history_viewset_module
 from isik.django.drf.viewsets.base import BaseModelViewSet
-from isik.django.drf.viewsets.history import HistoryMixin, context_filter
+from isik.django.drf.viewsets.history import HistoryMixin, context_field_filter, context_filter
 from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
 
 
@@ -54,15 +56,18 @@ def call_history_list(viewset_cls, user=None, **query_params):
 
 @pytest.fixture(autouse=True)
 def _reset_widget_viewset_history_caches():
-    # WidgetViewSet is module-level, so history_filterset_class/history_serializer_class's
-    # classproperty caching (build once, reuse for the class's whole lifetime - correct in
-    # production) would otherwise mean default_history_filters()/generic_history_serializer()
-    # only ever actually runs once per interpreter, on whichever test happens to touch it first -
-    # invisible under a normal test run, but it means a tool that reruns pytest in the same
-    # process never re-exercises either function after that first call. Reset before every test.
-    for attr in ("_history_filterset_class", "_history_serializer_class"):
-        if attr in WidgetViewSet.__dict__:
-            delattr(WidgetViewSet, attr)
+    # WidgetViewSet/ContextTrackedWidgetViewSet are module-level, so history_filterset_class/
+    # history_serializer_class's classproperty caching (build once, reuse for the class's whole
+    # lifetime - correct in production) would otherwise mean default_history_filters()/
+    # generic_history_serializer() only ever actually runs once per interpreter, on whichever test
+    # happens to touch it first - invisible under a normal test run, but it means a tool that
+    # reruns pytest in the same process never re-exercises either function after that first call,
+    # and different tests against the same module-level viewset would silently share one build.
+    # Reset before every test.
+    for viewset_cls in (WidgetViewSet, ContextTrackedWidgetViewSet):
+        for attr in ("_history_filterset_class", "_history_serializer_class"):
+            if attr in viewset_cls.__dict__:
+                delattr(viewset_cls, attr)
 
 
 class TestHistoryMixin:
@@ -499,3 +504,73 @@ class TestHistoryList:
 
         object_ids = {event["id"] for event in response.data}
         assert object_ids == {str(visible.pk)}
+
+
+class ContextTrackedWidgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContextTrackedWidget
+        fields = ["id", "name"]
+
+
+class ContextTrackedWidgetViewSet(HistoryMixin, BaseModelViewSet):
+    model = ContextTrackedWidget
+    endpoint = "ctx-filter-widgets"
+    serializer_class = ContextTrackedWidgetSerializer
+    exempt_from_registry = True
+
+
+class TestContextFieldFilter:
+    def test_default_actor_filter_prefers_the_real_column_over_json_when_a_context_field_covers_it(self, superuser):
+        # No HistoryMiddleware anywhere in this test - a ContextField's real column doesn't need
+        # it (unlike context_filter()'s pgh_context JSON lookup, which does).
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        bob = EmailUser.objects.create(username="bob", email="bob@example.com")
+        with pghistory.context(user=alice.pk):
+            alice_widget = ContextTrackedWidget.objects.create(name="bolt")
+        with pghistory.context(user=bob.pk):
+            ContextTrackedWidget.objects.create(name="nut")
+
+        response = call_history_list(ContextTrackedWidgetViewSet, user=superuser, actor=alice.pk)
+
+        assert [event["id"] for event in response.data] == [str(alice_widget.pk)]
+
+    def test_default_actor_filter_rejects_a_non_integer_value(self, superuser):
+        response = call_history_list(ContextTrackedWidgetViewSet, user=superuser, actor="not-an-int")
+        assert response.status_code == 400
+
+    def test_context_field_filter_works_for_a_field_other_than_actor(self, superuser):
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        bob = EmailUser.objects.create(username="bob", email="bob@example.com")
+        with pghistory.context(organization=alice.pk):
+            alice_widget = ContextTrackedWidget.objects.create(name="bolt")
+        with pghistory.context(organization=bob.pk):
+            ContextTrackedWidget.objects.create(name="nut")
+
+        class TenantWidgetViewSet(ContextTrackedWidgetViewSet):
+            endpoint = "tenant-ctx-filter-widgets"
+            extra_history_filters = {"tenant": context_field_filter(event_model_for(ContextTrackedWidget), "tenant")}
+
+        response = call_history_list(TenantWidgetViewSet, user=superuser, tenant=alice.pk)
+
+        assert [event["id"] for event in response.data] == [str(alice_widget.pk)]
+
+    def test_context_field_helper_skips_non_matching_fields_before_finding_one(self):
+        event_model = event_model_for(ContextTrackedWidget)
+        found = history_viewset_module._context_field(event_model, "tenant")
+        assert found is not None
+        assert found.name == "tenant"
+
+    def test_context_field_helper_returns_none_for_an_unknown_name(self):
+        event_model = event_model_for(ContextTrackedWidget)
+        assert history_viewset_module._context_field(event_model, "nonexistent") is None
+
+    def test_context_field_helper_returns_none_when_event_model_has_no_context_fields_at_all(self):
+        # Widget is tracked with no context_fields= at all, so its event model never gets a
+        # pgh_context_fields attribute in the first place - getattr's own default must cover that.
+        event_model = event_model_for(Widget)
+        assert history_viewset_module._context_field(event_model, "actor") is None
+
+    def test_context_field_filter_defaults_field_name_to_the_context_field_name(self):
+        event_model = event_model_for(ContextTrackedWidget)
+        built = context_field_filter(event_model, "tenant")
+        assert built.field_name == "tenant"

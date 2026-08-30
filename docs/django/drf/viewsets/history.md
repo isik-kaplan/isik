@@ -34,23 +34,32 @@ GET /widgets/history/?object_id=3&action=update
 - Filtering is built in on `action` (insert/update/delete), `created_after`/`created_before`
   (`pgh_created_at` range), `object_id` (which instance - redundant but harmless on the
   per-object endpoint, the main point of it on the cross-object one), and `actor` (pghistory's
-  context user - only added if `pghistory.middleware.HistoryMiddleware`, or a subclass, is
-  installed). `actor_id`'s value is annotated from `pgh_context` JSON unless the model was tracked
-  with an `actor` [`ContextField`](../../apps/common/db/history.md#real-indexed-columns-from-context---contextfield),
-  in which case that real column is used instead and the annotation is skipped. A value that fails
+  context user). `actor_id`'s *value* is annotated from `pgh_context` JSON unless the model was
+  tracked with an `actor` [`ContextField`](../../apps/common/db/history.md#real-indexed-columns-from-context---contextfield),
+  in which case that real column is used instead and the annotation is skipped - and the `actor`
+  *filter* follows the same precedent: it filters on that real column via `context_field_filter()`
+  when an `actor` `ContextField` exists (no `HistoryMiddleware` needed - a `ContextField` is
+  stamped by `pghistory.context()` directly), else on `pgh_context` JSON via `context_filter()` if
+  `HistoryMiddleware` (or a subclass) is installed, else it's omitted entirely. A value that fails
   a filter's own validation (e.g. `?created_after=not-a-date`) raises a 400 naming it rather than
-  silently filtering on whatever else was valid - `context_filter()` defaults to an integer-typed
-  `actor` filter, so a project whose actor pks aren't integers (e.g. UUID) needs its own
-  `filter_cls` (see `context_filter()`'s own docstring) or that filter alone raises on every value.
+  silently filtering on whatever else was valid - both `context_filter()`/`context_field_filter()`
+  default to an integer-typed filter, so a project whose actor pks aren't integers (e.g. UUID)
+  needs its own `filter_cls` (see either function's own docstring) or that filter alone raises on
+  every value.
 - `extra_history_filters` is your own extension point, merged on top of the built-ins - a matching
   key overrides one, a new key just adds one. `context_filter(key)` builds a filter over a key in
   pghistory's context JSON, without needing to know the `pgh_context__<key>` field-name
-  convention:
+  convention; `context_field_filter(event_model, name)` does the same for a `ContextField`'s own
+  real column instead (needs `event_model_for(cls.model)` - pghistory's aggregate `Events` model
+  has no way to reference a single tracked model's real column directly, not even via
+  `pghistory.ProxyField`, so this resolves matching rows against the concrete event model first):
 
   ```python
   class OrgWidgetViewSet(HistoryMixin, BaseModelViewSet):
       ...
       extra_history_filters = {"org_id": context_filter("org_id")}
+      # Or, if "org_id" is a ContextField on Widget's event model:
+      # extra_history_filters = {"org_id": context_field_filter(event_model_for(Widget), "org_id")}
   ```
 
 - Override `default_history_filters()` instead to replace the built-in set entirely -

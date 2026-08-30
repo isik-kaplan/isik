@@ -1,8 +1,9 @@
-"""HistoryMixin + context_filter() - see each one's own docstring."""
+"""HistoryMixin + context_filter()/context_field_filter() - see each one's own docstring."""
 
 from django import forms
 from django.db.models.fields.json import KeyTransform
 from django.utils.functional import classproperty
+from django_filters.constants import EMPTY_VALUES
 from django_filters.rest_framework import CharFilter, ChoiceFilter, DateTimeFilter, FilterSet, NumberFilter
 from pghistory.models import Events
 from rest_framework.decorators import action
@@ -34,6 +35,48 @@ def context_filter(key, filter_cls=_JSONContextNumberFilter, **kwargs):
     """
     kwargs.setdefault("field_name", f"pgh_context__{key}")
     return filter_cls(**kwargs)
+
+
+def _context_field(event_model, name):
+    for cf in getattr(event_model, "pgh_context_fields", ()):
+        if cf.name == name:
+            return cf
+    return None
+
+
+class _ContextFieldFilterMixin:
+    # pghistory's own Events.objects.across(event_model) can't reference event_model's real
+    # column directly - even pghistory.ProxyField on an Events subclass refuses anything but a
+    # pgh_context__* path (RuntimeError otherwise), so a real ContextField column is out of its
+    # reach entirely. Matching against event_model's own table first, then narrowing the aggregate
+    # queryset to those pgh_ids, works with that restriction instead of fighting it.
+    def __init__(self, *, event_model, **kwargs):
+        self._event_model = event_model
+        super().__init__(**kwargs)
+
+    def filter(self, qs, value):
+        if value in EMPTY_VALUES:
+            return qs
+        lookup = f"{self.field_name}__{self.lookup_expr}"
+        matching_ids = self._event_model.objects.filter(**{lookup: value}).values("pgh_id")
+        return qs.filter(pgh_id__in=matching_ids)
+
+
+def context_field_filter(event_model, name, filter_cls=NumberFilter, **kwargs):
+    """
+    Filter over a `ContextField`'s own real, indexed column - e.g.
+    `context_field_filter(event_model_for(Widget), "actor")` - instead of a `pgh_context` JSON
+    lookup (`context_filter()`). Correct for whatever type the column actually is, uses its index,
+    and needs no `pghistory.middleware.HistoryMiddleware` (a `ContextField` is stamped by
+    `pghistory.context()` directly, with or without it).
+
+    Defaults to an integer-typed filter, since that's the common case (an auto-incrementing pk).
+    A `ContextField` of another type (e.g. UUID) passes its own `filter_cls` (any django-filter
+    `Filter` subclass) rather than isik guessing - same escape hatch as `context_filter()`.
+    """
+    kwargs.setdefault("field_name", name)
+    built_cls = type(f"_ContextField{filter_cls.__name__}", (_ContextFieldFilterMixin, filter_cls), {})
+    return built_cls(event_model=event_model, **kwargs)
 
 
 class _StrictFilterSet(FilterSet):
@@ -79,8 +122,10 @@ class HistoryMixin:
     Filtering is built in on `action` (insert/update/delete), `created_after`/`created_before`
     (`pgh_created_at` range), `object_id` (which instance - redundant but harmless on the
     per-object endpoint, the main point of it on the cross-object one), and `actor` (pghistory's
-    context user - only added if `pghistory.middleware.HistoryMiddleware`, or a subclass, is
-    installed).
+    context user) - filtering on an indexed real column via `context_field_filter()` if the
+    tracked model has an `actor` `ContextField`, else on `pgh_context` JSON via `context_filter()`
+    if `pghistory.middleware.HistoryMiddleware` (or a subclass) is installed, else omitted
+    entirely.
 
     Add your own filters via `extra_history_filters` - merged on top of the built-ins, so a
     matching key overrides one and a new key just adds one:
@@ -112,6 +157,7 @@ class HistoryMixin:
 
     @classmethod
     def default_history_filters(cls):
+        event_model = event_model_for(cls.model)
         filters = {
             "action": ChoiceFilter(
                 field_name="pgh_label", choices=[("insert", "insert"), ("update", "update"), ("delete", "delete")]
@@ -120,7 +166,18 @@ class HistoryMixin:
             "created_before": DateTimeFilter(field_name="pgh_created_at", lookup_expr="lte"),
             "object_id": CharFilter(field_name="pgh_obj_id"),
         }
-        if history_middleware_installed():
+        # An "actor" ContextField's real column wins over the pgh_context JSON lookup, same
+        # precedent as _history_base_queryset()'s own actor_id annotation below - and unlike that
+        # JSON lookup, it doesn't need HistoryMiddleware, since a ContextField is stamped by
+        # pghistory.context() directly.
+        actor_name = "actor"
+        if _context_field(event_model, actor_name) is not None:
+            # django-filter's own FilterSetMetaclass backfills a filter's field_name from the
+            # dict key it's assigned under (actor_name, on both sides here) whenever it comes out
+            # falsy - so a wrong/missing name= passed to context_field_filter() is unobservable at
+            # this specific call site (field_name= itself is tested directly on the function).
+            filters[actor_name] = context_field_filter(event_model, actor_name)  # pragma: no mutate
+        elif history_middleware_installed():
             filters["actor"] = context_filter("user")
         return filters
 

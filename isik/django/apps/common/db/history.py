@@ -121,6 +121,9 @@ def _context_fields_attrs_and_trigger(context_fields):
     attrs["pgh_context_field_names"] = frozenset(
         f"{cf.name}_id" if isinstance(cf.field, models.ForeignKey) else cf.name for cf in context_fields
     )
+    # The ContextField instances themselves, not just their resolved names - HistoryMixin's
+    # context_field_filter() needs the original (unattached) Field back to build a filter over it.
+    attrs["pgh_context_fields"] = tuple(context_fields)
     assignments = "\n".join(
         f"NEW.\"{cf.column()}\" = (NULLIF(current_setting('pghistory.context_metadata', true), '')"
         f"::jsonb ->> '{cf.resolved_context_key()}')::{cf.resolved_cast()};"

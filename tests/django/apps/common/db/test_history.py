@@ -226,6 +226,7 @@ def test_context_fields_attrs_and_trigger_builds_attrs_and_one_combined_trigger(
         "actor": actor_field,
         "org_id": org_field,
         "pgh_context_field_names": frozenset({"actor", "org_id"}),
+        "pgh_context_fields": (cf_actor, cf_org),
     }
     assert trigger.name == "stamp_context_fields"
     assert trigger.when == pgtrigger.Before
