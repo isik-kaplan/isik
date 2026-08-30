@@ -12,6 +12,10 @@ SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever cov
 `pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `BaseModel` raises
 `ImproperlyConfigured` at import time if it's missing.
 
+Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
+advances `updated_at` even though `"updated_at"` isn't in `update_fields`. Naming it explicitly
+there is harmless leftover habit from `auto_now`, not something this still requires.
+
 ```python
 from isik.django.apps.common.db import BaseModel
 

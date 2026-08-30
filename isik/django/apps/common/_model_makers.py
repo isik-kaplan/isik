@@ -3,7 +3,7 @@ Shared plumbing behind every "maker" (feedback's `votes()`/`bookmarks()`/`notes(
 tags' `tags()`): resolving what a generated model inherits from, building it, and exposing it on
 the host via the real Django descriptor for the relation it just created - not a bespoke marker
 object - so `Host.<name>.model`/`.config` work for introspection while `host_instance.<name>`
-stays Django's own manager. Not tied to either app; see TODO.md for the design history.
+stays Django's own manager. Not tied to either app.
 """
 
 from django.conf import settings

@@ -53,6 +53,10 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
 
     id = models.UUIDField(primary_key=True, db_index=True, editable=False, default=uuid4, verbose_name=_("ID"))
     created_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Created At"))
+    # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) that
+    # fires unconditionally - update_fields does not gate it. save(update_fields=["name"]) still
+    # advances updated_at; explicitly naming "updated_at" in update_fields is harmless but no
+    # longer necessary.
     updated_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Updated At"))
 
     @transaction.atomic

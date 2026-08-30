@@ -398,6 +398,73 @@ class TestHistoryList:
         response = call_history_list(OpenHistoryWidgetViewSet, user=alice)
         assert response.status_code == 200
 
+    def test_check_permissions_passes_the_real_view_to_history_list_permission_classes(self):
+        class DenyIfViewMissing(BasePermission):
+            def has_permission(self, request, view):
+                return view is not None
+
+        class ViewAwareWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "view-aware-widgets"
+            exempt_from_registry = True
+            history_list_permission_classes = [DenyIfViewMissing]
+
+        Widget.objects.create(name="bolt", count=1)
+        response = call_history_list(ViewAwareWidgetViewSet)
+        assert response.status_code == 200
+
+    def test_check_permissions_propagates_the_denying_permissions_message_and_code(self):
+        class DenyWithCustomMessage(BasePermission):
+            message = "computer says no"
+            code = "no_soup_for_you"
+
+            def has_permission(self, request, view):
+                return False
+
+        class MessageWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "message-widgets"
+            exempt_from_registry = True
+            history_list_permission_classes = [DenyWithCustomMessage]
+            # Empty, so permission_denied() below can't take its "unauthenticated" branch (which
+            # raises a bare NotAuthenticated, discarding message/code) - the point of this test is
+            # that branch, not authentication.
+            authentication_classes = []
+
+        response = call_history_list(MessageWidgetViewSet)
+
+        assert response.status_code == 403
+        assert str(response.data["detail"]) == "computer says no"
+        assert response.data["detail"].code == "no_soup_for_you"
+
+    def test_check_permissions_falls_through_to_super_for_other_actions(self):
+        class RequiresRealRequestPermission(BasePermission):
+            def has_permission(self, request, view):
+                return request is not None
+
+        class GatedWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "gated-widgets"
+            exempt_from_registry = True
+            permission_classes = [RequiresRealRequestPermission]
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        response = call_history(GatedWidgetViewSet, widget)
+        assert response.status_code == 200
+
+    def test_history_list_permission_survives_a_get_permissions_override(self, alice):
+        class OverridesGetPermissionsWidgetViewSet(WidgetViewSet):
+            model = Widget
+            endpoint = "overrides-get-permissions-widgets"
+            exempt_from_registry = True
+
+            def get_permissions(self):
+                return []  # wide open, for unrelated reasons - doesn't call super()
+
+        Widget.objects.create(name="bolt", count=1)
+        response = call_history_list(OverridesGetPermissionsWidgetViewSet, user=alice)
+        assert response.status_code == 403
+
     def test_history_list_is_unscoped_by_default_even_with_a_narrowing_get_queryset(self, superuser):
         class NarrowWidgetViewSet(WidgetViewSet):
             model = Widget

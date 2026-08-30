@@ -75,6 +75,7 @@ GET /widgets/history/?object_id=3&action=update
   object to still exist.
 - `history()`'s own lookup works with a custom `lookup_field`/`lookup_url_kwarg` - it reads the
   object through `self.get_object()`, not a hardcoded `pk`.
-- Overriding `get_permissions()` on a subclass without calling `super().get_permissions()` silently
-  drops `history_list_permission_classes` enforcement (and drops it open, not closed) - call
-  `super()` from any override that needs to add to it rather than replace it.
+- `history_list_permission_classes` is enforced from `check_permissions()`, not `get_permissions()`
+  - deliberately, so a subclass overriding `get_permissions()` wholesale for unrelated reasons
+  (a far more commonly overridden hook) can't silently drop this enforcement the way it would if
+  it lived there.

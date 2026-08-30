@@ -6,6 +6,12 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
 class ReadOnly(BasePermission):
+    """
+    Meant to be combined with DRF's `&`/`|` permission operators rather than used alone - e.g.
+    `IsSuperUser | (IsAuthenticated & ReadOnly)` for "superusers can write, everyone else can only
+    read".
+    """
+
     def has_permission(self, request, view):
         return request.method in SAFE_METHODS
 

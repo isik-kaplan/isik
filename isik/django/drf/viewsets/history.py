@@ -177,10 +177,12 @@ class HistoryMixin:
 
     @action(detail=True, methods=["get"])
     def history(self, request, *args, **kwargs):
-        """One object's history, paginated, newest first - see HistoryMixin's own docstring for
-        query params. `*args, **kwargs` rather than a hardcoded `pk=None`: a viewset with a custom
-        `lookup_field` (e.g. `lookup_field = "schema_name"`) is dispatched with that name instead,
-        and `self.get_object()` below reads it off `self.kwargs`, not this method's arguments."""
+        """One object's history, paginated, newest first - see HistoryMixin's own docstring for query params."""
+        # *args, **kwargs rather than a hardcoded pk=None: a viewset with a custom lookup_field
+        # (e.g. lookup_field = "schema_name") is dispatched with that name instead, and
+        # self.get_object() below reads it off self.kwargs, not this method's arguments. A
+        # schema generator publishes this docstring verbatim as the operation's description, so
+        # implementation rationale belongs in this comment, not there.
         return self._history_response(request, self.get_history_queryset(self.get_object()))
 
     @action(detail=False, methods=["get"], url_path="history", url_name="history-list")
@@ -190,13 +192,22 @@ class HistoryMixin:
         `history_list_permission_classes` - see HistoryMixin's own docstring for query params."""
         return self._history_response(request, self.get_all_history_queryset())
 
-    def get_permissions(self):
-        # A subclass that overrides get_permissions() without calling super() loses this branch
-        # silently, and loses it open - falling back to whatever the rest of the viewset grants.
-        # Call super().get_permissions() from any override that needs to add to this, not replace it.
+    def check_permissions(self, request):
+        # In check_permissions() rather than get_permissions(): a viewset is far more likely to
+        # override get_permissions() wholesale for unrelated reasons (a common pattern) than
+        # check_permissions(), which DRF's dispatch() calls directly - so this can't be dropped
+        # by a subclass overriding the more commonly-touched hook without realizing it drops this
+        # too, and it can't silently fall open the way get_permissions() being replaced would.
         if self.action == "history_list":
-            return [permission() for permission in self.history_list_permission_classes]
-        return super().get_permissions()
+            for permission in self.history_list_permission_classes:
+                if not permission().has_permission(request, self):
+                    self.permission_denied(
+                        request,
+                        message=getattr(permission, "message", None),
+                        code=getattr(permission, "code", None),
+                    )
+            return
+        super().check_permissions(request)
 
     def get_serializer_class(self):
         if self.action in ("history", "history_list"):
