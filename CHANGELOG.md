@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-30
+
+### Fixed
+
+- A `ContextField` named `"actor"` (`isik.django.apps.common.db`) - a `ForeignKey` one, producing
+  a real `actor_id` column - collided with `generic_history_serializer()`'s own reserved
+  `actor_id` name and raised `ImproperlyConfigured`, with no way to resolve it (`track_events(
+  exclude=[...])` only excludes tracked *model* fields, not context fields). The real column now
+  wins instead: `generic_history_serializer()`/`HistoryMixin` serialize `actor_id` from it,
+  typed and indexed, and skip the `pgh_context` JSON annotation they'd otherwise fall back to.
+- `generic_history_serializer()`'s `changes` (`isik.django.drf.serializers`) could include a
+  `ContextField` column (e.g. `actor_id`) as though it were a change to the tracked object -
+  pghistory diffs every non-`pgh_`-prefixed column on the event row generically, so a handoff
+  between two actors with no real field edit reported `{"actor_id": [alice.pk, bob.pk]}`. Context
+  field keys are now filtered out of `changes` - they record who acted, not what changed.
+
 ## [0.5.0] - 2026-08-29
 
 ### Added

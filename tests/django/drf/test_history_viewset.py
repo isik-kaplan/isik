@@ -11,7 +11,7 @@ from rest_framework.test import APIRequestFactory
 from isik.django.drf.pagination import PageNumberPagination
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.history import HistoryMixin, context_filter
-from tests.testapp.models import Comment, Widget
+from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -298,6 +298,53 @@ class TestHistoryList:
         view = WidgetViewSet()
         view.action = "history_list"
         assert view.get_serializer_class() is WidgetViewSet.history_serializer_class
+
+    def test_context_field_actor_id_wins_over_the_pgh_context_json_annotation(self):
+        # ContextTrackedWidget's "actor" ContextField already puts a real, typed actor_id column
+        # on its event model - _history_base_queryset() must not also annotate one from JSON on
+        # top of it (see isik/django/drf/viewsets/history.py).
+        class ContextTrackedWidgetSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = ContextTrackedWidget
+                fields = ["id", "name"]
+
+        class ContextTrackedWidgetViewSet(HistoryMixin, BaseModelViewSet):
+            model = ContextTrackedWidget
+            endpoint = "context-widgets"
+            serializer_class = ContextTrackedWidgetSerializer
+            exempt_from_registry = True
+
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            with pghistory.context(user=alice.pk):
+                widget = ContextTrackedWidget.objects.create(name="bolt")
+
+            response = call_history(ContextTrackedWidgetViewSet, widget)
+
+        assert response.data[0]["actor_id"] == alice.pk
+
+    def test_history_base_queryset_omits_the_actor_id_annotation_when_a_context_field_covers_it(self):
+        class ContextTrackedWidgetSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = ContextTrackedWidget
+                fields = ["id", "name"]
+
+        class ContextTrackedWidgetViewSet(HistoryMixin, BaseModelViewSet):
+            model = ContextTrackedWidget
+            endpoint = "annotation-ctx-widgets"
+            serializer_class = ContextTrackedWidgetSerializer
+            exempt_from_registry = True
+
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            queryset = ContextTrackedWidgetViewSet()._history_base_queryset()
+
+        assert "actor_id" not in queryset.query.annotations
+
+    def test_history_base_queryset_still_annotates_actor_id_when_nothing_covers_it(self):
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            queryset = WidgetViewSet()._history_base_queryset()
+
+        assert "actor_id" in queryset.query.annotations
 
     def test_history_list_permission_classes_is_overridable(self, alice):
         class OpenHistoryWidgetViewSet(WidgetViewSet):

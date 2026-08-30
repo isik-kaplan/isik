@@ -38,6 +38,20 @@ _FIELD_TYPES = {
 _META_FIELD_NAMES = {"event_id", "event_created_at", "action", "changes", "actor_id"}
 
 
+class _ChangesField(serializers.JSONField):
+    """`pgh_diff`, minus any keys a `ContextField` put there - see generic_history_serializer()'s
+    own docstring for why those aren't a real change to the object."""
+
+    def __init__(self, *, context_field_names, **kwargs):
+        self._context_field_names = context_field_names
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        diff = super().to_representation(value)
+        filtered = {key: change for key, change in diff.items() if key not in self._context_field_names}
+        return filtered or None
+
+
 def generic_history_serializer(model):
     """
     Builds a read-only `Serializer` for the history of a model tracked with `@track_events()` -
@@ -56,12 +70,22 @@ def generic_history_serializer(model):
     model's Event table) rather than the concrete `<Model>Event` model directly - that's what
     computes `changes` in SQL, comparing each event to the previous one of the same object.
 
+    `changes` never includes a `ContextField` (`track_events(context_fields=[...])`) - pghistory
+    computes the diff generically over every non-`pgh_`-prefixed column on the event row, so a
+    `ContextField`'s own column would otherwise show up as a "change" whenever the acting context
+    differs from the previous event (e.g. `{"actor_id": [alice.pk, bob.pk]}`), even though nothing
+    about the tracked object itself changed - it's who acted, not what changed.
+
     Raises `ImproperlyConfigured` if a tracked field is itself named `event_id`/`event_created_at`/
-    `action`/`changes`/`actor_id` - rather than silently letting one clobber the other.
+    `action`/`changes`/`actor_id` - rather than silently letting one clobber the other. Exception:
+    an `actor_id` produced by a `ContextField` (see `track_events(context_fields=[...])`) isn't a
+    collision - it's the same fact `actor_id` would otherwise annotate from JSON, just as a real,
+    typed column, so it wins instead of raising.
     """
     event_model = event_model_for(model)
     tracked = _tracked_fields(event_model)
-    collisions = _META_FIELD_NAMES & tracked.keys()
+    context_field_names = getattr(event_model, "pgh_context_field_names", frozenset())
+    collisions = (_META_FIELD_NAMES & tracked.keys()) - context_field_names
     if collisions:
         raise ImproperlyConfigured(
             f"{model.__name__} has tracked field(s) named {sorted(collisions)}, which collide with "
@@ -73,15 +97,18 @@ def generic_history_serializer(model):
         "event_id": serializers.IntegerField(source="pgh_id", read_only=True),
         "event_created_at": serializers.DateTimeField(source="pgh_created_at", read_only=True),
         "action": serializers.CharField(source="pgh_label", read_only=True),
-        "changes": serializers.JSONField(source="pgh_diff", read_only=True, allow_null=True),
+        "changes": _ChangesField(
+            source="pgh_diff", read_only=True, allow_null=True, context_field_names=context_field_names
+        ),
         **tracked,
     }
-    if history_middleware_installed():
-        # actor_id is a queryset-level annotation (see HistoryMixin.get_history_queryset) rather
-        # than sourced off pgh_context directly - pgh_context is null for any event that wasn't
-        # created inside a request (a migration, a shell, a background job), and a plain
-        # `source="pgh_context.user"` would crash DRF's attribute traversal on that None instead
-        # of quietly serializing null.
+    if history_middleware_installed() and "actor_id" not in tracked:
+        # A queryset-level annotation (see HistoryMixin._history_base_queryset) rather than sourced
+        # off pgh_context directly - pgh_context is null for any event that wasn't created inside a
+        # request (a migration, a shell, a background job), and a plain `source="pgh_context.user"`
+        # would crash DRF's attribute traversal on that None instead of quietly serializing null.
+        # Skipped when tracked already has a real actor_id column (a ContextField) - that's typed
+        # and indexed, this JSON fallback is neither.
         attrs["actor_id"] = serializers.CharField(read_only=True, allow_null=True)
 
     return type(f"{model.__name__}HistorySerializer", (serializers.Serializer,), attrs)

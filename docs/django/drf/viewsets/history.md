@@ -35,7 +35,9 @@ GET /widgets/history/?object_id=3&action=update
   (`pgh_created_at` range), `object_id` (which instance - redundant but harmless on the
   per-object endpoint, the main point of it on the cross-object one), and `actor` (pghistory's
   context user - only added if `pghistory.middleware.HistoryMiddleware`, or a subclass, is
-  installed).
+  installed). `actor_id`'s value is annotated from `pgh_context` JSON unless the model was tracked
+  with an `actor` [`ContextField`](../../apps/common/db/history.md#real-indexed-columns-from-context---contextfield),
+  in which case that real column is used instead and the annotation is skipped.
 - `extra_history_filters` is your own extension point, merged on top of the built-ins - a matching
   key overrides one, a new key just adds one. `context_filter(key)` builds a filter over a key in
   pghistory's context JSON, without needing to know the `pgh_context__<key>` field-name

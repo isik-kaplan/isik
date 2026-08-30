@@ -114,6 +114,13 @@ def _context_fields_attrs_and_trigger(context_fields):
         return {}, None
 
     attrs = {cf.name: cf.field for cf in context_fields}
+    # Recorded on the generated event model so generic_history_serializer()/HistoryMixin can tell
+    # when one of these real columns already covers a name they'd otherwise reserve for themselves
+    # (currently just actor_id) - a real, indexed column and their own JSON-derived fallback are the
+    # same fact, and the real one should win rather than collide with or get shadowed by it.
+    attrs["pgh_context_field_names"] = frozenset(
+        f"{cf.name}_id" if isinstance(cf.field, models.ForeignKey) else cf.name for cf in context_fields
+    )
     assignments = "\n".join(
         f"NEW.\"{cf.column()}\" = (NULLIF(current_setting('pghistory.context_metadata', true), '')"
         f"::jsonb ->> '{cf.resolved_context_key()}')::{cf.resolved_cast()};"

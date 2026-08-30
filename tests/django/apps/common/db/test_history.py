@@ -222,7 +222,11 @@ def test_context_fields_attrs_and_trigger_builds_attrs_and_one_combined_trigger(
 
     attrs, trigger = history_module._context_fields_attrs_and_trigger([cf_actor, cf_org])
 
-    assert attrs == {"actor": actor_field, "org_id": org_field}
+    assert attrs == {
+        "actor": actor_field,
+        "org_id": org_field,
+        "pgh_context_field_names": frozenset({"actor", "org_id"}),
+    }
     assert trigger.name == "stamp_context_fields"
     assert trigger.when == pgtrigger.Before
     assert trigger.operation == pgtrigger.Insert
@@ -233,6 +237,22 @@ def test_context_fields_attrs_and_trigger_builds_attrs_and_one_combined_trigger(
         "::jsonb ->> 'org_id')::integer;\n"
         "RETURN NEW;"
     )
+
+
+def test_context_fields_attrs_and_trigger_names_a_foreign_key_field_with_its_id_suffix():
+    # A ForeignKey's real column is <name>_id, not <name> - the recorded name has to match, since
+    # this is what generic_history_serializer()/HistoryMixin compare against their own field names.
+    fk_field = models.ForeignKey("testapp.EmailUser", null=True, on_delete=models.DO_NOTHING, db_constraint=False)
+    cf_actor = ContextField("actor", context_key="user", cast="bigint", field=fk_field)
+
+    attrs, _ = history_module._context_fields_attrs_and_trigger([cf_actor])
+
+    assert attrs["pgh_context_field_names"] == frozenset({"actor_id"})
+
+
+def test_context_tracked_widget_event_records_its_context_field_names():
+    ContextTrackedWidgetEvent = event_model_for(ContextTrackedWidget)
+    assert ContextTrackedWidgetEvent.pgh_context_field_names == {"actor_id", "actor_schema", "tenant_id"}
 
 
 @isolate_apps("tests.testapp")

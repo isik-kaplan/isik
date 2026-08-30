@@ -1,5 +1,6 @@
 import uuid
 
+import pghistory
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
@@ -10,8 +11,8 @@ from rest_framework import serializers
 
 from isik.django.apps.common.db import track_events
 from isik.django.apps.common.db.history import event_model_for
-from isik.django.drf.serializers.history import _tracked_fields, generic_history_serializer
-from tests.testapp.models import Comment, Widget
+from isik.django.drf.serializers.history import _ChangesField, _tracked_fields, generic_history_serializer
+from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -151,3 +152,99 @@ def test_tracked_field_allow_null_reflects_the_real_model_field_nullability():
     fields = generic_history_serializer(Widget)().fields
     assert fields["name"].allow_null is False  # Widget.name has no null=True
     assert fields["owner_id"].allow_null is True  # Widget.owner has null=True
+
+
+class TestChangesField:
+    def test_drops_keys_named_in_context_field_names(self):
+        field = _ChangesField(context_field_names={"actor_id"})
+        assert field.to_representation({"actor_id": [1, 2], "name": ["a", "b"]}) == {"name": ["a", "b"]}
+
+    def test_returns_none_when_filtering_leaves_nothing(self):
+        field = _ChangesField(context_field_names={"actor_id"})
+        assert field.to_representation({"actor_id": [1, 2]}) is None
+
+    def test_is_a_noop_with_no_context_field_names(self):
+        field = _ChangesField(context_field_names=frozenset())
+        assert field.to_representation({"name": ["a", "b"]}) == {"name": ["a", "b"]}
+
+
+class TestContextFieldsAndActorIdCompose:
+    """A ContextField producing actor_id (an FK context field named "actor") used to collide with
+    generic_history_serializer()'s own reserved actor_id name - see
+    isik/django/apps/common/db/history.py's pgh_context_field_names."""
+
+    def test_builds_without_raising(self):
+        generic_history_serializer(ContextTrackedWidget)
+
+    def test_actor_id_is_sourced_from_the_real_column_not_the_json_annotation(self):
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+
+        with pghistory.context(user=alice.pk):
+            widget = ContextTrackedWidget.objects.create(name="bolt")
+
+        Serializer = generic_history_serializer(ContextTrackedWidget)
+        # actor_id is typed off the real FK column (an IntegerField), not the CharField the JSON
+        # annotation would otherwise use - a plain int, not "<alice.pk>" as a string.
+        assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)
+        data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
+        assert data[0]["actor_id"] == alice.pk
+
+    def test_other_context_fields_serialize_from_their_own_columns(self):
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        org = EmailUser.objects.create(username="org", email="org@example.com")
+
+        with pghistory.context(user=alice.pk, schema="tenant_1", organization=org.pk):
+            widget = ContextTrackedWidget.objects.create(name="bolt")
+
+        Serializer = generic_history_serializer(ContextTrackedWidget)
+        data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
+
+        assert data[0]["actor_schema"] == "tenant_1"
+        assert data[0]["tenant_id"] == org.pk
+
+    def test_context_fields_are_null_outside_any_pghistory_context(self):
+        widget = ContextTrackedWidget.objects.create(name="bolt")
+
+        Serializer = generic_history_serializer(ContextTrackedWidget)
+        data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
+
+        assert data[0]["actor_id"] is None
+        assert data[0]["actor_schema"] is None
+        assert data[0]["tenant_id"] is None
+
+    def test_changes_excludes_context_fields_even_when_the_actor_changes(self):
+        # pghistory computes the diff generically over every non-pgh_ column on the event row, so
+        # actor_id would otherwise show up as a "change" on a handoff between two actors, even
+        # though nothing about the tracked object itself changed - see _ChangesField.
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        bob = EmailUser.objects.create(username="bob", email="bob@example.com")
+
+        with pghistory.context(user=alice.pk):
+            widget = ContextTrackedWidget.objects.create(name="bolt")
+        with pghistory.context(user=bob.pk):
+            widget.update(name="nut")
+
+        Serializer = generic_history_serializer(ContextTrackedWidget)
+        data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
+
+        insert, update = data
+        assert insert["changes"] is None
+        assert update["changes"]["name"] == ["bolt", "nut"]
+        assert "actor_id" not in update["changes"]
+
+    def test_changes_still_reports_updated_at_when_only_the_actor_changed(self):
+        # A pure actor handoff (no real field edit) still leaves updated_at in the diff - BaseModel
+        # stamps it on every UPDATE - so this never actually empties out to None in this codebase,
+        # but it confirms filtering removes exactly actor_id and nothing else.
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        bob = EmailUser.objects.create(username="bob", email="bob@example.com")
+
+        with pghistory.context(user=alice.pk):
+            widget = ContextTrackedWidget.objects.create(name="bolt")
+        with pghistory.context(user=bob.pk):
+            widget.update(name="bolt")
+
+        Serializer = generic_history_serializer(ContextTrackedWidget)
+        data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
+
+        assert data[1]["changes"].keys() == {"updated_at"}

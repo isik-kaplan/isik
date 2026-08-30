@@ -108,11 +108,15 @@ class HistoryMixin:
         return built
 
     def _history_base_queryset(self):
-        queryset = Events.objects.across(event_model_for(self.model))
-        if history_middleware_installed():
+        event_model = event_model_for(self.model)
+        queryset = Events.objects.across(event_model)
+        context_field_names = getattr(event_model, "pgh_context_field_names", frozenset())
+        if history_middleware_installed() and "actor_id" not in context_field_names:
             # A SQL-level annotation, not a serializer-side `source="pgh_context.user"` - pgh_context
             # is null for any event created outside a request, and KeyTransform resolves that to a
-            # clean SQL NULL instead of the Python-side None a dotted source would crash on.
+            # clean SQL NULL instead of the Python-side None a dotted source would crash on. Skipped
+            # when a ContextField already put a real actor_id column on the event model - annotating
+            # the same fact a second time from JSON would just be slower and redundant.
             queryset = queryset.annotate(actor_id=KeyTransform("user", "pgh_context"))
         return queryset
 

@@ -63,3 +63,8 @@ class Widget(BaseModel):
   delete just because the actor/tenant it once pointed to is gone.
 - Outside any `pghistory.context()`/`HistoryMiddleware` block (a management command, a Celery
   task with no context set), the column is just `NULL` - give it `null=True`.
+
+Name a context field `"actor"` (as above) and `generic_history_serializer()`/`HistoryMixin` treat
+its `actor_id` column as the real thing rather than a name collision with their own JSON-derived
+`actor_id` - the real, typed column wins and the JSON annotation is skipped, instead of raising
+`ImproperlyConfigured`.
