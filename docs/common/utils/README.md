@@ -9,3 +9,4 @@
 - [required_attributes.md](required_attributes.md) - `RequiredAttributesMixin`, fail fast on missing subclass attributes.
 - [sentinel.md](sentinel.md) - `Sentinel`, unique named "not provided" markers.
 - [strings.md](strings.md) - `camel_to_snake`, `snake_to_pascal`, `snake_to_human`.
+- [validation.md](validation.md) - `validate_inputs`, argument validation for a plain function/method by position or name.

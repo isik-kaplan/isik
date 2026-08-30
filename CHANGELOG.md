@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-30
+
+### Added
+
+- `validate_inputs(*validators, **kwarg_validators)` (`isik.common.utils`) - decorator validating a
+  function's own arguments where the function is declared, before its body runs. Positional
+  validators line up with the function's positional parameters left to right (`self`/`cls` skipped
+  by name); keyword validators name a parameter directly. A validator is any callable: return falsy
+  to fail with a plain `ValueError` naming the argument and its value, or raise your own exception
+  to propagate it unchanged instead - no single validator "protocol" required.
+
 ## [0.5.5] - 2026-08-30
 
 ### Fixed
