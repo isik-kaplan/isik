@@ -77,7 +77,9 @@ GET /widgets/history/?object_id=3&action=update
   (same pattern as `FilterSetMixin.filterset_class`), not rebuilt on every request.
 - Wired through `get_serializer_class()` (the hook drf-spectacular's `AutoSchema` already reads),
   so schema generation picks up both actions' real field types with no extra `@extend_schema`
-  needed.
+  needed - the remaining gaps (list-vs-single response typing, a unique operation id per action,
+  the built-in filters showing up as query parameters) are fixed by
+  [`isik.django.drf.spectacular.AutoSchema`](../spectacular.md), opt-in via `DEFAULT_SCHEMA_CLASS`.
 - Once an object is deleted, `GET <endpoint>/{pk}/history/` 404s permanently (`get_object()` can
   no longer find the row) even though the delete event itself is recorded - `GET
   <endpoint>/history/?object_id=<pk>` still reaches it, since that endpoint doesn't require the

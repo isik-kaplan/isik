@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     "django_object_actions",
     "pgtrigger",
     "pghistory",
+    "rest_framework",
+    "drf_spectacular",
     "isik.django.apps.common",
     "isik.django.apps.feedback",
     "isik.django.apps.tags",

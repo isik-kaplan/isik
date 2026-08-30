@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `drf-spectacular` is now part of the `drf` extra (`isik[drf]`) - `isik.django.drf.spectacular.AutoSchema`
+  wires it project-wide, fixing schema gaps that are properties of isik's own mixins:
+  - `HistoryMixin`'s `history()`/`history_list()` are now typed as returning a paginated array, get
+    distinct operation ids instead of colliding (they tokenize identically once the path parameter
+    is dropped), and their built-in filters appear as query parameters (`history_filterset_class`
+    is applied inside the action rather than exposed as `filterset_class`, so drf-spectacular's own
+    introspection never saw it otherwise).
+  - Any serializer using `ConditionalSerializerMixin` gets `only=`/`exclude=`/`include=` documented
+    as query parameters - read straight off the query string, so there was nothing for schema
+    introspection to find on its own before. `include=`'s enum comes from `Meta.relational_fields`.
+
 ## [0.5.3] - 2026-08-30
 
 ### Added

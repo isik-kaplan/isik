@@ -19,6 +19,7 @@ class PersonSerializer(ConditionalSerializerMixin, ModelSerializer):
 
 - `?include=x,y` is the only way a `relational_fields` entry appears at all - declare it as a name -> zero-argument factory (see `relational_serializer`). `?only=`/`?exclude=` reach into an already-included nested field with a dotted path (`only=manager.first_name`), but `manager` still needs `?include=manager` alongside to be there in the first place.
 - `?exclude=` is applied last, so it always wins over a matching `?include=`/`?only=`.
+- These three params are invisible to schema generation on their own (read straight off the query string, not a declared serializer field) - [`isik.django.drf.spectacular.AutoSchema`](../spectacular.md) documents them for any serializer using this mixin.
 
 ## relational_serializer
 
