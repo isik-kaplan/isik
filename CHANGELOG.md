@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-30
+
 ### Added
 
 - `context_field_filter(event_model, name)` (`isik.django.drf.viewsets`) - filters `HistoryMixin`'s
