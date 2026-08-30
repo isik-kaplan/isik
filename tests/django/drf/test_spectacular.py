@@ -11,9 +11,11 @@ from django_filters.rest_framework import CharFilter, DateTimeFilter, NumberFilt
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
+from rest_framework.mixins import ListModelMixin
 from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.views import APIView
+from rest_framework.viewsets import GenericViewSet
 
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin, relational_serializer
 from isik.django.drf.spectacular import (
@@ -30,11 +32,15 @@ from tests.testapp.models import Widget
 pytestmark = pytest.mark.django_db
 
 
-def generate_schema(*view_sets_and_basenames, urlpatterns=()):
+def generate_schema(*view_sets_and_basenames, urlpatterns=(), extra_rest_framework=None):
     router = SimpleRouter()
     for view_set, basename in view_sets_and_basenames:
         router.register(view_set.endpoint, view_set, basename=basename)
-    with override_settings(REST_FRAMEWORK={"DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema"}):
+    rest_framework = {
+        "DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema",
+        **(extra_rest_framework or {}),
+    }
+    with override_settings(REST_FRAMEWORK=rest_framework):
         return SchemaGenerator(patterns=[*router.urls, *urlpatterns]).get_schema(request=None, public=True)
 
 
@@ -157,6 +163,33 @@ class TestHistoryMixinSchema:
 
         schema = generate_schema(urlpatterns=[path("plain/", PlainAPIView.as_view())])
         assert "/plain/" in schema["paths"]
+
+    def test_the_viewsets_own_filter_backends_do_not_leak_onto_history_routes(self):
+        class FilteredWidgetViewSet(WidgetViewSet):
+            endpoint = "filtered-widgets"
+            exempt_from_registry = True
+            filterset_fields = ["name", "count"]
+
+        schema = generate_schema(
+            (FilteredWidgetViewSet, "filtered-widget"),
+            extra_rest_framework={"DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]},
+        )
+        for endpoint_path in ("/filtered-widgets/{id}/history/", "/filtered-widgets/history/"):
+            names = {param["name"] for param in schema["paths"][endpoint_path]["get"]["parameters"]}
+            assert not ({"name", "count"} & names)
+
+    def test_the_viewsets_own_filter_backends_still_appear_on_non_history_actions(self):
+        class FilteredWidgetViewSet(WidgetViewSet):
+            endpoint = "filtered-widgets"
+            exempt_from_registry = True
+            filterset_fields = ["name", "count"]
+
+        schema = generate_schema(
+            (FilteredWidgetViewSet, "filtered-widget"),
+            extra_rest_framework={"DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]},
+        )
+        names = {param["name"] for param in schema["paths"]["/filtered-widgets/"]["get"]["parameters"]}
+        assert {"name", "count"} <= names
 
 
 class TestAutoSchemaOperationIdUnit:
@@ -287,15 +320,18 @@ class TestConditionalSerializerParametersUnit:
         assert by_name["include"].enum == ["owner"]
         assert by_name["include"].description == "Nest these normally-absent relational fields into the response."
 
-    def test_include_enum_is_none_without_relational_fields(self):
+    def test_include_is_omitted_without_relational_fields(self):
+        # No enum means effectively free-text, accepting a value that does nothing - omit the
+        # parameter entirely instead of publishing that.
         class NoRelationsSerializer(ConditionalSerializerMixin, serializers.ModelSerializer):
             class Meta:
                 model = Widget
                 fields = ["id", "name"]
 
         parameters = _conditional_serializer_parameters(NoRelationsSerializer)
-        include_param = next(parameter for parameter in parameters if parameter.name == "include")
-        assert include_param.enum is None
+        names = {parameter.name for parameter in parameters}
+        assert "include" not in names
+        assert {"only", "exclude"} <= names
 
     def test_a_serializer_with_no_meta_class_at_all_does_not_crash(self):
         # A plain Serializer (unlike ModelSerializer) doesn't require a Meta at all.
@@ -303,5 +339,19 @@ class TestConditionalSerializerParametersUnit:
             name = serializers.CharField()
 
         parameters = _conditional_serializer_parameters(NoMetaSerializer)
-        include_param = next(parameter for parameter in parameters if parameter.name == "include")
-        assert include_param.enum is None
+        names = {parameter.name for parameter in parameters}
+        assert "include" not in names
+        assert {"only", "exclude"} <= names
+
+
+class TestGetOverrideParametersRobustness:
+    def test_a_view_whose_get_serializer_class_raises_does_not_fail_the_whole_document(self):
+        # GenericAPIView's own default get_serializer_class() raises AssertionError when
+        # serializer_class was never set - a normal state for a view resolving it dynamically
+        # elsewhere, and exactly what drf-spectacular's own _get_serializer() already tolerates.
+        class NoSerializerClassViewSet(ListModelMixin, GenericViewSet):
+            endpoint = "no-serializer-widgets"
+            queryset = Widget.objects.all()
+
+        schema = generate_schema((NoSerializerClassViewSet, "no-serializer-widget"))
+        assert "/no-serializer-widgets/" in schema["paths"]

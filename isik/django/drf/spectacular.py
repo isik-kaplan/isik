@@ -50,7 +50,7 @@ def _history_filter_parameters(filterset_class):
 def _conditional_serializer_parameters(serializer_class):
     meta = getattr(serializer_class, "Meta", None)
     relational_fields = getattr(meta, "relational_fields", None) or {}
-    return [
+    parameters = [
         OpenApiParameter(
             name="only",
             type=OpenApiTypes.STR,
@@ -63,14 +63,21 @@ def _conditional_serializer_parameters(serializer_class):
             many=True,
             description="Drop these fields from the response - applied last, wins over only=/include=.",
         ),
-        OpenApiParameter(
-            name="include",
-            type=OpenApiTypes.STR,
-            many=True,
-            enum=sorted(relational_fields) or None,
-            description="Nest these normally-absent relational fields into the response.",
-        ),
     ]
+    # Nothing to omit here rather than an enum-less (so effectively free-text) include= - there's
+    # no normally-absent field this serializer could ever nest in, so the parameter itself would
+    # be a lie, not just an incomplete one.
+    if relational_fields:
+        parameters.append(
+            OpenApiParameter(
+                name="include",
+                type=OpenApiTypes.STR,
+                many=True,
+                enum=sorted(relational_fields),
+                description="Nest these normally-absent relational fields into the response.",
+            )
+        )
+    return parameters
 
 
 class AutoSchema(_BaseAutoSchema):
@@ -88,12 +95,16 @@ class AutoSchema(_BaseAutoSchema):
     what makes both endpoints referring to the same kind of thing describable at all), and their
     built-in filters as query parameters (`history_filterset_class` is applied inside the action
     rather than exposed as `filterset_class`, so drf-spectacular's own `django-filter` introspection
-    never sees it).
+    never sees it) - without also advertising the tracked model's own `filter_backends`-derived
+    filters (e.g. `is_active`, `created_at__gte`), which passing to either history endpoint does
+    nothing, since neither ever calls `filter_queryset()`.
 
-    Any serializer using `ConditionalSerializerMixin` gets `only=`/`exclude=`/`include=` documented
-    as query parameters - read straight off the query string inside `get_fields()`, so there's
-    nothing for schema introspection to find on its own. `include=`'s enum comes from
-    `Meta.relational_fields`, so it can't drift out of sync with what the mixin actually accepts.
+    Any serializer using `ConditionalSerializerMixin` gets `only=`/`exclude=` documented as query
+    parameters - read straight off the query string inside `get_fields()`, so there's nothing for
+    schema introspection to find on its own. `include=` joins them too, but only when the
+    serializer actually declares `Meta.relational_fields` - its enum comes from there, so it can't
+    drift out of sync with what the mixin accepts, and it's omitted entirely rather than
+    published as an always-empty, effectively free-text parameter when there's nothing to nest.
     """
 
     def _is_list_view(self, serializer=None):
@@ -111,12 +122,36 @@ class AutoSchema(_BaseAutoSchema):
             return f"{'_'.join(tokens) or 'root'}_{action}"
         return super().get_operation_id()
 
+    def get_filter_backends(self):
+        # Making _is_list_view() true for these actions (above) has a side effect: the base
+        # implementation returns self.view.filter_backends for any list view, and that's the
+        # tracked model's own filters (e.g. is_active, created_at__gte) - properties of the
+        # viewset's other actions, not of history()/history_list(), which never call
+        # filter_queryset()/use filter_backends at all. history_filterset_class's own filters are
+        # already added separately in get_override_parameters().
+        if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
+            return []
+        return super().get_filter_backends()
+
     def get_override_parameters(self):
         parameters = super().get_override_parameters()
         if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
             parameters = [*parameters, *_history_filter_parameters(self.view.history_filterset_class)]
-        get_serializer_class = getattr(self.view, "get_serializer_class", None)
-        serializer_class = get_serializer_class() if get_serializer_class else None
+        serializer_class = self._resolve_serializer_class()
         if serializer_class is not None and issubclass(serializer_class, ConditionalSerializerMixin):
             parameters = [*parameters, *_conditional_serializer_parameters(serializer_class)]
         return parameters
+
+    def _resolve_serializer_class(self):
+        get_serializer_class = getattr(self.view, "get_serializer_class", None)
+        if get_serializer_class is None:
+            return None
+        try:
+            # get_serializer_class() is a normal DRF hook, not one every view can call safely at
+            # schema-generation time (e.g. GenericAPIView's own default raises AssertionError if
+            # serializer_class was never set, expecting a subclass to override the method instead)
+            # - drf-spectacular's own _get_serializer() wraps the equivalent call the same way,
+            # skipping just this one view with a warning rather than failing the whole document.
+            return get_serializer_class()
+        except Exception:
+            return None

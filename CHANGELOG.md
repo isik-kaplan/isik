@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-30
+
+### Fixed
+
+- `isik.django.drf.spectacular.AutoSchema` no longer advertises the tracked model's own
+  `filter_backends`-derived filters (e.g. `is_active`, `created_at__gte`) on `HistoryMixin`'s
+  `history()`/`history_list()` routes - passing them there did nothing, since neither action calls
+  `filter_queryset()`.
+- `include=` is now omitted entirely from a `ConditionalSerializerMixin` serializer's documented
+  parameters when it declares no `Meta.relational_fields`, instead of being published with no enum
+  (effectively free-text, accepting a value that does nothing).
+- A view whose `get_serializer_class()` raises (e.g. `GenericAPIView`'s own default, when
+  `serializer_class` was never set) no longer fails `AutoSchema`'s entire document - caught the same
+  way drf-spectacular's own equivalent internal call already is.
+
 ## [0.5.4] - 2026-08-30
 
 ### Added
