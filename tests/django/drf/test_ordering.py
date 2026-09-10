@@ -225,3 +225,29 @@ class TestDeclaredOrderingFilter:
         # "count" isn't declared and isn't in ordering_fields, so it's stripped and no ordering
         # is applied at all - unlike the "name" case above, the queryset comes back untouched.
         assert {widget.name for widget in queryset} == {"a", "b"}
+
+    def test_a_view_with_no_declared_ordering_attribute_at_all_still_works(self, make_request):
+        # No declared_ordering attribute anywhere on the view - getattr()'s own default has to
+        # supply an empty dict, not None or nothing, or "key in declared_ordering" crashes instead
+        # of just saying no. "count" (not in ordering_fields either) forces that check to actually
+        # run - a term already valid via ordering_fields short-circuits past it via "or".
+        class WidgetViewSet:
+            ordering_fields = ["name"]
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("name,count"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert tuple(queryset.query.order_by) == ("name",)
+
+    def test_a_non_declared_term_ahead_of_a_declared_one_doesnt_stop_resolution(self, make_request):
+        # Regression: the "target is None" branch must *skip* the current term (continue), not
+        # abandon the rest of the ordering list (break) - a plain field ahead of a declared key in
+        # "?ordering=" would otherwise silently swallow everything after it.
+        class WidgetViewSet:
+            declared_ordering = {"popularity": "count"}
+            ordering_fields = ["name"]
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("name,popularity"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert tuple(queryset.query.order_by) == ("name", "count")

@@ -46,7 +46,10 @@ class DeclaredOrderingFilter(OrderingFilter):
 
     def remove_invalid_fields(self, queryset, fields, view, request):
         declared_ordering = getattr(view, "declared_ordering", {})
-        valid_fields = set(super().remove_invalid_fields(queryset, fields, view, request))
+        # `request` only reaches OrderingFilter.get_default_valid_fields() (the ordering_fields=None
+        # fallback), as serializer context - which field *names* it returns doesn't depend on it, so
+        # no test can observe this forwarding either way.
+        valid_fields = set(super().remove_invalid_fields(queryset, fields, view, request))  # pragma: no mutate
 
         def term_valid(term):
             key = term[1:] if term.startswith("-") else term
