@@ -3,7 +3,7 @@ from rest_framework.viewsets import ModelViewSet
 from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMixin
 from isik.django.drf.viewsets.action_serializer_class import ActionSerializerClassMixin
 from isik.django.drf.viewsets.filterset import FilterSetMixin
-from isik.django.drf.viewsets.ordering import ReverseOrderingMixin
+from isik.django.drf.viewsets.ordering import DeclaredOrderingMixin, ReverseOrderingMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
 
@@ -14,6 +14,7 @@ class BaseModelViewSet(
     ActionSerializerClassMixin,
     ProtectedDestroyMixin,
     ReverseOrderingMixin,
+    DeclaredOrderingMixin,
     FilterSetMixin,
     ModelViewSet,
 ):
@@ -23,7 +24,9 @@ class BaseModelViewSet(
     fast at class-definition time otherwise), ViewSetRegistryMixin (model -> viewset lookup),
     ActionSerializerClassMixin (`serializer_class_action_map`), ProtectedDestroyMixin (a clean 400
     instead of a 500 on ProtectedError), ReverseOrderingMixin (`-field` ordering for free),
-    FilterSetMixin (`filterset_class` built from `filterset_fields`/`declared_filters`).
+    DeclaredOrderingMixin (`?ordering=` values that map to a real field or expression other than
+    their own name, via `declared_ordering`), FilterSetMixin (`filterset_class` built from
+    `filterset_fields`/`declared_filters`).
 
     `model` is the source of truth for the queryset - not `serializer_class.Meta.model` - so it
     has to be set even though the serializer already implies it, matching the "required

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-10
+
+### Added
+
+- `DeclaredOrderingMixin`/`DeclaredOrderingFilter` (`isik.django.drf.viewsets.ordering`) - `declared_ordering`
+  maps a `?ordering=` key exposed to API clients to the real field(s) (or ordering expression) it
+  orders by, for a value that isn't itself a field - a stand-in for several columns, or one that
+  shouldn't leak the real column name. Mirrors `FilterSetMixin`'s `declared_filters`: a key's `-`
+  counterpart is always valid too and flips the sign of every field it maps to, and
+  `DeclaredOrderingFilter` must be present in `filter_backends` (a drop-in `OrderingFilter`
+  replacement) or this fails loudly at class-definition time. Composed into `BaseModelViewSet`
+  alongside `ReverseOrderingMixin`.
+
 ## [0.6.0] - 2026-08-30
 
 ### Added

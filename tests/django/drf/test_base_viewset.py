@@ -3,6 +3,7 @@ from rest_framework import serializers, status
 from rest_framework.test import APIRequestFactory
 
 from isik.django.drf.viewsets.base import BaseModelViewSet
+from isik.django.drf.viewsets.ordering import DeclaredOrderingFilter
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
 from tests.testapp.models import Comment, Tag, Widget
 
@@ -22,6 +23,15 @@ class WidgetViewSet(BaseModelViewSet):
     serializer_class = WidgetSerializer
     filterset_fields = ["name"]
     ordering_fields = ["created_at"]
+
+
+class WidgetViewSetWithDeclaredOrdering(BaseModelViewSet):
+    model = Widget
+    endpoint = "declared-ordering-widgets"
+    exempt_from_registry = True
+    serializer_class = WidgetSerializer
+    declared_ordering = {"popularity": "count"}
+    filter_backends = [DeclaredOrderingFilter]
 
 
 class TestBaseModelViewSet:
@@ -60,6 +70,14 @@ class TestBaseModelViewSet:
     def test_filterset_class_is_built_from_filterset_fields(self):
         assert WidgetViewSet.filterset_class.Meta.model is Widget
         assert WidgetViewSet.filterset_class.Meta.fields == ["name"]
+
+    def test_declared_ordering_resolves_to_its_target_field(self):
+        Widget.objects.create(name="a", count=2)
+        Widget.objects.create(name="b", count=1)
+        request = APIRequestFactory().get("/declared-ordering-widgets/", {"ordering": "-popularity"})
+        view = WidgetViewSetWithDeclaredOrdering.as_view({"get": "list"})
+        response = view(request)
+        assert [widget["count"] for widget in response.data] == [2, 1]
 
     def test_destroy_reports_protected_by_on_a_real_protected_error(self):
         widget = Widget.objects.create(name="bolt", count=1)

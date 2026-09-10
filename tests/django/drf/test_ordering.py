@@ -1,8 +1,12 @@
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import F
 from rest_framework.filters import OrderingFilter
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
-from isik.django.drf.viewsets.ordering import ReverseOrderingMixin
+from isik.django.drf.viewsets.ordering import DeclaredOrderingFilter, DeclaredOrderingMixin, ReverseOrderingMixin
+from tests.testapp.models import Widget
 
 
 class TestReverseOrderingMixin:
@@ -86,3 +90,138 @@ class TestReverseOrderingMixin:
             filter_backends = [OrderingFilter]
 
         assert WidgetViewSet.ordering_fields == ["-name"]
+
+
+class TestDeclaredOrderingMixin:
+    def test_no_declared_ordering_is_a_no_op_even_without_filter_backends(self):
+        class WidgetViewSet(DeclaredOrderingMixin):
+            pass
+
+        assert WidgetViewSet.declared_ordering == {}
+
+    def test_raises_if_declared_ordering_set_without_declared_ordering_filter(self):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^BrokenViewSet sets declared_ordering but DeclaredOrderingFilter \(or a "
+            r"subclass\) is not in filter_backends - add it to "
+            r"REST_FRAMEWORK\['DEFAULT_FILTER_BACKENDS'\] or set filter_backends directly\.$",
+        ):
+
+            class BrokenViewSet(DeclaredOrderingMixin):
+                declared_ordering = {"name": "count"}
+                filter_backends = [OrderingFilter]
+
+    def test_raises_if_filter_backends_is_not_set_at_all(self):
+        with pytest.raises(ImproperlyConfigured, match="DeclaredOrderingFilter"):
+
+            class NoBackendsAttributeViewSet(DeclaredOrderingMixin):
+                declared_ordering = {"name": "count"}
+
+    def test_a_backend_subclass_satisfies_the_check(self):
+        class CustomDeclaredOrderingFilter(DeclaredOrderingFilter):
+            pass
+
+        class WidgetViewSet(DeclaredOrderingMixin):
+            declared_ordering = {"name": "count"}
+            filter_backends = [CustomDeclaredOrderingFilter]
+
+        assert WidgetViewSet.declared_ordering == {"name": "count"}
+
+
+@pytest.mark.django_db
+class TestDeclaredOrderingFilter:
+    @pytest.fixture
+    def make_request(self):
+        factory = APIRequestFactory()
+        return lambda ordering: Request(factory.get("/", {"ordering": ordering}))
+
+    def test_a_declared_key_resolves_to_its_target_field(self, make_request):
+        Widget.objects.create(name="a", count=2)
+        Widget.objects.create(name="b", count=1)
+
+        class WidgetViewSet:
+            declared_ordering = {"popularity": "count"}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("popularity"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert [widget.count for widget in queryset] == [1, 2]
+
+    def test_the_negative_form_flips_every_target_field(self, make_request):
+        Widget.objects.create(name="a", count=2)
+        Widget.objects.create(name="b", count=1)
+
+        class WidgetViewSet:
+            declared_ordering = {"popularity": "count"}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("-popularity"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert [widget.count for widget in queryset] == [2, 1]
+
+    def test_a_target_that_already_carries_a_sign_gets_flipped_too(self, make_request):
+        Widget.objects.create(name="a", count=2)
+        Widget.objects.create(name="b", count=1)
+
+        class WidgetViewSet:
+            declared_ordering = {"newest": "-count"}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("-newest"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert [widget.count for widget in queryset] == [1, 2]
+
+    def test_a_declared_key_can_map_to_several_fields(self, make_request):
+        Widget.objects.create(name="b", count=1)
+        Widget.objects.create(name="a", count=1)
+
+        class WidgetViewSet:
+            declared_ordering = {"identity": ("count", "name")}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("identity"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert [widget.name for widget in queryset] == ["a", "b"]
+
+    def test_an_expression_target_ignores_the_requests_sign_and_is_passed_through(self, make_request):
+        Widget.objects.create(name="a", count=2)
+        Widget.objects.create(name="b", count=1)
+
+        class WidgetViewSet:
+            declared_ordering = {"popularity": F("count").desc()}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("-popularity"), Widget.objects.all(), WidgetViewSet()
+        )
+        assert [widget.count for widget in queryset] == [2, 1]
+
+    def test_a_non_declared_term_falls_back_to_plain_ordering_filter_behavior(self, make_request):
+        Widget.objects.create(name="b", count=1)
+        Widget.objects.create(name="a", count=2)
+
+        class WidgetViewSet:
+            declared_ordering = {}
+            ordering_fields = ["name"]
+
+        queryset = DeclaredOrderingFilter().filter_queryset(make_request("name"), Widget.objects.all(), WidgetViewSet())
+        assert [widget.name for widget in queryset] == ["a", "b"]
+
+    def test_an_invalid_term_that_isnt_declared_or_a_valid_ordering_field_is_dropped(self, make_request):
+        Widget.objects.create(name="b", count=1)
+        Widget.objects.create(name="a", count=2)
+
+        class WidgetViewSet:
+            declared_ordering = {}
+            ordering_fields = []
+
+        queryset = DeclaredOrderingFilter().filter_queryset(
+            make_request("count"), Widget.objects.all(), WidgetViewSet()
+        )
+        # "count" isn't declared and isn't in ordering_fields, so it's stripped and no ordering
+        # is applied at all - unlike the "name" case above, the queryset comes back untouched.
+        assert {widget.name for widget in queryset} == {"a", "b"}
