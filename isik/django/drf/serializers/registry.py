@@ -1,5 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 
+from isik._internal.translation import gettext as _
+
 
 class ModelSerializerRegistryMixin:
     """
@@ -48,7 +50,10 @@ class ModelSerializerRegistryMixin:
         if model in cls.model_map:
             existing = cls.model_map[model]
             if (existing.__module__, existing.__qualname__) != (cls.__module__, cls.__qualname__):
-                raise ImproperlyConfigured(f"{model} is already registered to {existing.__name__}")
+                raise ImproperlyConfigured(
+                    _("%(model)s is already registered to %(existing)s")
+                    % {"model": model, "existing": existing.__name__}
+                )
         cls.model_map[model] = cls
 
     @classmethod

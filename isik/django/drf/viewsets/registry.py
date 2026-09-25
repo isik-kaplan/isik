@@ -1,5 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 
+from isik._internal.translation import gettext as _
+
 
 class ViewSetRegistryMixin:
     """
@@ -51,7 +53,10 @@ class ViewSetRegistryMixin:
         if cls.model in cls.model_map:
             existing = cls.model_map[cls.model]
             if (existing.__module__, existing.__qualname__) != (cls.__module__, cls.__qualname__):
-                raise ImproperlyConfigured(f"{cls.model} is already registered to {existing.__name__}")
+                raise ImproperlyConfigured(
+                    _("%(model)s is already registered to %(existing)s")
+                    % {"model": cls.model, "existing": existing.__name__}
+                )
         cls.model_map[cls.model] = cls
 
     @classmethod

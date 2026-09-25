@@ -1,5 +1,7 @@
 from functools import wraps
 
+from isik._internal.translation import gettext as _
+
 
 def caster(f):
     """
@@ -49,7 +51,7 @@ def boolean(value):
     elif value in falsy:
         return False
     else:
-        raise ValueError(f"Value {value!r} can not be parsed into a boolean.")
+        raise ValueError(_("Value %(value)r can not be parsed into a boolean.") % {"value": value})
 
 
 string = caster(str)

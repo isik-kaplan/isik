@@ -1,5 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 
+from isik._internal.translation import gettext as _
+
 
 class WriteOnlyFieldsMixin:
     """
@@ -28,7 +30,8 @@ class WriteOnlyFieldsMixin:
         )
         if overlap:
             raise ImproperlyConfigured(
-                f"{cls.__name__}: {sorted(overlap)} can't be in both write_only_fields and create_only_fields."
+                _("%(serializer)s: %(fields)s can't be in both write_only_fields and create_only_fields.")
+                % {"serializer": cls.__name__, "fields": sorted(overlap)}
             )
 
     def get_extra_kwargs(self):

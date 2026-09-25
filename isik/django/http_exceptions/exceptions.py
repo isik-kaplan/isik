@@ -2,6 +2,7 @@ from http import HTTPStatus
 
 from django.http import HttpResponse, JsonResponse
 
+from isik._internal.translation import gettext as _
 from isik.common.utils.metaclasses import is_dunder, transform
 
 
@@ -70,7 +71,7 @@ class HTTPExceptions(metaclass=transform):
     def __transform__(key, value, classdict):
         base_exception = classdict.get("BASE_EXCEPTION") or HTTPException
         if not issubclass(base_exception, HTTPException):
-            raise TypeError("BASE_EXCEPTION must be a subclass of HTTPException.")
+            raise TypeError(_("BASE_EXCEPTION must be a subclass of HTTPException."))
         return type(
             value.name,
             (base_exception,),
@@ -98,7 +99,7 @@ class HTTPExceptions(metaclass=transform):
     def register_base_exception(cls, new_exception):
         for exception in cls.exceptions:
             if not issubclass(new_exception, HTTPException):
-                raise TypeError("New exception must be a subclass of HTTPException.")
+                raise TypeError(_("New exception must be a subclass of HTTPException."))
             getattr(cls, exception).__bases__ = (new_exception,)
 
     for status in HTTPStatus:

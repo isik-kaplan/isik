@@ -2,6 +2,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.functional import classproperty
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 
+from isik._internal.translation import gettext as _
+
 
 class FilterSetMixin:
     """
@@ -29,9 +31,12 @@ class FilterSetMixin:
         filter_backends = getattr(cls, "filter_backends", [])
         if not any(issubclass(backend, DjangoFilterBackend) for backend in filter_backends):
             raise ImproperlyConfigured(
-                f"{cls.__name__} sets filterset_fields/declared_filters but DjangoFilterBackend "
-                "(or a subclass) is not in filter_backends - add it to "
-                "REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
+                _(
+                    "%(viewset)s sets filterset_fields/declared_filters but DjangoFilterBackend "
+                    "(or a subclass) is not in filter_backends - add it to "
+                    "REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
+                )
+                % {"viewset": cls.__name__}
             )
 
     @classproperty

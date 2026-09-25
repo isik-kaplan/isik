@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-25
+
+### Added
+
+- `django_permission(permission, message=None, name=None)` (`isik.django.drf.permissions`) - a
+  permission that passes only if the caller holds a Django permission (`request.user.has_perm`). Takes
+  a permission name, a `str` subclass, a StrEnum/TextChoices member, or an Enum member whose value is
+  one, and passes it to the backends untouched. Request-level only: `ModelBackend` answers `False` to
+  every object-level check. An unauthenticated request is refused without asking the backend. Named
+  after the permission (`HasInvitationsIssuePublicInvitation`). `message=` takes a template with an
+  optional `%(permission)s` placeholder, a fixed message, or a callable asked on refusal as
+  `message(permission=, request=, view=)`. By default it names the permission.
+- Every user-facing string isik produces is translatable - permission messages, validation errors,
+  HTTP exception descriptions (including stdlib's `HTTPStatus` ones in the middleware's response), and
+  every raised exception, configuration errors included. With Django they come from Django's own
+  catalogs. Without Django, from stdlib gettext's `isik` domain. Errors raised at import time fall back
+  to the untranslated text instead of failing with `AppRegistryNotReady`. `isik/locale/isik.pot` lists
+  every message for `msgmerge`. See `docs/translations.md`.
+
+### Changed
+
+- The `drf` extra now brings the `django` extra with it. `isik.django.drf` builds on `isik.django.apps`
+  (`BaseModel`, history tracking), so `pip install isik[drf]` on its own used to leave imports failing.
+- `README.md` is its own page instead of a symlink to `docs/INDEX.md`, whose `docs/`-relative links
+  broke from the repo root on GitHub and on PyPI. It links to the docs with absolute URLs.
+
+### Fixed
+
+- `prevent_actions`, `only_actions`, `user_property` and `object_property` built their messages with
+  an f-string inside `gettext_lazy`, so the msgid changed with every value and could never be
+  translated. They use placeholders now; the rendered English is unchanged.
+- `SkippableValidatorsMixin` (and so every `BaseModel`) connected one `class_prepared` receiver per model
+  class with `sender=cls`. Django keys those by `id(cls)` and never removes them, so once a model class
+  was freed (one defined in a test, or under `isolate_apps`), the next class allocated at the same
+  address inherited the receiver and had its validators wrapped without mixing it in - an intermittent
+  failure, and one leaked receiver per model. It's now a single receiver that checks what it's handed.
+- `BaseModel`'s `id`/`created_at`/`updated_at` `verbose_name`s were translated once, at import, in the
+  default language. They're lazy now, so they follow the active language. No migration.
+
 ## [0.9.0] - 2026-09-25
 
 ### Changed

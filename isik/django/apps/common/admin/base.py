@@ -1,8 +1,8 @@
 from dalf.admin import DALFModelAdmin, DALFRelatedFieldAjax
 from django.contrib.admin import ModelAdmin
-from django.utils.translation import gettext_lazy as _
 from django_object_actions import DjangoObjectActions
 
+from isik._internal.translation import gettext_lazy
 from isik.common.utils.concurrency import ThreadLock
 from isik.common.utils.functional import with_attrs
 from isik.django.apps.common.db import BaseModel
@@ -48,7 +48,7 @@ class BaseAdmin(DjangoObjectActions, DALFModelAdmin):
     autocomplete_list_filter = []
     list_display = []
     object_fieldsets = []
-    meta_fieldsets = [[BaseModel.FIELDS, _("Meta")]]
+    meta_fieldsets = [[BaseModel.FIELDS, gettext_lazy("Meta")]]
     excluded_list_display = ["slug"]
     safe_m2m_fields = []
     create_force_field_as_current_user = []

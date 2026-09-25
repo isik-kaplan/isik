@@ -1,5 +1,7 @@
 from functools import wraps
 
+from isik._internal.translation import gettext as _
+
 
 def noop(*a, **kw):
     """Don't do anything, returns None"""
@@ -102,7 +104,7 @@ def require_exclusive_keys(*conditions, allow_empty=False):
         suppress_callable(ValueError, return_value=0, return_func=my_func)  # raises ValueError
     """
     if not conditions:
-        raise ValueError("At least one condition dict must be provided.")
+        raise ValueError(_("At least one condition dict must be provided."))
 
     merged: dict[str, list[str]] = {}
     for condition in conditions:
@@ -123,9 +125,17 @@ def require_exclusive_keys(*conditions, allow_empty=False):
                 governed_provided = {k: v for k, v in kwargs.items() if k in all_condition_keys and v is not None}
                 ungoverned_provided = {k: v for k, v in kwargs.items() if k not in all_condition_keys}
                 raise ValueError(
-                    f"Arguments to '{func.__name__}': the governed arguments {governed_provided!r} "
-                    f"must match exactly one of: {merged}. "
-                    f"Other arguments {ungoverned_provided!r} are unconstrained and were ignored."
+                    _(
+                        "Arguments to '%(func)s': the governed arguments %(governed)r "
+                        "must match exactly one of: %(merged)s. "
+                        "Other arguments %(ungoverned)r are unconstrained and were ignored."
+                    )
+                    % {
+                        "func": func.__name__,
+                        "governed": governed_provided,
+                        "merged": merged,
+                        "ungoverned": ungoverned_provided,
+                    }
                 )
 
             return func(*args, **kwargs)

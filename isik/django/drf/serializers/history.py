@@ -4,6 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from rest_framework import serializers
 
+from isik._internal.translation import gettext as _
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
 
 
@@ -113,9 +114,12 @@ def generic_history_serializer(model, *, withhold=(), name=None):
     collisions = (_META_FIELD_NAMES & tracked.keys()) - context_field_names
     if collisions:
         raise ImproperlyConfigured(
-            f"{model.__name__} has tracked field(s) named {sorted(collisions)}, which collide with "
-            "generic_history_serializer()'s own field names - rename the model field or exclude it "
-            "from tracking (track_events(exclude=[...]))."
+            _(
+                "%(model)s has tracked field(s) named %(fields)s, which collide with "
+                "generic_history_serializer()'s own field names - rename the model field or exclude it "
+                "from tracking (track_events(exclude=[...]))."
+            )
+            % {"model": model.__name__, "fields": sorted(collisions)}
         )
 
     attrs = {

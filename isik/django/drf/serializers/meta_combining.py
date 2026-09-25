@@ -1,3 +1,6 @@
+from isik._internal.translation import gettext as _
+
+
 class MetaCombiningMixin:
     """
     Merges specific `Meta` attributes with the values declared on `_Meta` (typically set once on
@@ -45,4 +48,4 @@ class MetaCombiningMixin:
             return base + own
         if isinstance(base, dict):
             return {**base, **own}
-        raise TypeError("meta_fields_to_combine only supports list or dict attributes")
+        raise TypeError(_("meta_fields_to_combine only supports list or dict attributes"))

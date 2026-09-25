@@ -1,6 +1,6 @@
 [project]
 name = "isik"
-version = "0.9.0"
+version = "0.10.0"
 description = "Everyday python utilities."
 authors = [
   { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
@@ -19,7 +19,8 @@ dependencies = []
 [project.optional-dependencies]
 sentry = ["sentry-sdk"]
 django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf", "django-lifecycle", "whitenoise"]
-drf = ["djangorestframework", "django-filter", "drf-spectacular"]
+# isik.django.drf builds on isik.django.apps (BaseModel, history tracking), so it brings the django extra.
+drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"]
 tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
 all = ["isik[sentry,django,drf,tiptap,templated_fields]"]
@@ -70,6 +71,8 @@ omit = ["*/migrations/*"]
 
 [tool.coverage.report]
 show_missing = true
+# Every line and branch is covered, and CI's `coverage report` fails if that ever stops being true.
+fail_under = 100
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",

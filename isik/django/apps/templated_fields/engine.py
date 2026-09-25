@@ -11,6 +11,7 @@ import functools
 from jinja2 import StrictUndefined, Undefined
 from jinja2.sandbox import SandboxedEnvironment
 
+from isik._internal.translation import gettext as _
 from isik.django.apps.templated_fields.policy import (
     ALWAYS_BLOCKED_NODES,
     DROPPED_GLOBALS,
@@ -32,7 +33,10 @@ def _capped_range(limit):
     def capped_range(*args):
         result = range(*args)
         if limit is not None and len(result) > limit:
-            raise TemplateSecurityError(f"range() would iterate {len(result)} times, over the {limit} limit")
+            raise TemplateSecurityError(
+                _("range() would iterate %(count)s times, over the %(limit)s limit")
+                % {"count": len(result), "limit": limit}
+            )
         return result
 
     return capped_range
@@ -74,13 +78,14 @@ def _build_environment(delimiters, policy, undefined):
 
 def _check_policy(ast, policy):
     for node in ast.find_all(ALWAYS_BLOCKED_NODES):
-        raise TemplateSecurityError(f"{type(node).__name__} is never allowed in a template field")
+        raise TemplateSecurityError(_("%(node)s is never allowed in a template field") % {"node": type(node).__name__})
     for feature, node_types in FEATURE_NODES.items():
         if feature in policy:
             continue
         for node in ast.find_all(node_types):
             raise TemplateSecurityError(
-                f"{type(node).__name__} requires TemplateFeature.{feature.name}, not enabled for this field"
+                _("%(node)s requires TemplateFeature.%(feature)s, not enabled for this field")
+                % {"node": type(node).__name__, "feature": feature.name}
             )
 
 
@@ -88,7 +93,8 @@ def _check_policy(ast, policy):
 def _compile(source, delimiters, policy, undefined):
     if policy.max_source_length is not None and len(source) > policy.max_source_length:
         raise TemplateSecurityError(
-            f"template source is {len(source)} chars, over the {policy.max_source_length} limit"
+            _("template source is %(length)s chars, over the %(limit)s limit")
+            % {"length": len(source), "limit": policy.max_source_length}
         )
     env = _build_environment(delimiters, policy, undefined)
     ast = env.parse(source)
@@ -118,5 +124,7 @@ def render(source, *, delimiters, policy, context, undefined):
         chunks.append(chunk)
         total += len(chunk)
         if total > policy.max_render_length:
-            raise TemplateSecurityError(f"rendered output exceeded the {policy.max_render_length} char limit")
+            raise TemplateSecurityError(
+                _("rendered output exceeded the %(limit)s char limit") % {"limit": policy.max_render_length}
+            )
     return "".join(chunks)

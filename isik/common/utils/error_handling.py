@@ -1,6 +1,7 @@
 from contextlib import ContextDecorator, suppress
 from functools import wraps
 
+from isik._internal.translation import gettext as _
 from isik.common.utils.functional import require_exclusive_keys
 
 
@@ -64,8 +65,10 @@ class TransformExceptions(ContextDecorator):
         if isinstance(exc_val, self.exception_types):
             if self.transform is None:
                 raise TypeError(
-                    "TransformExceptions has no transform set - "
-                    "pass transform=... or decorate a transform function with it first."
+                    _(
+                        "TransformExceptions has no transform set - "
+                        "pass transform=... or decorate a transform function with it first."
+                    )
                 )
             new_exception = self.transform(exc_val)
             raise new_exception from (exc_val if self.keep_original else None)

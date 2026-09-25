@@ -1,6 +1,8 @@
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework.filters import OrderingFilter
 
+from isik._internal.translation import gettext as _
+
 
 class ReverseOrderingMixin:
     """
@@ -24,9 +26,12 @@ class ReverseOrderingMixin:
             filter_backends = getattr(cls, "filter_backends", [])
             if not any(issubclass(backend, OrderingFilter) for backend in filter_backends):
                 raise ImproperlyConfigured(
-                    f"{cls.__name__} sets ordering_fields but OrderingFilter (or a subclass) is "
-                    "not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] "
-                    "or set filter_backends directly."
+                    _(
+                        "%(viewset)s sets ordering_fields but OrderingFilter (or a subclass) is "
+                        "not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] "
+                        "or set filter_backends directly."
+                    )
+                    % {"viewset": cls.__name__}
                 )
         if not cls.allow_reverse_ordering:
             return
@@ -113,7 +118,10 @@ class DeclaredOrderingMixin:
         filter_backends = getattr(cls, "filter_backends", [])
         if not any(issubclass(backend, DeclaredOrderingFilter) for backend in filter_backends):
             raise ImproperlyConfigured(
-                f"{cls.__name__} sets declared_ordering but DeclaredOrderingFilter (or a subclass) "
-                "is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or "
-                "set filter_backends directly."
+                _(
+                    "%(viewset)s sets declared_ordering but DeclaredOrderingFilter (or a subclass) "
+                    "is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or "
+                    "set filter_backends directly."
+                )
+                % {"viewset": cls.__name__}
             )

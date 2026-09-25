@@ -33,7 +33,10 @@ class TestResolveBaseModel:
     def test_raises_if_the_resolved_base_is_not_abstract(self):
         from tests.testapp.models import Widget
 
-        with pytest.raises(TypeError, match="abstract"):
+        with pytest.raises(
+            TypeError,
+            match=r"^base_model must be an abstract Model subclass, got <class 'tests\.testapp\.models\.Widget'>$",
+        ):
             _model_makers.resolve_base_model(Widget, "MAKER_DOES_NOT_EXIST")
 
 
@@ -47,7 +50,11 @@ class TestClaimRelatedName:
 
     def test_a_different_owner_claiming_the_same_name_raises(self):
         _model_makers.claim_related_name("some.Model", "votes", "SomeVote")
-        with pytest.raises(ValueError, match="already claimed"):
+        with pytest.raises(
+            ValueError,
+            match=r"^related_name='votes' on some\.Model is already claimed by SomeVote - pick a "
+            r"different name for OtherVote\.$",
+        ):
             _model_makers.claim_related_name("some.Model", "votes", "OtherVote")
 
     def test_different_related_names_on_the_same_model_dont_clash(self):
@@ -120,7 +127,7 @@ class TestExposeAndResolveField:
         _model_makers.expose(Host, "a", descriptor_a, generated_model=None, config=_Marker())
         _model_makers.expose(Host, "b", descriptor_b, generated_model=None, config=_Marker())
 
-        with pytest.raises(TypeError, match="multiple thingable fields"):
+        with pytest.raises(TypeError, match=r"^Host has multiple thingable fields - pass field= to disambiguate$"):
             _model_makers.resolve_field(Host(), None, _Marker, "thingable")
 
     @isolate_apps("tests.testapp")

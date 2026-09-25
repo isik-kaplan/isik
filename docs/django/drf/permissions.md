@@ -24,6 +24,41 @@ class User(AbstractUser):
 
 - Reads `user.SIGNUP_COMPLETED_FIELD` directly (not via `getattr` with a default) - a user model that never defines it raises `ImproperlyConfigured` rather than silently denying access.
 
+## django_permission
+
+Builds a permission that passes only if the caller holds a Django permission, via `request.user.has_perm(...)`. It takes a permission name, a `str` subclass, a StrEnum/TextChoices member, or an Enum member whose value is one. The name is passed to the backends untouched, in whatever format they understand (`"app_label.codename"` for Django's `ModelBackend`).
+
+```python
+permission_classes = [django_permission("invitations.issue_invitation")]
+permission_classes = [django_permission(Permission.INVITATIONS_ISSUE_PUBLIC_INVITATION) | IsSuperUser]
+guarding(django_permission("mail.edit_smtp_settings"), fields=["smtp_password"])
+```
+
+- **Request-level only.** `ModelBackend` answers `False` to every object-level `has_perm(perm, obj)`, so passing the object through would silently refuse everything on most projects.
+- **Implicit rules under `ModelBackend`.** An active superuser always passes, and an inactive user never does. An unauthenticated request is refused without asking the backend.
+- **Named after the permission**, e.g. `HasInvitationsIssuePublicInvitation`, or set with `name=`.
+- **Combine with `&` for "holds both".** `django_permission(A) & django_permission(B)`; there's no multi-permission argument.
+
+`message=` is what a refused request is told, in one of three forms, all translatable:
+
+```python
+from django.utils.translation import gettext, gettext_lazy
+
+# a template - %(permission)s is filled with the permission's name (write a literal % as %%)
+django_permission(Permission.X, message=gettext_lazy("Only %(permission)s holders can do this."))
+
+# a fixed message
+django_permission(Permission.X, message=gettext_lazy("Ask an admin."))
+
+# a callable, asked on refusal with the permission, request and view
+def refusal(permission, request, view):
+    return gettext("%(user)s can't do that here.") % {"user": request.user}
+
+django_permission(Permission.X, message=refusal)
+```
+
+By default the message is "You need the <permission> permission to do this.", which tells a refused caller your permission names. Pass a message if they shouldn't see them.
+
 ## is_owner
 
 Builds an object-level permission allowing access only when `request.user` matches `obj.<owner_field>`. With `of=`, it compares against an attribute of the user instead, for rows owned by a tenant rather than a person. Both halves take a dotted path or a callable.

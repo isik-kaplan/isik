@@ -8,7 +8,11 @@ def test_check_extra_passes_silently_when_the_package_is_installed():
 
 
 def test_check_extra_raises_a_helpful_message_when_missing():
-    with pytest.raises(ImportError, match=r"pip install isik\[fake_extra\]"):
+    with pytest.raises(
+        ImportError,
+        match=r"^The module you are trying to use requires 'fake_extra'\. "
+        r"Please install it with: pip install isik\[fake_extra\]$",
+    ):
         check_extra("fake_extra", "this_package_does_not_exist_anywhere")
 
 

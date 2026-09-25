@@ -53,7 +53,11 @@ def test_custom_separator_is_used_for_the_environment_key(monkeypatch):
 def test_missing_variable_without_a_default_raises_config_error(monkeypatch):
     monkeypatch.delenv("MISSING_KEY", raising=False)
 
-    with pytest.raises(ConfigError, match="not found"):
+    with pytest.raises(
+        ConfigError,
+        match=r"^Environment variable MISSING_KEY not found\. "
+        r"Please set it or provide a `missing_default` to your caster\.$",
+    ):
         config({"MISSING_KEY": string()})
 
 
@@ -214,13 +218,13 @@ class TestRefresh:
     def test_refresh_with_an_unknown_key_raises_config_error(self, monkeypatch):
         monkeypatch.setenv("NAME", "value")
         result = config({"NAME": string()})
-        with pytest.raises(ConfigError, match="not a key in this config"):
+        with pytest.raises(ConfigError, match=r"^'MISSING' is not a key in this config\.$"):
             result.refresh("MISSING")
 
     def test_refresh_with_an_unknown_nested_key_raises_config_error(self, monkeypatch):
         monkeypatch.setenv("DATABASE__HOST", "value")
         result = config({"DATABASE": {"HOST": string()}})
-        with pytest.raises(ConfigError, match="not a key in this config"):
+        with pytest.raises(ConfigError, match=r"^'MISSING' is not a key in this config\.$"):
             result.refresh("DATABASE", "MISSING")
 
 
@@ -336,7 +340,7 @@ class TestRef:
             ref("DRF", dot="DRF.PAGE_SIZE")
 
     def test_ref_rejects_a_malformed_dotted_path(self):
-        with pytest.raises(ConfigError, match="not a valid dotted path"):
+        with pytest.raises(ConfigError, match=r"^ref\(dot='DRF\.\.PAGE_SIZE'\) is not a valid dotted path\.$"):
             ref(dot="DRF..PAGE_SIZE")
 
     def test_ref_rejects_an_empty_path(self):
@@ -371,14 +375,14 @@ class TestRef:
     def test_ref_to_unknown_key_raises_config_error(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
 
-        with pytest.raises(ConfigError, match="does not point to a key"):
+        with pytest.raises(ConfigError, match=r"^ref\('NOPE',\) does not point to a key in this config\.$"):
             config({"MAX_PAGE_SIZE": integer(missing_default=ref("NOPE"))})
 
     def test_ref_to_a_nested_config_instead_of_a_leaf_raises_config_error(self, monkeypatch):
         monkeypatch.delenv("MAX_PAGE_SIZE", raising=False)
         monkeypatch.setenv("DRF__PAGE_SIZE", "50")
 
-        with pytest.raises(ConfigError, match="nested config"):
+        with pytest.raises(ConfigError, match=r"^ref\('DRF',\) points to a nested config, not a single setting\.$"):
             config(
                 {
                     "DRF": {"PAGE_SIZE": integer()},

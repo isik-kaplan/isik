@@ -69,4 +69,4 @@ its `actor_id` column as the real thing rather than a name collision with their 
 `actor_id` - the real, typed column wins and the JSON annotation is skipped, instead of raising
 `ImproperlyConfigured`. `HistoryMixin`'s built-in `actor` *filter* follows the same precedent, and
 any other `ContextField` is filterable the same way via
-[`context_field_filter()`](../../drf/viewsets/history.md).
+[`context_field_filter()`](../../../drf/viewsets/history.md).

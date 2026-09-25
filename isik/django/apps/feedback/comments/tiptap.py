@@ -30,6 +30,8 @@ from django.core.exceptions import ValidationError
 from django.utils.deconstruct import deconstructible
 from prosemirror.model import Node, Schema
 
+from isik._internal.translation import gettext as _
+
 
 @functools.lru_cache
 def _load_schema(schema_path):
@@ -42,7 +44,7 @@ def _resolve_schema_path(explicit):
     path = explicit or getattr(settings, "FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH", None)
     if not path:
         raise ValidationError(
-            "No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly."
+            _("No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly.")
         )
     return path
 
@@ -55,15 +57,15 @@ def parse_and_check(value, *, schema_path=None):
     parsed `prosemirror.model.Node` on success.
     """
     if not isinstance(value, dict):
-        raise ValidationError("Tiptap document must be a JSON object.")
+        raise ValidationError(_("Tiptap document must be a JSON object."))
     if value.get("type") != "doc":
-        raise ValidationError("Tiptap document must have a top-level type of 'doc'.")
+        raise ValidationError(_("Tiptap document must have a top-level type of 'doc'."))
     schema = _load_schema(_resolve_schema_path(schema_path))
     try:
         node = Node.from_json(schema, value)
         node.check()
     except Exception as exc:
-        raise ValidationError(f"Invalid Tiptap document: {exc}") from exc
+        raise ValidationError(_("Invalid Tiptap document: %(error)s") % {"error": exc}) from exc
     return node
 
 
@@ -103,9 +105,15 @@ class TiptapValidator:
         node = parse_and_check(value, schema_path=self.schema_path)
         text_length = len(node.text_content)
         if self.min_length is not None and text_length < self.min_length:
-            raise ValidationError(f"Comment must be at least {self.min_length} characters, got {text_length}.")
+            raise ValidationError(
+                _("Comment must be at least %(limit)s characters, got %(length)s.")
+                % {"limit": self.min_length, "length": text_length}
+            )
         if self.max_length is not None and text_length > self.max_length:
-            raise ValidationError(f"Comment must be at most {self.max_length} characters, got {text_length}.")
+            raise ValidationError(
+                _("Comment must be at most %(limit)s characters, got %(length)s.")
+                % {"limit": self.max_length, "length": text_length}
+            )
 
     def __eq__(self, other):
         return isinstance(other, TiptapValidator) and (self.min_length, self.max_length, self.schema_path) == (

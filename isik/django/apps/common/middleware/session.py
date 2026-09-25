@@ -2,6 +2,8 @@ from django.conf import settings
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 
+from isik._internal.translation import gettext as _
+
 
 class CookieORHeaderSessionMiddleware(SessionMiddleware):
     """
@@ -15,7 +17,10 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
 
     def __init__(self, get_response):
         if not hasattr(settings, "SESSION_HEADER_NAME"):
-            raise ImproperlyConfigured(f"{self.__class__.__name__} requires settings.SESSION_HEADER_NAME to be set.")
+            raise ImproperlyConfigured(
+                _("%(middleware)s requires settings.SESSION_HEADER_NAME to be set.")
+                % {"middleware": self.__class__.__name__}
+            )
         super().__init__(get_response)
 
     def process_request(self, request):
@@ -28,5 +33,5 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
         header_session_key = request.headers.get(settings.SESSION_HEADER_NAME)
         if cookie_session_key and header_session_key:
             if cookie_session_key != header_session_key:
-                raise SuspiciousOperation("Session key mismatch")
+                raise SuspiciousOperation(_("Session key mismatch"))
         return cookie_session_key or header_session_key

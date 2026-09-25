@@ -78,10 +78,10 @@ def test_the_wrapped_validator_still_calls_through_to_the_real_original_one():
 
 
 @isolate_apps("tests.testapp")
-def test_class_prepared_receiver_is_scoped_to_its_own_sender_not_every_model():
-    # sender=cls, not sender=None/omitted (which Django's Signal.connect treats as "every
-    # sender") - a plain model that never mixes in SkippableValidatorsMixin must never have its
-    # own validators wrapped just because some other, unrelated model was prepared afterward.
+@isolate_apps("tests.testapp")
+def test_a_plain_model_prepared_after_a_skippable_one_is_left_alone():
+    # The receiver runs for every model, so it has to check what it was handed - a plain model
+    # that never mixes in SkippableValidatorsMixin must never have its validators wrapped.
     class PlainWidget(models.Model):
         count = models.IntegerField(validators=[_custom_validator])
 
@@ -96,3 +96,29 @@ def test_class_prepared_receiver_is_scoped_to_its_own_sender_not_every_model():
 
     plain_field = PlainWidget._meta.get_field("count")
     assert not any(getattr(v, "_is_skippable", False) for v in plain_field.validators)
+
+
+def test_the_receiver_is_not_handed_a_model_that_does_not_mix_it_in():
+    from isik.django.apps.common.skippable_validators.mixin import _wrap_field_validators
+
+    field = type("Field", (), {"validators": [_custom_validator], "name": "count"})()
+    meta = type("Meta", (), {"local_fields": [field], "local_many_to_many": []})()
+    plain = type("Plain", (), {"_meta": meta})
+    _wrap_field_validators(sender=plain)
+    assert field.validators == [_custom_validator]
+
+
+@isolate_apps("tests.testapp")
+def test_defining_skippable_models_connects_no_receiver_per_class():
+    # A per-class receiver is keyed by id(cls) and outlives the class, so it would fire for any later
+    # class allocated at the same address - and pile up one per model.
+    from django.db.models.signals import class_prepared
+
+    before = len(class_prepared.receivers)
+    for index in range(3):
+        type(
+            f"Counted{index}",
+            (SkippableValidatorsMixin, models.Model),
+            {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})},
+        )
+    assert len(class_prepared.receivers) == before

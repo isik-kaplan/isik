@@ -28,7 +28,10 @@ class TestWriteOnlyFieldsMixin:
         assert "count" not in WidgetSerializer(widget).data
 
     def test_overlapping_write_only_and_create_only_fields_raise_at_class_definition_time(self):
-        with pytest.raises(ImproperlyConfigured, match="count"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^ConflictingSerializer: \['count'\] can't be in both write_only_fields and create_only_fields\.$",
+        ):
 
             class ConflictingSerializer(WriteOnlyFieldsMixin, serializers.ModelSerializer):
                 class Meta:

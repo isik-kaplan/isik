@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 
+from isik._internal.translation import gettext as _
 from isik.django.apps.templated_fields import engine
 from isik.django.apps.templated_fields.field import TemplateCharField, TemplateString, TemplateTextField
 
@@ -96,7 +97,9 @@ class TemplateFieldPreviewMixin:
         except FieldDoesNotExist:
             model_field = None
         if not isinstance(model_field, (TemplateCharField, TemplateTextField)):
-            raise serializers.ValidationError({"field": [f"{field_name!r} is not a template field on this model."]})
+            raise serializers.ValidationError(
+                {"field": [_("%(field)r is not a template field on this model.") % {"field": field_name}]}
+            )
 
         raw = request.data.get("raw", "")
         wrapped = TemplateString(

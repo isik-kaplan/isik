@@ -78,6 +78,14 @@ class TestExceptionHandlerMiddleware:
         assert response.status_code == 598
         assert response.content == _IsolatedException.description.encode()
 
+    def test_process_exception_translates_the_description(self, rf, monkeypatch):
+        # Built-in statuses carry stdlib's English HTTPStatus description; it has to reach the
+        # client through the active translation, not verbatim.
+        monkeypatch.setattr("django.utils.translation.gettext", lambda message: message.upper())
+        middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse())
+        response = middleware.process_exception(rf.get("/"), _IsolatedException())
+        assert response.content == b"ISOLATED MIDDLEWARE TEST EXCEPTION"
+
     def test_process_exception_prefers_an_attached_response(self, rf):
         middleware = ExceptionHandlerMiddleware(lambda request: HttpResponse())
         exc = _IsolatedException.with_content("custom body")

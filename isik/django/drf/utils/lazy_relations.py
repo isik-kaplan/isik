@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework.serializers import PrimaryKeyRelatedField
 
+from isik._internal.translation import gettext_lazy
+
 
 class LazyPrimaryKeyRelatedField(PrimaryKeyRelatedField):
     """
@@ -39,9 +41,9 @@ class LazyGenericRelatedField(serializers.Field):
     """
 
     default_error_messages = {
-        "no_model_match": "Invalid model - no serializer registered for it.",
-        "no_data_match": "Could not determine a serializer for the given data.",
-        "ambiguous_data": "Could not determine a unique serializer for the given data.",
+        "no_model_match": gettext_lazy("Invalid model - no serializer registered for it."),
+        "no_data_match": gettext_lazy("Could not determine a serializer for the given data."),
+        "ambiguous_data": gettext_lazy("Could not determine a unique serializer for the given data."),
     }
 
     def __init__(self, serializers_func, *args, **kwargs):

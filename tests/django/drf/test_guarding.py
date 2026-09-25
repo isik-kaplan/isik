@@ -195,7 +195,11 @@ class TestGuardingArguments:
         ],
     )
     def test_refuses_to_be_composed(self, compose):
-        with pytest.raises(TypeError, match="compose the predicate inside guarding"):
+        with pytest.raises(
+            TypeError,
+            match=r"^IsSuperUserForDestroy can't be combined with &, \| or ~ - compose the predicate inside "
+            r"guarding\(\) instead\.$",
+        ):
             compose(guarding(IsSuperUser, actions=["destroy"]))
 
 

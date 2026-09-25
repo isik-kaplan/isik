@@ -1,3 +1,6 @@
+from isik._internal.translation import gettext as _
+
+
 def is_dunder(name):
     """True for __dunder__-shaped names."""
     return name[:2] == name[-2:] == "__" and name[2:3] != "_" and name[-3:-2] != "_" and len(name) > 4
@@ -46,7 +49,7 @@ class transform(type):
     @staticmethod
     def __raise_on_new(name):
         def __new__(cls, *a, **kw):
-            raise TypeError(f"{name} can not be instantiated.")
+            raise TypeError(_("%(name)s can not be instantiated.") % {"name": name})
 
         return __new__
 

@@ -103,7 +103,9 @@ class TestFakeSerializer:
         assert fields["code"].required is True
 
     def test_an_unrecognized_schema_value_raises_a_clear_error(self):
-        with pytest.raises(TypeError, match="isn't a registered type"):
+        with pytest.raises(
+            TypeError, match=r"^<class 'decimal\.Decimal'> isn't a registered type, Field subclass, or Field instance$"
+        ):
             FakeSerializer("Fake", {"price": decimal.Decimal})
 
     def test_register_types_extends_the_default_map(self):

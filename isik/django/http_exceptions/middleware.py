@@ -1,5 +1,6 @@
 from django.http import HttpResponse
 
+from isik._internal.translation import translate_text
 from isik.common.utils.concurrency import ContextLocal
 from isik.django.http_exceptions.exceptions import HTTPExceptions
 
@@ -51,5 +52,6 @@ class ExceptionHandlerMiddleware:
             if not response and exc._has_default_view():
                 response = exc._get_default_view_response(request)
             if not response:
-                response = HttpResponse(content=exc.description.encode(), status=exc.status)
+                # Built-in statuses carry stdlib's English HTTPStatus description - translatable too.
+                response = HttpResponse(content=translate_text(exc.description).encode(), status=exc.status)
             return response

@@ -164,7 +164,7 @@ class TestFlattenedOneToOneMixinValidation:
                     }
 
     def test_a_field_name_that_is_not_a_real_field_raises(self):
-        with pytest.raises(ImproperlyConfigured, match="isn't a field on Widget"):
+        with pytest.raises(ImproperlyConfigured, match=r"^BadFieldNameSerializer: 'nope' isn't a field on Widget\.$"):
 
             class BadFieldNameSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
                 class Meta:
@@ -183,7 +183,10 @@ class TestFlattenedOneToOneMixinValidation:
         assert not hasattr(NoModelMetaSerializer.Meta, "model")
 
     def test_a_field_name_that_is_not_a_reverse_one_to_one_relation_raises(self):
-        with pytest.raises(ImproperlyConfigured, match="isn't a reverse one-to-one relation"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^ForwardFieldSerializer: 'name' isn't a reverse one-to-one relation on Widget\.$",
+        ):
 
             class ForwardFieldSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
                 class Meta:

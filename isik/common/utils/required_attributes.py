@@ -1,3 +1,4 @@
+from isik._internal.translation import gettext as _
 from isik.common.utils.sentinel import Sentinel
 
 
@@ -46,5 +47,7 @@ class RequiredAttributesMixin:
         if not exempt:
             for name in cls.required_attributes:
                 if getattr(cls, name, REQUIRED) is REQUIRED:
-                    raise TypeError(f"{cls.__name__} must define a `{name}` attribute")
+                    raise TypeError(
+                        _("%(cls)s must define a `%(name)s` attribute") % {"cls": cls.__name__, "name": name}
+                    )
         super().__init_subclass__(**kwargs)

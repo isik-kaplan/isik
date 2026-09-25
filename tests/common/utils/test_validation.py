@@ -134,14 +134,22 @@ class TestValidateInputsSelfCls:
 
 class TestValidateInputsDecorationTimeErrors:
     def test_raises_when_more_positional_validators_than_positional_parameters(self):
-        with pytest.raises(TypeError, match=r"only has 1 positional parameters \(self/cls excluded\)\."):
+        with pytest.raises(
+            TypeError,
+            match=r"^validate_inputs\(\) was given 2 positional validators for 'thing', which only has 1 "
+            r"positional parameters \(self/cls excluded\)\.$",
+        ):
 
             @validate_inputs(is_positive, is_positive)
             def thing(value):
                 return value
 
     def test_raises_when_a_keyword_validator_names_an_unknown_parameter(self):
-        with pytest.raises(TypeError, match=r"\['nonexistent'\]"):
+        with pytest.raises(
+            TypeError,
+            match=r"^validate_inputs\(\) was given validators for parameters 'thing' doesn't have: "
+            r"\['nonexistent'\]\.$",
+        ):
 
             @validate_inputs(nonexistent=is_positive)
             def thing(value):

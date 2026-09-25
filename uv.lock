@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "isik"
-version = "0.9.0"
+version = "0.10.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -435,9 +435,17 @@ django = [
     { name = "whitenoise" },
 ]
 drf = [
+    { name = "dalf" },
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-filter" },
+    { name = "django-lifecycle" },
+    { name = "django-object-actions" },
+    { name = "django-pghistory" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
+    { name = "mjml-python" },
+    { name = "whitenoise" },
 ]
 sentry = [
     { name = "sentry-sdk" },
@@ -471,6 +479,7 @@ requires-dist = [
     { name = "django-pghistory", marker = "extra == 'django'" },
     { name = "djangorestframework", marker = "extra == 'drf'" },
     { name = "drf-spectacular", marker = "extra == 'drf'" },
+    { name = "isik", extras = ["django"], marker = "extra == 'drf'" },
     { name = "isik", extras = ["sentry", "django", "drf", "tiptap", "templated-fields"], marker = "extra == 'all'" },
     { name = "jinja2", marker = "extra == 'templated-fields'" },
     { name = "mjml-python", marker = "extra == 'django'" },

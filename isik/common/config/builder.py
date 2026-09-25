@@ -1,5 +1,6 @@
 import os
 
+from isik._internal.translation import gettext as _
 from isik.common.config.exceptions import ConfigError
 from isik.common.utils.functional import with_attrs
 
@@ -48,7 +49,7 @@ class Config(dict):
         try:
             value = self._schema[key]
         except KeyError:
-            raise ConfigError(f"'{key}' is not a key in this config.") from None
+            raise ConfigError(_("'%(key)s' is not a key in this config.") % {"key": key}) from None
         if isinstance(value, dict):
             self[key].refresh()
         else:
@@ -63,7 +64,7 @@ class Ref:
 
     def __init__(self, *path):
         if not path:
-            raise ConfigError("ref() requires at least one path segment.")
+            raise ConfigError(_("ref() requires at least one path segment."))
         self.path = path
 
 
@@ -92,10 +93,10 @@ def ref(*path, dot=None):
     """
     if dot is not None:
         if path:
-            raise ConfigError("ref() accepts either positional path segments or `dot=`, not both.")
+            raise ConfigError(_("ref() accepts either positional path segments or `dot=`, not both."))
         path = tuple(dot.split("."))
         if not all(path):
-            raise ConfigError(f"ref(dot={dot!r}) is not a valid dotted path.")
+            raise ConfigError(_("ref(dot=%(dot)r) is not a valid dotted path.") % {"dot": dot})
     return Ref(*path)
 
 
@@ -107,10 +108,10 @@ def _resolve_ref_caster(root_schema, path):
     node = root_schema
     for key in path:
         if not isinstance(node, dict) or key not in node:
-            raise ConfigError(f"ref{tuple(path)} does not point to a key in this config.")
+            raise ConfigError(_("ref%(path)s does not point to a key in this config.") % {"path": tuple(path)})
         node = node[key]
     if isinstance(node, dict):
-        raise ConfigError(f"ref{tuple(path)} points to a nested config, not a single setting.")
+        raise ConfigError(_("ref%(path)s points to a nested config, not a single setting.") % {"path": tuple(path)})
     return node
 
 
@@ -122,7 +123,7 @@ def _fallback(caster, attr_name, root_schema, prefix, sep, seen, on_missing):
     if isinstance(default, Ref):
         if tuple(default.path) in seen:
             chain = " -> ".join(".".join(p) for p in [*seen, default.path])
-            raise ConfigError(f"Circular ref() chain: {chain}.")
+            raise ConfigError(_("Circular ref() chain: %(chain)s.") % {"chain": chain})
         ref_caster = _resolve_ref_caster(root_schema, default.path)
         return _read_leaf(ref_caster, list(default.path), root_schema, prefix, sep, seen)
 
@@ -144,8 +145,11 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
             sep,
             seen,
             on_missing=lambda: ConfigError(
-                f"Environment variable {environment_key} not found."
-                f" Please set it or provide a `missing_default` to your caster."
+                _(
+                    "Environment variable %(key)s not found."
+                    " Please set it or provide a `missing_default` to your caster."
+                )
+                % {"key": environment_key}
             ),
         )
 
@@ -161,8 +165,11 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
                 sep,
                 seen,
                 on_missing=lambda: ConfigError(
-                    f"Error while parsing {environment_key}={raw_value!r} with '{caster}'."
-                    " Please check the value and the caster or provide an `error_default` to your caster."
+                    _(
+                        "Error while parsing %(key)s=%(value)r with '%(caster)s'."
+                        " Please check the value and the caster or provide an `error_default` to your caster."
+                    )
+                    % {"key": environment_key, "value": raw_value, "caster": caster}
                 ),
             )
         except ConfigError as config_error:
@@ -184,7 +191,8 @@ def _build(data, path, prefix, sep, root_schema):
             result[key] = _read_leaf(value, key_path, root_schema, prefix, sep)
         else:
             raise ConfigError(
-                f"Values either must be callables or other mappings, not {type(value)}. Key={'.'.join(key_path)}."
+                _("Values either must be callables or other mappings, not %(type)s. Key=%(key)s.")
+                % {"type": type(value), "key": ".".join(key_path)}
             )
     return result
 

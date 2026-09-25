@@ -80,7 +80,7 @@ def test_event_model_for_returns_the_generated_event_model():
 
 
 def test_event_model_for_raises_on_an_untracked_model():
-    with pytest.raises(ImproperlyConfigured, match="has no @track_events"):
+    with pytest.raises(ImproperlyConfigured, match=r"^Comment has no @track_events\(\) history to serve\.$"):
         event_model_for(Comment)
 
 

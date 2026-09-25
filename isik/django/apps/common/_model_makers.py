@@ -10,6 +10,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.module_loading import import_string
 
+from isik._internal.translation import gettext as _
+
 
 class DefaultMakerBase(models.Model):
     """Fallback base for a generated model when no `base_model=`/`<SETTING>` applies."""
@@ -33,7 +35,7 @@ def resolve_base_model(explicit, setting_name):
         dotted = getattr(settings, setting_name, None)
         base = import_string(dotted) if dotted else DefaultMakerBase
     if not (isinstance(base, type) and issubclass(base, models.Model) and base._meta.abstract):
-        raise TypeError(f"base_model must be an abstract Model subclass, got {base!r}")
+        raise TypeError(_("base_model must be an abstract Model subclass, got %(base)r") % {"base": base})
     return base
 
 
@@ -57,8 +59,11 @@ def claim_related_name(target_model, related_name, owner_label):
     existing = claimed.get(related_name)
     if existing is not None and existing != owner_label:
         raise ValueError(
-            f"related_name={related_name!r} on {key} is already claimed by {existing} - pick a "
-            f"different name for {owner_label}."
+            _(
+                "related_name=%(related_name)r on %(key)s is already claimed by %(existing)s - pick a "
+                "different name for %(owner)s."
+            )
+            % {"related_name": related_name, "key": key, "existing": existing, "owner": owner_label}
         )
     claimed[related_name] = owner_label
 
@@ -113,9 +118,15 @@ def resolve_field(obj, explicit, field_cls, verb):
             if isinstance(getattr(value, "config", None), field_cls):
                 matches.append(value)
     if not matches:
-        raise TypeError(f"{cls.__name__} is not {verb} - attach the matching maker to it first")
+        raise TypeError(
+            _("%(model)s is not %(verb)s - attach the matching maker to it first")
+            % {"model": cls.__name__, "verb": verb}
+        )
     if len(matches) > 1:
-        raise TypeError(f"{cls.__name__} has multiple {verb} fields - pass field= to disambiguate")
+        raise TypeError(
+            _("%(model)s has multiple %(verb)s fields - pass field= to disambiguate")
+            % {"model": cls.__name__, "verb": verb}
+        )
     return matches[0]
 
 

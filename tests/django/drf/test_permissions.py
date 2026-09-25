@@ -96,7 +96,10 @@ class TestIsAuthenticatedANDSignupCompleted:
         user = django_user_model.objects.create_user(username="alice", password="password")
         request = rf.get("/")
         request.user = user
-        with pytest.raises(ImproperlyConfigured, match="SIGNUP_COMPLETED_FIELD"):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^EmailUser must define SIGNUP_COMPLETED_FIELD to use IsAuthenticatedANDSignupCompleted\.$",
+        ):
             IsAuthenticatedANDSignupCompleted().has_permission(request, view=None)
 
     def test_denies_when_the_named_field_itself_is_missing_from_the_user(self, rf, django_user_model):

@@ -1,5 +1,6 @@
 import functools
 from collections.abc import Mapping
+from enum import Enum
 from operator import attrgetter
 
 from django.core.exceptions import ImproperlyConfigured
@@ -10,8 +11,8 @@ from django.db.models.fields.related_descriptors import (
     ReverseOneToOneDescriptor,
 )
 from django.db.models.query_utils import DeferredAttribute
+from django.utils.functional import Promise, lazy
 from django.utils.functional import cached_property as django_cached_property
-from django.utils.translation import gettext_lazy as _
 from rest_framework.permissions import (
     AND,
     NOT,
@@ -23,6 +24,8 @@ from rest_framework.permissions import (
     SingleOperandHolder,
 )
 
+from isik._internal.translation import gettext as _
+from isik._internal.translation import gettext_lazy, lazy_format, translate_text
 from isik.common.utils.functional import with_attrs
 from isik.common.utils.strings import words_to_pascal
 
@@ -65,7 +68,8 @@ class IsAuthenticatedANDSignupCompleted(BasePermission):
             signup_completed_field = user.SIGNUP_COMPLETED_FIELD
         except AttributeError as exc:
             raise ImproperlyConfigured(
-                f"{user.__class__.__name__} must define SIGNUP_COMPLETED_FIELD to use {self.__class__.__name__}."
+                _("%(user_model)s must define SIGNUP_COMPLETED_FIELD to use %(permission)s.")
+                % {"user_model": user.__class__.__name__, "permission": self.__class__.__name__}
             ) from exc
         return bool(getattr(user, signup_completed_field, False))  # pragma: no mutate
 
@@ -127,7 +131,7 @@ def is_owner(owner_field, of=None, name=None):
             name += f"Of{words_to_pascal(_describe(of))}"
     bases = (BasePermission,)
     attrs = dict(
-        message=_("User is not the owner of the object"),
+        message=gettext_lazy("User is not the owner of the object"),
         has_object_permission=has_object_permission,
     )
     return type(name, bases, attrs)
@@ -147,7 +151,7 @@ def prevent_actions(*actions, name=None):
     name = name or f"Prevent{_joined(actions)}"
     bases = (BasePermission,)
     attrs = dict(
-        message=_(f"Actions should not be: {actions}"),
+        message=lazy_format("Actions should not be: %(actions)s", actions=actions),
         has_permission=has_permission,
     )
     return type(name, bases, attrs)
@@ -179,14 +183,17 @@ def descriptor_attribute_name(descriptor):
     if isinstance(descriptor, ReverseOneToOneDescriptor):
         return descriptor.related.get_accessor_name()
     raise TypeError(
-        f"Can't tell which attribute {descriptor!r} reads - pass its name as a string instead. "
-        "(A plain class attribute is its value, not a descriptor, so it has no name to find.)"
+        _(
+            "Can't tell which attribute %(descriptor)r reads - pass its name as a string instead. "
+            "(A plain class attribute is its value, not a descriptor, so it has no name to find.)"
+        )
+        % {"descriptor": descriptor}
     )
 
 
 def _resolve_attribute(caller, property_, attribute):
     if (property_ is None) == (attribute is None):
-        raise ValueError(f"{caller} requires exactly one of property_ or attribute")
+        raise ValueError(_("%(caller)s requires exactly one of property_ or attribute") % {"caller": caller})
     return descriptor_attribute_name(property_ if property_ is not None else attribute)
 
 
@@ -200,7 +207,7 @@ def only_actions(*actions, name=None):
     The class is named from the actions - `OnlyListAndRetrieve` - or by `name=`.
     """
     if not actions:
-        raise ValueError("only_actions requires at least one action - with none it would refuse everything")
+        raise ValueError(_("only_actions requires at least one action - with none it would refuse everything"))
 
     def has_permission(self, request, view):  # NOQA
         return view.action in actions
@@ -208,7 +215,95 @@ def only_actions(*actions, name=None):
     name = name or f"Only{_joined(actions)}"
     bases = (BasePermission,)
     attrs = dict(
-        message=_(f"Actions should be one of: {actions}"),
+        message=lazy_format("Actions should be one of: %(actions)s", actions=actions),
+        has_permission=has_permission,
+    )
+    return type(name, bases, attrs)
+
+
+DEFAULT_PERMISSION_MESSAGE = gettext_lazy("You need the %(permission)s permission to do this.")
+
+
+def _permission_name(permission):
+    if isinstance(permission, Enum) and not isinstance(permission, str):
+        permission = permission.value
+    if not isinstance(permission, str):
+        raise TypeError(
+            _("django_permission takes a permission name, or an Enum member whose value is one - not %(permission)r")
+            % {"permission": permission}
+        )
+    if not permission:
+        raise ValueError(_("django_permission needs a permission name, not an empty string"))
+    return permission
+
+
+def _render_permission_message(template, permission):
+    # A lazy template (gettext_lazy) is already translated when rendered; a plain string is looked up
+    # in the catalogs as it is, which is harmless when it isn't in them.
+    text = str(template) if isinstance(template, Promise) else translate_text(template)
+    return text % {"permission": permission} if "%(" in text else text
+
+
+def django_permission(permission, message=None, name=None):
+    """
+    Creates a permission that allows the request only if the caller holds a Django permission -
+    `request.user.has_perm(permission)`, answered by whichever authentication backends the project
+    runs, so the name is whatever format they understand (`"app_label.codename"` for Django's own
+    ModelBackend). Takes a string - a `str` subclass or a StrEnum/TextChoices member included - or an
+    Enum member whose value is one:
+
+        permission_classes = [django_permission("invitations.issue_invitation")]
+        permission_classes = [django_permission(Permission.INVITATIONS_ISSUE_PUBLIC_INVITATION) | IsSuperUser]
+        guarding(django_permission("mail.edit_smtp_settings"), fields=["smtp_password"])
+
+    Request-level only. `user.has_perm(permission, obj)` is real Django, but ModelBackend answers False
+    to every object-level check, so passing the object through would refuse everything on a project
+    whose backend doesn't implement them - and refuse it silently, looking like an ownership failure.
+    With ModelBackend an active superuser always passes and an inactive user never does. An
+    unauthenticated request is refused without asking the backend.
+
+    `message=` is what a refused request is told, in one of three forms - all translatable:
+
+    - a template with an optional `%(permission)s` placeholder, filled with the permission's name.
+      Pass it through `gettext_lazy` to have it translated; write a literal `%` as `%%` when the
+      template has a placeholder:
+
+          django_permission(Permission.X, message=gettext_lazy("Only %(permission)s holders can do this."))
+
+    - a fixed message - a template without a placeholder: `message=gettext_lazy("Ask an admin.")`
+    - a callable, called when a request is refused as `message(permission=..., request=..., view=...)`
+      and returning the message (translate it inside):
+
+          def refusal(permission, request, view):
+              return gettext("%(user)s can't do that here.") % {"user": request.user}
+
+    Without `message=`, the default names the permission: "You need the <permission> permission to do
+    this." - which tells a refused caller your permission names; pass a message if they shouldn't know.
+
+    The class is named from the permission - `HasInvitationsIssuePublicInvitation` - or by `name=`.
+    """
+    permission = _permission_name(permission)
+    if message is None:
+        message = DEFAULT_PERMISSION_MESSAGE
+    elif not (callable(message) or isinstance(message, (str, Promise))):
+        raise TypeError(
+            _("django_permission's message= takes a template, a message or a callable - not %(message)r")
+            % {"message": message}
+        )
+    template = DEFAULT_PERMISSION_MESSAGE if callable(message) else message
+
+    def has_permission(self, request, view):  # NOQA
+        user = getattr(request, "user", None)
+        allowed = bool(user and user.is_authenticated and user.has_perm(permission))
+        if not allowed and callable(message):
+            self.message = message(permission=permission, request=request, view=view)
+        return allowed
+
+    name = name or f"Has{words_to_pascal(str(permission))}"
+    bases = (BasePermission,)
+    attrs = dict(
+        permission=permission,
+        message=lazy(_render_permission_message, str)(template, permission),
         has_permission=has_permission,
     )
     return type(name, bases, attrs)
@@ -258,7 +353,7 @@ def user_property(property_=None, attribute=None, name=None):
     name = name or f"User{words_to_pascal(property_name)}"
     bases = (BasePermission,)
     attrs = dict(
-        message=_(f"User property {property_name} is False"),
+        message=lazy_format("User property %(property)s is False", property=property_name),
         has_permission=has_permission,
         has_object_permission=has_object_permission,
     )
@@ -289,7 +384,7 @@ def object_property(property_=None, attribute=None, name=None):
     name = name or f"Object{words_to_pascal(property_name)}"
     bases = (BasePermission,)
     attrs = dict(
-        message=_(f"Object property {property_name} is False"),
+        message=lazy_format("Object property %(property)s is False", property=property_name),
         has_object_permission=has_object_permission,
     )
     return type(name, bases, attrs)
@@ -339,7 +434,8 @@ class _GuardMetaclass(BasePermissionMetaclass):
 
     def _refuse(cls, *args):
         raise TypeError(
-            f"{cls.__name__} can't be combined with &, | or ~ - compose the predicate inside guarding() instead."
+            _("%(guard)s can't be combined with &, | or ~ - compose the predicate inside guarding() instead.")
+            % {"guard": cls.__name__}
         )
 
     __and__ = __or__ = __rand__ = __ror__ = __invert__ = _refuse
@@ -364,14 +460,20 @@ class Guard(BasePermission, metaclass=_GuardMetaclass):
 
     def has_permission(self, request, view):
         if not hasattr(view, "action"):
-            raise ImproperlyConfigured(f"{type(self).__name__} needs a viewset - {type(view).__name__} has no action.")
+            raise ImproperlyConfigured(
+                _("%(guard)s needs a viewset - %(view)s has no action.")
+                % {"guard": type(self).__name__, "view": type(view).__name__}
+            )
         if self.fields is not None:
             if not getattr(view, "runs_field_guards", False):  # pragma: no mutate
                 # Answering True here would permit everything and say nothing, since
                 # permission_classes are ANDed - fail closed and loud instead.
                 raise ImproperlyConfigured(
-                    f"{type(view).__name__} declares {type(self).__name__} but doesn't run field guards - "
-                    "add GuardedFieldsMixin (part of BaseModelViewSet)."
+                    _(
+                        "%(view)s declares %(guard)s but doesn't run field guards - "
+                        "add GuardedFieldsMixin (part of BaseModelViewSet)."
+                    )
+                    % {"view": type(view).__name__, "guard": type(self).__name__}
                 )
             return True
         return not self.in_scope(view) or self.allows(request, view)
@@ -462,7 +564,7 @@ def guarding_values(*values):
     with a marker instead.
     """
     if not values:
-        raise ValueError("guarding.values requires at least one value")
+        raise ValueError(_("guarding.values requires at least one value"))
     return OneOfTarget(values)
 
 
@@ -474,7 +576,7 @@ def guarding_other_than(*values):
         guarding(IsSuperUser, setting={"visibility": guarding.other_than(Visibility.PRIVATE)})
     """
     if not values:
-        raise ValueError("guarding.other_than requires at least one value")
+        raise ValueError(_("guarding.other_than requires at least one value"))
     return NotOneOfTarget(values)
 
 
@@ -486,7 +588,7 @@ def guarding_matching(predicate):
         guarding(IsSuperUser, setting={"max_uses": guarding.matching(lambda uses: uses is None or uses > 100)})
     """
     if not callable(predicate):
-        raise TypeError("guarding.matching requires a callable")
+        raise TypeError(_("guarding.matching requires a callable"))
     return MatchingTarget(predicate)
 
 
@@ -543,27 +645,27 @@ def guarding(predicate, fields=None, setting=None, actions=None, message=None, n
     `NotObjectIsAppForPartialUpdate` - or by `name=`.
     """
     if [fields, setting, actions].count(None) != 2:
-        raise ValueError("guarding requires exactly one of fields, setting or actions")
+        raise ValueError(_("guarding requires exactly one of fields, setting or actions"))
     if not (fields or setting or actions):
-        raise ValueError("guarding requires at least one field or action")
+        raise ValueError(_("guarding requires at least one field or action"))
     if isinstance(fields, str) or isinstance(actions, str):
-        raise ValueError("guarding takes a list of fields or actions, not a single string")
+        raise ValueError(_("guarding takes a list of fields or actions, not a single string"))
     if isinstance(fields, Mapping):
-        raise ValueError("guarding's fields= takes field names - for target values use setting=")
+        raise ValueError(_("guarding's fields= takes field names - for target values use setting="))
     if setting is not None and not isinstance(setting, Mapping):
-        raise ValueError("guarding's setting= takes a dict of field names to target values")
+        raise ValueError(_("guarding's setting= takes a dict of field names to target values"))
     if fields is not None:
         fields = dict.fromkeys(fields, ANY_VALUE)
         scope = _joined(sorted(fields))
-        default_message = _("You may not change this field.")
+        default_message = gettext_lazy("You may not change this field.")
     elif setting is not None:
         fields = {name: _as_target(setting[name]) for name in sorted(setting)}
         scope = f"Setting{_joined(fields)}"
-        default_message = _("You may not change this field.")
+        default_message = gettext_lazy("You may not change this field.")
     else:
         actions = frozenset(actions)
         scope = _joined(sorted(actions))
-        default_message = _("You may not perform this action.")
+        default_message = gettext_lazy("You may not perform this action.")
 
     attrs = dict(
         predicate=predicate,

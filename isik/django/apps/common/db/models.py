@@ -7,7 +7,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import models, transaction
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
-from django.utils.translation import gettext as _
 from django_lifecycle import (
     AFTER_CREATE,
     AFTER_SAVE,
@@ -18,6 +17,8 @@ from django_lifecycle import (
     LifecycleModelMixin,
 )
 
+from isik._internal.translation import gettext as _
+from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.skippable_validators import SkippableValidatorsMixin
 
 
@@ -27,9 +28,11 @@ def _check_pgtrigger_installed():
     # place. Without this check, subclassing BaseModel would just silently get no triggers.
     if not django_apps.is_installed("pgtrigger"):
         raise ImproperlyConfigured(
-            "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
-            "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
-            "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+            _(
+                "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
+                "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
+                "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+            )
         )
 
 
@@ -51,13 +54,19 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
     FIELDS = ["id", "created_at", "updated_at"]
     SKIP_FULL_CLEAN = False
 
-    id = models.UUIDField(primary_key=True, db_index=True, editable=False, default=uuid4, verbose_name=_("ID"))
-    created_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Created At"))
+    id = models.UUIDField(
+        primary_key=True, db_index=True, editable=False, default=uuid4, verbose_name=gettext_lazy("ID")
+    )
+    created_at = models.DateTimeField(
+        db_default=Now(), db_index=True, editable=False, verbose_name=gettext_lazy("Created At")
+    )
     # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) that
     # fires unconditionally - update_fields does not gate it. save(update_fields=["name"]) still
     # advances updated_at; explicitly naming "updated_at" in update_fields is harmless but no
     # longer necessary.
-    updated_at = models.DateTimeField(db_default=Now(), db_index=True, editable=False, verbose_name=_("Updated At"))
+    updated_at = models.DateTimeField(
+        db_default=Now(), db_index=True, editable=False, verbose_name=gettext_lazy("Updated At")
+    )
 
     @transaction.atomic
     def save(self, *args, **kwargs):

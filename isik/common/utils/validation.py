@@ -1,6 +1,8 @@
 import inspect
 from functools import wraps
 
+from isik._internal.translation import gettext as _
+
 
 def validate_inputs(*validators, **kwarg_validators):
     """
@@ -64,15 +66,18 @@ def validate_inputs(*validators, **kwarg_validators):
 
         if len(validators) > len(positional_names):
             raise TypeError(
-                f"validate_inputs() was given {len(validators)} positional validators for "
-                f"{func.__name__!r}, which only has {len(positional_names)} positional parameters "
-                "(self/cls excluded)."
+                _(
+                    "validate_inputs() was given %(given)s positional validators for "
+                    "%(func)r, which only has %(count)s positional parameters "
+                    "(self/cls excluded)."
+                )
+                % {"given": len(validators), "func": func.__name__, "count": len(positional_names)}
             )
         unknown = set(kwarg_validators) - set(param_names)
         if unknown:
             raise TypeError(
-                f"validate_inputs() was given validators for parameters {func.__name__!r} "
-                f"doesn't have: {sorted(unknown)}."
+                _("validate_inputs() was given validators for parameters %(func)r doesn't have: %(unknown)s.")
+                % {"func": func.__name__, "unknown": sorted(unknown)}
             )
 
         # strict=False (ruff B905 wants it spelled out): fewer validators than positional
@@ -89,7 +94,10 @@ def validate_inputs(*validators, **kwarg_validators):
             for name, validator in all_validators.items():
                 value = bound.arguments[name]
                 if not validator(value):
-                    raise ValueError(f"{func.__name__}() got an invalid value for {name!r}: {value!r}")
+                    raise ValueError(
+                        _("%(func)s() got an invalid value for %(name)r: %(value)r")
+                        % {"func": func.__name__, "name": name, "value": value}
+                    )
             return func(*args, **kwargs)
 
         return wrapper

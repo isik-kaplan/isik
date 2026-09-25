@@ -2,6 +2,7 @@ from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import transaction
 from django.db.models.fields.reverse_related import OneToOneRel
 
+from isik._internal.translation import gettext as _
 from isik.django.drf.error_handling import django_to_drf_validation_error
 
 
@@ -17,10 +18,14 @@ def _validate_field_names(cls):
         try:
             relation = model._meta.get_field(field_name)
         except FieldDoesNotExist:
-            raise ImproperlyConfigured(f"{cls.__name__}: '{field_name}' isn't a field on {model.__name__}.") from None
+            raise ImproperlyConfigured(
+                _("%(serializer)s: '%(field)s' isn't a field on %(model)s.")
+                % {"serializer": cls.__name__, "field": field_name, "model": model.__name__}
+            ) from None
         if not isinstance(relation, OneToOneRel):
             raise ImproperlyConfigured(
-                f"{cls.__name__}: '{field_name}' isn't a reverse one-to-one relation on {model.__name__}."
+                _("%(serializer)s: '%(field)s' isn't a reverse one-to-one relation on %(model)s.")
+                % {"serializer": cls.__name__, "field": field_name, "model": model.__name__}
             )
     return flattened
 
@@ -123,8 +128,11 @@ class FlattenedOneToOneMixin(_OneToOneWriteMixin):
             for name in nested_cls().fields:
                 if name in seen:
                     raise ImproperlyConfigured(
-                        f"{cls.__name__}: flattened field '{name}' is declared by both "
-                        f"'{seen[name]}' and '{field_name}'."
+                        _(
+                            "%(serializer)s: flattened field '%(name)s' is declared by both "
+                            "'%(first)s' and '%(second)s'."
+                        )
+                        % {"serializer": cls.__name__, "name": name, "first": seen[name], "second": field_name}
                     )
                 seen[name] = field_name
 

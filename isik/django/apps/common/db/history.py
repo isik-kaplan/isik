@@ -10,6 +10,8 @@ from django.utils.module_loading import import_string
 from pghistory.core import DeleteEvent, InsertEvent, UpdateEvent
 from pghistory.middleware import HistoryMiddleware
 
+from isik._internal.translation import gettext as _
+
 
 _INFERRED_CASTS = {
     models.UUIDField: "uuid",
@@ -84,9 +86,12 @@ class ContextField:
             if isinstance(self.field, field_type):
                 return cast
         raise TypeError(
-            f"ContextField({self.name!r}) needs cast= - can't infer a Postgres type for "
-            f"{self.field!r} (only {', '.join(t.__name__ for t in _INFERRED_CASTS)} are inferred; "
-            "ForeignKey always needs an explicit cast)."
+            _(
+                "ContextField(%(name)r) needs cast= - can't infer a Postgres type for "
+                "%(field)r (only %(inferred)s are inferred; "
+                "ForeignKey always needs an explicit cast)."
+            )
+            % {"name": self.name, "field": self.field, "inferred": ", ".join(t.__name__ for t in _INFERRED_CASTS)}
         )
 
     def column(self):
@@ -165,7 +170,7 @@ def event_model_for(model):
     model (`pghistory.track()` applied more than once with different labels).
     """
     if "pgh_event_model" not in dir(model):
-        raise ImproperlyConfigured(f"{model.__name__} has no @track_events() history to serve.")
+        raise ImproperlyConfigured(_("%(model)s has no @track_events() history to serve.") % {"model": model.__name__})
     try:
         return model.pgh_event_model
     except ValueError as e:

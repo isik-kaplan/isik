@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import SAFE_METHODS, OperandHolder, SingleOperandHolder
 from rest_framework.serializers import ListSerializer
 
+from isik._internal.translation import gettext as _
 from isik.django.drf.permissions import Guard
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin, _active_guarded_view
 
@@ -122,8 +123,11 @@ class GuardedFieldsMixin:
         nested = [guard for entry in getattr(cls, "permission_classes", []) for guard in _nested_guards(entry)]
         if nested:
             raise ImproperlyConfigured(
-                f"{cls.__name__} composes {nested[0].__name__} with &, | or ~ - a guard must be its own "
-                "permission_classes entry, with any composition inside guarding()."
+                _(
+                    "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own "
+                    "permission_classes entry, with any composition inside guarding()."
+                )
+                % {"viewset": cls.__name__, "guard": nested[0].__name__}
             )
         cls._check_shared_serializers()
 
@@ -151,9 +155,17 @@ class GuardedFieldsMixin:
                 if open_here or open_there:
                     lenient, strict, fields = (cls, other, open_here) if open_here else (other, cls, open_there)
                     raise ImproperlyConfigured(
-                        f"{strict.__name__} guards {sorted(fields)} on {serializer_cls.__name__}, but "
-                        f"{lenient.__name__} uses the same serializer without guarding them - guard them "
-                        f"there too, or list them in {lenient.__name__}.unguarded_fields if that's intended."
+                        _(
+                            "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same "
+                            "serializer without guarding them - guard them there too, or list them in "
+                            "%(lenient)s.unguarded_fields if that's intended."
+                        )
+                        % {
+                            "strict": strict.__name__,
+                            "fields": sorted(fields),
+                            "serializer": serializer_cls.__name__,
+                            "lenient": lenient.__name__,
+                        }
                     )
             users[key] = (cls, guarded)
 
@@ -206,10 +218,13 @@ class GuardedFieldsMixin:
         if not self.get_field_guards():  # a get_permissions() override dropped them for this action
             return
         raise ImproperlyConfigured(
-            f"{type(self).__name__}.{self.action} succeeded without running its field guards, so its database "
-            "writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), "
-            "call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields if it "
-            "writes no guarded field."
+            _(
+                "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are "
+                "rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call "
+                "self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields if it "
+                "writes no guarded field."
+            )
+            % {"viewset": type(self).__name__, "action": self.action}
         )
 
     def get_field_guards(self):
@@ -271,8 +286,8 @@ class GuardedFieldsMixin:
         # Built without a request, so nothing conditional narrows the fields.
         if not any(name in serializer_cls().fields for serializer_cls in self.declared_serializer_classes()):
             raise ImproperlyConfigured(
-                f"{type(guard).__name__} guards {name!r}, which no serializer of {type(self).__name__} "
-                "has a field named."
+                _("%(guard)s guards %(field)r, which no serializer of %(viewset)s has a field named.")
+                % {"guard": type(guard).__name__, "field": name, "viewset": type(self).__name__}
             )
 
     def perform_create(self, serializer):

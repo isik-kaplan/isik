@@ -13,11 +13,7 @@
 
 ## isik.django.apps
 
-The `django` and `drf` extras assume **PostgreSQL**. `BaseModel` keeps `created_at`/`updated_at`, and
-history tracking records changes, through database triggers ([django-pgtrigger](https://github.com/AmbitionEng/django-pgtrigger)
-and [django-pghistory](https://github.com/AmbitionEng/django-pghistory)), so both go in `INSTALLED_APPS`.
-The database driver is yours to choose (`psycopg` or `psycopg2`); isik doesn't install one, since your
-project already needs it to talk to Postgres.
+The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#install).
 
 - [django/apps/common/](django/apps/common/README.md) - `BaseModel`, `BaseAdmin`, history
   tracking, ORM helpers, email templates, middleware, skippable validators, and the shared
@@ -38,6 +34,11 @@ project already needs it to talk to Postgres.
 
 - [django/http_exceptions/](django/http_exceptions/README.md) - raise an HTTP status directly
   from anywhere instead of threading `Response`s back up the call stack
+
+## Translations
+
+- [translations.md](translations.md) - every user-facing string is translatable, through Django's
+  catalogs or stdlib gettext; `isik/locale/isik.pot` lists them all
 
 ## Everything else
 

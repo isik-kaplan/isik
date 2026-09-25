@@ -3,6 +3,8 @@ import uuid
 
 from rest_framework import serializers
 
+from isik._internal.translation import gettext as _
+
 
 class FakeSerializer:
     """
@@ -45,9 +47,12 @@ class FakeSerializer:
     ):
         if name in cls._used_names and not reuse:
             raise ValueError(
-                f"{name!r} was already used to build a {cls.__name__} - pass reuse=True if this is "
-                "intentional, or build it once and reuse the resulting class instead of calling "
-                "this again under the same name."
+                _(
+                    "%(name)r was already used to build a %(builder)s - pass reuse=True if this is "
+                    "intentional, or build it once and reuse the resulting class instead of calling "
+                    "this again under the same name."
+                )
+                % {"name": name, "builder": cls.__name__}
             )
         cls._used_names.add(name)
 
@@ -68,7 +73,9 @@ class FakeSerializer:
         field_cls = cls.type_fields.get(value)
         if field_cls is None:
             if not (isinstance(value, type) and issubclass(value, serializers.Field)):
-                raise TypeError(f"{value!r} isn't a registered type, Field subclass, or Field instance")
+                raise TypeError(
+                    _("%(value)r isn't a registered type, Field subclass, or Field instance") % {"value": value}
+                )
             field_cls = value
         kwargs = {}
         if read_only is not None:

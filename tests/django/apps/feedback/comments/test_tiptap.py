@@ -76,17 +76,17 @@ class TestParseAndCheckErrorCases:
 
     def test_unknown_node_type(self):
         value = doc({"type": "table", "content": []})
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_unknown_mark_type(self):
         value = doc(paragraph(text("x", marks=["underline"])))
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_mention_missing_its_required_id_attr(self):
         value = doc(paragraph({"type": "mention", "attrs": {}}))
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_invalid_nesting_a_list_item_may_only_contain_paragraphs(self):
@@ -94,16 +94,16 @@ class TestParseAndCheckErrorCases:
         catches it."""
         heading = {"type": "heading", "attrs": {"level": 1}, "content": []}
         value = doc({"type": "bulletList", "content": [{"type": "listItem", "content": [heading]}]})
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_empty_doc_content_is_invalid_doc_requires_at_least_one_block(self):
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(doc(), schema_path=SCHEMA_PATH)
 
     def test_content_that_is_not_a_list(self):
         value = {"type": "doc", "content": {"type": "paragraph"}}
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_no_schema_configured_at_all(self):
@@ -139,7 +139,7 @@ class TestSchemaPathResolution:
         document valid under the full schema fails validation under the narrower one."""
         value = doc(paragraph(text("cc "), {"type": "mention", "attrs": {"id": "user:1"}}))
         tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
-        with pytest.raises(ValidationError, match="Invalid Tiptap document"):
+        with pytest.raises(ValidationError, match=r"^\['Invalid Tiptap document: "):
             tiptap.parse_and_check(value, schema_path=MINIMAL_SCHEMA_PATH)
 
 

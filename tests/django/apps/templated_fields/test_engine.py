@@ -181,7 +181,7 @@ class TestResourceLimits:
 
     def test_max_loop_iterations_caps_range(self):
         policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_loop_iterations=3)
-        with pytest.raises(TemplateSecurityError, match="over the 3 limit"):
+        with pytest.raises(TemplateSecurityError, match=r"^range\(\) would iterate 10 times, over the 3 limit$"):
             _render("{% for i in range(10) %}{{ i }}{% endfor %}", policy=policy)
 
     def test_max_loop_iterations_does_not_reject_a_range_within_the_cap(self):
@@ -195,7 +195,7 @@ class TestResourceLimits:
 
     def test_max_render_length_aborts_a_runaway_loop(self):
         policy = TemplatePolicy(features=[TemplateFeature.FOR_LOOP], max_render_length=5, max_loop_iterations=None)
-        with pytest.raises(TemplateSecurityError, match="exceeded the 5 char limit"):
+        with pytest.raises(TemplateSecurityError, match=r"^rendered output exceeded the 5 char limit$"):
             _render("{% for i in range(1000) %}x{% endfor %}", policy=policy)
 
     def test_max_render_length_exactly_at_the_limit_does_not_raise(self):
