@@ -42,6 +42,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Tune Postgres for throwaway test data
+        # A CI database is discarded after the job, so crash safety buys nothing - these three are the
+        # difference between waiting on the disk for every commit and not. Not settable through the
+        # service definition, so set on the running server and reloaded.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:

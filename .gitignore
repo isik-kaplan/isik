@@ -17,3 +17,6 @@ dist
 poetry.lock
 
 # Project Specific
+
+# tests/mutation_ordering.py kill logs
+mutation-kills*.jsonl

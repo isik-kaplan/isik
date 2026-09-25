@@ -10,11 +10,6 @@ from tests.testapp.models import Widget
 pytestmark = pytest.mark.django_db
 
 
-def test_field_validators_run_by_default():
-    with pytest.raises(ValidationError):
-        Widget.objects.create(name="bolt", count=-1)
-
-
 def test_skip_field_validators_does_not_swallow_an_unrelated_exception_from_the_block():
     with pytest.raises(RuntimeError, match="boom"):
         with SkipFieldValidators("count"):

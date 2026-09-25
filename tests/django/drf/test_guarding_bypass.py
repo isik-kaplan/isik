@@ -264,9 +264,8 @@ class TestAfterTheFact:
 
     def test_a_plain_serializer_through_the_default_handlers_is_checked(self, bob, widget):
         viewset = guarded("PlainDefaultViewSet", plain_serializer("PlainDefault"))
+        # create through the same path is covered in test_guarding.py (plain WidgetSerializer, same guard)
         assert call(viewset, bob, "patch", "partial_update", {"count": 2}, pk=widget.pk).status_code == 400
-        assert call(viewset, bob, "post", "create", {"name": "nut", "count": 2}).status_code == 400
-        assert call(viewset, bob, "post", "create", {"name": "nut"}).status_code == 201
 
     def test_destroy_writes_no_fields(self, bob, widget):
         viewset = guarded("DestroyViewSet", plain_serializer("Destroyed"))

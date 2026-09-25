@@ -232,7 +232,7 @@ class TestOnlyFilter:
         serializer = WidgetSerializer(widget, context={"request": request})
         assert set(serializer.data) == {"name"}
 
-    def test_only_is_a_no_op_when_absent(self, widget, make_request):
+    def test_only_and_exclude_are_no_ops_when_absent(self, widget, make_request):
         serializer = WidgetSerializer(widget, context={"request": make_request("/")})
         assert set(serializer.data) == {"id", "name", "count"}
 
@@ -275,10 +275,6 @@ class TestExcludeFilter:
         request = make_request("/", {"exclude": "count"})
         serializer = WidgetSerializer(widget, context={"request": request})
         assert set(serializer.data) == {"id", "name"}
-
-    def test_exclude_is_a_no_op_when_absent(self, widget, make_request):
-        serializer = WidgetSerializer(widget, context={"request": make_request("/")})
-        assert set(serializer.data) == {"id", "name", "count"}
 
     def test_comma_separated_exclude_values_are_split(self, widget, make_request):
         request = make_request("/", {"exclude": "id,count"})

@@ -92,4 +92,5 @@ pytest_add_cli_args_test_selection = ["tests"]
 # --reuse-db: mutmut runs pytest many times over one session - without it, pytest-django would
 # recreate the whole Postgres schema (real migrations, not --no-migrations - see django_settings.py)
 # on every single one. --hypothesis-profile=mutation: see tests/conftest.py.
-pytest_add_cli_args = ["--reuse-db", "-q", "--hypothesis-profile=mutation"]
+# -p tests.mutation_ordering: runs each mutant's tests likeliest-killer-first - see that module.
+pytest_add_cli_args = ["--reuse-db", "-q", "--hypothesis-profile=mutation", "-p", "tests.mutation_ordering"]
