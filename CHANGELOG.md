@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-25
+
+### Added
+
+- `guarding(predicate, fields=... | actions=..., message=None)` (`isik.django.drf.permissions`) - narrows
+  any permission, `&`/`|`/`~` compositions included, to some actions or some fields. `actions=` refuses
+  with a 403 where DRF runs permissions. `fields=` refuses a write that actually changes a guarded field
+  with a `ValidationError` keyed by that field, checked after validation against the typed value
+  (a field echoed back unchanged isn't a change). `fields=` also takes a dict of target values, to
+  guard only one direction of a toggle. The predicate is evaluated as one expression over request and
+  object, so `~` works on object-level permissions (it refuses everything under DRF's own `NOT`).
+  Without an object, object-only parts are unknown and an unknown answer allows. A guard must be a
+  top-level `permission_classes` entry: composing one raises `TypeError`/`ImproperlyConfigured`,
+  and a `fields=` guard on a viewset that doesn't run field guards raises `ImproperlyConfigured` rather
+  than silently permitting everything.
+- `GuardedFieldsMixin` (`isik.django.drf.viewsets`) - runs `fields=` guards from `perform_create`/
+  `perform_update`, or explicitly via `check_guarded_fields(serializer)`. Composed into `BaseModelViewSet`.
+- `object_property(property_=None, attribute=None)` - the `user_property` counterpart for the object
+  being acted on, e.g. `guarding(~object_property(attribute="is_app"), actions=["partial_update"])`.
+- `is_owner(owner_field, of=None)` - `of` compares `obj.<owner_field>` to an attribute of the user
+  (dotted paths allowed) instead of the user itself, for rows owned by a tenant rather than a person.
+  The generated class name only changes when `of` is given.
+
 ## [0.7.0] - 2026-09-10
 
 ### Added

@@ -1,6 +1,6 @@
 # base
 
-`BaseModelViewSet` composes every viewset mixin in this package onto `ModelViewSet`: `RequiredAttributesMixin` (`model`/`endpoint`/`serializer_class` required), `ViewSetRegistryMixin`, `ActionSerializerClassMixin`, `ProtectedDestroyMixin`, `ReverseOrderingMixin`, `DeclaredOrderingMixin`, `FilterSetMixin`.
+`BaseModelViewSet` composes every viewset mixin in this package onto `ModelViewSet`: `RequiredAttributesMixin` (`model`/`endpoint`/`serializer_class` required), `ViewSetRegistryMixin`, `ActionSerializerClassMixin`, `ProtectedDestroyMixin`, `GuardedFieldsMixin`, `ReverseOrderingMixin`, `DeclaredOrderingMixin`, `FilterSetMixin`.
 
 ```python
 class WidgetViewSet(BaseModelViewSet):

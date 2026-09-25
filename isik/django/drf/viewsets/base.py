@@ -3,6 +3,7 @@ from rest_framework.viewsets import ModelViewSet
 from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMixin
 from isik.django.drf.viewsets.action_serializer_class import ActionSerializerClassMixin
 from isik.django.drf.viewsets.filterset import FilterSetMixin
+from isik.django.drf.viewsets.guarded_fields import GuardedFieldsMixin
 from isik.django.drf.viewsets.ordering import DeclaredOrderingMixin, ReverseOrderingMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
@@ -13,6 +14,7 @@ class BaseModelViewSet(
     ViewSetRegistryMixin,
     ActionSerializerClassMixin,
     ProtectedDestroyMixin,
+    GuardedFieldsMixin,
     ReverseOrderingMixin,
     DeclaredOrderingMixin,
     FilterSetMixin,
@@ -23,7 +25,8 @@ class BaseModelViewSet(
     RequiredAttributesMixin (`model`/`endpoint`/`serializer_class` must be set explicitly, fails
     fast at class-definition time otherwise), ViewSetRegistryMixin (model -> viewset lookup),
     ActionSerializerClassMixin (`serializer_class_action_map`), ProtectedDestroyMixin (a clean 400
-    instead of a 500 on ProtectedError), ReverseOrderingMixin (`-field` ordering for free),
+    instead of a 500 on ProtectedError), GuardedFieldsMixin (runs `guarding(..., fields=[...])`
+    permissions after validation), ReverseOrderingMixin (`-field` ordering for free),
     DeclaredOrderingMixin (`?ordering=` values that map to a real field or expression other than
     their own name, via `declared_ordering`), FilterSetMixin (`filterset_class` built from
     `filterset_fields`/`declared_filters`).
