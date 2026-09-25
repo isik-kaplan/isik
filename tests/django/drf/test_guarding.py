@@ -104,9 +104,9 @@ def post(viewset, user, data):
 
 class TestGuardingArguments:
     def test_requires_exactly_one_of_fields_or_actions(self):
-        with pytest.raises(ValueError, match="^guarding requires exactly one of fields or actions$"):
+        with pytest.raises(ValueError, match="^guarding requires exactly one of fields, setting or actions$"):
             guarding(IsSuperUser)
-        with pytest.raises(ValueError, match="^guarding requires exactly one of fields or actions$"):
+        with pytest.raises(ValueError, match="^guarding requires exactly one of fields, setting or actions$"):
             guarding(IsSuperUser, fields=["a"], actions=["b"])
 
     def test_rejects_an_empty_scope(self):
@@ -122,23 +122,55 @@ class TestGuardingArguments:
             guarding(IsSuperUser, actions="destroy")
 
     def test_generated_class_name_names_the_predicate_and_scope(self):
-        assert guarding(IsSuperUser, actions=["destroy", "create"]).__name__ == (
-            "Guarding(IsSuperUser, actions=['create', 'destroy'])"
-        )
-        assert guarding(is_owner("owner"), fields=["count"]).__name__ == (
-            "Guarding(IsOwnerPermission(owner_field=owner), fields=['count'])"
-        )
+        assert guarding(IsSuperUser, actions=["destroy", "create"]).__name__ == ("IsSuperUserForCreateAndDestroy")
+        assert guarding(is_owner("owner"), fields=["count"]).__name__ == ("IsOwnerByOwnerForCount")
 
     def test_generated_class_name_for_a_composed_predicate(self):
-        assert guarding(~IsSuperUser, actions=["destroy"]).__name__ == (
-            "Guarding(SingleOperandHolder, actions=['destroy'])"
+        assert guarding(~IsSuperUser, actions=["destroy"]).__name__ == "NotIsSuperUserForDestroy"
+        assert guarding(is_owner("owner") | IsSuperUser, actions=["destroy"]).__name__ == (
+            "IsOwnerByOwnerOrIsSuperUserForDestroy"
+        )
+        assert guarding(~(IsSuperUser & IsAuthenticated), fields=["name"]).__name__ == (
+            "NotIsSuperUserAndIsAuthenticatedForName"
         )
 
-    def test_a_flat_field_list_guards_any_value_and_a_dict_guards_its_targets(self):
+    def test_an_explicit_name(self):
+        assert guarding(IsSuperUser, actions=["destroy"], name="SuperusersDelete").__name__ == "SuperusersDelete"
+
+    def test_setting_counts_toward_exactly_one(self):
+        with pytest.raises(ValueError, match="exactly one of fields, setting or actions"):
+            guarding(IsSuperUser, fields=["a"], setting={"a": 1})
+        with pytest.raises(ValueError, match="exactly one of fields, setting or actions"):
+            guarding(IsSuperUser, setting={"a": 1}, actions=["b"])
+
+    def test_an_empty_setting_is_refused(self):
+        with pytest.raises(ValueError, match="^guarding requires at least one field or action$"):
+            guarding(IsSuperUser, setting={})
+
+    def test_fields_refuses_a_dict_and_points_at_setting(self):
+        with pytest.raises(ValueError, match="^guarding's fields= takes field names - for target values use setting=$"):
+            guarding(IsSuperUser, fields={"count": 5})
+
+    def test_setting_refuses_anything_but_a_dict(self):
+        with pytest.raises(ValueError, match="^guarding's setting= takes a dict of field names to target values$"):
+            guarding(IsSuperUser, setting=["count"])
+
+    def test_setting_name_and_message(self):
+        guard = guarding(IsSuperUser, setting={"name": "x", "count": guarding.values(5, 7)})
+        assert guard.__name__ == "IsSuperUserForSettingCountAndName"
+        assert guard.message == "You may not change this field."
+
+    def test_a_flat_field_list_guards_any_value_and_setting_guards_its_targets(self):
         from isik.django.drf.permissions import ANY_VALUE
 
         assert guarding(IsSuperUser, fields=["count"]).fields == {"count": ANY_VALUE}
-        assert guarding(IsSuperUser, fields={"count": 5}).fields == {"count": 5}
+        target = guarding(IsSuperUser, setting={"count": 5}).fields["count"]
+        assert (target.matches(5), target.matches(6)) == (True, False)
+
+    def test_an_explicit_any_value_target_passes_through(self):
+        from isik.django.drf.permissions import ANY_VALUE
+
+        assert guarding(IsSuperUser, setting={"count": ANY_VALUE}).fields == {"count": ANY_VALUE}
 
     def test_default_messages_depend_on_the_scope(self):
         assert guarding(IsSuperUser, fields=["count"]).message == "You may not change this field."
@@ -165,6 +197,100 @@ class TestGuardingArguments:
     def test_refuses_to_be_composed(self, compose):
         with pytest.raises(TypeError, match="compose the predicate inside guarding"):
             compose(guarding(IsSuperUser, actions=["destroy"]))
+
+
+class TestTargets:
+    def test_any_value_matches_everything(self):
+        from isik.django.drf.permissions import ANY_VALUE
+
+        assert ANY_VALUE.matches(None) is True
+        assert repr(ANY_VALUE) == "ANY_VALUE"
+
+    def test_values_matches_any_of_its_values_by_equality(self):
+        target = guarding.values(5, 7)
+        assert [target.matches(value) for value in (5, 7, 6)] == [True, True, False]
+
+    def test_values_works_for_unhashable_targets(self):
+        assert guarding.values([1], [2]).matches([2]) is True
+
+    def test_values_requires_at_least_one(self):
+        with pytest.raises(ValueError, match="^guarding.values requires at least one value$"):
+            guarding.values()
+
+    def test_reprs_read_like_what_was_written(self):
+        assert repr(guarding(IsSuperUser, setting={"count": 5}).fields["count"]) == "5"
+        assert repr(guarding.values(5, 7)) == "guarding.values(5, 7)"
+
+    def test_guarding_values_is_the_same_marker_on_its_own(self):
+        from isik.django.drf.permissions import guarding_values
+
+        assert guarding.values is guarding_values
+        assert guarding_values(5).matches(5) is True
+
+    def test_a_custom_target_subclass_is_used_as_it_is(self, alice, bob):
+        from isik.django.drf.permissions import GuardTarget
+
+        class Above(GuardTarget):
+            def __init__(self, floor):
+                self.floor = floor
+
+            def matches(self, incoming):
+                return incoming > self.floor
+
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+        viewset = widget_viewset(guarding(is_owner("owner"), setting={"count": Above(10)}))
+        assert patch(viewset, widget, bob, {"count": 9}).status_code == status.HTTP_200_OK
+        assert patch(viewset, widget, bob, {"count": 11}).status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_other_than_matches_everything_but_its_values(self):
+        target = guarding.other_than(5, 7)
+        assert [target.matches(value) for value in (5, 7, 6, None)] == [False, False, True, True]
+        assert repr(target) == "guarding.other_than(5, 7)"
+
+    def test_other_than_requires_at_least_one(self):
+        with pytest.raises(ValueError, match="^guarding.other_than requires at least one value$"):
+            guarding.other_than()
+
+    def test_matching_asks_its_predicate(self):
+        def big(value):
+            return value > 10
+
+        target = guarding.matching(big)
+        assert (target.matches(11), target.matches(10)) == (True, False)
+        assert repr(target) == "guarding.matching('big')"
+
+    def test_matching_coerces_to_bool(self):
+        assert guarding.matching(lambda value: value).matches([1]) is True
+
+    def test_matching_requires_a_callable(self):
+        with pytest.raises(TypeError, match="^guarding.matching requires a callable$"):
+            guarding.matching(5)
+
+    def test_matching_repr_without_a_name(self):
+        import functools
+
+        target = guarding.matching(functools.partial(max, 0))
+        assert repr(target).startswith("guarding.matching(functools.partial(")
+
+    def test_the_marker_spellings_are_the_public_functions(self):
+        from isik.django.drf.permissions import guarding_matching, guarding_other_than
+
+        assert guarding.other_than is guarding_other_than
+        assert guarding.matching is guarding_matching
+
+    def test_other_than_and_matching_through_a_viewset(self, alice, bob):
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+        other_than = widget_viewset(guarding(is_owner("owner"), setting={"count": guarding.other_than(1, 2)}))
+        assert patch(other_than, widget, bob, {"count": 2}).status_code == status.HTTP_200_OK
+        assert patch(other_than, widget, bob, {"count": 3}).status_code == status.HTTP_400_BAD_REQUEST
+        matching = widget_viewset(guarding(is_owner("owner"), setting={"count": guarding.matching(lambda n: n > 10)}))
+        assert patch(matching, widget, bob, {"count": 11}).status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_the_base_target_is_abstract(self):
+        from isik.django.drf.permissions import GuardTarget
+
+        with pytest.raises(NotImplementedError):
+            GuardTarget().matches(1)
 
 
 class TestActionsGuard:
@@ -239,7 +365,7 @@ class TestActionsGuard:
         guard = guarding(IsSuperUser, actions=["destroy"])()
         with pytest.raises(
             ImproperlyConfigured,
-            match=r"^Guarding\(IsSuperUser, actions=\['destroy'\]\) needs a viewset - object has no action\.$",
+            match=r"^IsSuperUserForDestroy needs a viewset - object has no action\.$",
         ):
             guard.has_permission(request_by(rf, alice), view=object())
 
@@ -280,7 +406,7 @@ class TestFieldsGuardAtRequestTime:
         guard = guarding(IsSuperUser, fields=["count"])()
         with pytest.raises(
             ImproperlyConfigured,
-            match=r"^FakeView declares Guarding\(IsSuperUser, fields=\['count'\]\) but doesn't run field guards - "
+            match=r"^FakeView declares IsSuperUserForCount but doesn't run field guards - "
             r"add GuardedFieldsMixin \(part of BaseModelViewSet\)\.$",
         ):
             guard.has_permission(request_by(rf, alice), FakeView("create"))
@@ -338,17 +464,24 @@ class TestGuardedFieldsMixin:
         response = patch(viewset, widget, bob, {"name": "nut", "count": "1"}, format="multipart")
         assert response.status_code == status.HTTP_200_OK
 
-    def test_a_dict_scope_only_guards_its_target_value(self, alice, bob):
+    def test_a_setting_scope_only_guards_its_target_value(self, alice, bob):
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
-        viewset = widget_viewset(guarding(is_owner("owner"), fields={"count": 5}))
+        viewset = widget_viewset(guarding(is_owner("owner"), setting={"count": 5}))
         assert patch(viewset, widget, bob, {"count": 3}).status_code == status.HTTP_200_OK
         response = patch(viewset, widget, bob, {"count": "5"}, format="multipart")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert set(response.data) == {"count"}
 
-    def test_a_dict_scope_setting_the_target_it_already_holds_is_not_a_change(self, alice, bob):
+    def test_a_values_target_guards_each_of_its_values(self, alice, bob):
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+        viewset = widget_viewset(guarding(is_owner("owner"), setting={"count": guarding.values(5, 7)}))
+        assert patch(viewset, widget, bob, {"count": 3}).status_code == status.HTTP_200_OK
+        assert patch(viewset, widget, bob, {"count": 7}).status_code == status.HTTP_400_BAD_REQUEST
+        assert patch(viewset, widget, bob, {"count": "5"}, format="multipart").status_code == 400
+
+    def test_a_setting_scope_setting_the_target_it_already_holds_is_not_a_change(self, alice, bob):
         widget = Widget.objects.create(name="bolt", count=5, owner=alice)
-        viewset = widget_viewset(guarding(is_owner("owner"), fields={"count": 5}))
+        viewset = widget_viewset(guarding(is_owner("owner"), setting={"count": 5}))
         assert patch(viewset, widget, bob, {"count": 5}).status_code == status.HTTP_200_OK
 
     def test_every_refusing_guard_reports_its_own_fields(self, alice, bob):
@@ -408,7 +541,7 @@ class TestGuardedFieldsMixin:
         viewset = widget_viewset(guarding(IsSuperUser, fields=["cuont"]))
         with pytest.raises(
             ImproperlyConfigured,
-            match=r"^Guarding\(IsSuperUser, fields=\['cuont'\]\) guards 'cuont', which WidgetSerializer has no field",
+            match=r"^IsSuperUserForCuont guards 'cuont', which no serializer of GuardedWidgetViewSet has a field",
         ):
             patch(viewset, widget, bob, {"count": 2})
 
@@ -445,23 +578,23 @@ class TestGuardedFieldsMixin:
         assert seen and all(isinstance(call[1], viewset) for call in seen)
 
     @pytest.mark.parametrize(
-        ("serializer_read_only", "fields", "payload"),
+        ("serializer_read_only", "scope", "payload"),
         [
             # each skip reason on the first field, then a real change to the second - skipping must
             # move on to the next field, not stop looking
-            (["id", "count"], ["count", "name"], {"count": 2, "name": "nut"}),
-            (["id"], ["count", "name"], {"name": "nut"}),
-            (["id"], {"count": 5, "name": "nut"}, {"count": 3, "name": "nut"}),
-            (["id"], ["count", "name"], {"count": 1, "name": "nut"}),
+            (["id", "count"], {"fields": ["count", "name"]}, {"count": 2, "name": "nut"}),
+            (["id"], {"fields": ["count", "name"]}, {"name": "nut"}),
+            (["id"], {"setting": {"count": 5, "name": "nut"}}, {"count": 3, "name": "nut"}),
+            (["id"], {"fields": ["count", "name"]}, {"count": 1, "name": "nut"}),
         ],
     )
-    def test_a_skipped_field_does_not_hide_a_later_changed_one(self, alice, bob, serializer_read_only, fields, payload):
+    def test_a_skipped_field_does_not_hide_a_later_changed_one(self, alice, bob, serializer_read_only, scope, payload):
         class Serializer(WidgetSerializer):
             class Meta(WidgetSerializer.Meta):
                 read_only_fields = serializer_read_only
 
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
-        viewset = widget_viewset(guarding(is_owner("owner"), fields=fields), serializer=Serializer)
+        viewset = widget_viewset(guarding(is_owner("owner"), **scope), serializer=Serializer)
         response = patch(viewset, widget, bob, payload)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert set(response.data) == {"name"}
@@ -501,6 +634,7 @@ class TestGuardedFieldsMixin:
 
         class Serializer:
             instance = None
+            fields = {}
             validated_data = {}
 
         serializer = Serializer()
@@ -575,7 +709,7 @@ class TestObjectProperty:
 
     def test_name_and_message(self):
         permission_cls = object_property(attribute="is_app")
-        assert permission_cls.__name__ == "ObjectAttributePermission(property=is_app)"
+        assert permission_cls.__name__ == "ObjectIsApp"
         assert permission_cls.message == "Object property is_app is False"
 
     def test_negated_inside_guarding(self, rf, alice):
@@ -590,6 +724,41 @@ class TestObjectProperty:
         assert guard.has_permission(request_by(rf, alice), view) is True
         assert guard.has_object_permission(request_by(rf, alice), view, AppAccount()) is False
         assert guard.has_object_permission(request_by(rf, alice), view, Person()) is True
+
+
+class TestIsOwnerTraversal:
+    def test_follows_a_dotted_owner_path(self, rf, alice, bob):
+        alice.manager = bob
+        widget = Widget.objects.create(name="bolt", owner=alice)
+        permission = is_owner("owner.manager")()
+        assert permission.has_object_permission(request_by(rf, bob), None, widget) is True
+        assert permission.has_object_permission(request_by(rf, alice), None, widget) is False
+
+    def test_a_path_broken_by_a_none_relation_is_not_the_owner(self, rf, alice):
+        widget = Widget.objects.create(name="bolt", owner=None)
+        assert is_owner("owner.manager")().has_object_permission(request_by(rf, alice), None, widget) is False
+
+    def test_takes_a_callable_owner(self, rf, alice, bob):
+        widget = Widget.objects.create(name="bolt", owner=alice)
+
+        def owner_of(obj):
+            return obj.owner
+
+        assert is_owner(owner_of)().has_object_permission(request_by(rf, alice), None, widget) is True
+        assert is_owner(owner_of)().has_object_permission(request_by(rf, bob), None, widget) is False
+        assert is_owner(owner_of).__name__ == "IsOwnerByOwnerOf"
+
+    def test_takes_a_callable_of(self, rf, alice, bob):
+        bob.manager = alice
+        widget = Widget.objects.create(name="bolt", owner=alice)
+        permission_cls = is_owner("owner", of=lambda user: user.manager)
+        assert permission_cls().has_object_permission(request_by(rf, bob), None, widget) is True
+        assert permission_cls.__name__ == "IsOwnerByOwnerOfLambda"
+
+    def test_a_callable_raising_attribute_error_is_not_the_owner(self, rf, alice):
+        widget = Widget.objects.create(name="bolt", owner=None)
+        permission = is_owner(lambda obj: obj.owner.manager)()
+        assert permission.has_object_permission(request_by(rf, alice), None, widget) is False
 
 
 class TestIsOwnerOf:
@@ -616,7 +785,11 @@ class TestIsOwnerOf:
         permission = is_owner("owner", of="manager")()
         assert permission.has_object_permission(request_by(rf, alice), None, widget) is False
 
+    def test_a_callable_without_a_name_falls_back_to_its_type(self):
+        import functools
+
+        owner_of = functools.partial(getattr, "owner")
+        assert is_owner(owner_of).__name__ == "IsOwnerByPartial"
+
     def test_name_includes_of(self):
-        assert is_owner("tenant", of="organization").__name__ == (
-            "IsOwnerPermission(owner_field=tenant, of=organization)"
-        )
+        assert is_owner("tenant", of="organization").__name__ == ("IsOwnerByTenantOfOrganization")

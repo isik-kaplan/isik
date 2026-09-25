@@ -27,3 +27,11 @@ user.upvote(post)
 user.downvote(post)
 user.unvote(post)
 ```
+
+## Naming the generated model
+
+The generated model is `<Host><Attr>Vote` by default (`Post.votes` -> `PostVotesVote`). Pass `model_name=` to name it yourself. It also names the table and constraints, so settle it before the first migration.
+
+```python
+votes = votes(user_related_name="post_votes", model_name="PostVote")
+```

@@ -37,3 +37,11 @@ Post.topics.model.objects.from_list(["python", "django"]).to_list()
 ```
 
 - `create()` is filter-then-create rather than an atomic `get_or_create()` - a race that slips two inserts past the filter check still recovers via the `name` unique constraint instead of raising `IntegrityError`.
+
+## Naming the generated models
+
+The generated models are `<Host><Attr>Tag` and `<Host><Attr>ObjectTag` by default. Pass `tag_model_name=`/`through_model_name=` to name them yourself. They also name the tables, so settle them before the first migration.
+
+```python
+topics = tags(related_name="posts_with_topic", tag_model_name="Topic", through_model_name="PostTopic")
+```

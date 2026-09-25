@@ -9,10 +9,12 @@ from isik.django.drf.permissions import (
     IsSuperUser,
     ReadOnly,
     is_owner,
+    object_property,
+    only_actions,
     prevent_actions,
     user_property,
 )
-from tests.testapp.models import Widget
+from tests.testapp.models import EmailUser, Tag, TaggedWidget, Widget, WidgetProfile
 
 
 pytestmark = pytest.mark.django_db
@@ -144,7 +146,7 @@ class TestIsOwner:
         assert permission_cls().has_object_permission(request, view=None, obj=object()) is False
 
     def test_generated_class_name_includes_the_owner_field(self):
-        assert is_owner("owner").__name__ == "IsOwnerPermission(owner_field=owner)"
+        assert is_owner("owner").__name__ == "IsOwnerByOwner"
 
     def test_denial_message(self):
         assert is_owner("owner").message == "User is not the owner of the object"
@@ -161,11 +163,30 @@ class TestPreventActions:
 
     def test_generated_class_name_includes_the_actions(self):
         permission_cls = prevent_actions("create", "destroy")
-        assert "create" in permission_cls.__name__
-        assert "destroy" in permission_cls.__name__
+        assert permission_cls.__name__ == "PreventCreateAndDestroy"
+        assert prevent_actions("partial_update").__name__ == "PreventPartialUpdate"
 
     def test_denial_message(self):
         assert prevent_actions("create", "destroy").message == "Actions should not be: ('create', 'destroy')"
+
+
+class TestOnlyActions:
+    def test_allows_the_listed_actions(self, rf):
+        assert only_actions("list", "retrieve")().has_permission(rf.get("/"), FakeView(action="retrieve")) is True
+
+    def test_denies_every_other_action(self, rf):
+        assert only_actions("list", "retrieve")().has_permission(rf.get("/"), FakeView(action="destroy")) is False
+
+    def test_requires_at_least_one_action(self):
+        with pytest.raises(ValueError, match="^only_actions requires at least one action - with none it would"):
+            only_actions()
+
+    def test_generated_class_name_and_an_explicit_one(self):
+        assert only_actions("list", "retrieve").__name__ == "OnlyListAndRetrieve"
+        assert only_actions("list", name="ListOnly").__name__ == "ListOnly"
+
+    def test_denial_message(self):
+        assert only_actions("list", "retrieve").message == "Actions should be one of: ('list', 'retrieve')"
 
 
 class TestUserProperty:
@@ -175,7 +196,7 @@ class TestUserProperty:
 
     def test_generated_class_name_and_default_message_use_the_attribute_name(self):
         permission_cls = user_property(attribute="is_verified")
-        assert permission_cls.__name__ == "UserAttributePermission(property=is_verified)"
+        assert permission_cls.__name__ == "UserIsVerified"
         assert permission_cls.message == "User property is_verified is False"
 
     def test_generated_class_name_and_default_message_use_the_property_name(self):
@@ -185,7 +206,7 @@ class TestUserProperty:
                 return True
 
         permission_cls = user_property(property_=User.is_verified)
-        assert permission_cls.__name__ == "UserAttributePermission(property=is_verified)"
+        assert permission_cls.__name__ == "UserIsVerified"
         assert permission_cls.message == "User property is_verified is False"
 
     def test_rejects_both_property_and_attribute_together(self):
@@ -279,3 +300,76 @@ class TestUserProperty:
         request = rf.get("/")
         request.user = AnonymousUser()
         assert permission_cls().has_object_permission(request, view=None, obj=object()) is False
+
+
+class TestDescriptorResolution:
+    @pytest.mark.parametrize(
+        ("descriptor", "name"),
+        [
+            (EmailUser.is_staff, "UserIsStaff"),  # a model field
+            (Widget.owner_id, "UserOwnerId"),  # a foreign key's column, not its relation
+            (EmailUser.manager, "UserManager"),  # forward foreign key
+            (WidgetProfile.widget, "UserWidget"),  # forward one-to-one
+            (Widget.profile, "UserProfile"),  # reverse one-to-one
+            (EmailUser.reports, "UserReports"),  # reverse foreign key - its .field.name is "manager"
+            (TaggedWidget.tags, "UserTags"),  # forward many-to-many
+            (Tag.tagged_widgets, "UserTaggedWidgets"),  # reverse many-to-many
+        ],
+    )
+    def test_model_descriptors_resolve_to_the_attribute_they_read(self, descriptor, name):
+        assert user_property(descriptor).__name__ == name
+
+    def test_cached_properties_resolve_and_keep_their_cache(self, rf):
+        import functools
+
+        from django.utils.functional import cached_property
+
+        calls = []
+
+        class User:
+            @functools.cached_property
+            def stdlib(self):
+                calls.append("stdlib")
+                return True
+
+            @cached_property
+            def django(self):
+                calls.append("django")
+                return True
+
+        request = rf.get("/")
+        request.user = User()
+        for descriptor in (User.stdlib, User.django):
+            permission = user_property(descriptor)()
+            assert permission.has_permission(request, view=None) is True
+            assert permission.has_permission(request, view=None) is True
+        assert calls == ["stdlib", "django"]
+
+    def test_a_name_is_accepted_positionally(self):
+        assert user_property("is_verified").__name__ == "UserIsVerified"
+
+    def test_a_dotted_name_camel_cases_every_part(self):
+        assert user_property("profile.is_active").__name__ == "UserProfileIsActive"
+
+    def test_every_factory_takes_an_explicit_name(self):
+        assert user_property("is_app", name="IsApplication").__name__ == "IsApplication"
+        assert object_property("is_app", name="TargetIsApplication").__name__ == "TargetIsApplication"
+        assert is_owner("owner", name="OwnsIt").__name__ == "OwnsIt"
+        assert is_owner("owner", of="manager", name="ManagerOwnsIt").__name__ == "ManagerOwnsIt"
+        assert prevent_actions("destroy", name="NoDeleting").__name__ == "NoDeleting"
+
+    def test_a_plain_value_has_no_name_to_find(self):
+        class User:
+            is_app = True
+
+        with pytest.raises(
+            TypeError,
+            match=r"^Can't tell which attribute True reads - pass its name as a string instead\. "
+            r"\(A plain class attribute is its value, not a descriptor, so it has no name to find\.\)$",
+        ):
+            user_property(User.is_app)
+
+    def test_object_property_resolves_the_same_way(self, rf, django_user_model):
+        permission = object_property(EmailUser.is_staff)()
+        staff = django_user_model.objects.create_user(username="s", email="s@example.com", is_staff=True)
+        assert permission.has_object_permission(rf.get("/"), view=None, obj=staff) is True

@@ -24,6 +24,7 @@ class _NotesField:
         user_model=None,
         base_model=None,
         extra_fields=None,
+        model_name=None,
         body_max_length=None,
     ):
         self.user_related_name = user_related_name
@@ -32,10 +33,11 @@ class _NotesField:
         self.user_model = user_model or settings.AUTH_USER_MODEL
         self.base_model = base_model
         self.extra_fields = extra_fields or {}
+        self.model_name = model_name
         self.body_max_length = body_max_length
 
     def contribute_to_class(self, host_cls, name):
-        model_name = f"{host_cls.__name__}{name.capitalize()}Note"
+        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Note"
         claim_related_name(host_cls, self.target_related_name, model_name)
         claim_related_name(self.user_model, self.user_related_name, model_name)
 
@@ -71,6 +73,7 @@ def notes(
     user_model=None,
     base_model=None,
     extra_fields=None,
+    model_name=None,
     body_max_length=None,
 ):
     """
@@ -92,6 +95,10 @@ def notes(
     Same configuration knobs as `votes()`/`bookmarks()`, plus `body_max_length` (default
     unbounded). A host can attach `notes()` more than once - see `votes()`'s docstring for the
     `field=` disambiguation rule.
+
+    `model_name` overrides the generated model's class name (default `<Host><Attr>Note`, e.g.
+    `Post.notes` -> `PostNotesNote`). It also names the table and constraints, so settle it
+    before the first migration.
     """
     return _NotesField(
         user_related_name=user_related_name,
@@ -100,6 +107,7 @@ def notes(
         user_model=user_model,
         base_model=base_model,
         extra_fields=extra_fields,
+        model_name=model_name,
         body_max_length=body_max_length,
     )
 

@@ -24,3 +24,11 @@ class User(UserNoteMixin, AbstractUser):
 note = user.add_note(post, "remember to follow up")
 user.notes_on(post)                  # this user's notes on `post`
 ```
+
+## Naming the generated model
+
+The generated model is `<Host><Attr>Note` by default (`Post.notes` -> `PostNotesNote`). Pass `model_name=` to name it yourself. It also names the table and constraints, so settle it before the first migration.
+
+```python
+notes = notes(user_related_name="post_notes", model_name="PostNote")
+```

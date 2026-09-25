@@ -71,6 +71,8 @@ class _TagsField:
         through_base_model=None,
         tag_extra_fields=None,
         through_extra_fields=None,
+        tag_model_name=None,
+        through_model_name=None,
     ):
         self.related_name = related_name
         self.target_name = target_name
@@ -82,12 +84,14 @@ class _TagsField:
         self.through_base_model = through_base_model
         self.tag_extra_fields = tag_extra_fields or {}
         self.through_extra_fields = through_extra_fields or {}
+        self.tag_model_name = tag_model_name
+        self.through_model_name = through_model_name
         self.attname = None  # pragma: no mutate
 
     def contribute_to_class(self, host_cls, name):
         self.attname = name  # pragma: no mutate
-        tag_model_name = f"{host_cls.__name__}{name.capitalize()}Tag"
-        through_model_name = f"{host_cls.__name__}{name.capitalize()}ObjectTag"
+        tag_model_name = self.tag_model_name or f"{host_cls.__name__}{name.capitalize()}Tag"
+        through_model_name = self.through_model_name or f"{host_cls.__name__}{name.capitalize()}ObjectTag"
         claim_related_name(host_cls, self.target_related_name, through_model_name)
 
         tag_fields = {
@@ -142,6 +146,8 @@ def tags(
     through_base_model=None,
     tag_extra_fields=None,
     through_extra_fields=None,
+    tag_model_name=None,
+    through_model_name=None,
 ):
     """
     Attaches a per-host-model tag pool plus a M2M through-table, and mixes in the ability to
@@ -174,6 +180,10 @@ def tags(
 
     A host can attach `tags()` more than once - `TaggableMixin` methods auto-pick the sole
     attachment when there's only one, and require `field=Post.topics` to disambiguate otherwise.
+
+    `tag_model_name`/`through_model_name` override the generated models' class names (default
+    `<Host><Attr>Tag` and `<Host><Attr>ObjectTag`). They also name the tables, so settle them before
+    the first migration.
     """
     return _TagsField(
         related_name=related_name,
@@ -186,6 +196,8 @@ def tags(
         through_base_model=through_base_model,
         tag_extra_fields=tag_extra_fields,
         through_extra_fields=through_extra_fields,
+        tag_model_name=tag_model_name,
+        through_model_name=through_model_name,
     )
 
 

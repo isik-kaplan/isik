@@ -31,6 +31,7 @@ class _CommentsField:
         user_model=None,
         base_model=None,
         extra_fields=None,
+        model_name=None,
         tiptap,
         comment_min_length,
         comment_max_length,
@@ -42,6 +43,7 @@ class _CommentsField:
         self.user_model = user_model or settings.AUTH_USER_MODEL
         self.base_model = base_model
         self.extra_fields = extra_fields or {}
+        self.model_name = model_name
         self.tiptap = tiptap
         self.comment_min_length = comment_min_length
         self.comment_max_length = comment_max_length
@@ -68,7 +70,7 @@ class _CommentsField:
         return models.TextField(validators=validators)
 
     def contribute_to_class(self, host_cls, name):
-        model_name = f"{host_cls.__name__}{name.capitalize()}Comment"
+        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Comment"
         claim_related_name(host_cls, self.target_related_name, model_name)
         claim_related_name(self.user_model, self.user_related_name, model_name)
 
@@ -99,6 +101,7 @@ def comments(
     user_model=None,
     base_model=None,
     extra_fields=None,
+    model_name=None,
     tiptap=False,
     comment_min_length=1,
     comment_max_length=None,
@@ -127,6 +130,10 @@ def comments(
     `extra_fields={"votes": votes(user_related_name=...)}`. Same `user_related_name`/
     `target_related_name`/`target_name`/`base_model` knobs as the other makers. A host can attach
     `comments()` more than once - see `votes()`'s docstring for the `field=` disambiguation rule.
+
+    `model_name` overrides the generated model's class name (default `<Host><Attr>Comment`, e.g.
+    `Post.comments` -> `PostCommentsComment`). It also names the table and constraints, so settle it
+    before the first migration.
     """
     return _CommentsField(
         user_related_name=user_related_name,
@@ -135,6 +142,7 @@ def comments(
         user_model=user_model,
         base_model=base_model,
         extra_fields=extra_fields,
+        model_name=model_name,
         tiptap=tiptap,
         comment_min_length=comment_min_length,
         comment_max_length=comment_max_length,

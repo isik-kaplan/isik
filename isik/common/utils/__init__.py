@@ -15,7 +15,7 @@ from isik.common.utils.iterables import all_combinations, first_of, not_none, pu
 from isik.common.utils.metaclasses import transform
 from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMixin
 from isik.common.utils.sentinel import Sentinel
-from isik.common.utils.strings import camel_to_snake, snake_to_human, snake_to_pascal
+from isik.common.utils.strings import camel_to_snake, snake_to_human, snake_to_pascal, words_to_pascal
 from isik.common.utils.validation import validate_inputs
 
 
@@ -48,4 +48,5 @@ __all__ = [
     "transform",
     "validate_inputs",
     "with_attrs",
+    "words_to_pascal",
 ]

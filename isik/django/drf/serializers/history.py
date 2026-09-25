@@ -59,7 +59,7 @@ class _ChangesField(serializers.JSONField):
         return result or None
 
 
-def generic_history_serializer(model, *, withhold=()):
+def generic_history_serializer(model, *, withhold=(), name=None):
     """
     Builds a read-only `Serializer` for the history of a model tracked with `@track_events()` -
     `event_id`, `event_created_at`, `action` ("insert"/"update"/"delete"), `changes` (a dict of
@@ -72,6 +72,8 @@ def generic_history_serializer(model, *, withhold=()):
 
         WidgetHistorySerializer = generic_history_serializer(Widget)
         WidgetHistorySerializer(some_queryset, many=True).data
+
+    `name=` overrides the generated class name (default `<Model>HistorySerializer`).
 
     Built off `pghistory.models.Events` (its cross-table aggregate, here scoped to just this one
     model's Event table) rather than the concrete `<Model>Event` model directly - that's what
@@ -138,7 +140,7 @@ def generic_history_serializer(model, *, withhold=()):
         # and indexed, this JSON fallback is neither.
         attrs["actor_id"] = serializers.CharField(read_only=True, allow_null=True)
 
-    return type(f"{model.__name__}HistorySerializer", (serializers.Serializer,), attrs)
+    return type(name or f"{model.__name__}HistorySerializer", (serializers.Serializer,), attrs)
 
 
 def _tracked_fields(event_model):

@@ -9,3 +9,5 @@ VoteSerializer = generic_vote_serializer(Post.votes.model)
 ```
 
 - `user` is never client-writable - the view (e.g. `perform_create`) still has to set it. Pair with `isik.django.drf.permissions.is_owner("user")` for a private vote viewset.
+
+- `name=` overrides the generated class name (default `<Model>Serializer`).

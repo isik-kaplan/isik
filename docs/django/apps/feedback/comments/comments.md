@@ -25,3 +25,11 @@ class User(UserCommentMixin, AbstractUser):
 user.comment(post, "nice post")
 post.comments.all()                  # every comment, any author
 ```
+
+## Naming the generated model
+
+The generated model is `<Host><Attr>Comment` by default (`Post.comments` -> `PostCommentsComment`). Pass `model_name=` to name it yourself. It also names the table and constraints, so settle it before the first migration.
+
+```python
+comments = comments(user_related_name="post_comments", model_name="PostComment")
+```

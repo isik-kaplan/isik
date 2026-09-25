@@ -52,3 +52,5 @@ generic_history_serializer(User, withhold=["password"])
 ```
 
 See [`HistoryMixin`](../viewsets/history.md) for exposing this over a viewset action.
+
+`generic_history_serializer(model, name=...)` overrides the generated class name (default `<Model>HistorySerializer`).

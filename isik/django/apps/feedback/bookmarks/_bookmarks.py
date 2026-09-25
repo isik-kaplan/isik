@@ -24,6 +24,7 @@ class _BookmarksField:
         user_model=None,
         base_model=None,
         extra_fields=None,
+        model_name=None,
     ):
         self.user_related_name = user_related_name
         self.target_name = target_name
@@ -31,9 +32,10 @@ class _BookmarksField:
         self.user_model = user_model or settings.AUTH_USER_MODEL
         self.base_model = base_model
         self.extra_fields = extra_fields or {}
+        self.model_name = model_name
 
     def contribute_to_class(self, host_cls, name):
-        model_name = f"{host_cls.__name__}{name.capitalize()}Bookmark"
+        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Bookmark"
         claim_related_name(host_cls, self.target_related_name, model_name)
         claim_related_name(self.user_model, self.user_related_name, model_name)
 
@@ -70,6 +72,7 @@ def bookmarks(
     user_model=None,
     base_model=None,
     extra_fields=None,
+    model_name=None,
 ):
     """
     Attaches a per-host-model bookmark through-table, plus `UserBookmarkMixin` on the User model.
@@ -89,6 +92,10 @@ def bookmarks(
     why), `target_related_name`/`target_name` default but overridable, `base_model` (or
     `FEEDBACK_BOOKMARKS_BASE_MODEL`), `extra_fields` to merge in other makers. A host can attach
     `bookmarks()` more than once - see `votes()`'s docstring for the `field=` disambiguation rule.
+
+    `model_name` overrides the generated model's class name (default `<Host><Attr>Bookmark`, e.g.
+    `Post.bookmarks` -> `PostBookmarksBookmark`). It also names the table and constraints, so settle it
+    before the first migration.
     """
     return _BookmarksField(
         user_related_name=user_related_name,
@@ -97,6 +104,7 @@ def bookmarks(
         user_model=user_model,
         base_model=base_model,
         extra_fields=extra_fields,
+        model_name=model_name,
     )
 
 

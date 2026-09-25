@@ -23,3 +23,5 @@ WidgetErrorSerializer = FakeErrorSerializer(WidgetSerializer)
 ```
 
 - Works with any serializer shape - `Meta.fields`, `Meta.fields = "__all__"`, `Meta.exclude`, or a plain `Serializer` with no `Meta` at all - since field names come from instantiating the source serializer, not from reading `Meta` directly.
+
+- `FakeErrorSerializer(serializer_cls, name=...)` overrides the derived `<Name>Error` name.

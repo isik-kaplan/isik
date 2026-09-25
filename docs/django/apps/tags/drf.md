@@ -22,3 +22,5 @@ from isik.django.apps.tags.drf import generic_tag_serializer
 
 TagSerializer = generic_tag_serializer(Post.topics)
 ```
+
+- `generic_tag_serializer(field, name=...)` overrides the generated class name (default `<TagModel>Serializer`).

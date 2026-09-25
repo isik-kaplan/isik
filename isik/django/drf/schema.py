@@ -95,11 +95,13 @@ class FakeErrorSerializer:
     works the same regardless of whether it declares `Meta.fields`, `Meta.exclude`, or is a plain
     `Serializer` with no `Meta` at all.
 
+    `name=` overrides the derived "<Name>Error" name.
+
     Subject to the same `reuse=True` requirement as FakeSerializer - the derived name can collide
     even when `extra_fields` differs between calls.
     """
 
-    def __new__(cls, serializer_cls, *, extra_fields=None, reuse=False):
+    def __new__(cls, serializer_cls, *, extra_fields=None, reuse=False, name=None):
         field_names = serializer_cls().fields.keys()
 
         def error_field():
@@ -108,5 +110,5 @@ class FakeErrorSerializer:
         schema = {field_name: error_field() for field_name in field_names}
         schema["non_field_errors"] = error_field()
         schema.update(extra_fields or {})
-        name = f"{serializer_cls.__name__.removesuffix('Serializer')}Error"
+        name = name or f"{serializer_cls.__name__.removesuffix('Serializer')}Error"
         return FakeSerializer(name, schema, reuse=reuse)

@@ -38,7 +38,7 @@ def generic_tag_field(field):
     return _TagListField()
 
 
-def generic_tag_serializer(field):
+def generic_tag_serializer(field, name=None):
     """
     Standalone `ModelSerializer` for the Tag model behind `field` (e.g. `Post.topics`) - `id`,
     `name`, and a read-only `usage_count` (how many hosts currently carry this tag). Meant for a
@@ -46,9 +46,11 @@ def generic_tag_serializer(field):
     `generic_tag_field()` for that.
 
         TagSerializer = generic_tag_serializer(Post.topics)
+
+    `name=` overrides the generated class name (default `<TagModel>Serializer`).
     """
     tag_model = field.model
     meta_attrs = {"model": tag_model, "fields": ["id", "name", "usage_count"]}
     meta = type("Meta", (), meta_attrs)  # pragma: no mutate
     attrs = {"Meta": meta, "usage_count": ModelRelatedCountField(related_name=field.config.related_name)}
-    return type(f"{tag_model.__name__}Serializer", (BaseModelSerializer,), attrs)
+    return type(name or f"{tag_model.__name__}Serializer", (BaseModelSerializer,), attrs)

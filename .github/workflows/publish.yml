@@ -5,17 +5,31 @@ on:
     branches:
       - master
 
+# Keep this file's name: PyPI's trusted publisher is configured against "publish.yml".
+
+permissions:
+  contents: read
+
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  mutation:
+    uses: ./.github/workflows/mutation.yml
+
   publish:
+    # Never publish a version that failed its tests or left a mutant alive.
+    needs: [tests, mutation]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       id-token: write
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 

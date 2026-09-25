@@ -3,13 +3,15 @@
 from isik.django.drf.serializers.base import BaseModelSerializer
 
 
-def generic_vote_serializer(model):
+def generic_vote_serializer(model, name=None):
     """
     Builds a default `ModelSerializer` for a generated `<Host>Vote` model - `id`, `value`,
     `created_at`, read-only `user` (never client-writable - the view must still set it, e.g. in
     `perform_create`). Use as-is or subclass further.
 
         VoteSerializer = generic_vote_serializer(Post.votes.model)
+
+    `name=` overrides the generated class name (default `<Model>Serializer`).
     """
 
     meta_attrs = {
@@ -18,4 +20,4 @@ def generic_vote_serializer(model):
         "read_only_fields": ["user", "created_at"],
     }
     meta = type("Meta", (), meta_attrs)  # pragma: no mutate
-    return type(f"{model.__name__}Serializer", (BaseModelSerializer,), {"Meta": meta})
+    return type(name or f"{model.__name__}Serializer", (BaseModelSerializer,), {"Meta": meta})

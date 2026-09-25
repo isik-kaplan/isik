@@ -9,3 +9,5 @@ BookmarkSerializer = generic_bookmark_serializer(Post.bookmarks.model)
 ```
 
 - Every field is read-only, so a viewset built on it only needs to support retrieve/destroy, not update - see `test_composes_with_is_owner_for_a_private_bookmark_viewset`.
+
+- `name=` overrides the generated class name (default `<Model>Serializer`).

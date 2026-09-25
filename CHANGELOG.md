@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-25
+
+### Changed
+
+- **Breaking:** `guarding()`'s value-targeted form is now its own keyword, `setting=`:
+  `guarding(is_owner("issued_by"), setting={"names_issuer": True})`. `fields=` takes field names only,
+  and a dict passed to it raises `ValueError` pointing at `setting=`. As `fields={...}`, it read as
+  "names_issuer: guarded, yes" rather than "guarded when set to True".
+- `is_owner(owner_field, of=None)` - both halves take a dotted path or a callable, so an owner can be
+  relations away (`is_owner("installation.organization")`) or computed (`is_owner(lambda obj: ...)`).
+  A path broken by a missing attribute or a `None` relation means "not the owner". A dotted
+  `owner_field` used to be read as one attribute name and so always refused.
+- `user_property`/`object_property` take the model's own descriptor, or a name, as the first
+  argument: `user_property(User.is_staff)`, `user_property(User.quota)`, `user_property("is_app")`.
+  Properties, model fields, forward and reverse relations, and both `functools`' and Django's
+  `cached_property` all resolve to the attribute they read, which is then read off the instance, so
+  a `cached_property` keeps its cache (a `property_=` used to be called through its raw `fget`). A
+  reverse relation resolves to its accessor, not to the field on the other model. Anything with no
+  name to find, like a plain class attribute's value, raises `TypeError`. `property_=`/`attribute=`
+  still work.
+- **Breaking:** generated permission classes are named like classes, not like the call that made
+  them: `is_owner("issued_by")` is `IsOwnerByIssuedBy` (was `IsOwnerPermission(owner_field=issued_by)`),
+  `is_owner("tenant", of="organization")` is `IsOwnerByTenantOfOrganization`, `user_property("is_verified")`
+  is `UserIsVerified`, `object_property("is_app")` is `ObjectIsApp`, `prevent_actions("create", "destroy")`
+  is `PreventCreateAndDestroy`, and `guarding(~object_property("is_app"), actions=["destroy"])` is
+  `NotObjectIsAppForDestroy` (compositions are named too - `AOrB`, `AAndB`, `NotA` - where they used
+  to show up as `SingleOperandHolder`). Nothing reads these names but people and error messages.
+
+### Fixed
+
+- A field guard no longer raises `ImproperlyConfigured` (a 500) when the request can't write the
+  guarded field. That happened when `?only=`/`?exclude=` dropped it (a client could trigger it) or when
+  the action's serializer from `serializer_class_action_map` doesn't carry it. Such a field is skipped
+  now. A name that none of the viewset's serializers has still raises, as a typo.
+
+### Added
+
+- `name=` on every factory that builds a class for its caller: `is_owner`, `user_property`,
+  `object_property`, `prevent_actions`, `guarding`, `generic_vote_serializer`/`generic_comment_serializer`/
+  `generic_note_serializer`/`generic_bookmark_serializer`, `generic_tag_serializer`,
+  `generic_history_serializer` and `FakeErrorSerializer`. Always optional; the defaults are unchanged
+  apart from the permission names above.
+- `model_name=` on `votes()`/`comments()`/`notes()`/`bookmarks()`, and `tag_model_name=`/
+  `through_model_name=` on `tags()`, to name the generated models. Defaults unchanged, so existing
+  tables and migrations are untouched.
+- `guarding.values(*values)` - a `setting=` target matching any of several values:
+  `setting={"status": guarding.values(Status.APPROVED, Status.FEATURED)}`. Every target is normalised
+  to a `GuardTarget` when the guard is built (`ANY_VALUE` for `fields=`, `EqualsTarget` for a plain
+  value, `OneOfTarget` for `guarding.values`); subclass `GuardTarget` for a custom one.
+- Public building blocks, usable on their own: `guarding_values` (what `guarding.values` is),
+  `GuardTarget`/`EqualsTarget`/`OneOfTarget`/`AnyValueTarget`, `evaluate_permission` (a permission
+  tree as one predicate, three-valued without an object), `descriptor_attribute_name`, and
+  `permission_name` (a class-style name for any permission entry, compositions included).
+- Field guards can't be skipped by overriding a handler. `FieldGuardsOnSaveMixin` (part of
+  `BaseModelSerializer`) runs the current viewset's field guards inside `save()`, before the write,
+  however the serializer was built, and counts `save(**kwargs)` values as part of the write. Any
+  other unsafe request that succeeds without its guards having run (a plain serializer saved by
+  hand, an ORM write in a custom action) raises `ImproperlyConfigured` inside `transaction.atomic()`
+  on every database (`field_guard_databases` narrows it), so its database writes roll back.
+  `@writes_no_guarded_fields` marks an action that writes no guarded field. `destroy` is exempt via
+  `actions_writing_no_guarded_fields`. A request DRF answers from an exception (a refused guard, a
+  failed validation) rolls back whatever the handler wrote before it, `on_commit` callbacks
+  included. The save hook only checks serializers for the viewset's own model.
+  `check_guarded_fields()` now also takes `save_kwargs` and checks `many=True` writes row by row.
+- `only_actions(*actions, name=None)` - the complement of `prevent_actions`: allows only the given
+  actions (`OnlyListAndRetrieve`). Refuses to be built with none.
+- `guarding.other_than(*values)` and `guarding.matching(predicate)` - `setting=` targets for "anything
+  but these" and "whatever this callable accepts" (`NotOneOfTarget`/`MatchingTarget`, also public as
+  `guarding_other_than`/`guarding_matching`).
+- Shared-serializer check: when two `GuardedFieldsMixin` viewsets share a serializer and only one guards
+  a field, defining the second raises `ImproperlyConfigured` naming both. A viewset that leaves the
+  field open on purpose lists it in the new `unguarded_fields` attribute.
+- `words_to_pascal(text)` (`isik.common.utils`) - PascalCase from any run of words, splitting on every
+  non-alphanumeric character and keeping inner capitals, so already-PascalCase names survive
+  (`snake_to_pascal("IsSuperUser")` gives `"Issuperuser"`).
+
 ## [0.8.0] - 2026-09-25
 
 ### Added

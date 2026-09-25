@@ -24,6 +24,7 @@ class _VotesField:
         user_model=None,
         base_model=None,
         extra_fields=None,
+        model_name=None,
     ):
         self.user_related_name = user_related_name
         self.target_name = target_name
@@ -31,9 +32,10 @@ class _VotesField:
         self.user_model = user_model or settings.AUTH_USER_MODEL
         self.base_model = base_model
         self.extra_fields = extra_fields or {}
+        self.model_name = model_name
 
     def contribute_to_class(self, host_cls, name):
-        model_name = f"{host_cls.__name__}{name.capitalize()}Vote"
+        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Vote"
         claim_related_name(host_cls, self.target_related_name, model_name)
         claim_related_name(self.user_model, self.user_related_name, model_name)
 
@@ -71,6 +73,7 @@ def votes(
     user_model=None,
     base_model=None,
     extra_fields=None,
+    model_name=None,
 ):
     """
     Attaches a per-host-model up/downvote through-table, plus `UserVoteMixin` on the User model
@@ -98,6 +101,10 @@ def votes(
     A host can attach `votes()` more than once (e.g. `Post.upvotes = votes(...)` and
     `Post.helpfulness = votes(...)`) - `UserVoteMixin` methods auto-pick the sole attachment when
     there's only one, and require `field=Post.upvotes` to disambiguate when there's more than one.
+
+    `model_name` overrides the generated model's class name (default `<Host><Attr>Vote`, e.g.
+    `Post.votes` -> `PostVotesVote`). It also names the table and constraints, so settle it before
+    the first migration.
     """
     return _VotesField(
         user_related_name=user_related_name,
@@ -106,6 +113,7 @@ def votes(
         user_model=user_model,
         base_model=base_model,
         extra_fields=extra_fields,
+        model_name=model_name,
     )
 
 

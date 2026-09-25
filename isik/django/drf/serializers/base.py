@@ -3,6 +3,7 @@ from rest_framework.serializers import ModelSerializer
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin
 from isik.django.drf.serializers.create_only import CreateOnlyFieldsMixin
 from isik.django.drf.serializers.flattened_one_to_one import FlattenedOneToOneMixin
+from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin
 from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
 from isik.django.drf.serializers.request_context import RequestContextMixin
@@ -11,6 +12,7 @@ from isik.django.drf.serializers.write_only import WriteOnlyFieldsMixin
 
 class BaseModelSerializer(
     ModelSerializerRegistryMixin,
+    FieldGuardsOnSaveMixin,
     CreateOnlyFieldsMixin,
     WriteOnlyFieldsMixin,
     FlattenedOneToOneMixin,
@@ -21,7 +23,8 @@ class BaseModelSerializer(
 ):
     """
     Everything above composed together - see each mixin's own docstring for what it adds:
-    ModelSerializerRegistryMixin (model -> serializer lookup), CreateOnlyFieldsMixin
+    ModelSerializerRegistryMixin (model -> serializer lookup), FieldGuardsOnSaveMixin (the current
+    viewset's field guards run inside `save()`, before the write), CreateOnlyFieldsMixin
     (`Meta.create_only_fields`), WriteOnlyFieldsMixin (`Meta.write_only_fields`),
     FlattenedOneToOneMixin (`Meta.flattened_one_to_one_fields`), MetaCombiningMixin
     (`Meta.relational_fields` merges with any `_Meta` set further up the hierarchy - empty by

@@ -1,12 +1,11 @@
 name: Mutation testing
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
+  # Pushes to master run this through publish.yml instead, so publishing can wait on it.
+  workflow_call:
 
 jobs:
   mutmut:
@@ -35,7 +34,7 @@ jobs:
       POSTGRES_DB: isik_test
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3

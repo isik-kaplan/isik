@@ -9,3 +9,5 @@ NoteSerializer = generic_note_serializer(Post.notes.model)
 ```
 
 - `isik.django.drf.permissions.is_owner` covers the object-level actions (retrieve/update/destroy); list/create still need the view's own `get_queryset()` filter and `perform_create()` to set `user`.
+
+- `name=` overrides the generated class name (default `<Model>Serializer`).

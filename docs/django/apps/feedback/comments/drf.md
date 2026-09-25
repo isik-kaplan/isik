@@ -7,3 +7,5 @@ from isik.django.apps.feedback.comments.drf import generic_comment_serializer
 
 CommentSerializer = generic_comment_serializer(Post.comments.model)
 ```
+
+- `name=` overrides the generated class name (default `<Model>Serializer`).

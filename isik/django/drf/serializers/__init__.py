@@ -6,6 +6,7 @@ from isik.django.drf.serializers.conditional_serializer import (
 )
 from isik.django.drf.serializers.create_only import CreateOnlyFieldsMixin
 from isik.django.drf.serializers.flattened_one_to_one import FlattenedOneToOneMixin
+from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin
 from isik.django.drf.serializers.history import generic_history_serializer
 from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
@@ -17,6 +18,7 @@ __all__ = [
     "BaseModelSerializer",
     "ConditionalSerializerMixin",
     "CreateOnlyFieldsMixin",
+    "FieldGuardsOnSaveMixin",
     "FlattenedOneToOneMixin",
     "MetaCombiningMixin",
     "ModelSerializerRegistryMixin",

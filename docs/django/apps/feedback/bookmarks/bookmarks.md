@@ -26,3 +26,11 @@ user.toggle_bookmark(post)
 user.is_bookmarked(post)
 user.unbookmark(post)
 ```
+
+## Naming the generated model
+
+The generated model is `<Host><Attr>Bookmark` by default (`Post.bookmarks` -> `PostBookmarksBookmark`). Pass `model_name=` to name it yourself. It also names the table and constraints, so settle it before the first migration.
+
+```python
+bookmarks = bookmarks(user_related_name="post_bookmarks", model_name="PostBookmark")
+```

@@ -5,7 +5,7 @@ DRF (Django REST Framework) helpers: error translation, filters, pagination, per
 - [error_handling.md](error_handling.md) - `django_to_drf_validation_error` decorator
 - [filters.md](filters.md) - `make_filters`, a lookup-expression dict builder
 - [pagination.md](pagination.md) - `PageNumberPagination` with `total_pages`/`page_size`
-- [permissions.md](permissions.md) - `ReadOnly`, `is_owner`, `user_property`, and other permission factories
+- [permissions.md](permissions.md) - `ReadOnly`, `is_owner`, `user_property`, `object_property`, `guarding` (field- and action-scoped permissions), and other permission factories
 - [schema.md](schema.md) - `FakeSerializer`/`FakeErrorSerializer` for ad hoc response shapes
 - [spectacular.md](spectacular.md) - `AutoSchema` fixing `HistoryMixin`/`ConditionalSerializerMixin`'s schema gaps
 - [serializers/](serializers/README.md) - model↔serializer registry, conditional include/only/exclude, create-only fields, Meta-combining, request context helpers
