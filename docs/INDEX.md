@@ -30,6 +30,11 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 - [django/drf/](django/drf/README.md) - Django REST Framework helpers: error translation,
   filters, pagination, permissions, ad hoc schema builders, plus serializer/viewset mixins
 
+## isik.django.celery
+
+- [django/celery/](django/celery/README.md) - `HistoryContextTask`: a task's history rows name
+  whoever caused it (`celery` extra)
+
 ## isik.django.http_exceptions
 
 - [django/http_exceptions/](django/http_exceptions/README.md) - raise an HTTP status directly

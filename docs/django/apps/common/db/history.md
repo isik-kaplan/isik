@@ -29,6 +29,13 @@ subclass) is in `settings.MIDDLEWARE` - that's what stamps `user`/`url` into pgh
 so tracked events carry an actor. Used by `HistoryMixin` to add actor filtering/serialization only
 when it'll actually have data.
 
+`open_history_context()` returns a copy of the pghistory context
+[`HistoryContextMiddleware`](../middleware/history.md) opened for the request being served, or `None`
+outside one. pghistory itself publishes no way to read the open context. It's read when called, so
+it includes everything added since the request started: the `request.user` DRF authenticates in the
+view, and any `pghistory.context(key=...)` a view adds. It's what
+[`HistoryContextTask`](../../../celery/README.md) uses to carry a request's cause to a worker.
+
 ## Real, indexed columns from context - `ContextField`
 
 pghistory's own `pgh_context` is JSON, joined off a shared table, and unindexed by default - fine

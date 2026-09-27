@@ -57,7 +57,7 @@ msgstr ""
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:173
+#: isik/django/apps/common/db/history.py:179
 #, python-format
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
@@ -239,7 +239,7 @@ msgstr ""
 msgid "Content is too large"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:89
+#: isik/django/apps/common/db/history.py:95
 #, python-format
 msgid "ContextField(%(name)r) needs cast= - can't infer a Postgres type for %(field)r (only %(inferred)s are inferred; ForeignKey always needs an explicit cast)."
 msgstr ""

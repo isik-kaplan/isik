@@ -10,6 +10,7 @@ scoped permissions, serializer and viewset mixins, and HTTP exceptions you can r
 pip install isik              # isik.common only - no dependencies
 pip install isik[django]      # isik.django.apps, isik.django.http_exceptions
 pip install isik[drf]         # isik.django.drf - brings the django extra with it
+pip install isik[celery]      # isik.django.celery - brings the django extra with it
 pip install isik[all]         # everything, sentry/tiptap/templated_fields included
 ```
 
@@ -30,6 +31,8 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
   `BaseModel`, history tracking, and the `votes()`/`comments()`/`notes()`/`bookmarks()`/`tags()` makers
 - [isik.django.drf](https://github.com/isik-kaplan/isik/blob/master/docs/django/drf/README.md) - permissions
   (`guarding`, `django_permission`, ...), serializer and viewset mixins, filters, pagination
+- [isik.django.celery](https://github.com/isik-kaplan/isik/blob/master/docs/django/celery/README.md) - a task
+  base whose history rows name whoever caused the task, not nobody
 - [isik.django.http_exceptions](https://github.com/isik-kaplan/isik/blob/master/docs/django/http_exceptions/README.md) -
   raise an HTTP status directly instead of threading responses back up the call stack
 - [isik.sentry](https://github.com/isik-kaplan/isik/blob/master/docs/sentry/README.md) - Sentry-reporting

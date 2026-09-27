@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-27
+
+### Added
+
+- `HistoryContextMiddleware` (`isik.django.apps.common.middleware`) - pghistory's `HistoryMiddleware`,
+  plus `open_history_context()` (`isik.django.apps.common.db`) to read the context it opened while
+  the request is served. pghistory publishes no reader of its own. It reads the live context, so a
+  user DRF authenticates in the view is included, which a copy taken in `get_context()` would miss.
+- `HistoryContextTask` (`isik.django.celery`, new `celery` extra) - a Celery task base whose history
+  rows name whoever caused the task. The request's cause travels in the message headers and is
+  re-opened around the task body in the worker, with the task's name added. `carried_history_keys`
+  picks which keys travel (`user` by default, never the `url`). A task nobody asked for records
+  `caused_by: "system"` rather than an empty context. A caller's own headers are kept. A task run
+  inside a request (eagerly, or called directly) leaves that request's context untouched.
+
 ## [0.10.0] - 2026-09-25
 
 ### Added

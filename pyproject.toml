@@ -1,6 +1,6 @@
 [project]
 name = "isik"
-version = "0.10.0"
+version = "0.11.0"
 description = "Everyday python utilities."
 authors = [
   { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
@@ -21,9 +21,11 @@ sentry = ["sentry-sdk"]
 django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf", "django-lifecycle", "whitenoise"]
 # isik.django.drf builds on isik.django.apps (BaseModel, history tracking), so it brings the django extra.
 drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"]
+# isik.django.celery carries pghistory context into a worker, so it brings the django extra.
+celery = ["isik[django]", "celery"]
 tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
-all = ["isik[sentry,django,drf,tiptap,templated_fields]"]
+all = ["isik[sentry,django,drf,celery,tiptap,templated_fields]"]
 
 [project.urls]
 Homepage = "https://github.com/isik-kaplan/isik"

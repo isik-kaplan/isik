@@ -1,4 +1,5 @@
 import copy
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 import pghistory
@@ -25,6 +26,11 @@ _INFERRED_CASTS = {
     models.TextField: "text",
     models.CharField: "text",
 }
+
+# The metadata of the pghistory context HistoryContextMiddleware opened: the live dict itself, which
+# pghistory keeps adding to (DRF's authenticated user arrives after the middleware has run). A
+# ContextVar rather than a thread-local, because an async server runs many requests on one thread.
+_open_history_context = ContextVar("isik_open_history_context", default=None)
 
 
 @dataclass(frozen=True)
@@ -190,3 +196,16 @@ def history_middleware_installed():
         if isinstance(middleware_cls, type) and issubclass(middleware_cls, HistoryMiddleware):
             return True
     return False
+
+
+def open_history_context():
+    """
+    A copy of the pghistory context `HistoryContextMiddleware` opened for the request being served,
+    or `None` outside one - what a Celery task dispatched from here needs to know who asked for it.
+
+    Read when called, not when the request started: pghistory adds to an open context as the request
+    goes on (DRF authenticating `request.user`, a view calling `pghistory.context(key=...)`), and
+    this sees all of it.
+    """
+    metadata = _open_history_context.get()
+    return None if metadata is None else dict(metadata)
