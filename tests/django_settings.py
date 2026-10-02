@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     "isik.django.apps.common",
     "isik.django.apps.feedback",
     "isik.django.apps.tags",
+    # Both claim apps, so both claims are tested - a project installs one (see get_claim_model()).
+    "isik.django.apps.idempotency.by_reference",
+    "isik.django.apps.idempotency.with_body",
     "tests.testapp",
 ]
 

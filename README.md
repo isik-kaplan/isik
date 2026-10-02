@@ -29,6 +29,8 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
   concurrency, error handling, functional helpers, typed settings from environment variables
 - [isik.django.apps](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/common/README.md) -
   `BaseModel`, history tracking, and the `votes()`/`comments()`/`notes()`/`bookmarks()`/`tags()` makers
+- [Idempotency keys](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/idempotency/README.md) -
+  `Idempotency-Key` on DRF views: a retry replays the first response instead of doing the work twice
 - [isik.django.drf](https://github.com/isik-kaplan/isik/blob/master/docs/django/drf/README.md) - permissions
   (`guarding`, `django_permission`, ...), serializer and viewset mixins, filters, pagination
 - [isik.django.celery](https://github.com/isik-kaplan/isik/blob/master/docs/django/celery/README.md) - a task

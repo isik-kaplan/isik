@@ -22,6 +22,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   `comments()`: per-host interaction models attached with no migration to hand-write
 - [django/apps/tags/](django/apps/tags/README.md) - `tags()`: a per-host tag pool + M2M
   through-table, deduped by name
+- [django/apps/idempotency/](django/apps/idempotency/README.md) - `IdempotencyMixin`: a retry
+  with the same `Idempotency-Key` replays the first response, by reference or from a kept body
 - [django/apps/templated_fields/](django/apps/templated_fields/README.md) - model fields storing
   a sandboxed Jinja template, rendered on demand against a caller-supplied context
 

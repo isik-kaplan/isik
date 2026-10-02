@@ -49,11 +49,16 @@ def raw_texts(node):
         yield from raw_texts(child)
 
 
+def is_app_config(class_node):
+    return any(getattr(base, "id", None) == "AppConfig" for base in class_node.bases)
+
+
 def violations():
     found = []
     for path in sorted(translation_catalog.PACKAGE.rglob("*.py")):
         where = path.relative_to(translation_catalog.ROOT)
-        if str(where) in EXEMPT:
+        # Migrations are generated, and only ever say what the models already say.
+        if str(where) in EXEMPT or "migrations" in where.parts:
             continue
         tree = ast.parse(path.read_text())
         raised = {id(node.exc) for node in ast.walk(tree) if isinstance(node, ast.Raise) and node.exc is not None}
@@ -73,9 +78,11 @@ def violations():
                     if keyword.arg in USER_FACING_KEYWORDS and is_raw_text(keyword.value):
                         found.append(f"{where}:{keyword.value.lineno} untranslated {keyword.arg}=")
             if isinstance(node, ast.ClassDef):
+                # An AppConfig's label is an identifier - the app's name in migrations and table names.
+                attributes = USER_FACING_ATTRIBUTES - {"label"} if is_app_config(node) else USER_FACING_ATTRIBUTES
                 for statement in node.body:
                     if isinstance(statement, ast.Assign) and any(
-                        getattr(target, "id", None) in USER_FACING_ATTRIBUTES for target in statement.targets
+                        getattr(target, "id", None) in attributes for target in statement.targets
                     ):
                         for text in raw_texts(statement.value):
                             found.append(f"{where}:{text.lineno} untranslated class attribute")

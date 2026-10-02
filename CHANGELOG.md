@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-02
+
+### Added
+
+- Idempotency keys (`isik.django.apps.idempotency`). A caller sends `Idempotency-Key: <uuid>`, and a
+  retry of the same request gets the first response back instead of the work being done twice.
+  `IdempotencyMixin` (`isik.django.apps.idempotency.drf`) honours it on any DRF view. The claim is
+  inserted inside the request's transaction, against a `UNIQUE (claimed_by, key)` index, so a
+  concurrent retry waits for the first request and then replays it, or runs for real if it rolled
+  back. There is no in-flight state, nothing to reap and no expiry. Needs `ATOMIC_REQUESTS` (or an
+  equivalent transaction) and Postgres.
+  - Two claim apps, install one: `idempotency.by_reference` (`IdempotencyClaim`) replays by
+    re-serializing the row the response named and never stores a body;
+    `idempotency.with_body` (`IdempotencyClaimWithBody`) keeps the body, through a pluggable codec
+    (`IDEMPOTENCY_BODY_CODEC`) so it can be encrypted at rest. Each ships its own migration, so the
+    body column only exists where it's used. Or subclass `AbstractBaseIdempotencyClaim` /
+    `AbstractIdempotencyClaim` / `AbstractIdempotencyClaimWithBody` and set `IDEMPOTENCY_CLAIM_MODEL`.
+  - Covers `POST` by default, with the key required. `{action: reason}` exemptions
+    (`idempotency_exempt_actions`), and `idempotency_no_replay_actions` for responses shown once:
+    those keep only their status and refuse a repeat with 409.
+  - The fingerprint is sha256 over method, path, sorted query and the body as sorted-key JSON, so
+    reordered JSON is the same request. An uploaded file is described by its content hash rather than
+    the multipart bytes, whose boundary changes on every retry. What the body is compared by can be
+    replaced globally (`IDEMPOTENCY_NORMALIZE`), per view or per `@action`.
+  - Answers: 400 for a missing or malformed key, 422 for a key reused on a different request, 409 for
+    a no-replay action, 410 for a replay whose row is gone, `Idempotent-Replayed: true` on a replay.
+  - A raised failure rolls its claim back. A returned 4xx releases its claim. Either way the key isn't
+    spent.
+  - `IDEMPOTENCY_LOCK_TIMEOUT` (milliseconds, off by default) bounds how long a retry waits on the
+    first request, answering 409 `idempotency_key_in_flight` when it runs out.
+
 ## [0.11.0] - 2026-09-27
 
 ### Added

@@ -138,6 +138,21 @@ msgstr ""
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
+#: isik/django/apps/idempotency/drf.py:129
+#, python-format
+msgid "%(view)s honours idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:85
+#, python-format
+msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
+msgstr ""
+
+#: isik/django/apps/idempotency/drf.py:80
+#, python-format
+msgid "%(view)s.%(attribute)s needs a reason for %(action)s, not %(reason)r."
+msgstr ""
+
 #: isik/django/drf/viewsets/guarded_fields.py:126
 #, python-format
 msgid "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own permission_classes entry, with any composition inside guarding()."
@@ -166,6 +181,10 @@ msgstr ""
 #: isik/common/config/builder.py:52
 #, python-format
 msgid "'%(key)s' is not a key in this config."
+msgstr ""
+
+#: isik/django/apps/idempotency/exceptions.py:28
+msgid "A request with this idempotency key is still being served. Retry it shortly."
 msgstr ""
 
 #: isik/django/drf/permissions.py:218
@@ -197,6 +216,11 @@ msgstr ""
 
 #: isik/django/apps/common/db/models.py:31
 msgid "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+msgstr ""
+
+#: isik/django/apps/idempotency/fingerprint.py:17
+#, python-format
+msgid "Can't fingerprint a value of type %(type)s. Pass a normalizer that turns the body into JSON - idempotency_normalize on the view, or IDEMPOTENCY_NORMALIZE."
 msgstr ""
 
 #: isik/django/drf/permissions.py:186
@@ -298,6 +322,19 @@ msgstr ""
 msgid "ID"
 msgstr ""
 
+#: isik/django/apps/idempotency/by_reference/apps.py:9
+msgid "Idempotency claims"
+msgstr ""
+
+#: isik/django/apps/idempotency/with_body/apps.py:9
+msgid "Idempotency claims with bodies"
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:183
+#, python-format
+msgid "Install exactly one of %(apps)s, or set IDEMPOTENCY_CLAIM_MODEL to the claim model to use."
+msgstr ""
+
 #: isik/django/apps/feedback/comments/tiptap.py:68
 #, python-format
 msgid "Invalid Tiptap document: %(error)s"
@@ -313,6 +350,10 @@ msgstr ""
 
 #: isik/django/apps/common/admin/base.py:51
 msgid "Meta"
+msgstr ""
+
+#: isik/django/apps/idempotency/drf.py:105
+msgid "Must be a UUID."
 msgstr ""
 
 #: isik/django/http_exceptions/exceptions.py:102
@@ -493,6 +534,10 @@ msgstr ""
 msgid "The origin server requires the request to be conditional"
 msgstr ""
 
+#: isik/django/apps/idempotency/exceptions.py:36
+msgid "The request with this idempotency key succeeded, but what it returned is gone."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "The server cannot process the request due to a high load"
 msgstr ""
@@ -507,6 +552,18 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
+msgstr ""
+
+#: isik/django/apps/idempotency/drf.py:100
+msgid "This header is required."
+msgstr ""
+
+#: isik/django/apps/idempotency/exceptions.py:12
+msgid "This idempotency key was already used for a different request."
+msgstr ""
+
+#: isik/django/apps/idempotency/exceptions.py:20
+msgid "This idempotency key was already used, and its response can't be sent again."
 msgstr ""
 
 #: isik/django/apps/feedback/comments/tiptap.py:60
