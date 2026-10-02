@@ -13,13 +13,3 @@ repos:
       - id: ruff
         args: [ --fix ]
       - id: ruff-format
-
-  - repo: local
-    hooks:
-      # isik.__version__ follows pyproject.toml - see scripts/sync_version.py.
-      - id: sync-version
-        name: sync isik.__version__ with pyproject.toml
-        entry: python scripts/sync_version.py
-        language: python
-        files: ^(pyproject\.toml|isik/__init__\.py)$
-        pass_filenames: false

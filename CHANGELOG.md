@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-03
+
+### Fixed
+
+- `isik.__version__` said `0.1.0` in every release since 0.1.0. It is now where the version lives:
+  `pyproject.toml` declares the version dynamic and hatchling reads it from `isik/__init__.py`, so the
+  two can't disagree.
+
 ## [0.13.0] - 2026-10-03
 
 ### Added

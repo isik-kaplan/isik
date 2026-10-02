@@ -483,7 +483,6 @@ wheels = [
 
 [[package]]
 name = "isik"
-version = "0.13.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -562,25 +561,50 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "celery", marker = "extra == 'all'" },
     { name = "celery", marker = "extra == 'celery'" },
+    { name = "dalf", marker = "extra == 'all'" },
+    { name = "dalf", marker = "extra == 'celery'" },
     { name = "dalf", marker = "extra == 'django'" },
+    { name = "dalf", marker = "extra == 'drf'" },
+    { name = "django", marker = "extra == 'all'" },
+    { name = "django", marker = "extra == 'celery'" },
     { name = "django", marker = "extra == 'django'" },
+    { name = "django", marker = "extra == 'drf'" },
+    { name = "django-filter", marker = "extra == 'all'" },
     { name = "django-filter", marker = "extra == 'drf'" },
+    { name = "django-lifecycle", marker = "extra == 'all'" },
+    { name = "django-lifecycle", marker = "extra == 'celery'" },
     { name = "django-lifecycle", marker = "extra == 'django'" },
+    { name = "django-lifecycle", marker = "extra == 'drf'" },
+    { name = "django-object-actions", marker = "extra == 'all'" },
+    { name = "django-object-actions", marker = "extra == 'celery'" },
     { name = "django-object-actions", marker = "extra == 'django'" },
+    { name = "django-object-actions", marker = "extra == 'drf'" },
+    { name = "django-pghistory", marker = "extra == 'all'" },
+    { name = "django-pghistory", marker = "extra == 'celery'" },
     { name = "django-pghistory", marker = "extra == 'django'" },
+    { name = "django-pghistory", marker = "extra == 'drf'" },
+    { name = "djangorestframework", marker = "extra == 'all'" },
     { name = "djangorestframework", marker = "extra == 'drf'" },
+    { name = "drf-spectacular", marker = "extra == 'all'" },
     { name = "drf-spectacular", marker = "extra == 'drf'" },
-    { name = "isik", extras = ["django"], marker = "extra == 'celery'" },
-    { name = "isik", extras = ["django"], marker = "extra == 'drf'" },
-    { name = "isik", extras = ["sentry", "django", "drf", "celery", "tiptap", "templated-fields"], marker = "extra == 'all'" },
+    { name = "jinja2", marker = "extra == 'all'" },
     { name = "jinja2", marker = "extra == 'templated-fields'" },
+    { name = "mjml-python", marker = "extra == 'all'" },
+    { name = "mjml-python", marker = "extra == 'celery'" },
     { name = "mjml-python", marker = "extra == 'django'" },
+    { name = "mjml-python", marker = "extra == 'drf'" },
+    { name = "prosemirror", marker = "extra == 'all'" },
     { name = "prosemirror", marker = "extra == 'tiptap'" },
+    { name = "sentry-sdk", marker = "extra == 'all'" },
     { name = "sentry-sdk", marker = "extra == 'sentry'" },
+    { name = "whitenoise", marker = "extra == 'all'" },
+    { name = "whitenoise", marker = "extra == 'celery'" },
     { name = "whitenoise", marker = "extra == 'django'" },
+    { name = "whitenoise", marker = "extra == 'drf'" },
 ]
-provides-extras = ["sentry", "django", "drf", "celery", "tiptap", "templated-fields", "all"]
+provides-extras = ["all", "celery", "django", "drf", "sentry", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [
