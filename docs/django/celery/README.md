@@ -35,6 +35,12 @@ dispatch reads the request's context from.
   the task's keys into the request's context for good, and every later row of that request would
   claim to be the task's.
 
+- **The cause travels as `header_safe()` makes it**: through the JSON encoder pghistory stores its
+  context with (`PGHISTORY_JSON_ENCODER`, `DjangoJSONEncoder` by default), so a `UUID` user pk
+  travels as the string its row would hold anyway. AMQP refuses a `UUID`, a `Decimal` or a `datetime`
+  in a header outright - `FrameSyntaxError` on every dispatch from an authenticated request - and
+  every broker carries strings. Override `header_safe(cause)` for values that encoder doesn't know.
+
 A row a worker writes for a request then reads:
 
 ```json

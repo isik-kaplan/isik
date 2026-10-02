@@ -11,13 +11,18 @@ from django.db import models
 from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
+from isik._internal.translation import gettext_lazy
 
 
 class DefaultMakerBase(models.Model):
     """Fallback base for a generated model when no `base_model=`/`<SETTING>` applies."""
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True, help_text=gettext_lazy("When the row was created."), db_comment="When the row was created."
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True, help_text=gettext_lazy("When the row last changed."), db_comment="When the row last changed."
+    )
 
     class Meta:
         abstract = True

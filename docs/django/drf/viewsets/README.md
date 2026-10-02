@@ -2,11 +2,12 @@
 
 Viewset mixins composed together in `base.py`'s `BaseModelViewSet` - registry, per-action serializer selection, filtering/ordering wiring, and protected-delete handling.
 
-- [base.md](base.md) - `BaseModelViewSet`, everything below composed onto `ModelViewSet`
+- [base.md](base.md) - `BaseViewSet` (the model-free half) and `BaseModelViewSet` (it plus everything about a model)
+- [request_policies.md](request_policies.md) - `RequestPolicy`/`RequestPoliciesMixin`, request-level rules on any view
 - [registry.md](registry.md) - `ViewSetRegistryMixin`, model -> viewset lookup
 - [action_serializer_class.md](action_serializer_class.md) - `serializer_class_action_map` per action
 - [filterset.md](filterset.md) - builds `filterset_class` from `filterset_fields`/`declared_filters`
-- [guarded_fields.md](guarded_fields.md) - `GuardedFieldsMixin`, runs `guarding(..., fields=/setting=...)` permissions after validation, on every write path, with `@writes_no_guarded_fields` as the opt-out
+- [guarded_fields.md](guarded_fields.md) - `GuardedFieldsMixin`, runs `guarding(..., fields=/setting=...)` permissions after validation, on every write path, with `@writes_no_guarded_fields("<why>")` as the opt-out
 - [history.md](history.md) - `HistoryMixin`, a paginated/filterable `history/` action for a `@track_events()`-tracked model
 - [ordering.md](ordering.md) - auto `-field` reverse ordering counterparts, and `declared_ordering` for `?ordering=` values that resolve to a different field/expression
 - [protected_destroy.md](protected_destroy.md) - `ProtectedError` -> clean 400 instead of 500

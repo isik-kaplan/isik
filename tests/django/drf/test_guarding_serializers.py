@@ -28,7 +28,7 @@ REFUSED, ALLOWED = status.HTTP_400_BAD_REQUEST, "allowed"
 class MatrixSerializer(BaseModelSerializer):
     """The full stack - create-only, write-only, flattened one-to-one, conditional fields."""
 
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
     class Meta:
         model = Widget
@@ -395,7 +395,8 @@ class TestSharedSerializers:
         with pytest.raises(
             ImproperlyConfigured,
             match=r"^TenantWidgets guards \['count'\] on Shared, but PlatformWidgets uses the same serializer "
-            r"without guarding them - guard them there too, or list them in PlatformWidgets\.unguarded_fields",
+            r"without guarding them - guard them there too, or name them in PlatformWidgets\.unguarded_fields with the "
+            r"reason they're open there\.$",
         ):
             self.define("PlatformWidgets", Shared)
 
@@ -416,13 +417,13 @@ class TestSharedSerializers:
             pass
 
         self.define("StrictWidgets", SharedOnPurpose, "count")
-        self.define("StaffWidgets", SharedOnPurpose, unguarded_fields=["count"])
+        self.define("StaffWidgets", SharedOnPurpose, unguarded_fields={"count": "staff may set the count freely"})
 
         # and in the other order
         class SharedOnPurposeToo(MatrixSerializer):
             pass
 
-        self.define("StaffFirst", SharedOnPurposeToo, unguarded_fields=["count"])
+        self.define("StaffFirst", SharedOnPurposeToo, unguarded_fields={"count": "staff may set the count freely"})
         self.define("StrictSecond", SharedOnPurposeToo, "count")
 
     def test_agreeing_viewsets_are_fine(self):

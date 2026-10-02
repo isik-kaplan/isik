@@ -47,7 +47,7 @@ class TestViewSetRegistryMixin:
     def test_exempt_from_registry_keeps_a_viewset_out_of_the_map(self):
         class ExemptTagViewSet(ViewSetRegistryMixin, ModelViewSet):
             model = DummyTagModel
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         assert ViewSetRegistryMixin.get_for_model(DummyTagModel) is None
 

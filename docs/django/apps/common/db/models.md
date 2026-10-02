@@ -1,6 +1,28 @@
 # models
 
-`BaseModel` is the abstract base most models in this codebase inherit from: a UUID primary key,
+`BaseModel` is four abstract models composed together, each usable alone:
+
+| Model | Adds |
+|---|---|
+| `UUIDPrimaryKeyModel` | a random `uuid4` primary key |
+| `DatabaseTimestampsModel` | `created_at`/`updated_at` kept by the database (needs `pgtrigger`) |
+| `FullCleanOnSaveModel` | `full_clean()` and `django-lifecycle` hooks on every `save()`, skippable validators, `update()`, `skip_full_clean()` |
+| `ReprModel` | `STR`/`REPR` format strings for `str()`/`repr()` |
+
+```python
+from isik.django.apps.common.db import DatabaseTimestampsModel, FullCleanOnSaveModel
+
+class Event(DatabaseTimestampsModel):          # Django's own integer pk, no validation on save
+    ...
+
+class Setting(FullCleanOnSaveModel):           # validated on save, nothing else
+    ...
+```
+
+Every field isik declares carries a `help_text` (translatable) and a `db_comment` (plain English, so
+the migration doesn't depend on the language it was generated in).
+
+`BaseModel` itself, the abstract base most models in this codebase inherit from: a UUID primary key,
 `created_at`/`updated_at` timestamps, `django-lifecycle` hooks (BEFORE/AFTER CREATE/UPDATE/SAVE)
 wired into `save()`, and field validators wrapped via `SkippableValidatorsMixin` so they can be
 selectively bypassed. `full_clean()` runs on every `save()` unless bypassed.
@@ -9,7 +31,7 @@ selectively bypassed. `full_clean()` runs on every `save()` unless bypassed.
 `db_default=Now()` plus a trigger refusing any UPDATE that changes it, and `updated_at` is stamped
 by a `BEFORE UPDATE` trigger on every UPDATE, including `QuerySet.update()`/`bulk_update()`/raw
 SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever covered. Requires
-`pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `BaseModel` raises
+`pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `DatabaseTimestampsModel` raises
 `ImproperlyConfigured` at import time if it's missing.
 
 Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
@@ -36,12 +58,12 @@ with widget.skip_full_clean():
   validators (not the whole `full_clean()`), use `SkipFieldValidators`/`SkipNamedValidators` from
   `skippable_validators` instead.
 - `FIELDS = ["id", "created_at", "updated_at"]` is a class attribute `BaseAdmin` reads to
-  auto-append readonly/list-display fields.
-- `__str__` falls back to `REPR` (`"{self.__class__.__name__}(id={self.id})"`) unless the
+  auto-append readonly/list-display fields. `as_queryset()` is the row as a one-row queryset.
+- `__str__` falls back to `REPR` (`"{self.__class__.__name__}(id={self.pk})"`) unless the
   subclass sets `STR` to its own format string.
 - Don't put a `classproperty` with a query-building body on a subclass - use a plain `classmethod`
   instead. `django_lifecycle`'s `LifecycleModelMixin` scans class attributes on every
   instantiation to find hook methods, which evaluates a `classproperty` eagerly as a side effect;
   if that property builds a queryset by instantiating the same model, this recurses infinitely.
-  This is a `django_lifecycle` behavior, not something `BaseModel` can fix - just a trap worth
+  This is a `django_lifecycle` behavior, not something `FullCleanOnSaveModel` can fix - just a trap worth
   knowing about.

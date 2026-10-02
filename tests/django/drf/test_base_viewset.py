@@ -28,7 +28,7 @@ class WidgetViewSet(BaseModelViewSet):
 class WidgetViewSetWithDeclaredOrdering(BaseModelViewSet):
     model = Widget
     endpoint = "declared-ordering-widgets"
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
     serializer_class = WidgetSerializer
     declared_ordering = {"popularity": "count"}
     filter_backends = [DeclaredOrderingFilter]
@@ -97,7 +97,7 @@ class TestBaseModelViewSet:
         class ScopedViewSet(WidgetViewSet):
             model = Widget
             endpoint = "scoped-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             serializer_class_action_map = {"list": ListOnlySerializer}
 
         view = ScopedViewSet()

@@ -29,7 +29,7 @@ class WidgetViewSet(HistoryMixin, BaseModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ class TestHistoryMixin:
         class ScopedViewSet(WidgetViewSet):
             model = Widget
             endpoint = "scoped-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
             def get_queryset(self):
                 return self.model.objects.none()
@@ -113,7 +113,7 @@ class TestHistoryMixin:
             model = Comment
             endpoint = "comments"
             serializer_class = CommentSerializer
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         comment = Comment.objects.create(body="hi", widget=Widget.objects.create(name="bolt", count=1))
         with pytest.raises(ImproperlyConfigured, match="has no @track_events"):
@@ -151,7 +151,7 @@ class TestHistoryMixin:
         class MiddlewareWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "mw-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             assert "actor" in MiddlewareWidgetViewSet.history_filterset_class.base_filters
@@ -160,7 +160,7 @@ class TestHistoryMixin:
         class ActorWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "actor-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             widget = Widget.objects.create(name="bolt", count=1)
@@ -178,7 +178,7 @@ class TestHistoryMixin:
         class OrgWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "org-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             extra_history_filters = {"org_id": context_filter("org_id")}
 
         base_filters = OrgWidgetViewSet.history_filterset_class.base_filters
@@ -189,7 +189,7 @@ class TestHistoryMixin:
         class RenamedActionFilterViewSet(WidgetViewSet):
             model = Widget
             endpoint = "renamed-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             extra_history_filters = {"action": CharFilter(field_name="pgh_label", lookup_expr="icontains")}
 
         filterset_field = RenamedActionFilterViewSet.history_filterset_class.base_filters["action"]
@@ -214,7 +214,7 @@ class TestHistoryMixin:
         class MinimalFilterWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "minimal-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
             @classmethod
             def default_history_filters(cls):
@@ -227,7 +227,7 @@ class TestHistoryMixin:
         class PaginatedWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "paginated-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             pagination_class = PageNumberPagination
 
         widget = Widget.objects.create(name="bolt", count=1)
@@ -255,7 +255,7 @@ class TestHistoryMixin:
         class SlugWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "slug-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             lookup_field = "name"
 
         widget = Widget.objects.create(name="bolt", count=1)
@@ -278,7 +278,7 @@ class TestHistoryMixin:
         class WithholdCountViewSet(WidgetViewSet):
             model = Widget
             endpoint = "withhold-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             history_withhold = ["count"]
 
         widget = Widget.objects.create(name="bolt", count=1)
@@ -358,7 +358,7 @@ class TestHistoryList:
             model = ContextTrackedWidget
             endpoint = "context-widgets"
             serializer_class = ContextTrackedWidgetSerializer
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
@@ -379,7 +379,7 @@ class TestHistoryList:
             model = ContextTrackedWidget
             endpoint = "annotation-ctx-widgets"
             serializer_class = ContextTrackedWidgetSerializer
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             queryset = ContextTrackedWidgetViewSet()._history_base_queryset()
@@ -396,7 +396,7 @@ class TestHistoryList:
         class OpenHistoryWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "open-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             history_list_permission_classes = [BasePermission]
 
         Widget.objects.create(name="bolt", count=1)
@@ -411,7 +411,7 @@ class TestHistoryList:
         class ViewAwareWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "view-aware-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             history_list_permission_classes = [DenyIfViewMissing]
 
         Widget.objects.create(name="bolt", count=1)
@@ -429,7 +429,7 @@ class TestHistoryList:
         class MessageWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "message-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             history_list_permission_classes = [DenyWithCustomMessage]
             # Empty, so permission_denied() below can't take its "unauthenticated" branch (which
             # raises a bare NotAuthenticated, discarding message/code) - the point of this test is
@@ -450,7 +450,7 @@ class TestHistoryList:
         class GatedWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "gated-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             permission_classes = [RequiresRealRequestPermission]
 
         widget = Widget.objects.create(name="bolt", count=1)
@@ -461,7 +461,7 @@ class TestHistoryList:
         class OverridesGetPermissionsWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "overrides-get-permissions-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
             def get_permissions(self):
                 return []  # wide open, for unrelated reasons - doesn't call super()
@@ -474,7 +474,7 @@ class TestHistoryList:
         class NarrowWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "narrow-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
             def get_queryset(self):
                 return self.model.objects.none()
@@ -491,7 +491,7 @@ class TestHistoryList:
         class ScopedListWidgetViewSet(WidgetViewSet):
             model = Widget
             endpoint = "scoped-list-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             history_list_scoped_to_queryset = True
 
             def get_queryset(self):
@@ -516,7 +516,7 @@ class ContextTrackedWidgetViewSet(HistoryMixin, BaseModelViewSet):
     model = ContextTrackedWidget
     endpoint = "ctx-filter-widgets"
     serializer_class = ContextTrackedWidgetSerializer
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
 
 class TestContextFieldFilter:

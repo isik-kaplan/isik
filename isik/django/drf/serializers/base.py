@@ -1,4 +1,4 @@
-from rest_framework.serializers import ModelSerializer
+from rest_framework.serializers import ModelSerializer, Serializer
 
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin
 from isik.django.drf.serializers.create_only import CreateOnlyFieldsMixin
@@ -10,31 +10,35 @@ from isik.django.drf.serializers.request_context import RequestContextMixin
 from isik.django.drf.serializers.write_only import WriteOnlyFieldsMixin
 
 
-class BaseModelSerializer(
-    ModelSerializerRegistryMixin,
-    FieldGuardsOnSaveMixin,
-    CreateOnlyFieldsMixin,
-    WriteOnlyFieldsMixin,
-    FlattenedOneToOneMixin,
-    MetaCombiningMixin,
-    RequestContextMixin,
-    ConditionalSerializerMixin,
-    ModelSerializer,
-):
+class BaseSerializer(MetaCombiningMixin, RequestContextMixin, ConditionalSerializerMixin, Serializer):
     """
-    Everything above composed together - see each mixin's own docstring for what it adds:
-    ModelSerializerRegistryMixin (model -> serializer lookup), FieldGuardsOnSaveMixin (the current
-    viewset's field guards run inside `save()`, before the write), CreateOnlyFieldsMixin
-    (`Meta.create_only_fields`), WriteOnlyFieldsMixin (`Meta.write_only_fields`),
-    FlattenedOneToOneMixin (`Meta.flattened_one_to_one_fields`), MetaCombiningMixin
-    (`Meta.relational_fields` merges with any `_Meta` set further up the hierarchy - empty by
-    default), RequestContextMixin (`current_request()`/`current_user()`), ConditionalSerializerMixin
-    (`?include=`/`?only=`/`?exclude=`).
-
-    Pick and compose the individual mixins directly instead, if a project doesn't want all of this.
+    Everything isik adds to a serializer that isn't about a model - for a response that isn't a row
+    (a computed summary, a credential shown once): MetaCombiningMixin (`Meta.relational_fields` merges
+    with any `_Meta` set further up the hierarchy - empty by default), RequestContextMixin
+    (`current_request()`/`current_user()`), ConditionalSerializerMixin (`?include=`/`?only=`/`?exclude=`).
     """
 
     meta_fields_to_combine = ["relational_fields"]
 
     class _Meta:
         relational_fields = {}
+
+
+class BaseModelSerializer(
+    ModelSerializerRegistryMixin,
+    FieldGuardsOnSaveMixin,
+    CreateOnlyFieldsMixin,
+    WriteOnlyFieldsMixin,
+    FlattenedOneToOneMixin,
+    BaseSerializer,
+    ModelSerializer,
+):
+    """
+    `BaseSerializer` plus everything that is about a model - see each mixin's own docstring for what
+    it adds: ModelSerializerRegistryMixin (model -> serializer lookup), FieldGuardsOnSaveMixin (the
+    current viewset's field guards run inside `save()`, before the write), CreateOnlyFieldsMixin
+    (`Meta.create_only_fields`), WriteOnlyFieldsMixin (`Meta.write_only_fields`),
+    FlattenedOneToOneMixin (`Meta.flattened_one_to_one_fields`).
+
+    Pick and compose the individual mixins directly instead, if a project doesn't want all of this.
+    """

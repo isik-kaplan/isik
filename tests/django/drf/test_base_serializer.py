@@ -5,9 +5,11 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from isik.django.drf.serializers.base import BaseModelSerializer
-from isik.django.drf.serializers.conditional_serializer import relational_serializer
+from isik.django.drf.serializers.base import BaseModelSerializer, BaseSerializer
+from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin, relational_serializer
+from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
+from isik.django.drf.serializers.request_context import RequestContextMixin
 from tests.testapp.models import Widget
 
 
@@ -31,7 +33,7 @@ class WidgetSerializerWithOwnerInclude(BaseModelSerializer):
     # Widget is already registered to WidgetSerializer above - this is an intentional second
     # serializer for it, just to exercise the composed mixin stack's ?include=/?only=/?exclude=
     # handling end-to-end.
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
     class Meta:
         model = Widget
@@ -40,7 +42,7 @@ class WidgetSerializerWithOwnerInclude(BaseModelSerializer):
 
 
 class WidgetSerializerWithWriteOnlyCount(BaseModelSerializer):
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
     class Meta:
         model = Widget
@@ -72,7 +74,7 @@ class TestBaseModelSerializer:
         with pytest.raises(ImproperlyConfigured, match="count"):
 
             class ConflictingSerializer(BaseModelSerializer):
-                exempt_from_registry = True
+                exempt_from_registry = "a test's own class, defined again on every run"
 
                 class Meta:
                     model = Widget
@@ -94,3 +96,36 @@ class TestBaseModelSerializer:
         request = Request(APIRequestFactory().get("/", {"include": "owner", "only": "name,owner", "exclude": "count"}))
         serializer = WidgetSerializerWithOwnerInclude(widget, context={"request": request})
         assert serializer.data == {"name": "bolt", "owner": {"id": owner.id, "username": "alice"}}
+
+
+class TestBaseSerializer:
+    """The model-free half - for a response that isn't a row."""
+
+    class Summary(BaseSerializer):
+        total = serializers.IntegerField()
+        label = serializers.CharField()
+
+    def test_narrows_its_fields_by_the_query_string(self):
+        request = Request(APIRequestFactory().get("/", {"only": "total"}))
+
+        assert self.Summary({"total": 3, "label": "x"}, context={"request": request}).data == {"total": 3}
+
+    def test_reaches_the_request_and_user(self):
+        request = Request(APIRequestFactory().get("/"))
+
+        serializer = self.Summary(context={"request": request})
+
+        assert (serializer.current_request(), serializer.current_user()) == (request, None)
+
+    def test_is_what_the_model_serializer_is_built_on(self):
+        assert issubclass(BaseModelSerializer, BaseSerializer)
+        assert BaseSerializer.__bases__ == (
+            MetaCombiningMixin,
+            RequestContextMixin,
+            ConditionalSerializerMixin,
+            serializers.Serializer,
+        )
+
+    def test_has_no_model_surface(self):
+        assert not issubclass(BaseSerializer, serializers.ModelSerializer)
+        assert not hasattr(BaseSerializer, "model_map")

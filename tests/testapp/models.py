@@ -10,7 +10,14 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django_lifecycle import AFTER_CREATE, AFTER_SAVE, AFTER_UPDATE, BEFORE_CREATE, BEFORE_SAVE, BEFORE_UPDATE, hook
 
-from isik.django.apps.common.db import BaseModel, ContextField, track_events
+from isik.django.apps.common.db import (
+    BaseModel,
+    ContextField,
+    DatabaseTimestampsModel,
+    FullCleanOnSaveModel,
+    ReprModel,
+    track_events,
+)
 from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
@@ -270,6 +277,26 @@ class TemplatedPost(BaseModel):
     greeting = TemplateCharField(
         max_length=200, available=default_text_context, policy=TemplatePolicy.VARIABLES_ONLY(), blank=True
     )
+
+    class Meta:
+        app_label = "testapp"
+
+
+class TimestampedNote(DatabaseTimestampsModel):
+    """Only the database-kept timestamps - Django's own integer pk, no full_clean on save, no repr."""
+
+    text = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class CleanedNote(FullCleanOnSaveModel, ReprModel):
+    """Validated on save and given a repr, with neither a UUID pk nor database timestamps."""
+
+    STR = "note of {self.count}"
+
+    count = models.IntegerField(default=0, validators=[positive_only])
 
     class Meta:
         app_label = "testapp"

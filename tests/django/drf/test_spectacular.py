@@ -75,7 +75,7 @@ class WidgetViewSet(HistoryMixin, BaseModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
 
 @pytest.fixture(autouse=True)
@@ -133,7 +133,7 @@ class TestHistoryMixinSchema:
     def test_a_plain_number_filter_is_typed_as_a_number(self):
         class NumberFilterWidgetViewSet(WidgetViewSet):
             endpoint = "number-filter-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             extra_history_filters = {"count": NumberFilter()}
 
         schema = generate_schema((NumberFilterWidgetViewSet, "number-filter-widget"))
@@ -167,7 +167,7 @@ class TestHistoryMixinSchema:
     def test_the_viewsets_own_filter_backends_do_not_leak_onto_history_routes(self):
         class FilteredWidgetViewSet(WidgetViewSet):
             endpoint = "filtered-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             filterset_fields = ["name", "count"]
 
         schema = generate_schema(
@@ -181,7 +181,7 @@ class TestHistoryMixinSchema:
     def test_the_viewsets_own_filter_backends_still_appear_on_non_history_actions(self):
         class FilteredWidgetViewSet(WidgetViewSet):
             endpoint = "filtered-widgets"
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
             filterset_fields = ["name", "count"]
 
         schema = generate_schema(
@@ -239,7 +239,7 @@ class TestConditionalSerializerMixinSchema:
             model = Widget
             endpoint = "plain-widgets"
             serializer_class = PlainWidgetSerializer
-            exempt_from_registry = True
+            exempt_from_registry = "a test's own class, defined again on every run"
 
         schema = generate_schema((PlainWidgetViewSet, "plain-widget"))
         params = schema["paths"]["/plain-widgets/"]["get"]["parameters"]

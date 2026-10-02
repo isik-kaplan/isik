@@ -1,5 +1,8 @@
+import json
+
 import pghistory
 from celery import Task
+from pghistory import config
 
 from isik.django.apps.common.db.history import open_history_context
 
@@ -25,6 +28,9 @@ class HistoryContextTask(Task):
       the same empty value. A message without the header, sent before this was deployed or by a
       producer that doesn't set it, runs as `"system"` too.
     - A caller's own `headers=` are kept, and a caller setting `history_context_header` itself wins.
+    - The cause travels as `header_safe()` makes it: written the way pghistory will store it anyway,
+      so a broker that encodes headers strictly (AMQP takes no `UUID`) carries it, and the row a
+      worker writes is the row the request would have written.
     - Run inside a request (`task_always_eager`, or the task called directly), the body runs in that
       request's context untouched: its rows are the request's.
     """
@@ -47,8 +53,18 @@ class HistoryContextTask(Task):
         """
         return {"task": self.name}
 
+    def header_safe(self, cause):
+        """
+        `cause` as plain JSON values, through the encoder pghistory stores its context with - a
+        `UUID` user pk becomes the string its row would hold anyway. AMQP refuses a `UUID`, a
+        `Decimal` or a `datetime` in a header outright, and every broker carries strings. Override
+        for values pghistory's encoder doesn't know either.
+        """
+        return json.loads(json.dumps(cause, cls=config.json_encoder()))
+
     def apply_async(self, args=None, kwargs=None, **options):
-        options["headers"] = {self.history_context_header: self.history_cause(), **(options.get("headers") or {})}
+        cause = self.header_safe(self.history_cause())
+        options["headers"] = {self.history_context_header: cause, **(options.get("headers") or {})}
         return super().apply_async(args, kwargs, **options)
 
     def __call__(self, *args, **kwargs):

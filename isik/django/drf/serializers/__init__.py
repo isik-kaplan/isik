@@ -1,4 +1,4 @@
-from isik.django.drf.serializers.base import BaseModelSerializer
+from isik.django.drf.serializers.base import BaseModelSerializer, BaseSerializer
 from isik.django.drf.serializers.conditional_serializer import (
     ConditionalSerializerMixin,
     relational_serializer,
@@ -16,6 +16,7 @@ from isik.django.drf.serializers.write_only import WriteOnlyFieldsMixin
 
 __all__ = [
     "BaseModelSerializer",
+    "BaseSerializer",
     "ConditionalSerializerMixin",
     "CreateOnlyFieldsMixin",
     "FieldGuardsOnSaveMixin",

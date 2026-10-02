@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.db import models
 
+from isik._internal.translation import gettext_lazy, lazy_format
 from isik.django.apps.common._model_makers import (
     build_model,
     claim_related_name,
@@ -45,12 +46,27 @@ class _NotesField:
         # Django never enforces (no auto-validator, no DB-level constraint); CharField gets both:
         # an automatic MaxLengthValidator (full_clean()) and a real varchar(N) column at the DB
         # level. Unbounded (body_max_length=None) still gets the original unbounded TextField.
-        body_field = models.CharField(max_length=self.body_max_length) if self.body_max_length else models.TextField()
+        described = {"help_text": gettext_lazy("The note's text."), "db_comment": "The note's text."}
+        body_field = (
+            models.CharField(max_length=self.body_max_length, **described)
+            if self.body_max_length
+            else models.TextField(**described)
+        )
         fields = {
             self.target_name: models.ForeignKey(
-                host_cls, on_delete=models.CASCADE, related_name=self.target_related_name
+                host_cls,
+                on_delete=models.CASCADE,
+                related_name=self.target_related_name,
+                help_text=lazy_format("The %(target)s this note is on.", target=host_cls.__name__),
+                db_comment=f"The {host_cls.__name__} this note is on.",
             ),
-            "user": models.ForeignKey(self.user_model, on_delete=models.CASCADE, related_name=self.user_related_name),
+            "user": models.ForeignKey(
+                self.user_model,
+                on_delete=models.CASCADE,
+                related_name=self.user_related_name,
+                help_text=gettext_lazy("Who wrote this note."),
+                db_comment="Who wrote this note.",
+            ),
             "body": body_field,
             **self.extra_fields,
         }

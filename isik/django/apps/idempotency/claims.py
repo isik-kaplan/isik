@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.utils.encoders import JSONEncoder
 
 from isik._internal.translation import gettext as _
+from isik._internal.translation import gettext_lazy
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyInFlight, IdempotentReplayGone
 
 
@@ -43,11 +44,37 @@ class AbstractBaseIdempotencyClaim(models.Model):
     `AbstractIdempotencyClaim` and `AbstractIdempotencyClaimWithBody` are the two shipped ways.
     """
 
-    claimed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
-    key = models.UUIDField()
-    fingerprint = models.CharField(max_length=64)
-    status = models.PositiveSmallIntegerField(null=True)
-    claimed_at = models.DateTimeField(default=timezone.now)
+    id = models.BigAutoField(
+        primary_key=True,
+        help_text=gettext_lazy("The claim's own identifier."),
+        db_comment="The claim's own identifier.",
+    )
+    claimed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=gettext_lazy("Who spent the key - a key is only ever compared with its caller's own."),
+        db_comment="Who spent the key - a key is only ever compared with its caller's own.",
+    )
+    key = models.UUIDField(
+        help_text=gettext_lazy("The Idempotency-Key the caller sent."),
+        db_comment="The Idempotency-Key the caller sent.",
+    )
+    fingerprint = models.CharField(
+        max_length=64,
+        help_text=gettext_lazy("sha256 of the request the key was spent on - its method, path, query and body."),
+        db_comment="sha256 of the request the key was spent on - its method, path, query and body.",
+    )
+    status = models.PositiveSmallIntegerField(
+        null=True,
+        help_text=gettext_lazy("The status the request was answered with."),
+        db_comment="The status the request was answered with. Null only while its request is being served.",
+    )
+    claimed_at = models.DateTimeField(
+        default=timezone.now,
+        help_text=gettext_lazy("When the key was spent."),
+        db_comment="When the key was spent. Nothing expires by it - it is there to delete old claims by.",
+    )
 
     class Meta:
         abstract = True
@@ -105,7 +132,12 @@ class AbstractIdempotencyClaim(AbstractBaseIdempotencyClaim):
     `ImproperlyConfigured` - inside the request's transaction, so the work it did rolls back.
     """
 
-    object_id = models.CharField(max_length=255, null=True)
+    object_id = models.CharField(
+        max_length=255,
+        null=True,
+        help_text=gettext_lazy("The primary key of the row the response serialized, to serialize it again."),
+        db_comment="The primary key of the row the response serialized - null for a response without a body.",
+    )
 
     class Meta(AbstractBaseIdempotencyClaim.Meta):
         abstract = True
@@ -152,7 +184,11 @@ class AbstractIdempotencyClaimWithBody(AbstractBaseIdempotencyClaim):
     so encrypting the body at rest is a codec that encrypts what `JSONBodyCodec` writes.
     """
 
-    body = models.TextField(null=True)
+    body = models.TextField(
+        null=True,
+        help_text=gettext_lazy("The response body, as its codec wrote it."),
+        db_comment="The response body, as its codec wrote it - null for an action that can't be replayed.",
+    )
 
     body_codec = None
 

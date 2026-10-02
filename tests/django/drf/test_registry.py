@@ -30,7 +30,7 @@ class WidgetSerializer(ModelSerializerRegistryMixin):
 
 
 class ExemptTagSerializer(ModelSerializerRegistryMixin):
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
     class Meta:
         model = DummyTagModel

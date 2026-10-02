@@ -5,6 +5,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models import Q
 
+from isik._internal.translation import lazy_format
+
 
 class AutoGenericForeignKey(GenericForeignKey):
     """
@@ -86,11 +88,17 @@ class AutoGenericForeignKey(GenericForeignKey):
             related_name=f"{cls.__name__.lower()}_{name}+",
             on_delete=self.on_delete,
             limit_choices_to=self.limit_gfk_models_to,
+            help_text=lazy_format("The type of the %(name)s object.", name=name),
+            db_comment=f"The type of the {name} object.",
         )
         content_type_field.contribute_to_class(cls, self.ct_field_name)
 
         id_field_type = self.object_id_field_class or models.UUIDField
-        id_field_type(**self.object_id_field_kwargs).contribute_to_class(cls, self.fk_field_name)
+        described = {
+            "help_text": lazy_format("The primary key of the %(name)s object.", name=name),
+            "db_comment": f"The primary key of the {name} object.",
+        }
+        id_field_type(**{**described, **self.object_id_field_kwargs}).contribute_to_class(cls, self.fk_field_name)
 
         self.ct_field = self.ct_field_name
         self.fk_field = self.fk_field_name

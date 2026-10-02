@@ -1,6 +1,12 @@
+import datetime
+import decimal
+import uuid
+
+import amqp
 import pghistory
 import pytest
 from celery import Celery, Task
+from django.core.serializers.json import DjangoJSONEncoder
 from django.test import RequestFactory
 
 from isik.django.apps.common.db.history import open_history_context
@@ -176,3 +182,74 @@ def test_a_task_run_inside_some_other_context_opens_its_own_keys_in_it():
         peek()
 
     assert opened.metadata == {"command": "import", "caused_by": "system", "task": "widgets.peek"}
+
+
+class Recorder(HistoryContextTask):
+    def history_cause(self):
+        return {"user": uuid.UUID(int=7), "amount": decimal.Decimal("1.50"), "at": FROZEN, "caused_by": "request"}
+
+
+@app.task(base=Recorder, name="widgets.record")
+def record():
+    return None
+
+
+FROZEN = datetime.datetime(2026, 10, 3, 12, 30, tzinfo=datetime.UTC)
+
+
+def test_the_cause_travels_as_pghistory_would_store_it(sent):
+    record.delay()
+
+    assert sent[0]["headers"]["isik_history_context"] == {
+        "user": "00000000-0000-0000-0000-000000000007",
+        "amount": "1.50",
+        "at": "2026-10-03T12:30:00Z",
+        "caused_by": "request",
+    }
+
+
+def test_the_cause_fits_in_a_real_amqp_frame(sent):
+    # What hid this: eager tasks and stubbed sends never encode a frame, and AMQP's table encoder is
+    # the one that refuses a UUID. This is the encoder a real broker connection runs headers through.
+    record.delay()
+
+    frame = amqp.serialization.dumps("F", [sent[0]["headers"]])
+    (decoded,), _ = amqp.serialization.loads("F", frame, 0)
+
+    assert decoded == sent[0]["headers"]
+
+
+def test_a_raw_uuid_is_what_amqp_refuses():
+    with pytest.raises(amqp.exceptions.FrameSyntaxError):
+        amqp.serialization.dumps("F", [{"isik_history_context": {"user": uuid.UUID(int=7)}}])
+
+
+def test_the_encoding_follows_pghistorys_own_setting(sent, settings):
+    settings.PGHISTORY_JSON_ENCODER = "tests.django.celery.test_tasks.ShoutingEncoder"
+
+    record.delay()
+
+    assert sent[0]["headers"]["isik_history_context"]["user"] == "UUID:00000000-0000-0000-0000-000000000007"
+
+
+class OnlyTheCauseTravels(Recorder):
+    def header_safe(self, cause):
+        return {"caused_by": cause["caused_by"]}
+
+
+@app.task(base=OnlyTheCauseTravels, name="widgets.record_plainly")
+def record_plainly():
+    return None
+
+
+def test_a_task_can_say_how_its_values_travel(sent):
+    record_plainly.delay()
+
+    assert sent[0]["headers"] == {"isik_history_context": {"caused_by": "request"}}
+
+
+class ShoutingEncoder(DjangoJSONEncoder):
+    def default(self, o):
+        if isinstance(o, uuid.UUID):
+            return f"UUID:{o}"
+        return super().default(o)

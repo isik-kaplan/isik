@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-03
+
+### Added
+
+- `RequestPolicy` + `RequestPoliciesMixin` (`isik.django.drf.viewsets`) - a rule about the request
+  ("this organization is set up", "this account has its second factor") on any DRF view, not only one
+  with a model surface. `request_policies = [...]` runs after the view's own permissions in
+  `check_permissions()`, so a `get_permissions()` override can't drop one. A policy says
+  `allows(request, view)`, its `message`/`code`, and can add to its refusal's response (`refused()`,
+  for a header DRF can't render). Exemptions are `{action: reason}` under the policy's own attribute
+  (`<policy_name>_exempt_actions`, or `exemptions_attribute`).
+- `BaseViewSet` - the model-free half of `BaseModelViewSet`: `RequestPoliciesMixin`,
+  `ActionSerializerClassMixin` and `GuardedFieldsMixin` on `GenericViewSet`, for a viewset over
+  something that isn't one of your models. `BaseModelViewSet` is now built on it.
+- `BaseSerializer` - the model-free half of `BaseModelSerializer` (`MetaCombiningMixin`,
+  `RequestContextMixin`, `ConditionalSerializerMixin` on `Serializer`). `BaseModelSerializer` is now
+  built on it.
+- `UUIDPrimaryKeyModel`, `DatabaseTimestampsModel`, `FullCleanOnSaveModel`, `ReprModel`
+  (`isik.django.apps.common.db`) - `BaseModel`'s four parts, each usable alone. `BaseModel` is now
+  composed from them, with the same fields and behaviour.
+- `isik.django.drf.coverage`: `routed_actions()` walks a urlconf's DRF views, and
+  `request_policy_coverage(policy)` reports each routed action as covered, exempt (with its reason)
+  or uncovered - what a project's own check or test fails the build on.
+  `idempotency_coverage()` (`isik.django.apps.idempotency.coverage`) does the same for idempotency
+  keys.
+- `DeclaredStr`, `text()`, `attribute()` (`isik.common.utils.declared_str`) - a `str` sentinel whose
+  value, validation (lengths, a pattern) and carried attributes are declared on the class. The first
+  `text()` is the positional argument; `displays_as=""` makes it empty to Django while it carries its
+  reason. Survives `copy`/`pickle`, and `deconstruct()`s for migrations as itself. isik itself
+  doesn't use it - it's for a project's own `Exemption`/`NoComment`/`NoHelpText`.
+- Every model field isik declares or generates has a `help_text` (translatable) and a `db_comment`.
+
+### Changed
+
+- **Breaking: an opt-out isik can't check says why.** A reason is any non-blank string; a bare
+  `True`, a list of names or a bare decorator raises `ImproperlyConfigured`.
+  - `exempt_from_registry = "<why>"` on viewsets and serializers.
+  - `unguarded_fields = {field: reason}` and `actions_writing_no_guarded_fields = {action: reason}`.
+  - `@writes_no_guarded_fields("<why>")`.
+- **Breaking: migrations regenerated.** The idempotency apps' `0001_initial` now carries every
+  column's comment - regenerated in place rather than followed by a `0002`, so a project that
+  migrated 0.12.0 gets no comments until it recreates those tables. Models built by isik's makers
+  (`votes()`, `notes()`, `comments()`, `bookmarks()`, `tags()`) and `AutoGenericForeignKey`'s columns
+  now carry `help_text`/`db_comment`, so `makemigrations` will want an `AlterField` for each.
+- `BaseModelViewSet`'s mixin order: the model-free ones now come after the model-bound ones, as
+  `BaseViewSet`.
+
+### Fixed
+
+- `HistoryContextTask` put the cause's raw values in the message headers, and a `UUID` user pk -
+  pghistory's own value on any project with UUID primary keys - can't be encoded by AMQP:
+  `FrameSyntaxError` on every task dispatched from an authenticated request, with the default
+  settings, on RabbitMQ. The cause now travels through `header_safe()`: the JSON encoder pghistory
+  stores its context with, so a value becomes what its row would hold anyway. Override
+  `header_safe()` for values that encoder doesn't know.
+
 ## [0.12.0] - 2026-10-02
 
 ### Added

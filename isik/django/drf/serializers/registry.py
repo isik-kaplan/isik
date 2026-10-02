@@ -1,5 +1,6 @@
 from django.core.exceptions import ImproperlyConfigured
 
+from isik._internal.reasons import require_reason
 from isik._internal.translation import gettext as _
 
 
@@ -17,8 +18,9 @@ class ModelSerializerRegistryMixin:
 
     Registering two serializers for the same model is almost always a mistake, so it fails fast
     instead of silently letting the second one win (matches ViewSetRegistryMixin). Set
-    `exempt_from_registry = True` on a subclass that shouldn't be registered at all - e.g. a
-    schema-only serializer, or an intentional second serializer for a model already registered.
+    `exempt_from_registry = "<why>"` on a subclass that shouldn't be registered at all - e.g. a
+    schema-only serializer, or an intentional second serializer for a model already registered. A
+    reason, not `True`: the exemption is the one case the registry can't check, so it says why.
 
     The same class body redefining itself under the same name/module (e.g. a test's inline
     serializer re-executing because the test itself ran twice in one process, or a dev-server
@@ -37,6 +39,7 @@ class ModelSerializerRegistryMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        require_reason(cls.__name__, "exempt_from_registry", cls.exempt_from_registry)
         if cls.__dict__.get("is_base_class", False):  # pragma: no mutate
             # Must happen before the `model is None` guard below - a class marking itself as a
             # new base is almost always still abstract with no `Meta.model` of its own, which is

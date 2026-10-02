@@ -17,9 +17,34 @@ msgstr ""
 msgid "%(caller)s requires exactly one of property_ or attribute"
 msgstr ""
 
+#: isik/common/utils/declared_str.py:149
+#, python-format
+msgid "%(cls)s declares no %(names)s."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:134
+#, python-format
+msgid "%(cls)s declares no text() and no displays_as=, so it has nothing to be."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:145
+#, python-format
+msgid "%(cls)s got %(name)s twice."
+msgstr ""
+
 #: isik/common/utils/required_attributes.py:51
 #, python-format
 msgid "%(cls)s must define a `%(name)s` attribute"
+msgstr ""
+
+#: isik/common/utils/declared_str.py:157
+#, python-format
+msgid "%(cls)s needs a %(name)s."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:140
+#, python-format
+msgid "%(cls)s takes %(count)d positional argument(s), not %(given)d."
 msgstr ""
 
 #: isik/django/apps/templated_fields/drf.py:101
@@ -37,7 +62,7 @@ msgstr ""
 msgid "%(guard)s can't be combined with &, | or ~ - compose the predicate inside guarding() instead."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:289
+#: isik/django/drf/viewsets/guarded_fields.py:307
 #, python-format
 msgid "%(guard)s guards %(field)r, which no serializer of %(viewset)s has a field named."
 msgstr ""
@@ -52,7 +77,7 @@ msgstr ""
 msgid "%(middleware)s requires settings.SESSION_HEADER_NAME to be set."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:127
+#: isik/django/apps/common/_model_makers.py:132
 #, python-format
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
@@ -67,13 +92,13 @@ msgstr ""
 msgid "%(model)s has tracked field(s) named %(fields)s, which collide with generic_history_serializer()'s own field names - rename the model field or exclude it from tracking (track_events(exclude=[...]))."
 msgstr ""
 
-#: isik/django/drf/serializers/registry.py:54
-#: isik/django/drf/viewsets/registry.py:57
+#: isik/django/drf/serializers/registry.py:57
+#: isik/django/drf/viewsets/registry.py:61
 #, python-format
 msgid "%(model)s is already registered to %(existing)s"
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:122
+#: isik/django/apps/common/_model_makers.py:127
 #, python-format
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
@@ -98,6 +123,46 @@ msgstr ""
 msgid "%(node)s requires TemplateFeature.%(feature)s, not enabled for this field"
 msgstr ""
 
+#: isik/common/utils/declared_str.py:68
+#, python-format
+msgid "%(owner)s needs a %(name)s of at least %(length)d characters, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:73
+#, python-format
+msgid "%(owner)s needs a %(name)s of at most %(length)d characters, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:94
+#, python-format
+msgid "%(owner)s's %(name)s must be a %(type)s, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:60
+#, python-format
+msgid "%(owner)s's %(name)s must be text, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/declared_str.py:78
+#, python-format
+msgid "%(owner)s's %(name)s must match %(pattern)s, and %(value)r doesn't."
+msgstr ""
+
+#: isik/_internal/reasons.py:38
+#, python-format
+msgid "%(owner)s.%(attribute)s needs a reason for %(name)s, not %(reason)r."
+msgstr ""
+
+#: isik/_internal/reasons.py:23
+#, python-format
+msgid "%(owner)s.%(attribute)s needs a reason rather than %(value)r - say why, as a string."
+msgstr ""
+
+#: isik/_internal/reasons.py:32
+#, python-format
+msgid "%(owner)s.%(attribute)s takes {name: reason}, not %(value)r."
+msgstr ""
+
 #: isik/django/drf/serializers/write_only.py:33
 #, python-format
 msgid "%(serializer)s: %(fields)s can't be in both write_only_fields and create_only_fields."
@@ -118,9 +183,9 @@ msgstr ""
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:158
+#: isik/django/drf/viewsets/guarded_fields.py:176
 #, python-format
-msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or list them in %(lenient)s.unguarded_fields if that's intended."
+msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or name them in %(lenient)s.unguarded_fields with the reason they're open there."
 msgstr ""
 
 #: isik/django/drf/permissions.py:71
@@ -138,22 +203,17 @@ msgstr ""
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:129
+#: isik/django/apps/idempotency/drf.py:125
 #, python-format
 msgid "%(view)s honours idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/apps/idempotency/claims.py:85
+#: isik/django/apps/idempotency/claims.py:112
 #, python-format
 msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:80
-#, python-format
-msgid "%(view)s.%(attribute)s needs a reason for %(action)s, not %(reason)r."
-msgstr ""
-
-#: isik/django/drf/viewsets/guarded_fields.py:126
+#: isik/django/drf/viewsets/guarded_fields.py:144
 #, python-format
 msgid "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own permission_classes entry, with any composition inside guarding()."
 msgstr ""
@@ -173,14 +233,22 @@ msgstr ""
 msgid "%(viewset)s sets ordering_fields but OrderingFilter (or a subclass) is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:221
+#: isik/django/drf/viewsets/guarded_fields.py:239
 #, python-format
-msgid "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields if it writes no guarded field."
+msgid "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields(\"<why>\") if it writes no guarded field."
 msgstr ""
 
 #: isik/common/config/builder.py:52
 #, python-format
 msgid "'%(key)s' is not a key in this config."
+msgstr ""
+
+#: isik/django/apps/feedback/votes/_votes.py:60
+msgid "1 for an upvote, -1 for a downvote."
+msgstr ""
+
+#: isik/django/apps/common/db/models.py:52
+msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
 #: isik/django/apps/idempotency/exceptions.py:28
@@ -212,10 +280,6 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "Bad request syntax or unsupported method"
-msgstr ""
-
-#: isik/django/apps/common/db/models.py:31
-msgid "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
 #: isik/django/apps/idempotency/fingerprint.py:17
@@ -276,8 +340,12 @@ msgstr ""
 msgid "Could not determine a unique serializer for the given data."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:61
+#: isik/django/apps/common/db/models.py:72
 msgid "Created At"
+msgstr ""
+
+#: isik/django/apps/common/db/models.py:31
+msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
 #: http.HTTPStatus
@@ -318,7 +386,7 @@ msgstr ""
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:58
+#: isik/django/apps/common/db/models.py:51
 msgid "ID"
 msgstr ""
 
@@ -330,7 +398,7 @@ msgstr ""
 msgid "Idempotency claims with bodies"
 msgstr ""
 
-#: isik/django/apps/idempotency/claims.py:183
+#: isik/django/apps/idempotency/claims.py:219
 #, python-format
 msgid "Install exactly one of %(apps)s, or set IDEMPOTENCY_CLAIM_MODEL to the claim model to use."
 msgstr ""
@@ -352,7 +420,7 @@ msgstr ""
 msgid "Meta"
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:105
+#: isik/django/apps/idempotency/drf.py:101
 msgid "Must be a UUID."
 msgstr ""
 
@@ -517,8 +585,53 @@ msgstr ""
 msgid "Switching to new protocol; obey Upgrade header"
 msgstr ""
 
+#: isik/django/apps/tags/tags.py:153
+msgid "Tags from this pool."
+msgstr ""
+
+#: isik/django/apps/feedback/bookmarks/_bookmarks.py:48
+#, python-format
+msgid "The %(target)s bookmarked."
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:128
+#, python-format
+msgid "The %(target)s tagged."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:88
+#, python-format
+msgid "The %(target)s this comment is on."
+msgstr ""
+
+#: isik/django/apps/feedback/notes/_notes.py:60
+#, python-format
+msgid "The %(target)s this note is on."
+msgstr ""
+
+#: isik/django/apps/feedback/votes/_votes.py:48
+#, python-format
+msgid "The %(target)s this vote is on."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:60
+msgid "The Idempotency-Key the caller sent."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:49
+msgid "The claim's own identifier."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "The client needs to authenticate to gain network access"
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:73
+msgid "The comment's text."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:64
+msgid "The comment, as a Tiptap document."
 msgstr ""
 
 #: http.HTTPStatus
@@ -530,12 +643,29 @@ msgstr ""
 msgid "The module you are trying to use requires '%(extra)s'. Please install it with: pip install isik[%(extra)s]"
 msgstr ""
 
+#: isik/django/apps/feedback/notes/_notes.py:49
+msgid "The note's text."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "The origin server requires the request to be conditional"
 msgstr ""
 
+#: isik/django/apps/common/fields/gfk.py:98
+#, python-format
+msgid "The primary key of the %(name)s object."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:138
+msgid "The primary key of the row the response serialized, to serialize it again."
+msgstr ""
+
 #: isik/django/apps/idempotency/exceptions.py:36
 msgid "The request with this idempotency key succeeded, but what it returned is gone."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:189
+msgid "The response body, as its codec wrote it."
 msgstr ""
 
 #: http.HTTPStatus
@@ -550,11 +680,28 @@ msgstr ""
 msgid "The server is unwilling to process the request because its header fields are too large"
 msgstr ""
 
+#: isik/django/apps/idempotency/claims.py:70
+msgid "The status the request was answered with."
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:121
+msgid "The tag applied."
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:103
+msgid "The tag's name, unique in its pool."
+msgstr ""
+
+#: isik/django/apps/common/fields/gfk.py:91
+#, python-format
+msgid "The type of the %(name)s object."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:100
+#: isik/django/apps/idempotency/drf.py:96
 msgid "This header is required."
 msgstr ""
 
@@ -564,6 +711,10 @@ msgstr ""
 
 #: isik/django/apps/idempotency/exceptions.py:20
 msgid "This idempotency key was already used, and its response can't be sent again."
+msgstr ""
+
+#: isik/django/drf/viewsets/request_policies.py:31
+msgid "This request isn't allowed."
 msgstr ""
 
 #: isik/django/apps/feedback/comments/tiptap.py:60
@@ -590,7 +741,7 @@ msgstr ""
 msgid "URI not available in preferred format"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:68
+#: isik/django/apps/common/db/models.py:84
 msgid "Updated At"
 msgstr ""
 
@@ -611,6 +762,46 @@ msgstr ""
 #: isik/common/config/builder.py:194
 #, python-format
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:75
+msgid "When the key was spent."
+msgstr ""
+
+#: isik/django/apps/common/db/models.py:85
+msgid "When the row last changed, by the database's clock."
+msgstr ""
+
+#: isik/django/apps/common/_model_makers.py:24
+msgid "When the row last changed."
+msgstr ""
+
+#: isik/django/apps/common/db/models.py:73
+msgid "When the row was created, by the database's clock. Never changes."
+msgstr ""
+
+#: isik/django/apps/common/_model_makers.py:21
+msgid "When the row was created."
+msgstr ""
+
+#: isik/django/apps/feedback/bookmarks/_bookmarks.py:55
+msgid "Who bookmarked it."
+msgstr ""
+
+#: isik/django/apps/feedback/votes/_votes.py:55
+msgid "Who cast this vote."
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:56
+msgid "Who spent the key - a key is only ever compared with its caller's own."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:95
+msgid "Who wrote this comment."
+msgstr ""
+
+#: isik/django/apps/feedback/notes/_notes.py:67
+msgid "Who wrote this note."
 msgstr ""
 
 #: isik/django/drf/permissions.py:660
@@ -635,7 +826,7 @@ msgstr ""
 msgid "You need the %(permission)s permission to do this."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:38
+#: isik/django/apps/common/_model_makers.py:43
 #, python-format
 msgid "base_model must be an abstract Model subclass, got %(base)r"
 msgstr ""
@@ -722,7 +913,7 @@ msgstr ""
 msgid "ref(dot=%(dot)r) is not a valid dotted path."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:62
+#: isik/django/apps/common/_model_makers.py:67
 #, python-format
 msgid "related_name=%(related_name)r on %(key)s is already claimed by %(existing)s - pick a different name for %(owner)s."
 msgstr ""
@@ -730,6 +921,10 @@ msgstr ""
 #: isik/django/apps/templated_fields/engine.py:128
 #, python-format
 msgid "rendered output exceeded the %(limit)s char limit"
+msgstr ""
+
+#: isik/django/apps/idempotency/claims.py:65
+msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
 
 #: isik/django/apps/templated_fields/engine.py:96
@@ -745,4 +940,9 @@ msgstr ""
 #: isik/common/utils/validation.py:79
 #, python-format
 msgid "validate_inputs() was given validators for parameters %(func)r doesn't have: %(unknown)s."
+msgstr ""
+
+#: isik/django/drf/viewsets/guarded_fields.py:61
+#, python-format
+msgid "writes_no_guarded_fields takes the reason the action writes no guarded field - @writes_no_guarded_fields(\"...\"), not %(value)r."
 msgstr ""

@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import router, transaction
 from rest_framework.exceptions import NotAuthenticated, ValidationError
 
+from isik._internal.reasons import require_reasons
 from isik._internal.translation import gettext as _
 from isik.django.apps.idempotency.claims import claim_idempotency_key, get_claim_model
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyNotReplayable, IdempotencyKeyReused
@@ -74,12 +75,7 @@ class IdempotencyMixin:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         for attribute in ("idempotency_exempt_actions", "idempotency_no_replay_actions"):
-            for action, reason in getattr(cls, attribute).items():
-                if not isinstance(reason, str) or not reason.strip():
-                    raise ImproperlyConfigured(
-                        _("%(view)s.%(attribute)s needs a reason for %(action)s, not %(reason)r.")
-                        % {"view": cls.__name__, "attribute": attribute, "action": action, "reason": reason}
-                    )
+            require_reasons(cls.__name__, attribute, getattr(cls, attribute))
 
     @property
     def idempotency_action(self):

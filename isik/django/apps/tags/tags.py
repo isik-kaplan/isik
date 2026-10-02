@@ -3,6 +3,7 @@
 from django.core.validators import RegexValidator
 from django.db import IntegrityError, models, transaction
 
+from isik._internal.translation import gettext_lazy, lazy_format
 from isik.django.apps.common._model_makers import (
     build_model,
     claim_related_name,
@@ -95,7 +96,13 @@ class _TagsField:
         claim_related_name(host_cls, self.target_related_name, through_model_name)
 
         tag_fields = {
-            "name": models.CharField(max_length=self.name_max_length, unique=True, validators=self.name_validators),
+            "name": models.CharField(
+                max_length=self.name_max_length,
+                unique=True,
+                validators=self.name_validators,
+                help_text=gettext_lazy("The tag's name, unique in its pool."),
+                db_comment="The tag's name, unique in its pool.",
+            ),
             "objects": TagManager(),
             **self.tag_extra_fields,
         }
@@ -108,9 +115,18 @@ class _TagsField:
         )
 
         through_fields = {
-            "tag": models.ForeignKey(tag_model, on_delete=models.CASCADE),
+            "tag": models.ForeignKey(
+                tag_model,
+                on_delete=models.CASCADE,
+                help_text=gettext_lazy("The tag applied."),
+                db_comment="The tag applied.",
+            ),
             self.target_name: models.ForeignKey(
-                host_cls, on_delete=models.CASCADE, related_name=self.target_related_name
+                host_cls,
+                on_delete=models.CASCADE,
+                related_name=self.target_related_name,
+                help_text=lazy_format("The %(target)s tagged.", target=host_cls.__name__),
+                db_comment=f"The {host_cls.__name__} tagged.",
             ),
             **self.through_extra_fields,
         }
@@ -128,7 +144,14 @@ class _TagsField:
             },
         )
 
-        m2m_field = models.ManyToManyField(tag_model, through=through_model, related_name=self.related_name, blank=True)
+        # No db_comment: a many-to-many has no column of its own - its through model's columns say it.
+        m2m_field = models.ManyToManyField(
+            tag_model,
+            through=through_model,
+            related_name=self.related_name,
+            blank=True,
+            help_text=gettext_lazy("Tags from this pool."),
+        )
         m2m_field.contribute_to_class(host_cls, name)
         descriptor = getattr(host_cls, name)
         expose(host_cls, name, descriptor, generated_model=tag_model, config=self)

@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import SAFE_METHODS, OperandHolder, SingleOperandHolder
 from rest_framework.serializers import ListSerializer
 
+from isik._internal.reasons import is_reason, require_reasons
 from isik._internal.translation import gettext as _
 from isik.django.drf.permissions import Guard
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin, _active_guarded_view
@@ -40,12 +41,13 @@ def _dig(value, attrs):
     return value
 
 
-def writes_no_guarded_fields(handler):
+def writes_no_guarded_fields(reason):
     """
     Marks a viewset action as writing no guarded field - one that saves through no serializer at
-    all (a service call, an ORM update), so its viewset's field guards have nothing to check:
+    all (a service call, an ORM update), so its viewset's field guards have nothing to check - and
+    says why:
 
-        @writes_no_guarded_fields
+        @writes_no_guarded_fields("rotates the secret through the service, touching no guarded field")
         @action(detail=True, methods=["post"])
         def rotate_secret(self, request, pk=None):
             ...
@@ -54,8 +56,20 @@ def writes_no_guarded_fields(handler):
     fails - and is rolled back - rather than trusting that nothing guarded was written. Either
     decorator order works.
     """
-    handler.writes_no_guarded_fields = True
-    return handler
+    if not is_reason(reason):
+        raise ImproperlyConfigured(
+            _(
+                "writes_no_guarded_fields takes the reason the action writes no guarded field - "
+                '@writes_no_guarded_fields("..."), not %(value)r.'
+            )
+            % {"value": reason}
+        )
+
+    def mark(handler):
+        handler.writes_no_guarded_fields = reason
+        return handler
+
+    return mark
 
 
 def _changed(stored, incoming):
@@ -89,9 +103,10 @@ class GuardedFieldsMixin:
       after the fact: an unsafe request that succeeds without its guards having run raises
       `ImproperlyConfigured`, inside a transaction on every database (`field_guard_databases` narrows
       it), so its database writes roll back. Call `self.check_guarded_fields(serializer)` yourself,
-      or mark an action that writes no guarded field `@writes_no_guarded_fields`. `destroy` writes no
-      fields and is exempt (`actions_writing_no_guarded_fields`). Side effects outside the database
-      aren't rolled back - which is what the loud failure is for: a test hitting the endpoint finds it.
+      or mark an action that writes no guarded field `@writes_no_guarded_fields("<why>")`. `destroy`
+      writes no fields and is exempt (`actions_writing_no_guarded_fields`, `{action: reason}`). Side
+      effects outside the database aren't rolled back - which is what the loud failure is for: a test
+      hitting the endpoint finds it.
 
     The transaction and the after-the-fact check apply to viewsets whose `permission_classes` declare
     a field guard.
@@ -105,21 +120,24 @@ class GuardedFieldsMixin:
 
         class PlatformInvitationViewSet(BaseModelViewSet):
             serializer_class = PublicInvitationSerializer  # also used by the tenant viewset
-            unguarded_fields = ["names_issuer"]  # platform staff may change it freely
+            unguarded_fields = {"names_issuer": "platform staff may change who an invitation names"}
 
     Only viewsets with this mixin (so every `BaseModelViewSet`) are compared, and only through their
     `permission_classes` - not a `get_permissions()` override.
     """
 
     runs_field_guards = True
-    unguarded_fields = ()
-    actions_writing_no_guarded_fields = ("destroy",)
+    # {field name: reason} - a field another viewset over the same serializer guards, left open here.
+    unguarded_fields = {}
+    actions_writing_no_guarded_fields = {"destroy": "deleting a row writes none of its fields"}
     field_guard_databases = None  # every configured database
     # serializer class -> {(module, qualname): (viewset, guarded field names)}
     _serializer_guards = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        require_reasons(cls.__name__, "unguarded_fields", cls.unguarded_fields)
+        require_reasons(cls.__name__, "actions_writing_no_guarded_fields", cls.actions_writing_no_guarded_fields)
         nested = [guard for entry in getattr(cls, "permission_classes", []) for guard in _nested_guards(entry)]
         if nested:
             raise ImproperlyConfigured(
@@ -157,8 +175,8 @@ class GuardedFieldsMixin:
                     raise ImproperlyConfigured(
                         _(
                             "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same "
-                            "serializer without guarding them - guard them there too, or list them in "
-                            "%(lenient)s.unguarded_fields if that's intended."
+                            "serializer without guarding them - guard them there too, or name them in "
+                            "%(lenient)s.unguarded_fields with the reason they're open there."
                         )
                         % {
                             "strict": strict.__name__,
@@ -221,8 +239,8 @@ class GuardedFieldsMixin:
             _(
                 "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are "
                 "rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call "
-                "self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields if it "
-                "writes no guarded field."
+                'self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields("<why>") if '
+                "it writes no guarded field."
             )
             % {"viewset": type(self).__name__, "action": self.action}
         )

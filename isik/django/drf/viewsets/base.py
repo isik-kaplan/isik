@@ -1,4 +1,4 @@
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMixin
 from isik.django.drf.viewsets.action_serializer_class import ActionSerializerClassMixin
@@ -7,33 +7,44 @@ from isik.django.drf.viewsets.guarded_fields import GuardedFieldsMixin
 from isik.django.drf.viewsets.ordering import DeclaredOrderingMixin, ReverseOrderingMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
+from isik.django.drf.viewsets.request_policies import RequestPoliciesMixin
+
+
+class BaseViewSet(RequestPoliciesMixin, ActionSerializerClassMixin, GuardedFieldsMixin, GenericViewSet):
+    """
+    Everything isik adds to a viewset that isn't about a model - for a viewset over something that
+    isn't one of your models (a third-party library's tokens, a computed resource), which should
+    still be held to the same request-level rules: RequestPoliciesMixin (`request_policies`, run on
+    every request), ActionSerializerClassMixin (`serializer_class_action_map`), GuardedFieldsMixin
+    (`guarding(..., fields=[...])` permissions, on every write path).
+
+    No routes of its own, as `GenericViewSet` has none - declare actions, or add DRF's mixins.
+    """
 
 
 class BaseModelViewSet(
     RequiredAttributesMixin,
     ViewSetRegistryMixin,
-    ActionSerializerClassMixin,
     ProtectedDestroyMixin,
-    GuardedFieldsMixin,
     ReverseOrderingMixin,
     DeclaredOrderingMixin,
     FilterSetMixin,
+    BaseViewSet,
     ModelViewSet,
 ):
     """
-    Everything above composed together - see each mixin's own docstring for what it adds:
-    RequiredAttributesMixin (`model`/`endpoint`/`serializer_class` must be set explicitly, fails
+    `BaseViewSet` plus everything that is about a model - see each mixin's own docstring for what it
+    adds: RequiredAttributesMixin (`model`/`endpoint`/`serializer_class` must be set explicitly, fails
     fast at class-definition time otherwise), ViewSetRegistryMixin (model -> viewset lookup),
-    ActionSerializerClassMixin (`serializer_class_action_map`), ProtectedDestroyMixin (a clean 400
-    instead of a 500 on ProtectedError), GuardedFieldsMixin (runs `guarding(..., fields=[...])`
-    permissions after validation), ReverseOrderingMixin (`-field` ordering for free),
-    DeclaredOrderingMixin (`?ordering=` values that map to a real field or expression other than
-    their own name, via `declared_ordering`), FilterSetMixin (`filterset_class` built from
-    `filterset_fields`/`declared_filters`).
+    ProtectedDestroyMixin (a clean 400 instead of a 500 on ProtectedError), ReverseOrderingMixin
+    (`-field` ordering for free), DeclaredOrderingMixin (`?ordering=` values that map to a real field
+    or expression other than their own name, via `declared_ordering`), FilterSetMixin
+    (`filterset_class` built from `filterset_fields`/`declared_filters`).
 
     `model` is the source of truth for the queryset - not `serializer_class.Meta.model` - so it
     has to be set even though the serializer already implies it, matching the "required
-    explicit" choice made for `endpoint` too.
+    explicit" choice made for `endpoint` too. `model`/`endpoint`/`serializer_class` buy the model
+    surface and nothing else: a request-level rule belongs in `BaseViewSet`'s `request_policies`.
 
     Pick and compose the individual mixins directly instead, if a project doesn't want all of this.
     """

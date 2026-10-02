@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.db import models
 
+from isik._internal.translation import gettext_lazy, lazy_format
 from isik.django.apps.common._model_makers import (
     build_model,
     claim_related_name,
@@ -41,9 +42,19 @@ class _BookmarksField:
 
         fields = {
             self.target_name: models.ForeignKey(
-                host_cls, on_delete=models.CASCADE, related_name=self.target_related_name
+                host_cls,
+                on_delete=models.CASCADE,
+                related_name=self.target_related_name,
+                help_text=lazy_format("The %(target)s bookmarked.", target=host_cls.__name__),
+                db_comment=f"The {host_cls.__name__} bookmarked.",
             ),
-            "user": models.ForeignKey(self.user_model, on_delete=models.CASCADE, related_name=self.user_related_name),
+            "user": models.ForeignKey(
+                self.user_model,
+                on_delete=models.CASCADE,
+                related_name=self.user_related_name,
+                help_text=gettext_lazy("Who bookmarked it."),
+                db_comment="Who bookmarked it.",
+            ),
             **self.extra_fields,
         }
         generated_model = build_model(

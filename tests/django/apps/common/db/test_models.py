@@ -4,8 +4,15 @@ import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 
+from isik.django.apps.common.db import (
+    BaseModel,
+    DatabaseTimestampsModel,
+    FullCleanOnSaveModel,
+    ReprModel,
+    UUIDPrimaryKeyModel,
+)
 from isik.django.apps.common.db import models as base_models
-from tests.testapp.models import Recorder, Widget
+from tests.testapp.models import CleanedNote, Recorder, TimestampedNote, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -16,9 +23,9 @@ def test_check_pgtrigger_installed_raises_when_pgtrigger_is_not_in_installed_app
     with pytest.raises(ImproperlyConfigured) as exc_info:
         base_models._check_pgtrigger_installed()
     assert str(exc_info.value) == (
-        "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
-        "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
-        "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
+        "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it "
+        "maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. "
+        "django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
     )
 
 
@@ -158,3 +165,58 @@ class TestLifecycleHookOrdering:
         persisted = Recorder.objects.get(pk=recorder.pk)
         assert persisted.name == "REC-2"
         assert persisted.slug == "rec-2"
+
+
+def triggers_of(model):
+    return {trigger.name for trigger in getattr(model._meta, "triggers", [])}
+
+
+class TestComposingThePieces:
+    """BaseModel is four abstract models; a model can take any of them alone."""
+
+    def test_base_model_is_the_four_together(self):
+        assert BaseModel.__bases__ == (UUIDPrimaryKeyModel, DatabaseTimestampsModel, FullCleanOnSaveModel, ReprModel)
+
+    @pytest.mark.django_db
+    def test_timestamps_alone_keep_their_triggers_and_django_keeps_its_pk(self):
+        note = TimestampedNote.objects.create(text="a")
+        note.refresh_from_db()
+        created, updated = note.created_at, note.updated_at
+
+        TimestampedNote.objects.filter(pk=note.pk).update(text="b")
+        note.refresh_from_db()
+
+        assert isinstance(note.pk, int)
+        assert note.created_at == created
+        # The trigger stamps NOW() - the transaction's start, which inside a test's transaction can be
+        # earlier than the insert's statement time. That it moved is what says the trigger fired.
+        assert note.updated_at != updated
+        assert {"protect_created_at", "stamp_updated_at"} <= triggers_of(TimestampedNote)
+
+    @pytest.mark.django_db
+    def test_timestamps_alone_dont_validate_on_save(self):
+        TimestampedNote(text="x" * 10).save()
+
+    def test_a_model_without_the_timestamps_gets_no_triggers(self):
+        assert not {"protect_created_at", "stamp_updated_at"} & triggers_of(CleanedNote)
+
+    @pytest.mark.django_db
+    def test_full_clean_on_save_alone_still_validates(self):
+        with pytest.raises(ValidationError):
+            CleanedNote(count=-1).save()
+
+        assert CleanedNote.objects.count() == 0
+
+    @pytest.mark.django_db
+    def test_repr_alone_formats_over_any_pk(self):
+        note = CleanedNote.objects.create(count=2)
+
+        assert repr(note) == f"CleanedNote(id={note.pk})"
+        assert str(note) == "note of 2"
+
+    @pytest.mark.django_db
+    def test_as_queryset_is_this_row_by_pk(self):
+        widget = Widget.objects.create(name="bolt")
+        Widget.objects.create(name="nut")
+
+        assert list(widget.as_queryset()) == [widget]

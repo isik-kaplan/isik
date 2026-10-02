@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.db import models
 
+from isik._internal.translation import gettext_lazy, lazy_format
 from isik.django.apps.common._model_makers import (
     build_model,
     claim_related_name,
@@ -58,16 +59,21 @@ class _CommentsField:
                 max_length=self.comment_max_length,
                 schema_path=self.tiptap_schema_path,
             )
-            return models.JSONField(validators=[validator])
+            return models.JSONField(
+                validators=[validator],
+                help_text=gettext_lazy("The comment, as a Tiptap document."),
+                db_comment="The comment, as a Tiptap document.",
+            )
 
         # CharField, not TextField(validators=[MaxLengthValidator(...)]) - same reasoning as
         # notes()'s body_max_length: only CharField gets a DB-level varchar(N) column, so a caller
         # bypassing full_clean() (e.g. UserCommentMixin.comment()'s own objects.create()) still
         # can't insert an over-long body.
         validators = [MinLengthValidator(self.comment_min_length)]
+        described = {"help_text": gettext_lazy("The comment's text."), "db_comment": "The comment's text."}
         if self.comment_max_length:
-            return models.CharField(max_length=self.comment_max_length, validators=validators)
-        return models.TextField(validators=validators)
+            return models.CharField(max_length=self.comment_max_length, validators=validators, **described)
+        return models.TextField(validators=validators, **described)
 
     def contribute_to_class(self, host_cls, name):
         model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Comment"
@@ -76,9 +82,19 @@ class _CommentsField:
 
         fields = {
             self.target_name: models.ForeignKey(
-                host_cls, on_delete=models.CASCADE, related_name=self.target_related_name
+                host_cls,
+                on_delete=models.CASCADE,
+                related_name=self.target_related_name,
+                help_text=lazy_format("The %(target)s this comment is on.", target=host_cls.__name__),
+                db_comment=f"The {host_cls.__name__} this comment is on.",
             ),
-            "user": models.ForeignKey(self.user_model, on_delete=models.CASCADE, related_name=self.user_related_name),
+            "user": models.ForeignKey(
+                self.user_model,
+                on_delete=models.CASCADE,
+                related_name=self.user_related_name,
+                help_text=gettext_lazy("Who wrote this comment."),
+                db_comment="Who wrote this comment.",
+            ),
             "body": self._body_field(),
             **self.extra_fields,
         }

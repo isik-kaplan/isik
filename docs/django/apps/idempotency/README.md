@@ -81,8 +81,10 @@ who has lost access since the first request is refused instead of answered from 
 
 - Which handlers are covered. `IdempotencyMixin` covers `POST` by default. Leave the mixin off views
   whose responses you don't own (a third-party auth library's endpoints, say).
-- A system check that fails the build for an unprotected handler, if you want one. Which views count
-  as "should be protected" is a project decision.
+- Failing the build for an unprotected handler. `idempotency_coverage()`
+  (`isik.django.apps.idempotency.coverage`) reports every routed POST as covered, exempt with its
+  reason, or uncovered - see [coverage.md](../../drf/coverage.md) - and which of them must be
+  covered is a project decision, made in its own check or test.
 - Publishing the header in your schema (`OpenApiParameter`), so typed clients send it.
 
 The client half matters as much as the server half. A key minted per call protects nothing: a user

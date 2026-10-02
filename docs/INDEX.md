@@ -4,7 +4,7 @@
 
 - [common/](common/README.md)
   - [utils/](common/utils/README.md) - caching, concurrency, error handling, functional/iterable
-    helpers, metaclasses, sentinels, string case conversion
+    helpers, metaclasses, sentinels (and `DeclaredStr`, declared ones), string case conversion
   - [config/](common/config/README.md) - typed settings objects built from environment variables
 
 ## isik.sentry

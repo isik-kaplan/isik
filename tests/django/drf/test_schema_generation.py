@@ -19,7 +19,7 @@ class UserScopedWidgetViewSet(BaseModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
-    exempt_from_registry = True
+    exempt_from_registry = "a test's own class, defined again on every run"
 
     @none_during_schema_generation
     def get_queryset(self):

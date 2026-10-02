@@ -32,7 +32,8 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
 - [Idempotency keys](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/idempotency/README.md) -
   `Idempotency-Key` on DRF views: a retry replays the first response instead of doing the work twice
 - [isik.django.drf](https://github.com/isik-kaplan/isik/blob/master/docs/django/drf/README.md) - permissions
-  (`guarding`, `django_permission`, ...), serializer and viewset mixins, filters, pagination
+  (`guarding`, `django_permission`, ...), request policies on any view, serializer and viewset mixins,
+  filters, pagination
 - [isik.django.celery](https://github.com/isik-kaplan/isik/blob/master/docs/django/celery/README.md) - a task
   base whose history rows name whoever caused the task, not nobody
 - [isik.django.http_exceptions](https://github.com/isik-kaplan/isik/blob/master/docs/django/http_exceptions/README.md) -

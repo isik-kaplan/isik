@@ -2,7 +2,7 @@
 
 Serializer mixins composed together in `base.py`'s `BaseModelSerializer` - registry, create-only/write-only fields, Meta-combining, request context helpers, and conditional include/only/exclude.
 
-- [base.md](base.md) - `BaseModelSerializer`, everything below composed onto `ModelSerializer`
+- [base.md](base.md) - `BaseSerializer` (the model-free half) and `BaseModelSerializer` (it plus everything about a model)
 - [guarded_save.md](guarded_save.md) - `FieldGuardsOnSaveMixin`, the current viewset's field guards run inside `save()`, before the write
 - [registry.md](registry.md) - `ModelSerializerRegistryMixin`, model -> serializer lookup
 - [conditional_serializer.md](conditional_serializer.md) - `?include=`/`?only=`/`?exclude=` field control

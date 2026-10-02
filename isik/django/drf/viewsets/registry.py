@@ -1,5 +1,6 @@
 from django.core.exceptions import ImproperlyConfigured
 
+from isik._internal.reasons import require_reason
 from isik._internal.translation import gettext as _
 
 
@@ -14,7 +15,9 @@ class ViewSetRegistryMixin:
     Registering two viewsets for the same model is almost always a mistake, so it fails fast
     instead of silently letting the second one win. A subclass with no `model` set yet (e.g. an
     abstract intermediate still relying on RequiredAttributesMixin to enforce it later) is skipped
-    rather than registered under a placeholder - as is one with `exempt_from_registry = True`.
+    rather than registered under a placeholder - as is one with `exempt_from_registry = "<why>"`, a
+    reason rather than `True`: a second viewset over a registered model is usually the mistake the
+    registry exists to catch, so the one that isn't says why.
 
     The same class body redefining itself under the same name/module (e.g. a test's inline
     ViewSet re-executing because the test itself ran twice in one process, or a dev-server
@@ -43,6 +46,7 @@ class ViewSetRegistryMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        require_reason(cls.__name__, "exempt_from_registry", cls.exempt_from_registry)
         if cls.__dict__.get("is_base_class", False):  # pragma: no mutate
             # Must happen before the `not cls.model` guard below - a class marking itself as a
             # new base is almost always still abstract with no `model` of its own, which is

@@ -23,13 +23,14 @@ from isik.django.apps.common.skippable_validators import SkippableValidatorsMixi
 
 
 def _check_pgtrigger_installed():
-    # pgtrigger.register() below (called for every BaseModel subclass) is a no-op without
+    # pgtrigger.register() below (called for every DatabaseTimestampsModel subclass) is a no-op without
     # pgtrigger's AppConfig - it's what makes the trigger registry migration-aware in the first
     # place. Without this check, subclassing BaseModel would just silently get no triggers.
     if not django_apps.is_installed("pgtrigger"):
         raise ImproperlyConfigured(
             _(
-                "BaseModel requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at "
+                "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it "
+                "maintains created_at/updated_at "
                 "via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs "
                 "automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
             )
@@ -39,8 +40,64 @@ def _check_pgtrigger_installed():
 _check_pgtrigger_installed()
 
 
-class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
+class UUIDPrimaryKeyModel(models.Model):
+    """A random UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share."""
+
+    id = models.UUIDField(
+        primary_key=True,
+        db_index=True,
+        editable=False,
+        default=uuid4,
+        verbose_name=gettext_lazy("ID"),
+        help_text=gettext_lazy("A random identifier, assigned when the row is created."),
+        db_comment="A random identifier, assigned when the row is created.",
+    )
+
+    class Meta:
+        abstract = True
+
+
+class DatabaseTimestampsModel(models.Model):
     """
+    `created_at`/`updated_at` kept by the database rather than by Django: `db_default=Now()` on insert,
+    a trigger refusing any change to `created_at`, and a BEFORE UPDATE trigger stamping `updated_at` -
+    so `QuerySet.update()`, `bulk_update()` and raw SQL keep them true too, none of which `auto_now`
+    touches. Needs `pgtrigger` installed; the triggers attach to every concrete subclass.
+    """
+
+    created_at = models.DateTimeField(
+        db_default=Now(),
+        db_index=True,
+        editable=False,
+        verbose_name=gettext_lazy("Created At"),
+        help_text=gettext_lazy("When the row was created, by the database's clock. Never changes."),
+        db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.",
+    )
+    # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) that
+    # fires unconditionally - update_fields does not gate it. save(update_fields=["name"]) still
+    # advances updated_at; explicitly naming "updated_at" in update_fields is harmless but no
+    # longer necessary.
+    updated_at = models.DateTimeField(
+        db_default=Now(),
+        db_index=True,
+        editable=False,
+        verbose_name=gettext_lazy("Updated At"),
+        help_text=gettext_lazy("When the row last changed, by the database's clock."),
+        db_comment="When the row last changed, by the database's clock. Stamped by a trigger on every update.",
+    )
+
+    class Meta:
+        abstract = True
+
+
+class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
+    """
+    `save()` runs `full_clean()` and django-lifecycle's hooks, in that model's order: BEFORE_* hooks,
+    then `full_clean()`, then the write, then AFTER_* hooks. A field a BEFORE_* hook sets still reaches
+    the database when `update_fields` didn't name it. `SKIP_FULL_CLEAN = True` (or `skip_full_clean()`)
+    skips validation; `save(_skip_hooks=True)` skips the hooks. Validators are skippable per call - see
+    `SkippableValidatorsMixin`.
+
     Don't put a `classproperty` with a query-building body on a subclass of this - use a plain
     `classmethod` instead. `django_lifecycle`'s `LifecycleModelMixin` scans class attributes via
     `getattr(cls, name)` on every instantiation to find hook methods, which evaluates a
@@ -49,24 +106,7 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
     `django_lifecycle` behavior, not something fixable from here, just a documented trap.
     """
 
-    STR = None
-    REPR = "{self.__class__.__name__}(id={self.id})"
-    FIELDS = ["id", "created_at", "updated_at"]
     SKIP_FULL_CLEAN = False
-
-    id = models.UUIDField(
-        primary_key=True, db_index=True, editable=False, default=uuid4, verbose_name=gettext_lazy("ID")
-    )
-    created_at = models.DateTimeField(
-        db_default=Now(), db_index=True, editable=False, verbose_name=gettext_lazy("Created At")
-    )
-    # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) that
-    # fires unconditionally - update_fields does not gate it. save(update_fields=["name"]) still
-    # advances updated_at; explicitly naming "updated_at" in update_fields is harmless but no
-    # longer necessary.
-    updated_at = models.DateTimeField(
-        db_default=Now(), db_index=True, editable=False, verbose_name=gettext_lazy("Updated At")
-    )
 
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -127,9 +167,6 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
         changed_by_hooks = {name for name, value in before.items() if after[name] != value}
         return list({*requested_fields, *changed_by_hooks})
 
-    def as_queryset(self):
-        return self.__class__.objects.filter(id=self.id)
-
     @contextmanager
     def skip_full_clean(self):
         original_value = self.SKIP_FULL_CLEAN
@@ -139,11 +176,37 @@ class BaseModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
         finally:
             self.SKIP_FULL_CLEAN = original_value
 
+    class Meta:
+        abstract = True
+
+
+class ReprModel(models.Model):
+    """`STR`/`REPR` as format strings over `self` - `str()` falls back to `repr()` without an `STR`."""
+
+    STR = None
+    REPR = "{self.__class__.__name__}(id={self.pk})"
+
     def __repr__(self):
         return self.REPR.format(self=self)
 
     def __str__(self):
         return self.STR.format(self=self) if self.STR else self.__repr__()
+
+    class Meta:
+        abstract = True
+
+
+class BaseModel(UUIDPrimaryKeyModel, DatabaseTimestampsModel, FullCleanOnSaveModel, ReprModel):
+    """
+    Every model mixin above composed together - see each one's docstring: UUIDPrimaryKeyModel,
+    DatabaseTimestampsModel, FullCleanOnSaveModel, ReprModel. Compose them directly instead for a
+    model that wants only some.
+    """
+
+    FIELDS = ["id", "created_at", "updated_at"]
+
+    def as_queryset(self):
+        return self.__class__.objects.filter(pk=self.pk)
 
     class Meta:
         abstract = True
@@ -166,11 +229,11 @@ def _timestamp_triggers():
 
 
 def _register_timestamp_triggers(sender, **kwargs):
-    # Declaring these on BaseModel's own Meta.triggers wouldn't reach subclasses - Django only
+    # Declaring these on DatabaseTimestampsModel's own Meta.triggers wouldn't reach subclasses - Django only
     # inherits an abstract base's Meta into a subclass that writes `class Meta(BaseModel.Meta)`,
     # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
     # via pgtrigger.register() on every concrete subclass instead needs no such cooperation.
-    if issubclass(sender, BaseModel) and not sender._meta.abstract:  # pragma: no mutate
+    if issubclass(sender, DatabaseTimestampsModel) and not sender._meta.abstract:  # pragma: no mutate
         # class_prepared fires exactly once per model class, ever - a mutation here is provably
         # caught by test_timestamp_triggers_are_registered_on_every_concrete_basemodel_subclass
         # under plain pytest, but not under mutmut: whichever variant is active the one time this

@@ -62,7 +62,7 @@ def test_composes_with_is_owner_for_a_private_vote_viewset(alice, bob, post):
         endpoint = "votes"
         serializer_class = VoteSerializer
         permission_classes = [is_owner("user")]
-        exempt_from_registry = True
+        exempt_from_registry = "a test's own class, defined again on every run"
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)
