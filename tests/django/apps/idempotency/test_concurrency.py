@@ -132,7 +132,7 @@ def test_a_request_outside_a_transaction_is_a_misconfiguration(alice, key):
         post(client_for(alice), "/widgets/", {"name": "bolt"}, key)
 
     assert str(raised.value) == (
-        "WidgetViewSet honours idempotency keys, which needs its request served in a transaction - "
+        "WidgetViewSet honors idempotency keys, which needs its request served in a transaction - "
         "turn on ATOMIC_REQUESTS."
     )
     assert not Widget.objects.exists()

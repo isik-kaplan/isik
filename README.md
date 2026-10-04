@@ -43,6 +43,25 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
 - [Translations](https://github.com/isik-kaplan/isik/blob/master/docs/translations.md) - every
   user-facing string is translatable, through Django's catalogs or stdlib gettext
 
+### Plain Python, and worth knowing about in a Django project
+
+A Django project's imports all start with `isik.django`, so `isik.common.utils` is easy to never
+see. It needs no Django and these come up in Django code constantly:
+
+- `first_of(iterable, default=None, pred=None)` / `not_none` - the first item, or the first one
+  matching a predicate, without a `next(...)` and a `StopIteration` to handle.
+- `with_attrs(**attrs)` - set attributes on a function as a decorator (`short_description`,
+  `boolean` on an admin method).
+- `returns(value)` / `raises(exception)` / `noop` / `identity` - small callables for defaults and
+  hooks.
+- `DeclaredString` - a `str` sentinel whose reason, validation and attributes are declared:
+  `Exemption("why")`, `NoComment("why")`.
+- `TransformExceptions` / `SuppressAndRun` - turn one exception into another, or run something
+  when one is swallowed.
+
+See [isik.common](https://github.com/isik-kaplan/isik/blob/master/docs/common/README.md) for all
+of it.
+
 What changed in each release: [CHANGELOG.md](https://github.com/isik-kaplan/isik/blob/master/CHANGELOG.md).
 
 ## License

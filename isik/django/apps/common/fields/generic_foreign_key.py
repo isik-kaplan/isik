@@ -17,7 +17,7 @@ class AutoGenericForeignKey(GenericForeignKey):
         limit_models_to: Optional list of models to restrict the content type
             choices to. Each entry can be a model class or an "app_label.ModelName"
             string.
-        on_delete: Deletion behaviour for the content type ForeignKey.
+        on_delete: Deletion behavior for the content type ForeignKey.
             Defaults to models.CASCADE.
         object_id_field: Field class to use for the object ID. Defaults to
             models.UUIDField.
@@ -64,7 +64,7 @@ class AutoGenericForeignKey(GenericForeignKey):
         super().__init__(*args, **kwargs)
 
     @property
-    def limit_gfk_models_to(self):
+    def limit_content_types_to(self):
         if self.limit_models_to:
             q_objects = [
                 (
@@ -87,7 +87,7 @@ class AutoGenericForeignKey(GenericForeignKey):
             ContentType,
             related_name=f"{cls.__name__.lower()}_{name}+",
             on_delete=self.on_delete,
-            limit_choices_to=self.limit_gfk_models_to,
+            limit_choices_to=self.limit_content_types_to,
             help_text=lazy_format("The type of the %(name)s object.", name=name),
             db_comment=f"The type of the {name} object.",
         )

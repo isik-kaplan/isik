@@ -2,6 +2,7 @@ from django.http import HttpResponse
 
 from isik._internal.translation import translate_text
 from isik.common.utils.concurrency import ContextLocal
+from isik.django.apps.common.middleware.base import Middleware
 from isik.django.http_exceptions.exceptions import HTTPExceptions
 
 
@@ -12,16 +13,15 @@ def get_current_request():
     return _CURRENT_REQUEST.get("request", None)
 
 
-class RequestContextMiddleware:
+class RequestContextMiddleware(Middleware):
     """
     Stashes the current request in a ContextLocal for the duration of the request, so code
     without direct access to it (serializers, signal handlers, ...) can still reach it via
     get_current_request().
     """
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-
+    # Wraps the whole request rather than running before and after it: the reset has to happen
+    # however the view ends, raising included.
     def __call__(self, request):
         token = _CURRENT_REQUEST.set("request", request)
         try:
@@ -30,18 +30,12 @@ class RequestContextMiddleware:
             _CURRENT_REQUEST.reset("request", token)
 
 
-class ExceptionHandlerMiddleware:
+class ExceptionHandlerMiddleware(Middleware):
     """
     Turns any raised HTTPExceptions.BASE_EXCEPTION into a response - using exc.response if
     one was attached (with_response/with_content/with_json), the class's registered default
     view, or a plain response built from its description and status code.
     """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        return self.get_response(request)
 
     @staticmethod
     def process_exception(request, exc):

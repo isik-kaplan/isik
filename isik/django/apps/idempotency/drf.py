@@ -23,7 +23,7 @@ class IdempotentReplay(Exception):
 
 class IdempotencyMixin:
     """
-    Honours an `Idempotency-Key: <uuid>` header on a DRF view: the same key with the same request
+    Honors an `Idempotency-Key: <uuid>` header on a DRF view: the same key with the same request
     answers with the first request's response, status and all, rather than doing the work twice.
 
         class WidgetViewSet(IdempotencyMixin, BaseModelViewSet):
@@ -46,7 +46,7 @@ class IdempotencyMixin:
     attempt rather than a replayed refusal.
 
     - `idempotent_methods` - which methods are covered. `("POST",)`.
-    - `idempotency_key_required` - a covered request without the header is a 400. True; False honours
+    - `idempotency_key_required` - a covered request without the header is a 400. True; False honors
       a key only when one is sent.
     - `idempotency_exempt_actions` - `{action: reason}`, actions the key is never asked of.
     - `idempotency_no_replay_actions` - `{action: reason}`, actions whose response mustn't be stored
@@ -123,7 +123,7 @@ class IdempotencyMixin:
         if not transaction.get_connection(router.db_for_write(model)).in_atomic_block:
             raise ImproperlyConfigured(
                 _(
-                    "%(view)s honours idempotency keys, which needs its request served in a transaction - "
+                    "%(view)s honors idempotency keys, which needs its request served in a transaction - "
                     "turn on ATOMIC_REQUESTS."
                 )
                 % {"view": type(self).__name__}

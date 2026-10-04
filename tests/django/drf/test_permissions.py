@@ -8,6 +8,7 @@ from isik.django.drf.permissions import (
     IsAuthenticatedANDSignupCompleted,
     IsSuperUser,
     ReadOnly,
+    SignedInPermission,
     is_owner,
     object_property,
     only_actions,
@@ -67,6 +68,59 @@ class TestIsSuperUser:
         request = rf.get("/")
         request.user = None
         assert IsSuperUser().has_permission(request, view=None) is False
+
+
+class TestSignedInPermission:
+    """Refuses anyone not signed in before asking the subclass - which only ever sees a signed-in user."""
+
+    class Recording(SignedInPermission):
+        def __init__(self, answer):
+            self.answer = answer
+            self.asked = []
+
+        def allows(self, user, request, view):
+            self.asked.append((user, request, view))
+            return self.answer
+
+    def test_an_anonymous_request_is_refused_without_asking(self, rf):
+        request = rf.get("/")
+        request.user = AnonymousUser()
+        permission = self.Recording(answer=True)
+
+        assert permission.has_permission(request, view=None) is False
+        assert permission.asked == []
+
+    def test_a_request_without_a_user_is_refused_without_asking(self, rf):
+        request = rf.get("/")
+        request.user = None
+        permission = self.Recording(answer=True)
+
+        assert permission.has_permission(request, view=None) is False
+        assert permission.asked == []
+
+    @pytest.mark.parametrize("answer", [True, False])
+    def test_a_signed_in_request_gets_the_subclass_answer(self, rf, django_user_model, answer):
+        user = django_user_model.objects.create_user(username="alice", password="password")
+        request = rf.get("/")
+        request.user = user
+        view = object()
+        permission = self.Recording(answer=answer)
+
+        assert permission.has_permission(request, view) is answer
+        assert permission.asked == [(user, request, view)]
+
+    def test_an_answer_is_a_bool(self, rf, django_user_model):
+        request = rf.get("/")
+        request.user = django_user_model.objects.create_user(username="alice", password="password")
+
+        assert self.Recording(answer="yes").has_permission(request, None) is True
+
+    def test_the_bare_base_says_what_to_implement(self, rf, django_user_model):
+        request = rf.get("/")
+        request.user = django_user_model.objects.create_user(username="alice", password="password")
+
+        with pytest.raises(NotImplementedError):
+            SignedInPermission().has_permission(request, None)
 
 
 class TestIsAuthenticatedANDSignupCompleted:

@@ -8,11 +8,11 @@ from rest_framework.serializers import ListSerializer
 
 from isik._internal.reasons import is_reason, require_reasons
 from isik._internal.translation import gettext as _
+from isik.django.drf._changes import MISSING as _MISSING
+from isik.django.drf._changes import changed as _changed
+from isik.django.drf._changes import dig as _dig
 from isik.django.drf.permissions import Guard
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin, _active_guarded_view
-
-
-_MISSING = object()
 
 
 def _nested_guards(permission):
@@ -28,17 +28,6 @@ def _guards_in(permission):
     if isinstance(permission, type) and issubclass(permission, Guard):
         return [permission]
     return _nested_guards(permission)
-
-
-def _dig(value, attrs):
-    for attr in attrs:
-        if isinstance(value, dict):
-            value = value.get(attr, _MISSING)
-        else:
-            value = getattr(value, attr, _MISSING)
-        if value is _MISSING:
-            return _MISSING
-    return value
 
 
 def writes_no_guarded_fields(reason):
@@ -72,14 +61,6 @@ def writes_no_guarded_fields(reason):
     return mark
 
 
-def _changed(stored, incoming):
-    if hasattr(stored, "all"):  # a related manager - compare the rows, not the manager
-        return set(stored.all()) != set(incoming)
-    if isinstance(incoming, dict):  # a nested serializer's payload - no stored value to compare it to
-        return True
-    return stored != incoming
-
-
 class GuardedFieldsMixin:
     """
     Runs the `fields=`/`setting=` guards of `guarding()` (see `isik.django.drf.permissions.guarding`): after a
@@ -87,7 +68,7 @@ class GuardedFieldsMixin:
     evaluated against the stored row, and refuses with a `ValidationError` keyed by each such field.
 
     "Changes" means the typed, validated value differs from the stored one - so a client echoing
-    a field back unchanged while editing its neighbours isn't refused. It's about what the write
+    a field back unchanged while editing its neighbors isn't refused. It's about what the write
     does, however the value arrives: the payload, a serializer default, or a HiddenField like
     CurrentUserField all count. On create there is no stored row, so every value supplied counts.
     Fields this write can't reach - read-only, dropped by `?only=`/`?exclude=`, absent from the

@@ -18,7 +18,7 @@ from isik.django.apps.common.db import (
     ReprModel,
     track_events,
 )
-from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
+from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
 from isik.django.apps.feedback.notes import UserNoteMixin, notes

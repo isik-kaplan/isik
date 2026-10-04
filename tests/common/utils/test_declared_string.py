@@ -1,4 +1,4 @@
-"""DeclaredStr - a str whose value, validation and carried attributes are declared, not hand-written."""
+"""DeclaredString - a str whose value, validation and carried attributes are declared, not hand-written."""
 
 import copy
 import pickle
@@ -6,32 +6,32 @@ import re
 
 import pytest
 
-from isik.common.utils.declared_str import (
+from isik.common.utils.declared_string import (
     MISSING,
     Declaration,
     DeclaredAttribute,
-    DeclaredStr,
+    DeclaredString,
     DeclaredText,
     attribute,
     text,
 )
 
 
-class Exemption(DeclaredStr):
+class Exemption(DeclaredString):
     reason = text(min_length=10)
 
 
-class NoComment(DeclaredStr, displays_as=""):
+class NoComment(DeclaredString, displays_as=""):
     reason = text(min_length=10, max_length=40)
 
 
-class PermissionName(DeclaredStr):
+class PermissionName(DeclaredString):
     name = text(pattern=r"[a-z_]+:[a-z_]+:[a-z_]+")
     label = attribute(str)
     delegatable = attribute(bool, default=False)
 
 
-class ProjectReason(DeclaredStr):
+class ProjectReason(DeclaredString):
     """A project's own base - every sentinel built on it shares its rule."""
 
     reason = text(min_length=20)
@@ -41,7 +41,7 @@ class NoHelpText(ProjectReason, displays_as=""):
     pass
 
 
-class Marker(DeclaredStr, displays_as="marked"):
+class Marker(DeclaredString, displays_as="marked"):
     note = attribute(default=None)
 
 
@@ -68,7 +68,7 @@ class TestWhatItIs:
         assert Exemption("  the   registry\n would\treject it ").reason == REASON
 
     def test_whitespace_is_kept_when_asked(self):
-        class Verbatim(DeclaredStr):
+        class Verbatim(DeclaredString):
             body = text(collapse_whitespace=False)
 
         assert Verbatim(" a  b ") == " a  b "
@@ -125,7 +125,7 @@ class TestValidation:
         )
 
     def test_a_compiled_pattern_works_the_same(self):
-        class Upper(DeclaredStr):
+        class Upper(DeclaredString):
             word = text(pattern=re.compile(r"[A-Z]+"))
 
         assert Upper("ABC") == "ABC"
@@ -182,7 +182,7 @@ class TestValidation:
 
     def test_a_class_with_neither_text_nor_displays_as_is_refused(self):
         with pytest.raises(TypeError) as raised:
-            type("Nothing", (DeclaredStr,), {"note": attribute()})
+            type("Nothing", (DeclaredString,), {"note": attribute()})
 
         assert str(raised.value) == "Nothing declares no text() and no displays_as=, so it has nothing to be."
 
@@ -206,7 +206,7 @@ class TestAsItself:
 
     def test_deconstructs_as_itself_for_migrations(self):
         assert NoComment(REASON).deconstruct() == (
-            "tests.common.utils.test_declared_str.NoComment",
+            "tests.common.utils.test_declared_string.NoComment",
             (REASON,),
             {},
         )
@@ -227,25 +227,25 @@ class TestAsItself:
 
         written, imports = MigrationWriter.serialize(NoComment(REASON))
 
-        assert written == f"tests.common.utils.test_declared_str.NoComment({REASON!r})"
-        assert imports == {"import tests.common.utils.test_declared_str"}
+        assert written == f"tests.common.utils.test_declared_string.NoComment({REASON!r})"
+        assert imports == {"import tests.common.utils.test_declared_string"}
 
 
 class TestTheDeclarations:
     def test_text_collapses_whitespace_unless_told_not_to(self):
         # Declared here rather than at module level: a declaration made while the module is imported
         # is made before any test runs.
-        class Collapsed(DeclaredStr):
+        class Collapsed(DeclaredString):
             body = text()
 
-        class Spelled(DeclaredStr):
+        class Spelled(DeclaredString):
             body = DeclaredText()
 
         assert Collapsed(" a  b ") == Spelled(" a  b ") == "a b"
         assert (text().collapse_whitespace, DeclaredText().collapse_whitespace) == (True, True)
 
     def test_displays_as_is_what_the_class_says(self):
-        class Unsaid(DeclaredStr, displays_as="-"):
+        class Unsaid(DeclaredString, displays_as="-"):
             reason = text()
 
         assert (Unsaid("why"), Unsaid.displays_as) == ("-", "-")

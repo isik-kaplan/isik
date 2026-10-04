@@ -1,14 +1,14 @@
 """
-DeclaredStr + text()/attribute() - a `str` whose value, validation and carried attributes are declared
+DeclaredString + text()/attribute() - a `str` whose value, validation and carried attributes are declared
 on the class, rather than hand-written in a `__new__` each time.
 
-    class Exemption(DeclaredStr):
+    class Exemption(DeclaredString):
         reason = text(min_length=40)
 
-    class NoComment(DeclaredStr, displays_as=""):
+    class NoComment(DeclaredString, displays_as=""):
         reason = text(min_length=40, max_length=300)
 
-    class PermissionName(DeclaredStr):
+    class PermissionName(DeclaredString):
         name = text(pattern=r"[a-z_]+:[a-z_]+:[a-z_]+")
         label = attribute(str)
         delegatable = attribute(bool, default=False)
@@ -33,7 +33,7 @@ MISSING = Sentinel("DECLARED_STR_MISSING")
 
 
 class Declaration:
-    """What a `DeclaredStr` carries under one name - see `DeclaredText`/`DeclaredAttribute`."""
+    """What a `DeclaredString` carries under one name - see `DeclaredText`/`DeclaredAttribute`."""
 
     default = MISSING
 
@@ -98,16 +98,16 @@ class DeclaredAttribute(Declaration):
 
 
 def text(min_length=None, max_length=None, pattern=None, collapse_whitespace=True):
-    """Declares text a `DeclaredStr` carries - see `DeclaredText`."""
+    """Declares text a `DeclaredString` carries - see `DeclaredText`."""
     return DeclaredText(min_length, max_length, pattern, collapse_whitespace)
 
 
 def attribute(type=None, default=MISSING):
-    """Declares a keyword attribute a `DeclaredStr` carries - see `DeclaredAttribute`."""
+    """Declares a keyword attribute a `DeclaredString` carries - see `DeclaredAttribute`."""
     return DeclaredAttribute(type, default)
 
 
-class DeclaredStr(str):
+class DeclaredString(str):
     """
     A `str` built from its declarations - see the module docstring. Equal to, and hashed as, the str
     it displays as; copied, pickled and written into migrations (`deconstruct()`) as itself.

@@ -1,23 +1,23 @@
-# declared_str
+# declared_string
 
-`DeclaredStr` - a `str` whose value, validation and carried attributes are declared on the class,
+`DeclaredString` - a `str` whose value, validation and carried attributes are declared on the class,
 for the sentinel that otherwise gets a hand-written `__new__` every time: an exemption that must say
 why, a field description that must be empty to Django while still carrying its reason, a permission
 name that must match a shape and carry a label.
 
 ```python
-from isik.common.utils.declared_str import DeclaredStr, attribute, text
+from isik.common.utils.declared_string import DeclaredString, attribute, text
 
 
-class Exemption(DeclaredStr):
+class Exemption(DeclaredString):
     reason = text(min_length=40)
 
 
-class NoComment(DeclaredStr, displays_as=""):
+class NoComment(DeclaredString, displays_as=""):
     reason = text(min_length=40, max_length=300)
 
 
-class PermissionName(DeclaredStr):
+class PermissionName(DeclaredString):
     name = text(pattern=r"[a-z_]+:[a-z_]+:[a-z_]+")
     label = attribute(str)
     delegatable = attribute(bool, default=False)
@@ -52,7 +52,7 @@ It equals, and hashes as, the str it displays as.
 Lengths and patterns are per class, and inherited: a project's own base sets them once.
 
 ```python
-class Reasoned(DeclaredStr):
+class Reasoned(DeclaredString):
     reason = text(min_length=40)
 
 

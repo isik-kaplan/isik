@@ -16,7 +16,7 @@ def test_every_routed_action_is_behind_the_setup_gate():
     assert uncovered == []
 
 
-def test_every_post_honours_an_idempotency_key():
+def test_every_post_honors_an_idempotency_key():
     assert [entry for entry in idempotency_coverage() if entry.is_uncovered] == []
 ```
 
@@ -36,6 +36,6 @@ otherwise. `entry.is_uncovered` for the ones to fail on.
 ## idempotency_coverage(urlconf=None, methods=("POST",))
 
 The same for idempotency keys, over the routed actions answering one of `methods`: `covered` when
-the view honours a key for that method, `exempt` when the action is in `idempotency_exempt_actions`,
+the view honors a key for that method, `exempt` when the action is in `idempotency_exempt_actions`,
 `uncovered` otherwise - a view with `IdempotencyMixin` whose `idempotent_methods` leave the method
 out included.

@@ -315,7 +315,7 @@ class TestWhatIsCovered:
         assert Widget.objects.count() == 2
         assert not IdempotencyClaim.objects.exists()
 
-    def test_an_optional_key_sent_is_honoured(self, client, key):
+    def test_an_optional_key_sent_is_honored(self, client, key):
         post(client, "/optional-widgets/", {"name": "bolt"}, key)
 
         assert post(client, "/optional-widgets/", {"name": "bolt"}, key)[REPLAYED] == "true"

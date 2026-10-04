@@ -22,7 +22,7 @@ POST /installations/  Idempotency-Key: 0192f5a4-...   -> 201 {"id": 7, ...}   Id
 | Attribute                        | Default            | Meaning |
 |----------------------------------|--------------------|---------|
 | `idempotent_methods`             | `("POST",)`        | Which methods are covered. `PUT`/`PATCH`/`DELETE` on a detail route are idempotent already. |
-| `idempotency_key_required`       | `True`             | A covered request without the header is a 400. `False` honours a key only when one is sent. |
+| `idempotency_key_required`       | `True`             | A covered request without the header is a 400. `False` honors a key only when one is sent. |
 | `idempotency_exempt_actions`     | `{}`               | `{action: reason}` - actions the key is never asked of, e.g. a POST that changes nothing. |
 | `idempotency_no_replay_actions`  | `{}`               | `{action: reason}` - actions whose response must never be stored. |
 | `idempotency_normalize`          | `None`             | A function of the request that decides what its body is compared by. See [fingerprint.md](fingerprint.md). |

@@ -1,8 +1,8 @@
 """
 How isik's own opt-outs insist on saying why - the few whose default isn't obvious to turn off.
 
-A reason is any non-blank `str`: a plain one, or a project's own `DeclaredStr` sentinel holding itself
-to a stricter rule (`isik.common.utils.declared_str`). isik checks only that one was given.
+A reason is any non-blank `str`: a plain one, or a project's own `DeclaredString` sentinel holding itself
+to a stricter rule (`isik.common.utils.declared_string`). isik checks only that one was given.
 """
 
 from collections.abc import Mapping

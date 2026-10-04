@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-04
+
+### Added
+
+- `Middleware` (`isik.django.apps.common.middleware`) - the `get_response` constructor every
+  hand-written middleware opens with, and a `__call__` around `before(request)` (return a response
+  to answer without the view) and `after(request, response)`. Django's other hooks stay Django's.
+  `RequestContextMiddleware` and `ExceptionHandlerMiddleware` are now built on it.
+- `NarrowingFilterMixin` (`isik.django.drf.filters`) - a django-filter filter that leaves the
+  queryset alone when its value wasn't given and narrows it with `narrow(qs, value)` when it was, so
+  `if value in EMPTY_VALUES: return qs` is written once. isik's own context-field history filter uses it.
+- `login_through(request, user, backend)` and `listed_backend_path(backend)`
+  (`isik.django.apps.common.backends`) - log in through a backend *class*, resolved to the path it's
+  listed under in `AUTHENTICATION_BACKENDS` (a re-exporting package's path counts). An unlisted one
+  raises `ImproperlyConfigured` where the login is written, instead of Django's silent logout on the
+  next request.
+- `Meta.create_only_changes = "refuse"` on `CreateOnlyFieldsMixin` - an update changing a
+  create-only field is a 400 naming it (code `create_only`), while the same value sent back
+  unchanged still passes. `"ignore"`, the default, keeps today's behavior.
+- `SignedInPermission` (`isik.django.drf.permissions`) - refuses anyone not signed in, then asks
+  `allows(user, request, view)`. `IsAuthenticatedANDSignupCompleted` is now one.
+- `docs/naming.md` - the rules isik's names follow, and `tests/test_naming.py` failing on the parts a
+  test can see: American spelling, acronyms in capitals, no truncated class or module names.
+- The README and docs index point Django users at the `isik.common.utils` helpers they keep
+  rewriting (`first_of`, `not_none`, `with_attrs`, `returns`, `DeclaredString`).
+
+### Changed
+
+- **Breaking - renamed, no aliases:**
+  - `DeclaredStr` -> `DeclaredString`, `isik.common.utils.declared_str` ->
+    `isik.common.utils.declared_string`.
+  - `isik.django.apps.common.fields.gfk` -> `isik.django.apps.common.fields.generic_foreign_key`
+    (`AutoGenericForeignKey` is still importable from `isik.django.apps.common.fields`).
+  - `AutoGenericForeignKey.limit_gfk_models_to` -> `limit_content_types_to`.
+- American spelling throughout: "honors" in the idempotency mixin's misconfiguration message, so its
+  catalog entry moved with it.
+
 ## [0.13.1] - 2026-10-03
 
 ### Fixed
@@ -34,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built on it.
 - `UUIDPrimaryKeyModel`, `DatabaseTimestampsModel`, `FullCleanOnSaveModel`, `ReprModel`
   (`isik.django.apps.common.db`) - `BaseModel`'s four parts, each usable alone. `BaseModel` is now
-  composed from them, with the same fields and behaviour.
+  composed from them, with the same fields and behavior.
 - `isik.django.drf.coverage`: `routed_actions()` walks a urlconf's DRF views, and
   `request_policy_coverage(policy)` reports each routed action as covered, exempt (with its reason)
   or uncovered - what a project's own check or test fails the build on.
@@ -77,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Idempotency keys (`isik.django.apps.idempotency`). A caller sends `Idempotency-Key: <uuid>`, and a
   retry of the same request gets the first response back instead of the work being done twice.
-  `IdempotencyMixin` (`isik.django.apps.idempotency.drf`) honours it on any DRF view. The claim is
+  `IdempotencyMixin` (`isik.django.apps.idempotency.drf`) honors it on any DRF view. The claim is
   inserted inside the request's transaction, against a `UNIQUE (claimed_by, key)` index, so a
   concurrent retry waits for the first request and then replays it, or runs for real if it rolled
   back. There is no in-flight state, nothing to reap and no expiry. Needs `ATOMIC_REQUESTS` (or an
@@ -202,7 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `through_model_name=` on `tags()`, to name the generated models. Defaults unchanged, so existing
   tables and migrations are untouched.
 - `guarding.values(*values)` - a `setting=` target matching any of several values:
-  `setting={"status": guarding.values(Status.APPROVED, Status.FEATURED)}`. Every target is normalised
+  `setting={"status": guarding.values(Status.APPROVED, Status.FEATURED)}`. Every target is normalized
   to a `GuardTarget` when the guard is built (`ANY_VALUE` for `fields=`, `EqualsTarget` for a plain
   value, `OneOfTarget` for `guarding.values`); subclass `GuardTarget` for a custom one.
 - Public building blocks, usable on their own: `guarding_values` (what `guarding.values` is),

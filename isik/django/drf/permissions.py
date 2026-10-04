@@ -53,17 +53,36 @@ class IsSuperUser(BasePermission):
         return bool(request.user and request.user.is_superuser)
 
 
-class IsAuthenticatedANDSignupCompleted(BasePermission):
+class SignedInPermission(BasePermission):
+    """
+    A permission that refuses anyone not signed in, then asks `allows(user, request, view)` - so a
+    subclass writes only the one thing it decides, and never the anonymous check before it:
+
+        class MayManageUsers(SignedInPermission):
+            def allows(self, user, request, view):
+                return user.is_staff or user.has_perm("users.manage")
+
+    `allows()` is only ever handed a signed-in user. For a truthy attribute of the user alone,
+    `user_property()` says it in one line; this is for a decision that needs more.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and self.allows(user, request, view))
+
+    def allows(self, user, request, view):
+        """Whether this signed-in `user` may make `request` to `view`."""
+        raise NotImplementedError
+
+
+class IsAuthenticatedANDSignupCompleted(SignedInPermission):
     """
     Allows access only to authenticated users who have completed signup.
     The user model must define SIGNUP_COMPLETED_FIELD, naming the boolean field to check - raises
     ImproperlyConfigured (not a bare AttributeError) if the user model never defines it.
     """
 
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
+    def allows(self, user, request, view):
         try:
             signup_completed_field = user.SIGNUP_COMPLETED_FIELD
         except AttributeError as exc:

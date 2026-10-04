@@ -90,7 +90,7 @@ def violations():
 
 
 # mutmut runs the suite against its own rewritten copy of the source, which these read instead of
-# isik's - and a check on how source is written has nothing to say about a mutant's behaviour.
+# isik's - and a check on how source is written has nothing to say about a mutant's behavior.
 @pytest.mark.skipif("MUTANT_UNDER_TEST" in os.environ, reason="reads source, which mutmut has rewritten")
 class TestEverythingIsTranslatable:
     def test_no_user_facing_string_bypasses_translation(self):

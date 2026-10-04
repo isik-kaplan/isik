@@ -1,4 +1,4 @@
-from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
+from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 
 
 __all__ = [

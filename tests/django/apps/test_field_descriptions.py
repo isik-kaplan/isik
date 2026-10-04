@@ -13,7 +13,7 @@ from django.db import models
 from django.test.utils import isolate_apps
 from django.utils import translation
 
-from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
+from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import bookmarks
 from isik.django.apps.feedback.comments import comments
 from isik.django.apps.feedback.comments import comments as comments_maker

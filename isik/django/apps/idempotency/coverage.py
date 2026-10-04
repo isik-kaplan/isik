@@ -1,4 +1,4 @@
-"""idempotency_coverage() - which routed state-changing actions honour an idempotency key."""
+"""idempotency_coverage() - which routed state-changing actions honor an idempotency key."""
 
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.coverage import Coverage, CoverageStatus, routed_actions
@@ -7,7 +7,7 @@ from isik.django.drf.coverage import Coverage, CoverageStatus, routed_actions
 def idempotency_coverage(urlconf=None, methods=IdempotencyMixin.idempotent_methods):
     """
     `Coverage` of idempotency keys for every routed action answering one of `methods` - POST by
-    default, what `IdempotencyMixin` covers. Covered when the view honours a key for that method,
+    default, what `IdempotencyMixin` covers. Covered when the view honors a key for that method,
     exempt (with its reason) when the action is in `idempotency_exempt_actions`, uncovered otherwise,
     including a view with the mixin whose `idempotent_methods` leave that method out.
     """

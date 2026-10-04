@@ -4,8 +4,12 @@
 
 - [common/](common/README.md)
   - [utils/](common/utils/README.md) - caching, concurrency, error handling, functional/iterable
-    helpers, metaclasses, sentinels (and `DeclaredStr`, declared ones), string case conversion
+    helpers, metaclasses, sentinels (and `DeclaredString`, declared ones), string case conversion
   - [config/](common/config/README.md) - typed settings objects built from environment variables
+
+Using isik from Django? Its imports all start with `isik.django`, so these are easy to miss and come
+up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `DeclaredString`
+([declared_string.md](common/utils/declared_string.md)), `TransformExceptions`.
 
 ## isik.sentry
 
@@ -41,6 +45,11 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 
 - [django/http_exceptions/](django/http_exceptions/README.md) - raise an HTTP status directly
   from anywhere instead of threading `Response`s back up the call stack
+
+## Naming
+
+- [naming.md](naming.md) - the rules isik's names follow: words spelled out, acronyms in capitals,
+  American spelling, purpose over construction
 
 ## Translations
 

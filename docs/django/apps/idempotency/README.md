@@ -5,7 +5,7 @@
 A caller sends `Idempotency-Key: <uuid>` with a state-changing request. A retry with the same key
 and the same request gets the first response back, status and body, instead of doing the work twice.
 
-- [mixin.md](mixin.md) - `IdempotencyMixin`, what a view honours and how to configure it
+- [mixin.md](mixin.md) - `IdempotencyMixin`, what a view honors and how to configure it
 - [claims.md](claims.md) - the claim models, choosing one, `claim_idempotency_key()`, body codecs
 - [fingerprint.md](fingerprint.md) - `request_fingerprint()`, `canonical_body()`, custom normalizers
 

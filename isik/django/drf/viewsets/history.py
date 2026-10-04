@@ -3,7 +3,6 @@
 from django import forms
 from django.db.models.fields.json import KeyTransform
 from django.utils.functional import classproperty
-from django_filters.constants import EMPTY_VALUES
 from django_filters.rest_framework import CharFilter, ChoiceFilter, DateTimeFilter, FilterSet, NumberFilter
 from pghistory.models import Events
 from rest_framework.decorators import action
@@ -11,6 +10,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
+from isik.django.drf.filters import NarrowingFilterMixin
 from isik.django.drf.permissions import IsSuperUser
 from isik.django.drf.serializers.history import generic_history_serializer
 
@@ -44,7 +44,7 @@ def _context_field(event_model, name):
     return None
 
 
-class _ContextFieldFilterMixin:
+class _ContextFieldFilterMixin(NarrowingFilterMixin):
     # pghistory's own Events.objects.across(event_model) can't reference event_model's real
     # column directly - even pghistory.ProxyField on an Events subclass refuses anything but a
     # pgh_context__* path (RuntimeError otherwise), so a real ContextField column is out of its
@@ -54,9 +54,7 @@ class _ContextFieldFilterMixin:
         self._event_model = event_model
         super().__init__(**kwargs)
 
-    def filter(self, qs, value):
-        if value in EMPTY_VALUES:
-            return qs
+    def narrow(self, qs, value):
         lookup = f"{self.field_name}__{self.lookup_expr}"
         matching_ids = self._event_model.objects.filter(**{lookup: value}).values("pgh_id")
         return qs.filter(pgh_id__in=matching_ids)

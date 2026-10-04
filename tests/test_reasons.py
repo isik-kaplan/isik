@@ -8,13 +8,13 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers, viewsets
 
 from isik._internal.reasons import is_reason, require_reason, require_reasons
-from isik.common.utils.declared_str import DeclaredStr, text
+from isik.common.utils.declared_string import DeclaredString, text
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
 from isik.django.drf.viewsets import GuardedFieldsMixin, ViewSetRegistryMixin
 from tests.testapp.models import Widget
 
 
-class Exemption(DeclaredStr):
+class Exemption(DeclaredString):
     reason = text(min_length=20)
 
 

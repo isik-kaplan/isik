@@ -134,7 +134,7 @@ def test_idempotency_coverage_looks_at_the_methods_a_key_is_for():
         ("^ungated/$", "POST", "create", "uncovered", None),
         ("gated/preview/", "POST", "preview", "exempt", "validates without writing anything"),
         ("api/plain/", "POST", None, "uncovered", None),
-        # The mixin is there, but this view honours keys on PUT alone.
+        # The mixin is there, but this view honors keys on PUT alone.
         ("api/gated-plain/", "POST", None, "uncovered", None),
     ]
 

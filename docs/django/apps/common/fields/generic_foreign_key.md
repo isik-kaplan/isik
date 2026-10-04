@@ -1,11 +1,11 @@
-# gfk
+# generic_foreign_key
 
 `AutoGenericForeignKey` is a `GenericForeignKey` subclass that creates its own companion
 content-type and object-id fields via `contribute_to_class`, instead of requiring them declared by
 hand alongside it.
 
 ```python
-from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
+from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 
 class Note(BaseModel):
     body = models.CharField(max_length=200)

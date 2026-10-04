@@ -12,3 +12,20 @@ class MyFilterSet(FilterSet):
 ```
 
 - `"exact"` maps to the bare field name (no suffix); every other lookup gets a `field__lookup` key.
+
+## NarrowingFilterMixin
+
+A django-filter filter that leaves the queryset alone when its value wasn't given, and narrows it
+with `narrow(qs, value)` when it was. django-filter's own `Filter.filter()` skips an empty value, but
+overriding `filter()` loses that - so every custom filter writes `if value in EMPTY_VALUES: return qs`
+again. Mix this in before the filter class instead:
+
+```python
+from django_filters import DateFilter
+from isik.django.drf.filters import NarrowingFilterMixin
+
+
+class PublishedAfterFilter(NarrowingFilterMixin, DateFilter):
+    def narrow(self, qs, value):
+        return qs.filter(published_at__date__gt=value)
+```

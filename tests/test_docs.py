@@ -14,7 +14,7 @@ REPOSITORY = "https://github.com/isik-kaplan/isik/blob/master/"
 LINK = re.compile(r"\]\(([^)\s#]+)(?:#[^)]*)?\)")
 
 # mutmut runs the suite from its own copy of the package and tests, which has no README or docs - and a
-# check on the repository's files has nothing to say about a mutant's behaviour anyway.
+# check on the repository's files has nothing to say about a mutant's behavior anyway.
 pytestmark = pytest.mark.skipif("MUTANT_UNDER_TEST" in os.environ, reason="reads repository files, not code")
 
 

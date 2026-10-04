@@ -3,7 +3,7 @@ from django.db import connection, models
 from django.db.models import Q
 from django.test.utils import isolate_apps
 
-from isik.django.apps.common.fields.gfk import AutoGenericForeignKey
+from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from tests.testapp.models import Note, Tag, Widget
 
 
@@ -30,24 +30,25 @@ def test_setting_the_target_persists_and_resolves_correctly():
     assert fetched.target_object_id == widget.id
 
 
-def test_limit_gfk_models_to_restricts_to_the_given_models():
+def test_limit_content_types_to_restricts_to_the_given_models():
     field = AutoGenericForeignKey(limit_models_to=[Widget])
-    assert field.limit_gfk_models_to == Q(app_label="testapp", model="widget")
+    assert field.limit_content_types_to == Q(app_label="testapp", model="widget")
 
 
-def test_limit_gfk_models_to_accepts_dotted_app_label_strings():
+def test_limit_content_types_to_accepts_dotted_app_label_strings():
     field = AutoGenericForeignKey(limit_models_to=["testapp.Tag"])
-    assert field.limit_gfk_models_to == Q(app_label="testapp", model="tag")
+    assert field.limit_content_types_to == Q(app_label="testapp", model="tag")
 
 
-def test_limit_gfk_models_to_combines_multiple_models_with_or():
+def test_limit_content_types_to_combines_multiple_models_with_or():
     field = AutoGenericForeignKey(limit_models_to=[Widget, Tag])
-    assert field.limit_gfk_models_to == (Q(app_label="testapp", model="widget") | Q(app_label="testapp", model="tag"))
+    expected = Q(app_label="testapp", model="widget") | Q(app_label="testapp", model="tag")
+    assert field.limit_content_types_to == expected
 
 
-def test_limit_gfk_models_to_is_none_when_unrestricted():
+def test_limit_content_types_to_is_none_when_unrestricted():
     field = AutoGenericForeignKey()
-    assert field.limit_gfk_models_to is None
+    assert field.limit_content_types_to is None
 
 
 def test_ct_field_name_and_fk_field_name_start_out_as_none_before_contribute_to_class():
@@ -142,7 +143,7 @@ def test_contribute_to_class_wires_every_default_correctly():
 def test_contribute_to_class_wires_a_real_limit_models_to_freshly():
     # A fresh model with limit_models_to actually set - the module-level Note (used by
     # test_content_type_field_enforces_the_limit_choices_to above) is built once at import time,
-    # so it can't distinguish limit_choices_to=self.limit_gfk_models_to from a mutated None here.
+    # so it can't distinguish limit_choices_to=self.limit_content_types_to from a mutated None here.
     class RestrictedTarget(models.Model):
         target = AutoGenericForeignKey(limit_models_to=[Widget])
 

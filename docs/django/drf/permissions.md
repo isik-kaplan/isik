@@ -13,9 +13,24 @@ class WidgetViewSet(ModelViewSet):
     permission_classes = [IsSuperUser | ReadOnly]  # write access limited to superusers
 ```
 
+## SignedInPermission
+
+A permission base that refuses anyone not signed in, then asks `allows(user, request, view)` - so a
+subclass writes only the one thing it decides, and never the anonymous check before it.
+
+```python
+class MayManageUsers(SignedInPermission):
+    def allows(self, user, request, view):
+        return user.is_staff or user.has_perm("users.manage")
+```
+
+- `allows()` is only ever handed a signed-in user, and its answer is made a `bool`.
+- For a truthy attribute of the user alone, `user_property()` says it in one line - this is for a
+  decision that needs more, the request or the view included.
+
 ## IsAuthenticatedANDSignupCompleted
 
-Allows only authenticated users who have completed signup, per a boolean field named on the user model.
+Allows only authenticated users who have completed signup, per a boolean field named on the user model. A `SignedInPermission`.
 
 ```python
 class User(AbstractUser):
