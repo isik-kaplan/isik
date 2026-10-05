@@ -305,6 +305,15 @@ wheels = [
 ]
 
 [[package]]
+name = "django-hosts"
+version = "7.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/c0/cf2b37b6ef4dda89d00f040e69b4f8a3f52fa4f74b33141b68983c0fecce/django_hosts-7.0.0.tar.gz", hash = "sha256:08006bc09f5af69638721ced0657f24044835a22a608732ee1004adc9c95fb7c", size = 36858, upload-time = "2025-06-19T07:43:22.746Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/93/05/8056f3e631b0aee8ac99929a558d132634945d3cb16253fb2a2785b62dcf/django_hosts-7.0.0-py3-none-any.whl", hash = "sha256:93d3c941336463fd0c9377c1773d1c53a49606fa72656ed7ddfa474d2fe1f907", size = 27858, upload-time = "2025-06-19T07:43:33.953Z" },
+]
+
+[[package]]
 name = "django-lifecycle"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -550,6 +559,7 @@ tiptap = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "django-hosts" },
     { name = "hypothesis" },
     { name = "mutmut" },
     { name = "pre-commit" },
@@ -609,6 +619,7 @@ provides-extras = ["all", "celery", "django", "drf", "sentry", "templated-fields
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=7.6.0" },
+    { name = "django-hosts", specifier = ">=7.0.0" },
     { name = "hypothesis", specifier = ">=6.130.0" },
     { name = "mutmut", specifier = ">=3.7.0" },
     { name = "pre-commit", specifier = ">=3.0.0" },

@@ -18,6 +18,7 @@ from isik.django.apps.common.exemptions import (
     policy_rule,
     project_exemption_rules,
     project_exemptions,
+    unimported_project_exemption_types,
     unseen_project_exemptions,
 )
 from isik.django.apps.common.management.commands import exemptions as command
@@ -127,6 +128,7 @@ class TestTheCommand:
             "line": help_text_line(),
         } in payload["exemptions"]
         assert payload["unseen"] == []
+        assert payload["unimported_types"] == []
 
     def test_rules_as_text_and_json(self):
         text, _ = run("--rules")
@@ -144,10 +146,35 @@ class TestTheCommand:
         payload = json.loads(run("--format", "json")[0])
 
         assert err == (
-            f"{source.resolve()}:2 makes a NoHelpText that wasn't made while loading the project - it isn't "
-            "listed above.\n"
+            f"{source.resolve()}:2 makes an exemption through NoHelpText that loading the project didn't - it "
+            "isn't listed above.\n"
         )
-        assert payload["unseen"] == [{"file": str(source.resolve()), "line": 2, "type": "NoHelpText"}]
+        assert payload["unseen"] == [{"file": str(source.resolve()), "line": 2, "name": "NoHelpText"}]
+
+    def test_unimported_types_are_warned_about(self, monkeypatch, tmp_path):
+        source = tmp_path / "checks.py"
+        source.write_text("class Unloaded(Exemption, rule='app.unloaded', why='x'):\n    pass\n")
+        monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
+
+        _, err = run("--rule", "testapp.help-text")
+        payload = json.loads(run("--format", "json")[0])
+
+        assert err == (
+            f"{source.resolve()}:1 declares Unloaded, which loading the project didn't import - its exemptions "
+            "aren't listed.\n"
+        )
+        assert payload["unimported_types"] == [{"file": str(source.resolve()), "line": 1, "name": "Unloaded"}]
+        assert unimported_project_exemption_types(URLCONF) == [(str(source.resolve()), 1, "Unloaded")]
+
+    def test_test_code_in_the_project_is_not_scanned(self, monkeypatch, tmp_path):
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_views.py").write_text("NoHelpText(reason='a test checking a refusal')\n")
+        monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
+
+        assert unseen_project_exemptions(URLCONF) == []
+        assert unseen_project_exemptions(URLCONF, exclude=()) == [
+            (str((tmp_path / "tests" / "test_views.py").resolve()), 1, "NoHelpText")
+        ]
 
 
 class TestEdges:
@@ -234,6 +261,96 @@ class TestTheOutput:
         assert actions["rules"].help == "Each rule, why it's there, and its count."
         assert (actions["rules"].default, actions["rules"].const) == (False, True)
         assert (actions["format"].choices, actions["format"].default) == (["text", "json"], "text")
-        assert actions["urlconf"].help == "The urlconf to load views from (ROOT_URLCONF by default)."
+        assert actions["urlconf"].help == (
+            "A urlconf to load views from - repeat it for several. Every urlconf the project serves by default."
+        )
+        assert (actions["urlconf"].default, type(actions["urlconf"]).__name__) == (None, "_AppendAction")
         with pytest.raises(CommandError):
             run("--format", "yaml")
+
+
+HOSTED = "tests.django.apps.common.hosted_urls"
+HOSTED_REASON = "routed only by the api host, beside the main widget viewset"
+
+
+class TestAcrossUrlconfs:
+    def hosted(self, entries):
+        return [
+            (e.rule, e.declared_by, e.reason, e.action)
+            for e in entries
+            if e.reason in (HOSTED_REASON, "a host's health check reads the list")
+        ]
+
+    def test_every_django_hosts_urlconf_is_loaded_by_default(self, settings):
+        settings.ROOT_URLCONF = URLCONF
+        settings.ROOT_HOSTCONF = "tests.django.apps.common.hosts"
+
+        out = StringIO()
+        call_command("exemptions", "--format", "json", stdout=out, stderr=StringIO())
+        listed = json.loads(out.getvalue())["exemptions"]
+
+        assert [(e["rule"], e["declared_by"], e["action"]) for e in listed if e["reason"] == HOSTED_REASON] == [
+            ("isik.viewset-registry", "ViewSetRegistryExemption", None)
+        ]
+        assert self.hosted(project_exemptions()) == [
+            ("isik.viewset-registry", "ViewSetRegistryExemption", HOSTED_REASON, None),
+            ("policy.set-up", "HostedGated", "a host's health check reads the list", "list"),
+        ]
+
+    def test_urlconf_given_twice_loads_both(self):
+        out, _ = run("--urlconf", HOSTED, "--rule", "policy.set-up")
+
+        assert out.splitlines()[-1].endswith("list - a host's health check reads the list")
+        assert self.hosted(project_exemptions([URLCONF, HOSTED]))[-1] == (
+            "policy.set-up",
+            "HostedGated",
+            "a host's health check reads the list",
+            "list",
+        )
+        assert "HostedGated" not in {e.declared_by for e in project_exemptions(URLCONF)}
+
+
+class TestWhatGetsLoaded:
+    def test_every_urlconf_given_is_loaded(self, monkeypatch):
+        loaded = []
+        monkeypatch.setattr(
+            project, "get_resolver", lambda urlconf: loaded.append(urlconf) or types.SimpleNamespace(url_patterns=[])
+        )
+
+        project._load_everything(["a.urls", "b.urls"])
+
+        assert loaded == ["a.urls", "b.urls"]
+
+    def test_each_listing_loads_the_urlconfs_it_was_given(self, monkeypatch, tmp_path):
+        loaded = []
+        monkeypatch.setattr(project, "_load_everything", loaded.append)
+        monkeypatch.setattr(project, "_policy_entries", lambda urlconf: ([], {}))
+        monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
+
+        project_exemptions("a.urls")
+        unseen_project_exemptions("b.urls")
+        unimported_project_exemption_types("c.urls")
+
+        assert loaded == ["a.urls", "b.urls", "c.urls"]
+
+    def test_the_unimported_scan_skips_test_code_unless_told_otherwise(self, monkeypatch, tmp_path):
+        (tmp_path / "tests").mkdir()
+        source = tmp_path / "tests" / "types.py"
+        source.write_text("class InATest(Exemption, rule='tmp.in-a-test', why='x'):\n    pass\n")
+        monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
+
+        assert unimported_project_exemption_types(URLCONF) == []
+        assert unimported_project_exemption_types(URLCONF, exclude=()) == [(str(source.resolve()), 1, "InATest")]
+
+    def test_the_command_scans_with_the_urlconfs_it_was_given(self, monkeypatch):
+        asked = []
+        monkeypatch.setattr(
+            command, "unseen_project_exemptions", lambda urlconf: asked.append(("unseen", urlconf)) or []
+        )
+        monkeypatch.setattr(
+            command, "unimported_project_exemption_types", lambda urlconf: asked.append(("unimported", urlconf)) or []
+        )
+
+        run("--rule", "testapp.help-text")
+
+        assert asked == [("unseen", [URLCONF]), ("unimported", [URLCONF])]

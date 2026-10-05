@@ -36,9 +36,7 @@ class TestAReasonInAMap:
     def test_anything_said_is_a_reason(self, value):
         assert is_reason(value) is True
 
-    @pytest.mark.parametrize(
-        "value", ["", "  \n", "n/a", "N/A", " tbd ", "TBD", "-", ".", "x", True, 1, None, ["why"]]
-    )
+    @pytest.mark.parametrize("value", ["", "  \n", "n/a", "N/A", " tbd ", "TBD", "-", ".", "x", True, 1, None, ["why"]])
     def test_blank_placeholders_and_non_text_are_not(self, value):
         assert is_reason(value) is False
 

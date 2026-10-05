@@ -15,6 +15,9 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 - [fields/](fields/generic_foreign_key.md) — `AutoGenericForeignKey`
 - [middleware/](middleware/README.md) — the `Middleware` base, media serving and cookie/header session middleware
 - [skippable_validators/](skippable_validators/README.md) — selectively bypass model field validators
+- `urlconfs.py` — `project_urlconfs(urlconf=None)`: `ROOT_URLCONF` plus each django-hosts host's urlconf
+  when django-hosts is installed, or the urlconfs given; what the coverage walk and `manage.py exemptions` load
+- `manage.py exemptions` — every exemption by rule; see [exemptions.md](../../../common/utils/exemptions.md)
 
 `apps.py` is Django `AppConfig` boilerplate — `CommonConfig.ready()` imports `db.lookups` so the
 `length` lookup registers on startup.

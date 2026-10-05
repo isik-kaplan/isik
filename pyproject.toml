@@ -44,6 +44,7 @@ dev-dependencies = [
     "pre-commit>=3.0.0",
     "ruff>=0.9.0",
     "mutmut>=3.7.0",
+    "django-hosts>=7.0.0",
 ]
 
 [build-system]
@@ -69,6 +70,9 @@ known-first-party = ["isik"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.django_settings"
+# The repository first: django-hosts' wheel installs a top-level `tests` package of its own, which would
+# otherwise shadow this one.
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.coverage.run]

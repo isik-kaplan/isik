@@ -7,6 +7,7 @@ from isik._internal.translation import gettext as _
 from isik.django.apps.common.exemptions import (
     project_exemption_rules,
     project_exemptions,
+    unimported_project_exemption_types,
     unseen_project_exemptions,
 )
 
@@ -35,7 +36,11 @@ class Command(BaseCommand):
         parser.add_argument("--rule", help="Only this rule's exemptions.")
         parser.add_argument("--rules", action="store_true", help="Each rule, why it's there, and its count.")
         parser.add_argument("--format", choices=["text", "json"], default="text")
-        parser.add_argument("--urlconf", help="The urlconf to load views from (ROOT_URLCONF by default).")
+        parser.add_argument(
+            "--urlconf",
+            action="append",
+            help="A urlconf to load views from - repeat it for several. Every urlconf the project serves by default.",
+        )
 
     def handle(self, *args, rule, rules, format, urlconf, **options):
         if rules:
@@ -48,6 +53,7 @@ class Command(BaseCommand):
                 raise CommandError(_("No exemption type or policy exempts from %(rule)r.") % {"rule": rule})
             entries = [entry for entry in entries if entry.rule == rule]
         unseen = unseen_project_exemptions(urlconf)
+        unimported = unimported_project_exemption_types(urlconf)
         if format == "json":
             self.stdout.write(
                 json.dumps(
@@ -63,7 +69,10 @@ class Command(BaseCommand):
                             }
                             for entry in entries
                         ],
-                        "unseen": [{"file": file, "line": line, "type": name} for file, line, name in unseen],
+                        "unseen": [{"file": file, "line": line, "name": name} for file, line, name in unseen],
+                        "unimported_types": [
+                            {"file": file, "line": line, "name": name} for file, line, name in unimported
+                        ],
                     },
                     indent=2,
                 )
@@ -81,8 +90,19 @@ class Command(BaseCommand):
             self.stdout.write("\n".join(_columns(rows)))
         for file, line, name in unseen:
             self.stderr.write(
-                _("%(where)s makes a %(type)s that wasn't made while loading the project - it isn't listed above.")
-                % {"where": _where(file, line), "type": name}
+                _(
+                    "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't "
+                    "listed above."
+                )
+                % {"where": _where(file, line), "name": name}
+            )
+        for file, line, name in unimported:
+            self.stderr.write(
+                _(
+                    "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't "
+                    "listed."
+                )
+                % {"where": _where(file, line), "name": name}
             )
 
     def _rules(self, found, format):

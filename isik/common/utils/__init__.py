@@ -7,6 +7,8 @@ from isik.common.utils.exemptions import (
     declared_exemptions,
     exemption_class,
     exemption_types,
+    makes_exemption,
+    unimported_exemption_types,
     unseen_exemption_calls,
 )
 from isik.common.utils.functional import (
@@ -48,6 +50,7 @@ __all__ = [
     "first_of",
     "get_cached",
     "identity",
+    "makes_exemption",
     "noop",
     "not_none",
     "purge_iterable",
@@ -59,6 +62,7 @@ __all__ = [
     "snake_to_pascal",
     "suppress_callable",
     "transform",
+    "unimported_exemption_types",
     "unseen_exemption_calls",
     "validate_inputs",
     "with_attrs",

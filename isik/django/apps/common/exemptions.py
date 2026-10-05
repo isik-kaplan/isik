@@ -13,8 +13,15 @@ from pathlib import Path
 from django.apps import apps
 from django.urls import get_resolver
 
-from isik.common.utils.exemptions import declared_exemptions, exemption_types, unseen_exemption_calls
+from isik.common.utils.exemptions import (
+    TEST_CODE,
+    declared_exemptions,
+    exemption_types,
+    unimported_exemption_types,
+    unseen_exemption_calls,
+)
 from isik.common.utils.strings import camel_to_snake
+from isik.django.apps.common.urlconfs import project_urlconfs
 
 
 @dataclass(frozen=True)
@@ -71,15 +78,17 @@ def _policy_entries(urlconf):
 
 
 def _load_everything(urlconf):
-    # Models are loaded by django.setup(); the urlconf brings in every routed view, and so every
+    # Models are loaded by django.setup(); the urlconfs bring in every routed view, and so every
     # serializer, viewset and exemption declared with them.
-    get_resolver(urlconf).url_patterns  # noqa: B018 - loading it is the point
+    for each in project_urlconfs(urlconf):
+        get_resolver(each).url_patterns  # noqa: B018 - loading it is the point
 
 
 def project_exemptions(urlconf=None):
     """
     Every exemption the project declares, by rule - within one, in the order they were made, and a
-    policy's in route order.
+    policy's in route order. It loads every urlconf the project serves (`project_urlconfs()`), or
+    `urlconf` - one, or several in a list - to find them.
     """
     _load_everything(urlconf)
     typed = [
@@ -118,10 +127,21 @@ def _project_paths():
     )
 
 
-def unseen_project_exemptions(urlconf=None):
+def unseen_project_exemptions(urlconf=None, exclude=TEST_CODE):
     """
-    `[(file, line, type name)]` for each exemption call in the project's own apps that the import didn't
-    run - one inside a function, say - so "every exemption" stays every one.
+    `[(file, line, name)]` for each exemption call in the project's own apps that loading the project
+    didn't run - one inside a function, say - so "every exemption" stays every one. See
+    `unseen_exemption_calls()`.
     """
     _load_everything(urlconf)
-    return unseen_exemption_calls(_project_paths())
+    return unseen_exemption_calls(_project_paths(), exclude)
+
+
+def unimported_project_exemption_types(urlconf=None, exclude=TEST_CODE):
+    """
+    `[(file, line, name)]` for each exemption type the project's own apps declare that loading the
+    project didn't import, so its rule and its exemptions are missing from the listing. See
+    `unimported_exemption_types()`.
+    """
+    _load_everything(urlconf)
+    return unimported_exemption_types(_project_paths(), exclude)

@@ -123,7 +123,7 @@ msgstr ""
 msgid "%(owner)s.%(attribute)s takes {name: reason}, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:268
+#: isik/common/utils/exemptions.py:302
 #, python-format
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
 msgstr ""
@@ -158,62 +158,62 @@ msgstr ""
 msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or name them in %(lenient)s.unguarded_fields with the reason they're open there."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:108
+#: isik/common/utils/exemptions.py:114
 #, python-format
 msgid "%(type)s claims the rule %(rule)r, which %(module)s.%(claimed)s already exempts from - name another."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:154
+#: isik/common/utils/exemptions.py:160
 #, python-format
 msgid "%(type)s is the base to make exemption types from - subclass it with rule= and why=."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:183
+#: isik/common/utils/exemptions.py:189
 #, python-format
 msgid "%(type)s needs a reason of at least %(length)d characters. %(why)s Got %(reason)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:165
+#: isik/common/utils/exemptions.py:171
 #, python-format
 msgid "%(type)s needs reason=."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:121
+#: isik/common/utils/exemptions.py:127
 #, python-format
 msgid "%(type)s needs rule= - the dotted name of the rule it exempts from."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:127
+#: isik/common/utils/exemptions.py:133
 #, python-format
 msgid "%(type)s needs why= - what the rule asks for, and why it matters."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:158
+#: isik/common/utils/exemptions.py:164
 #, python-format
 msgid "%(type)s takes its reason as reason=, not positionally."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:162
+#: isik/common/utils/exemptions.py:168
 #, python-format
 msgid "%(type)s takes only reason=, not %(names)s."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:133
+#: isik/common/utils/exemptions.py:139
 #, python-format
 msgid "%(type)s's min_length must be a whole number of at least 1, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:178
+#: isik/common/utils/exemptions.py:184
 #, python-format
 msgid "%(type)s's reason must be text, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:101
+#: isik/common/utils/exemptions.py:107
 #, python-format
 msgid "%(type)s's rule must be a dotted slug like 'schema-docs.help-text', not %(rule)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:138
+#: isik/common/utils/exemptions.py:144
 #, python-format
 msgid "%(type)s's shows_as must be a str, not %(value)r."
 msgstr ""
@@ -268,9 +268,14 @@ msgstr ""
 msgid "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields(\"<why>\") if it writes no guarded field."
 msgstr ""
 
-#: isik/django/apps/common/management/commands/exemptions.py:84
+#: isik/django/apps/common/management/commands/exemptions.py:101
 #, python-format
-msgid "%(where)s makes a %(type)s that wasn't made while loading the project - it isn't listed above."
+msgid "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't listed."
+msgstr ""
+
+#: isik/django/apps/common/management/commands/exemptions.py:93
+#, python-format
+msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
 msgstr ""
 
 #: isik/common/config/builder.py:52
@@ -467,12 +472,12 @@ msgstr ""
 msgid "No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:255
+#: isik/common/utils/exemptions.py:289
 #, python-format
 msgid "No exemption type exempts from %(rule)r."
 msgstr ""
 
-#: isik/django/apps/common/management/commands/exemptions.py:48
+#: isik/django/apps/common/management/commands/exemptions.py:53
 #, python-format
 msgid "No exemption type or policy exempts from %(rule)r."
 msgstr ""
@@ -894,7 +899,7 @@ msgstr ""
 msgid "django_permission's message= takes a template, a message or a callable - not %(message)r"
 msgstr ""
 
-#: isik/common/utils/exemptions.py:234
+#: isik/common/utils/exemptions.py:240
 #, python-format
 msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
 msgstr ""
@@ -931,6 +936,11 @@ msgstr ""
 msgid "guarding.values requires at least one value"
 msgstr ""
 
+#: isik/common/utils/exemptions.py:262
+#, python-format
+msgid "makes_exemption() takes an exemption type, not %(value)r."
+msgstr ""
+
 #: isik/django/drf/serializers/meta_combining.py:51
 msgid "meta_fields_to_combine only supports list or dict attributes"
 msgstr ""
@@ -939,7 +949,7 @@ msgstr ""
 msgid "only_actions requires at least one action - with none it would refuse everything"
 msgstr ""
 
-#: isik/django/drf/coverage.py:124
+#: isik/django/drf/coverage.py:130
 #, python-format
 msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""

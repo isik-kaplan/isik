@@ -3,6 +3,8 @@ Walking the routed DRF views for which carry a rule, which are exempt and why, a
 over this module's own urlconf (`urlpatterns` below), which no project setting has to point at.
 """
 
+import sys
+
 import pytest
 from django.http import HttpResponse
 from django.urls import include, path
@@ -223,3 +225,34 @@ def test_plain_views_must_answer_true_false_or_a_reason():
         TypeError, match=r"^plain_views\(\) answers True, False or a reason, not ' ' for not-drf-first/\.$"
     ):
         request_policy_coverage(SetUp, URLCONF, plain_views=lambda routed: " ")
+
+
+def test_each_entry_names_the_urlconf_routing_it():
+    assert {a.urlconf for a in routed_views(URLCONF)} == {URLCONF}
+    assert {a.urlconf for a in routed_views(sys.modules[__name__])} == {URLCONF}
+
+
+def test_by_default_every_django_hosts_urlconf_is_walked(settings):
+    settings.ROOT_URLCONF = URLCONF
+    settings.ROOT_HOSTCONF = "tests.django.apps.common.hosts"
+    from tests.django.apps.common.hosted_urls import HostedGated
+
+    walked = routed_views()
+
+    assert walked[: len(routed_views(URLCONF))] == routed_views(URLCONF)
+    assert [(a.route, a.view, a.method, a.kind, a.urlconf) for a in walked[len(routed_views(URLCONF)) :]] == [
+        ("^hosted/$", HostedGated, "GET", ViewKind.DRF, "tests.django.apps.common.hosted_urls"),
+    ]
+    assert table(request_policy_coverage(SetUp))[-1] == (
+        "^hosted/$",
+        "GET",
+        "list",
+        "exempt",
+        "a host's health check reads the list",
+    )
+
+
+def test_several_urlconfs_are_walked_in_order(settings):
+    hosted = "tests.django.apps.common.hosted_urls"
+
+    assert routed_views([hosted, URLCONF]) == [*routed_views(hosted), *routed_views(URLCONF)]

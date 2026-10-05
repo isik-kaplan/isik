@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-06
+
+### Added
+
+- `makes_exemption(Type)` (`isik.common.utils.exemptions`) - marks a project helper that makes
+  exemptions for its caller (`@not_atomic("...")`). Each exemption it makes is recorded where the
+  helper was called rather than inside it, and the unseen scan counts calls to it. Under other
+  decorators it marks every function down the `__wrapped__` chain.
+- `unimported_exemption_types(paths, exclude=TEST_CODE)` - exemption types declared in source whose
+  module was never imported, so their rule and exemptions were missing from the listing. Types are
+  read with `ast`: a class whose base is `Exemption` or another type (declared in any file, in any
+  order), or an `X = exemption_class(...)`. `manage.py exemptions` reports them on stderr, and in JSON
+  under `"unimported_types"`.
+- `project_urlconfs(urlconf=None)` (`isik.django.apps.common.urlconfs`) - `ROOT_URLCONF`, then every
+  host's urlconf when django-hosts is installed and `ROOT_HOSTCONF` is set, each once. Given urlconfs
+  (one, or a list or tuple) are used as they are. isik doesn't depend on django-hosts.
+- `RoutedAction.urlconf` - the urlconf that routes the entry, since under django-hosts one route can
+  appear in several.
+- `manage.py exemptions --urlconf` can be given more than once.
+
+### Changed
+
+- `unseen_exemption_calls()` follows `from ... import X as Y`. It also counts calls to types and
+  makers that are only declared in the scanned files, not imported.
+- `routed_views()`, `routed_actions()`, `request_policy_coverage()`, `idempotency_coverage()` and
+  `manage.py exemptions` walk every urlconf the project serves by default (`project_urlconfs()`),
+  not only `ROOT_URLCONF`. Without django-hosts that's `ROOT_URLCONF` alone, as before. `urlconf=` also
+  takes a list or tuple.
+- **Breaking:** `unseen_exemption_calls()` and `unseen_project_exemptions()` skip test code by
+  default (`exclude=TEST_CODE`: `tests` directories, `test_*.py`, `*_test.py`, `conftest.py`). Tests
+  make exemptions on purpose and never run while a project loads, so every one used to be flagged.
+  Pass `exclude=()` to scan everything.
+- **Breaking:** `manage.py exemptions --format json` names each `"unseen"` entry's callee `"name"`
+  rather than `"type"`, since it can be a maker function as well as a type.
+
 ## [0.15.0] - 2026-10-05
 
 ### Added

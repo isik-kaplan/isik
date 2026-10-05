@@ -22,8 +22,8 @@ def test_every_post_honors_an_idempotency_key():
 
 ## routed_actions(urlconf=None)
 
-Every method of every DRF view a urlconf routes (`ROOT_URLCONF` by default), in route order, as
-`RoutedAction(route, view, method, action, kind)`. A viewset contributes one per method its router maps,
+Every method of every DRF view a urlconf routes, in route order, as
+`RoutedAction(route, view, method, action, kind, urlconf)`. A viewset contributes one per method its router maps,
 with `action` set; a plain `APIView` one per method it implements, with `action=None`. Plain Django
 views aren't DRF's and are left out, as is OPTIONS, which DRF answers for every view.
 
@@ -38,8 +38,14 @@ answers each entry:
 - `ViewKind.FUNCTION` - a function view, once, with `view` the function and `method=None`: which
   methods a function answers can't be read from it, so a project classifies it by hand.
 
-`routed_actions()` is this without the views that aren't DRF's. For django-hosts, walk each host's
-urlconf.
+`routed_actions()` is this without the views that aren't DRF's.
+
+`urlconf` can be one urlconf, by dotted name or as a module, or several in a list or tuple. By
+default it's every urlconf the project serves, from `project_urlconfs()` in
+`isik.django.apps.common.urlconfs`: `ROOT_URLCONF`, then each host's urlconf when django-hosts is
+installed and `ROOT_HOSTCONF` is set. isik doesn't depend on django-hosts. Each urlconf is walked once,
+and each entry's `urlconf` names the one that routes it, since under django-hosts the same route can
+appear in several.
 
 ## request_policy_coverage(policy, urlconf=None, *, plain_views=None)
 

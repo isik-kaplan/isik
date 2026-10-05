@@ -1,6 +1,7 @@
 """Exemption - a str skipping one named rule, carrying a reason held to a floor, and listed by its rule."""
 
 import copy
+import functools
 import importlib.util
 import pickle
 import sys
@@ -11,11 +12,14 @@ import pytest
 
 from isik.common.utils import exemptions
 from isik.common.utils.exemptions import (
+    TEST_CODE,
     Exemption,
     assert_exemption_budget,
     declared_exemptions,
     exemption_class,
     exemption_types,
+    makes_exemption,
+    unimported_exemption_types,
     unseen_exemption_calls,
 )
 
@@ -278,6 +282,18 @@ class Budgeted(Exemption, rule="tests.budgeted", why="Kept to a budget."):
     pass
 
 
+@makes_exemption(Budgeted)
+def budget_for(reason):
+    """A decorator making a Budgeted for whatever it decorates - a project's own helper, say."""
+    made = Budgeted(reason=reason)
+
+    def mark(function):
+        function.budget = made
+        return function
+
+    return mark
+
+
 class TestListing:
     def test_each_records_where_it_was_made(self):
         made, line = NoHelpText(reason=REASON), sys._getframe().f_lineno
@@ -367,8 +383,13 @@ class TestUnseenCalls:
         assert unseen_exemption_calls([tmp_path]) == [(str(source.resolve()), 3, "NoHelpText")]
 
 
-def frame_at(file, back=None):
-    return types.SimpleNamespace(f_code=types.SimpleNamespace(co_filename=file), f_back=back)
+class Code:
+    def __init__(self, file):
+        self.co_filename = file
+
+
+def frame_at(file, back=None, code=None):
+    return types.SimpleNamespace(f_code=code or Code(file), f_back=back)
 
 
 class TestCallSite:
@@ -408,3 +429,253 @@ class TestCallSite:
         assert exemption_class("Placed", rule="tests.placed", why="x", module="app.exemptions").__module__ == (
             "app.exemptions"
         )
+
+
+class TestMakers:
+    """A function making exemptions for its caller - each is recorded where it was called."""
+
+    def test_each_is_recorded_where_the_maker_was_called(self, monkeypatch):
+        # Fresh, so nothing a previous run of this test registered for the same code counts.
+        monkeypatch.setattr(exemptions, "_makers", {})
+
+        @makes_exemption(Budgeted)
+        def make_budgeted(reason):
+            return Budgeted(reason=reason)
+
+        made, line = make_budgeted("made by a helper, recorded at its caller"), sys._getframe().f_lineno
+
+        assert (made.file, made.line) == (HERE, line)
+        assert exemptions._makers[make_budgeted.__code__] == "make_budgeted"
+
+    def test_a_maker_under_other_decorators_is_marked_all_the_way_down(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_makers", {})
+
+        def passing_through(function):
+            @functools.wraps(function)
+            def wrapper(*args, **kwargs):
+                return function(*args, **kwargs)
+
+            return wrapper
+
+        @makes_exemption(Budgeted)
+        @passing_through
+        def wrapped_maker(reason):
+            return Budgeted(reason=reason)
+
+        made, line = wrapped_maker("made two decorators deep, still recorded here"), sys._getframe().f_lineno
+
+        assert (made.file, made.line) == (HERE, line)
+        assert exemptions._makers[wrapped_maker.__code__] == "wrapped_maker"
+        assert exemptions._makers[wrapped_maker.__wrapped__.__code__] == "wrapped_maker"
+
+    def test_a_maker_frame_is_passed_over(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_ISIK", "/isik/")
+        monkeypatch.setattr(exemptions, "_LIBRARIES", ("/libraries/",))
+        maker_code = Code("/project/transactions.py")
+        monkeypatch.setitem(exemptions._makers, maker_code, "not_atomic")
+        caller = frame_at("/project/views.py")
+        inner = frame_at("/isik/exemptions.py", frame_at("/project/transactions.py", caller, maker_code))
+
+        assert exemptions._call_site(inner) == (caller, "/project/views.py")
+
+    @pytest.mark.parametrize("value", [Exemption, str, "NotAtomic", None])
+    def test_it_takes_an_exemption_type(self, value):
+        with pytest.raises(TypeError) as raised:
+            makes_exemption(value)
+
+        assert str(raised.value) == f"makes_exemption() takes an exemption type, not {value!r}."
+
+
+def write(path, source):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source)
+    return str(path.resolve())
+
+
+CALL = "NoHelpText(reason='never imported, so never made at all')\n"
+
+
+class TestWhatTheScanSkips:
+    def test_test_code_is_skipped_by_default(self, tmp_path):
+        for skipped in ("tests/views.py", "app/tests/deep/models.py", "test_views.py", "views_test.py", "conftest.py"):
+            write(tmp_path / skipped, CALL)
+        app = write(tmp_path / "app" / "views.py", CALL)
+
+        assert TEST_CODE == ("tests", "test_*.py", "*_test.py", "conftest.py")
+        assert unseen_exemption_calls([tmp_path]) == [(app, 1, "NoHelpText")]
+
+    def test_exclude_says_what_else_to_skip(self, tmp_path):
+        tests = write(tmp_path / "tests" / "views.py", CALL)
+        app = write(tmp_path / "app.py", CALL)
+
+        assert unseen_exemption_calls([tmp_path], exclude=()) == [(app, 1, "NoHelpText"), (tests, 1, "NoHelpText")]
+        assert unseen_exemption_calls([tmp_path], exclude=("app.py",)) == [(tests, 1, "NoHelpText")]
+
+    def test_only_the_path_under_the_root_is_matched(self, tmp_path):
+        app = write(tmp_path / "tests" / "app" / "views.py", CALL)
+
+        assert unseen_exemption_calls([tmp_path / "tests" / "app"]) == [(app, 1, "NoHelpText")]
+
+
+DECLARATIONS = """\
+from isik.common.utils.exemptions import Exemption, exemption_class as make, makes_exemption as marks
+
+
+class Local(Exemption, rule="tmp.local", why="Declared, never imported."):
+    pass
+
+
+class Unrelated(dict):
+    pass
+
+
+Made = make("Made", rule="tmp.made", why="Made in one line, never imported.")
+holder.Unpacked = make("Unpacked", rule="tmp.unpacked", why="Assigned to an attribute, so not a name.")
+
+
+@marks(Local)
+def not_atomic(reason):
+    return Local(reason=reason)
+
+
+@staticmethod
+def plain():
+    pass
+"""
+
+SUBCLASSES = """\
+from declarations import Local as Renamed, Made
+
+
+class FromMade(Made):
+    pass
+
+
+class Deeper(FromMade, min_length=60):
+    pass
+
+
+class Stricter(Renamed, min_length=60):
+    pass
+"""
+
+CALLS = """\
+from declarations import Local as Renamed, not_atomic
+
+
+Renamed(reason="through an alias, never run")
+Deeper(reason="a type declared two files and two classes away")
+Renamed("positional, so not a call that makes one")
+not_atomic("a maker called with its reason first")
+not_atomic(reason="a maker called with reason=")
+not_atomic()
+
+
+@not_atomic("a maker used as a decorator")
+def view():
+    pass
+"""
+
+
+class TestTypesAndMakersReadFromSource:
+    def files(self, tmp_path):
+        return (
+            write(tmp_path / "declarations.py", DECLARATIONS),
+            write(tmp_path / "subclasses.py", SUBCLASSES),
+            write(tmp_path / "calls.py", CALLS),
+        )
+
+    def test_types_declared_but_never_imported_are_found(self, tmp_path):
+        declarations, subclasses, _ = self.files(tmp_path)
+
+        assert unimported_exemption_types([tmp_path]) == [
+            (declarations, 4, "Local"),
+            (declarations, 12, "Made"),
+            (subclasses, 4, "FromMade"),
+            (subclasses, 8, "Deeper"),
+            (subclasses, 12, "Stricter"),
+        ]
+
+    def test_calls_to_them_and_to_makers_are_unseen(self, tmp_path):
+        declarations, _, calls = self.files(tmp_path)
+
+        assert unseen_exemption_calls([tmp_path]) == [
+            (calls, 4, "Local"),
+            (calls, 5, "Deeper"),
+            (calls, 7, "not_atomic"),
+            (calls, 8, "not_atomic"),
+            (calls, 12, "not_atomic"),
+            (declarations, 18, "Local"),
+        ]
+
+    def test_a_type_is_unimported_unless_its_own_module_defined_it(self, tmp_path, monkeypatch):
+        source = (
+            "from isik.common.utils.exemptions import Exemption\n\n\n"
+            "class Imported(Exemption, rule='tmp.imported', why='x'):\n"
+            "    pass\n"
+        )
+        imported = write(tmp_path / "imported.py", source)
+        # Named like a type defined elsewhere - a different class, which nothing imported.
+        elsewhere = write(tmp_path / "elsewhere.py", source.replace("tmp.imported", "tmp.elsewhere"))
+        spec = importlib.util.spec_from_file_location("imported", imported)
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, "imported", module)
+        spec.loader.exec_module(module)
+
+        assert unimported_exemption_types([tmp_path]) == [(elsewhere, 4, "Imported")]
+
+    def test_unaliased_declarations_count_too(self, tmp_path):
+        plain = write(
+            tmp_path / "plain.py",
+            "from isik.common.utils.exemptions import exemption_class, makes_exemption\n"
+            "\n"
+            "Plain = exemption_class('Plain', rule='tmp.plain', why='Declared under its own name.')\n"
+            "\n"
+            "\n"
+            "@makes_exemption(Plain)\n"
+            "def plain_maker(reason):\n"
+            "    pass\n"
+            "\n"
+            "\n"
+            "plain_maker('called by its own name, never run')\n",
+        )
+
+        assert unimported_exemption_types([tmp_path]) == [(plain, 3, "Plain")]
+        assert unseen_exemption_calls([tmp_path]) == [(plain, 11, "plain_maker")]
+
+    def test_types_in_test_code_are_skipped_unless_told_otherwise(self, tmp_path):
+        source = write(
+            tmp_path / "tests" / "types.py", "class InATest(Exemption, rule='tmp.in-a-test', why='x'):\n    pass\n"
+        )
+
+        assert unimported_exemption_types([tmp_path]) == []
+        assert unimported_exemption_types([tmp_path], exclude=()) == [(source, 1, "InATest")]
+
+    def test_a_module_no_longer_loaded_has_no_file(self):
+        assert exemptions._module_file("no.such.module") is None
+        assert exemptions._module_file(exemptions.__name__) == str(Path(exemptions.__file__).resolve())
+
+
+class TestRunMakersAreSeen:
+    def test_a_decorator_use_that_ran_is_seen_and_one_that_did_not_is_not(self, tmp_path):
+        source = write(
+            tmp_path / "views.py",
+            "from tests.common.utils.test_exemptions import budget_for\n"
+            "\n"
+            "\n"
+            "@budget_for('a decorator use that ran when the module loaded')\n"
+            "def view():\n"
+            "    pass\n"
+            "\n"
+            "\n"
+            "def later():\n"
+            "    return budget_for('a call that only runs once later() does')\n",
+        )
+        spec = importlib.util.spec_from_file_location("views", source)
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+        assert (declared_exemptions("tests.budgeted")[-1].file, declared_exemptions("tests.budgeted")[-1].line) == (
+            source,
+            4,
+        )
+        assert unseen_exemption_calls([tmp_path]) == [(source, 10, "budget_for")]

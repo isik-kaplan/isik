@@ -76,11 +76,56 @@ is a replay rather than a new declaration, so it isn't recorded.
 - `declared_exemptions(rule=None)` returns every exemption made so far, or only `rule`'s.
 - `assert_exemption_budget(rule, at_most=3)` fails if `rule` has more exemptions than that. Adding
   one then means changing a test in review instead of slipping in unnoticed.
-- `unseen_exemption_calls(paths)` returns `[(file, line, type name)]` for each `<Type>(reason=...)`
-  call under `paths` that never ran, e.g. one inside a function. "Every exemption" means every one,
-  not just every one that happened to execute.
+- `unseen_exemption_calls(paths, exclude=TEST_CODE)` returns `[(file, line, name)]` for each call
+  under `paths` that makes an exemption but never ran, e.g. one inside a function. "Every exemption"
+  means every one, not just every one that happened to execute.
+- `unimported_exemption_types(paths, exclude=TEST_CODE)` returns `[(file, line, name)]` for each type
+  declared under `paths` whose module was never imported, so its rule is missing from
+  `exemption_types()`.
 
-In a Django project, `manage.py exemptions` puts these together. It loads the models and the urlconf,
+Both read the source with Python's `ast` module and import none of it. A type is a class whose base is
+`Exemption` or another type, including one declared later or in another file, or an
+`X = exemption_class("X", ...)`. A call makes an exemption when it calls a type with `reason=`, or a
+`makes_exemption()` function. `from ... import X as Y` is followed, and `module.X(...)` counts as a
+call to `X`.
+
+Both skip migrations, which rebuild exemptions rather than make them. By default they also skip test
+code: `TEST_CODE` is `("tests", "test_*.py", "*_test.py", "conftest.py")`. A test makes exemptions on
+purpose, to check one is refused or listed, and loading the project never runs it. Pass
+`exclude=` to change the patterns. Each one is matched against every file and directory name below
+the path being scanned.
+
+## Helpers that make exemptions
+
+A project helper that makes an exemption for its caller would otherwise be recorded at its own line,
+once for every use. `@makes_exemption(Type)` marks it. Each exemption it makes is then recorded where
+the helper was called, and the scan counts calls to it, with the reason given positionally or as
+`reason=`:
+
+```python
+from isik.common.utils.exemptions import makes_exemption
+
+
+@makes_exemption(NotAtomicReason)
+def not_atomic(reason):
+    reason = NotAtomicReason(reason=reason)
+
+    def mark(view):
+        view.not_atomic = reason
+        return view
+
+    return mark
+
+
+@not_atomic("streams to storage the whole time")   # recorded here
+def upload(request): ...
+```
+
+Under other decorators, it marks every function down the `__wrapped__` chain.
+
+## In a Django project
+
+`manage.py exemptions` puts these together. It loads the models and every urlconf the project serves,
 then lists every exemption by rule. Each `RequestPolicy`'s `{action: reason}` exemptions on routed
 views appear under `policy.<policy-name>`:
 
@@ -93,10 +138,16 @@ policy.organization-is-set-up apps/orgs/views.py:12          me - answers who is
 $ python manage.py exemptions --rule schema-docs.help-text   # one rule
 $ python manage.py exemptions --rules                        # each rule, its count, and its why
 $ python manage.py exemptions --format json                  # for tooling and CI diffing
+$ python manage.py exemptions --urlconf config.urls.api --urlconf config.urls.admin
 ```
 
-The command reports calls in the project's own apps that never ran on stderr (in JSON, under
-`"unseen"`).
+By default the urlconfs are `project_urlconfs()`: `ROOT_URLCONF`, plus every host's urlconf when
+django-hosts is installed and `ROOT_HOSTCONF` is set. `--urlconf`, given once or more, names them
+instead.
+
+On stderr, the command reports calls in the project's own apps that never ran, and types they declare
+that were never imported. Test code is skipped. In JSON these appear under `"unseen"` and
+`"unimported_types"`, each entry with a `file`, `line` and `name`.
 
 ## isik's own opt-outs
 

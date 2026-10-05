@@ -18,6 +18,7 @@ from django.urls import URLResolver, get_resolver
 
 from isik._internal.reasons import is_reason
 from isik._internal.translation import gettext as _
+from isik.django.apps.common.urlconfs import project_urlconfs
 from isik.django.drf.viewsets.request_policies import RequestPoliciesMixin
 
 
@@ -33,7 +34,8 @@ class RoutedAction:
     One method a routed view answers. `action` is the viewset action, None anywhere else. `kind` says
     what answers it: a DRF view (`view` is its class), a Django class-based view (`view` is its class),
     or a function view (`view` is the function, and `method` is None - which methods a function
-    answers can't be read from it).
+    answers can't be read from it). `urlconf` names the urlconf that routes it - under django-hosts, one
+    route can be in several.
     """
 
     route: str
@@ -41,6 +43,7 @@ class RoutedAction:
     method: str | None
     action: str | None
     kind: ViewKind = ViewKind.DRF
+    urlconf: str | None = None
 
 
 class CoverageStatus(StrEnum):
@@ -86,27 +89,30 @@ def _answers(view):
 
 def routed_views(urlconf=None):
     """
-    Every method of every view `urlconf` routes (the project's `ROOT_URLCONF` by default), in route
-    order: a DRF view's as `routed_actions()` gives them, a Django class-based view's one per method it
-    implements, and a function view once, with `method=None` - see `RoutedAction`.
+    Every method of every view routed by `urlconf` - one, or several in a list - or by default by every
+    urlconf the project serves (`project_urlconfs()`: `ROOT_URLCONF`, and each django-hosts host's), in
+    route order: a DRF view's as `routed_actions()` gives them, a Django class-based view's one per
+    method it implements, and a function view once, with `method=None` - see `RoutedAction`.
     """
     found = []
-    for route, view in _walk(get_resolver(urlconf).url_patterns, ""):
-        if getattr(view, "cls", None) is not None:
-            for method, action in _answers(view):
-                found.append(RoutedAction(route, view.cls, method, action))
-        elif getattr(view, "view_class", None) is not None:
-            for method in _handlers(view.view_class):
-                found.append(RoutedAction(route, view.view_class, method, None, ViewKind.CLASS))
-        else:
-            found.append(RoutedAction(route, view, None, None, ViewKind.FUNCTION))
+    for each in project_urlconfs(urlconf):
+        name = getattr(each, "__name__", each)
+        for route, view in _walk(get_resolver(each).url_patterns, ""):
+            if getattr(view, "cls", None) is not None:
+                for method, action in _answers(view):
+                    found.append(RoutedAction(route, view.cls, method, action, urlconf=name))
+            elif getattr(view, "view_class", None) is not None:
+                for method in _handlers(view.view_class):
+                    found.append(RoutedAction(route, view.view_class, method, None, ViewKind.CLASS, name))
+            else:
+                found.append(RoutedAction(route, view, None, None, ViewKind.FUNCTION, name))
     return found
 
 
 def routed_actions(urlconf=None):
     """
-    Every method of every DRF view `urlconf` routes (the project's `ROOT_URLCONF` by default), in route
-    order - `routed_views()` without the views that aren't DRF's. OPTIONS is left out: DRF answers it
+    Every method of every DRF view `urlconf` routes (every urlconf the project serves by default), in
+    route order - `routed_views()` without the views that aren't DRF's. OPTIONS is left out: DRF answers it
     for every view, and it changes nothing.
     """
     return [routed for routed in routed_views(urlconf) if routed.kind is ViewKind.DRF]
