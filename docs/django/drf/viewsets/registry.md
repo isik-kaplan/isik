@@ -10,7 +10,7 @@ ViewSetRegistryMixin.get_for_model(Widget) is WidgetViewSet
 ViewSetRegistryMixin.get_for_model(Unregistered)  # None, not KeyError
 ```
 
-- Registering two viewsets for the same model raises `ImproperlyConfigured` immediately. A subclass with no `model` set yet (e.g. an abstract intermediate relying on `RequiredAttributesMixin` to enforce it later) is skipped rather than registered under a placeholder - as is one with `exempt_from_registry = "<why>"`. The exemption is a reason, not `True`: a second viewset over a registered model is usually the mistake the registry exists to catch, so the one that isn't says why. `True` raises `ImproperlyConfigured`.
+- Registering two viewsets for the same model raises `ImproperlyConfigured` immediately. A subclass with no `model` set yet (e.g. an abstract intermediate relying on `RequiredAttributesMixin` to enforce it later) is skipped rather than registered under a placeholder - as is one with `exempt_from_registry = "<why>"`. The exemption is a reason, not `True`: a second viewset over a registered model is usually the mistake the registry exists to catch, so the one that isn't says why. The reason is a `ViewSetRegistryExemption` (rule `isik.viewset-registry`, see [exemptions.md](../../../common/utils/exemptions.md)), given as a `str` of at least 40 characters or as the type itself. `True`, or a shorter reason, raises `ImproperlyConfigured`.
 - Set `is_base_class = True` on a project-level intermediate to give that branch its own private registry instead of sharing this one - several independent hierarchies (e.g. one `BaseModelViewSet` per API) can then each register the same model without colliding, and without needing `exempt_from_registry` sprinkled across every one of them.
 
     ```python

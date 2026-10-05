@@ -23,15 +23,49 @@ def test_every_post_honors_an_idempotency_key():
 ## routed_actions(urlconf=None)
 
 Every method of every DRF view a urlconf routes (`ROOT_URLCONF` by default), in route order, as
-`RoutedAction(route, view, method, action)`. A viewset contributes one per method its router maps,
+`RoutedAction(route, view, method, action, kind)`. A viewset contributes one per method its router maps,
 with `action` set; a plain `APIView` one per method it implements, with `action=None`. Plain Django
 views aren't DRF's and are left out, as is OPTIONS, which DRF answers for every view.
 
-## request_policy_coverage(policy, urlconf=None)
+## routed_views(urlconf=None)
+
+Every view a urlconf routes, DRF's or not, through nested `include()`s, with `kind` saying what
+answers each entry:
+
+- `ViewKind.DRF` - as `routed_actions()` gives them.
+- `ViewKind.CLASS` - a Django class-based view, one entry per method it implements (`post`, `put`,
+  ...), with `view` its class.
+- `ViewKind.FUNCTION` - a function view, once, with `view` the function and `method=None`: which
+  methods a function answers can't be read from it, so a project classifies it by hand.
+
+`routed_actions()` is this without the views that aren't DRF's. For django-hosts, walk each host's
+urlconf.
+
+## request_policy_coverage(policy, urlconf=None, *, plain_views=None)
 
 A `Coverage(routed, status, reason)` per routed action: `covered` when the view runs `policy`,
 `exempt` (with the reason it gave) when the action is in the policy's exemptions, `uncovered`
 otherwise. `entry.is_uncovered` for the ones to fail on.
+
+A view that isn't DRF's can't carry `RequestPoliciesMixin`. Pass `plain_views(routed)` to judge those
+views yourself, and they join the report. It answers `True` (covered), a reason (exempt) or `False`
+(uncovered) for each non-DRF entry of `routed_views()`. Without it they're left out. With it, one
+closed-world test covers everything routed:
+
+```python
+GATED_VIEWS = {EmailAddView, PasswordSetView}
+
+
+def gate(routed):
+    if routed.view is health_check:
+        return "answers load balancers, which never sign in"
+    return routed.view in GATED_VIEWS or routed.method == "GET"
+
+
+def test_every_routed_write_is_behind_the_reauthentication_gate():
+    report = request_policy_coverage(RecentlyAuthenticated, plain_views=gate)
+    assert [entry for entry in report if entry.is_uncovered] == []
+```
 
 ## idempotency_coverage(urlconf=None, methods=("POST",))
 

@@ -9,7 +9,7 @@ from isik.django.drf.serializers.flattened_one_to_one import FlattenedOneToOneMi
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin
 from isik.django.drf.serializers.history import generic_history_serializer
 from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
-from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
+from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin, SerializerRegistryExemption
 from isik.django.drf.serializers.request_context import RequestContextMixin
 from isik.django.drf.serializers.write_only import WriteOnlyFieldsMixin
 
@@ -24,6 +24,7 @@ __all__ = [
     "MetaCombiningMixin",
     "ModelSerializerRegistryMixin",
     "RequestContextMixin",
+    "SerializerRegistryExemption",
     "WriteOnlyFieldsMixin",
     "generic_history_serializer",
     "relational_serializer",

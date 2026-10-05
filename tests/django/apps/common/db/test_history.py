@@ -4,13 +4,18 @@ import pghistory
 import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.db import models
+from django.db import connection, models
 from django.test import override_settings
 from django.test.utils import isolate_apps
 
 from isik.django.apps.common.db import history as history_module
 from isik.django.apps.common.db import track_events
-from isik.django.apps.common.db.history import ContextField, event_model_for, history_middleware_installed
+from isik.django.apps.common.db.history import (
+    ContextField,
+    event_model_for,
+    history_middleware_installed,
+    object_stream_index,
+)
 from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget, WidgetEvent
 
 
@@ -304,3 +309,53 @@ def test_track_events_context_fields_combine_into_one_trigger_covering_every_fie
     event_triggers = event_model_for(Tracked)._meta.triggers
     stamp_trigger = next(t for t in event_triggers if t.name == "stamp_context_fields")
     assert stamp_trigger.func.count("NEW.") == 2
+
+
+def _fresh_model(prefix):
+    # Fresh, uniquely-named model - see test_track_events_forwards_its_own_trackers_not_just_kwargs.
+    attrs = {
+        "name": models.CharField(max_length=100),
+        "__module__": __name__,
+        "Meta": type("Meta", (), {"app_label": "testapp"}),
+    }
+    return type(f"{prefix}{uuid.uuid4().hex[:8]}", (models.Model,), attrs)
+
+
+def _index_fields(model):
+    return [tuple(index.fields) for index in model._meta.indexes]
+
+
+class TestObjectStreamIndex:
+    def test_every_event_table_with_a_stream_gets_it(self):
+        assert ("pgh_obj", "-pgh_id") in _index_fields(event_model_for(Widget))
+
+    def test_a_callers_own_indexes_stay_beside_it(self):
+        fields = _index_fields(event_model_for(ContextTrackedWidget))
+        assert fields.count(("pgh_obj", "-pgh_id")) == 1
+        assert ("tenant", "actor") in fields
+
+    @isolate_apps("tests.testapp")
+    def test_an_event_table_without_pgh_obj_gets_none(self):
+        Tracked = track_events(obj_field=None)(_fresh_model("FreshStreamlessWidget"))
+        event_model = event_model_for(Tracked)
+        assert not any(field.name == "pgh_obj" for field in event_model._meta.get_fields())
+        assert ("pgh_obj", "-pgh_id") not in _index_fields(event_model)
+
+    @isolate_apps("tests.testapp")
+    def test_one_decorator_reused_adds_it_once_to_each_model(self):
+        track = track_events(meta={"indexes": [models.Index(fields=["name"], name="reused_name_idx")]})
+        first = event_model_for(track(_fresh_model("FreshReusedWidgetA")))
+        second = event_model_for(track(_fresh_model("FreshReusedWidgetB")))
+        assert _index_fields(first) == [("name",), ("pgh_obj", "-pgh_id")]
+        assert _index_fields(second) == [("name",), ("pgh_obj", "-pgh_id")]
+
+    def test_each_call_is_a_new_unnamed_index(self):
+        assert object_stream_index() is not object_stream_index()
+        assert object_stream_index().name == ""
+
+    def test_the_database_has_it(self):
+        table = event_model_for(Widget)._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT indexdef FROM pg_indexes WHERE tablename = %s", [table])
+            definitions = [row[0] for row in cursor.fetchall()]
+        assert any('("pgh_obj_id", "pgh_id" DESC)' in d or "(pgh_obj_id, pgh_id DESC)" in d for d in definitions)

@@ -12,7 +12,10 @@ from pghistory.core import DeleteEvent, InsertEvent, UpdateEvent
 from pghistory.middleware import HistoryMiddleware
 
 from isik._internal.translation import gettext as _
+from isik.common.utils.sentinel import Sentinel
 
+
+_NOT_GIVEN = Sentinel("TRACK_EVENTS_NOT_GIVEN")
 
 _INFERRED_CASTS = {
     models.UUIDField: "uuid",
@@ -149,19 +152,34 @@ def _context_fields_attrs_and_trigger(context_fields):
     return attrs, trigger
 
 
+def object_stream_index():
+    """
+    `(pgh_obj, -pgh_id)` - what reading one object's history needs. Each event's predecessor is found
+    with `pgh_obj_id = X AND pgh_id < N`; on pghistory's own single-column `pgh_obj` index, a page of a
+    stream costs the square of the stream's length. `track_events()` adds it to every event table
+    that has a stream. A new instance each call, since Django names an index after the model it joins.
+    """
+    return models.Index(fields=["pgh_obj", "-pgh_id"])
+
+
 def track_events(*, context_fields=(), **kwargs):
     def track_model_history(cls):
         """
         Instead of using pghistory.track() directly, if we need base configuration we will do it here.
         """
         trackers = [InsertEvent(), UpdateEvent(), DeleteEvent()]
+        options = dict(kwargs)
+        meta = dict(options.get("meta", {}))
         attrs, trigger = _context_fields_attrs_and_trigger(context_fields)
         if attrs:
-            kwargs["attrs"] = {**attrs, **kwargs.get("attrs", {})}
+            options["attrs"] = {**attrs, **options.get("attrs", {})}
         if trigger:
-            meta = kwargs.get("meta", {})
-            kwargs["meta"] = {**meta, "triggers": [*meta.get("triggers", []), trigger]}
-        return pghistory.track(*trackers, **kwargs)(cls)
+            meta["triggers"] = [*meta.get("triggers", []), trigger]
+        # obj_field=None is an event table with no pgh_obj, so no stream to index.
+        if options.get("obj_field", _NOT_GIVEN) is not None:
+            meta["indexes"] = [*meta.get("indexes", []), object_stream_index()]
+        options["meta"] = meta
+        return pghistory.track(*trackers, **options)(cls)
 
     return track_model_history
 

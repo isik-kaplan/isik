@@ -4,7 +4,7 @@ Shared Django app: base model/admin classes, ORM helpers, and cross-cutting midd
 used by isik's other Django apps.
 
 Plain-Python helpers that come up in Django code just as often live in `isik.common.utils` -
-`first_of`, `not_none`, `with_attrs`, `returns`, `DeclaredString`: see
+`first_of`, `not_none`, `with_attrs`, `returns`, `Exemption`: see
 [common/utils](../../../common/utils/README.md).
 
 - [model_makers](model_makers.md) — shared plumbing behind feedback/tags' model-generating "makers"

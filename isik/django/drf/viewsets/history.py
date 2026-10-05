@@ -146,12 +146,21 @@ class HistoryMixin:
     the point); turn it on when a viewset's `get_queryset()` is itself the boundary (e.g. scoped to
     the caller's own organization) - without it, the cross-object endpoint answers for objects the
     per-object one would 404 on.
+
+    `history_component_prefix` (default `""`) goes in front of the generated serializer's name, and so
+    of its schema component. A second `HistoryMixin` viewset over the same model needs one - two
+    `WidgetHistory` components would collide, and the schema would keep only one of their shapes:
+
+        class StaffWidgetViewSet(HistoryMixin, BaseModelViewSet):
+            ...
+            history_component_prefix = "Staff"   # StaffWidgetHistory, not WidgetHistory
     """
 
     extra_history_filters = {}
     history_list_permission_classes = [IsSuperUser]
     history_withhold = ()
     history_list_scoped_to_queryset = False
+    history_component_prefix = ""
 
     @classmethod
     def default_history_filters(cls):
@@ -198,7 +207,11 @@ class HistoryMixin:
         cached = cls.__dict__.get("_history_serializer_class")
         if cached is not None:
             return cached
-        built = generic_history_serializer(cls.model, withhold=cls.history_withhold)
+        built = generic_history_serializer(
+            cls.model,
+            withhold=cls.history_withhold,
+            name=f"{cls.history_component_prefix}{cls.model.__name__}HistorySerializer",
+        )
         cls._history_serializer_class = built
         return built
 

@@ -6,8 +6,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import SAFE_METHODS, OperandHolder, SingleOperandHolder
 from rest_framework.serializers import ListSerializer
 
-from isik._internal.reasons import is_reason, require_reasons
+from isik._internal.reasons import require_exemption, require_reasons
 from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import Exemption
 from isik.django.drf._changes import MISSING as _MISSING
 from isik.django.drf._changes import changed as _changed
 from isik.django.drf._changes import dig as _dig
@@ -30,11 +31,19 @@ def _guards_in(permission):
     return _nested_guards(permission)
 
 
+class WritesNoGuardedFields(
+    Exemption,
+    rule="isik.guarded-fields.writes-none",
+    why="A write through a viewset with field guards runs them, or it fails and is rolled back.",
+):
+    """Why an action writes no guarded field - `@writes_no_guarded_fields`'s type."""
+
+
 def writes_no_guarded_fields(reason):
     """
     Marks a viewset action as writing no guarded field - one that saves through no serializer at
     all (a service call, an ORM update), so its viewset's field guards have nothing to check - and
-    says why:
+    says why, in at least 40 characters (or as a `WritesNoGuardedFields(reason=...)`):
 
         @writes_no_guarded_fields("rotates the secret through the service, touching no guarded field")
         @action(detail=True, methods=["post"])
@@ -45,7 +54,7 @@ def writes_no_guarded_fields(reason):
     fails - and is rolled back - rather than trusting that nothing guarded was written. Either
     decorator order works.
     """
-    if not is_reason(reason):
+    if not isinstance(reason, str):
         raise ImproperlyConfigured(
             _(
                 "writes_no_guarded_fields takes the reason the action writes no guarded field - "
@@ -53,6 +62,7 @@ def writes_no_guarded_fields(reason):
             )
             % {"value": reason}
         )
+    reason = require_exemption("writes_no_guarded_fields", "reason", reason, WritesNoGuardedFields)
 
     def mark(handler):
         handler.writes_no_guarded_fields = reason

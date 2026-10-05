@@ -7,7 +7,7 @@
 - [iterables.md](iterables.md) - `not_none`, `first_of`, `purge_iterable`, `purge_mapping`, `all_combinations`.
 - [metaclasses.md](metaclasses.md) - `is_dunder`, `transform` metaclass for hook-driven class bodies.
 - [required_attributes.md](required_attributes.md) - `RequiredAttributesMixin`, fail fast on missing subclass attributes.
-- [declared_string.md](declared_string.md) - `DeclaredString`, `text()`, `attribute()`: str sentinels whose value, validation and attributes are declared.
+- [exemptions.md](exemptions.md) - `Exemption`, `exemption_class`: opt-outs that name the rule they skip and say why, listed by rule (`manage.py exemptions`).
 - [sentinel.md](sentinel.md) - `Sentinel`, unique named "not provided" markers.
 - [strings.md](strings.md) - `camel_to_snake`, `snake_to_pascal`, `snake_to_human`, `words_to_pascal`.
 - [validation.md](validation.md) - `validate_inputs`, argument validation for a plain function/method by position or name.

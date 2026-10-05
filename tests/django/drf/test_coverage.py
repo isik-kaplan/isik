@@ -3,8 +3,10 @@ Walking the routed DRF views for which carry a rule, which are exempt and why, a
 over this module's own urlconf (`urlpatterns` below), which no project setting has to point at.
 """
 
+import pytest
 from django.http import HttpResponse
 from django.urls import include, path
+from django.views import View
 from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.views import APIView
@@ -12,7 +14,15 @@ from rest_framework.viewsets import ViewSet
 
 from isik.django.apps.idempotency.coverage import idempotency_coverage
 from isik.django.apps.idempotency.drf import IdempotencyMixin
-from isik.django.drf.coverage import Coverage, CoverageStatus, RoutedAction, request_policy_coverage, routed_actions
+from isik.django.drf.coverage import (
+    Coverage,
+    CoverageStatus,
+    RoutedAction,
+    ViewKind,
+    request_policy_coverage,
+    routed_actions,
+    routed_views,
+)
 from isik.django.drf.viewsets import RequestPoliciesMixin, RequestPolicy
 
 
@@ -72,6 +82,14 @@ def not_drf(request):
     return HttpResponse()
 
 
+class DjangoView(View):
+    def get(self, request):
+        return HttpResponse()
+
+    def post(self, request):
+        return HttpResponse()
+
+
 router = SimpleRouter()
 router.register("gated", Gated, basename="gated")
 router.register("ungated", Ungated, basename="ungated")
@@ -83,6 +101,7 @@ urlpatterns = [
     path("gated/preview/", Gated.as_view({"post": "preview"})),
     path("api/", include([path("plain/", PlainView.as_view()), path("gated-plain/", GatedPlainView.as_view())])),
     path("not-drf/", not_drf),
+    path("site/", include([path("account/", include([path("email/", DjangoView.as_view())]))])),
 ]
 
 
@@ -154,3 +173,53 @@ def test_an_entry_says_whether_it_is_uncovered():
     assert Coverage(routed, CoverageStatus.EXEMPT, "why").is_uncovered is False
     assert Coverage(routed, CoverageStatus.COVERED).is_uncovered is False
     assert Coverage(routed, CoverageStatus.COVERED).reason is None
+
+
+def test_every_view_is_walked_with_what_answers_it():
+    assert [(a.route, a.view, a.method, a.action, a.kind) for a in routed_views(URLCONF)] == [
+        ("^gated/$", Gated, "GET", "list", ViewKind.DRF),
+        ("^gated/$", Gated, "POST", "create", ViewKind.DRF),
+        ("^gated/(?P<pk>[^/.]+)/$", Gated, "GET", "retrieve", ViewKind.DRF),
+        ("^ungated/$", Ungated, "POST", "create", ViewKind.DRF),
+        ("not-drf-first/", not_drf, None, None, ViewKind.FUNCTION),
+        ("gated/preview/", Gated, "POST", "preview", ViewKind.DRF),
+        ("api/plain/", PlainView, "GET", None, ViewKind.DRF),
+        ("api/plain/", PlainView, "POST", None, ViewKind.DRF),
+        ("api/gated-plain/", GatedPlainView, "POST", None, ViewKind.DRF),
+        ("not-drf/", not_drf, None, None, ViewKind.FUNCTION),
+        ("site/account/email/", DjangoView, "GET", None, ViewKind.CLASS),
+        ("site/account/email/", DjangoView, "POST", None, ViewKind.CLASS),
+    ]
+
+
+def test_routed_actions_are_the_drf_part_of_routed_views():
+    assert routed_actions(URLCONF) == [a for a in routed_views(URLCONF) if a.kind is ViewKind.DRF]
+
+
+def test_plain_views_join_the_report_as_the_project_judges_them():
+    def plain_views(routed):
+        if routed.view is DjangoView:
+            return routed.method == "POST"
+        if routed.route == "not-drf/":
+            return "a health check, answering anyone"
+        return False
+
+    plain = [entry for entry in table(request_policy_coverage(SetUp, URLCONF, plain_views=plain_views))]
+    assert [entry for entry in plain if entry[0] in ("not-drf-first/", "not-drf/", "site/account/email/")] == [
+        ("not-drf-first/", None, None, "uncovered", None),
+        ("not-drf/", None, None, "exempt", "a health check, answering anyone"),
+        ("site/account/email/", "GET", None, "uncovered", None),
+        ("site/account/email/", "POST", None, "covered", None),
+    ]
+
+
+def test_without_plain_views_only_drf_views_are_reported():
+    routes = {entry.routed.route for entry in request_policy_coverage(SetUp, URLCONF)}
+    assert routes.isdisjoint({"not-drf-first/", "not-drf/", "site/account/email/"})
+
+
+def test_plain_views_must_answer_true_false_or_a_reason():
+    with pytest.raises(
+        TypeError, match=r"^plain_views\(\) answers True, False or a reason, not ' ' for not-drf-first/\.$"
+    ):
+        request_policy_coverage(SetUp, URLCONF, plain_views=lambda routed: " ")

@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Now
 from django_lifecycle import AFTER_CREATE, AFTER_SAVE, AFTER_UPDATE, BEFORE_CREATE, BEFORE_SAVE, BEFORE_UPDATE, hook
 
 from isik.django.apps.common.db import (
@@ -25,6 +26,7 @@ from isik.django.apps.feedback.notes import UserNoteMixin, notes
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
 from isik.django.apps.tags.tags import TaggableMixin, tags
 from isik.django.apps.templated_fields import TemplateCharField, TemplatePolicy, TemplateTextField
+from tests.testapp.exemptions import NoComment, NoHelpText
 
 
 def positive_only(value):
@@ -286,6 +288,29 @@ class TimestampedNote(DatabaseTimestampsModel):
     """Only the database-kept timestamps - Django's own integer pk, no full_clean on save, no repr."""
 
     text = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class ModifiedColumnNote(DatabaseTimestampsModel):
+    """The timestamps with `updated_at` stored in a column named otherwise - the trigger must follow it."""
+
+    text = models.CharField(max_length=50, blank=True)
+    updated_at = models.DateTimeField(db_default=Now(), db_column="Modified", editable=False)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class ExemptedNote(models.Model):
+    """A field skipping two documentation rules - its migration writes each exemption as the call that made it."""
+
+    text = models.CharField(
+        max_length=50,
+        help_text=NoHelpText(reason="the model's own name already says what the text is"),
+        db_comment=NoComment(reason="a scratch column the tests write and read straight back"),
+    )
 
     class Meta:
         app_label = "testapp"

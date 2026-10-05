@@ -16,7 +16,7 @@ from rest_framework.viewsets import ModelViewSet
 from isik.django.drf.permissions import BasePermission, IsSuperUser, guarding
 from isik.django.drf.serializers.base import BaseModelSerializer
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin, _active_guarded_view
-from isik.django.drf.viewsets import GuardedFieldsMixin, writes_no_guarded_fields
+from isik.django.drf.viewsets import GuardedFieldsMixin, WritesNoGuardedFields, writes_no_guarded_fields
 from tests.testapp.models import Widget
 
 
@@ -231,7 +231,7 @@ class TestAfterTheFact:
             Widget.objects.filter(pk=pk).update(name="archived")
             return Response({})
 
-        mark = writes_no_guarded_fields("saves through no serializer")
+        mark = writes_no_guarded_fields("saves through no serializer, so no guarded field moves")
         if decorators_outer_first:
             archive = mark(action(detail=True, methods=["post"])(archive))
         else:
@@ -245,10 +245,18 @@ class TestAfterTheFact:
         def handler():
             pass
 
-        assert writes_no_guarded_fields("rotates through the service")(handler) is handler
-        assert handler.writes_no_guarded_fields == "rotates through the service"
+        assert writes_no_guarded_fields("rotates the secret through the service alone")(handler) is handler
+        assert handler.writes_no_guarded_fields == WritesNoGuardedFields(
+            reason="rotates the secret through the service alone"
+        )
+        assert isinstance(handler.writes_no_guarded_fields, WritesNoGuardedFields)
 
-    @pytest.mark.parametrize("reason", ["", "   ", None, True])
+    def test_the_decorator_takes_a_reason_already_made(self):
+        reason = WritesNoGuardedFields(reason="rotates the secret through the service alone")
+
+        assert writes_no_guarded_fields(reason)(lambda: None).writes_no_guarded_fields is reason
+
+    @pytest.mark.parametrize("reason", [None, True])
     def test_the_decorator_needs_a_reason(self, reason):
         with pytest.raises(ImproperlyConfigured) as raised:
             writes_no_guarded_fields(reason)
@@ -256,6 +264,17 @@ class TestAfterTheFact:
         assert str(raised.value) == (
             "writes_no_guarded_fields takes the reason the action writes no guarded field - "
             f'@writes_no_guarded_fields("..."), not {reason!r}.'
+        )
+
+    @pytest.mark.parametrize("reason", ["", "   ", "rotates through the service"])
+    def test_the_decorator_needs_a_reason_of_at_least_forty_characters(self, reason):
+        with pytest.raises(ImproperlyConfigured) as raised:
+            writes_no_guarded_fields(reason)
+
+        assert str(raised.value) == (
+            "writes_no_guarded_fields.reason - WritesNoGuardedFields needs a reason of at least 40 characters. "
+            "A write through a viewset with field guards runs them, or it fails and is rolled back. "
+            f"Got {' '.join(reason.split())!r}."
         )
 
     def test_the_decorator_used_bare_is_told_it_needs_a_reason(self):
@@ -351,7 +370,9 @@ class TestDispatch:
             f"Positional{handler_name}",
             plain_serializer(f"Positional{handler_name}Serializer"),
             {
-                handler_name: writes_no_guarded_fields("saves through no serializer")(handler),
+                handler_name: writes_no_guarded_fields("saves through no serializer, so no guarded field moves")(
+                    handler
+                ),
             },
         )
         request = getattr(APIRequestFactory(), method)(f"/widgets/{widget.pk}/", {}, format="json")
@@ -398,7 +419,7 @@ class TestTransaction:
     def depth_during(viewset_name, user, pk, **attrs):
         depths = []
 
-        @writes_no_guarded_fields("saves through no serializer")
+        @writes_no_guarded_fields("saves through no serializer, so no guarded field moves")
         @action(detail=True, methods=["post"])
         def probe(self, request, pk=None):
             depths.append(len(connection.atomic_blocks))
@@ -553,7 +574,7 @@ class TestRefusedRequestsRollBack:
         assert not Widget.objects.filter(name="written before validating").exists()
 
     def test_an_error_response_returned_on_purpose_keeps_its_writes(self, bob, widget):
-        @writes_no_guarded_fields("saves through no serializer")
+        @writes_no_guarded_fields("saves through no serializer, so no guarded field moves")
         @action(detail=True, methods=["post"])
         def throttle(self, request, pk=None):
             Widget.objects.create(name="attempt counted")
@@ -566,7 +587,7 @@ class TestRefusedRequestsRollBack:
     def test_a_plain_django_response_keeps_its_writes(self, bob, widget):
         from django.http import HttpResponse
 
-        @writes_no_guarded_fields("saves through no serializer")
+        @writes_no_guarded_fields("saves through no serializer, so no guarded field moves")
         @action(detail=True, methods=["post"])
         def raw(self, request, pk=None):
             Widget.objects.create(name="raw response write")

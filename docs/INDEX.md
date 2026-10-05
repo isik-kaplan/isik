@@ -4,12 +4,12 @@
 
 - [common/](common/README.md)
   - [utils/](common/utils/README.md) - caching, concurrency, error handling, functional/iterable
-    helpers, metaclasses, sentinels (and `DeclaredString`, declared ones), string case conversion
+    helpers, metaclasses, sentinels, exemptions (opt-outs that say why), string case conversion
   - [config/](common/config/README.md) - typed settings objects built from environment variables
 
 Using isik from Django? Its imports all start with `isik.django`, so these are easy to miss and come
-up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `DeclaredString`
-([declared_string.md](common/utils/declared_string.md)), `TransformExceptions`.
+up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `Exemption`
+([exemptions.md](common/utils/exemptions.md)), `TransformExceptions`.
 
 ## isik.sentry
 

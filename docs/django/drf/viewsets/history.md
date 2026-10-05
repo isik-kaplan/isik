@@ -67,6 +67,10 @@ GET /widgets/history/?object_id=3&action=update
 - `history_withhold = [...]` names tracked fields to keep out of both endpoints' output entirely -
   forwarded straight into `generic_history_serializer(cls.model, withhold=cls.history_withhold)`,
   see its own docstring for what that does to `changes`.
+- `history_component_prefix = "Staff"` goes in front of the generated serializer's name, and so of
+  its schema component (`StaffWidgetHistory` rather than `WidgetHistory`). A second `HistoryMixin`
+  viewset over the same model needs one. Without it, the two components collide and the schema keeps
+  only one of their shapes. The default, `""`, leaves the names as they were.
 - `history_list_scoped_to_queryset = True` restricts `GET <endpoint>/history/` to events for
   objects `self.get_queryset()` would return, instead of every instance of the model regardless of
   scope (the default, unaffected unless you opt in). Turn it on when a viewset's `get_queryset()`

@@ -8,6 +8,7 @@ from django.test import override_settings
 from django.urls import path
 from django_filters import ChoiceFilter, FilterSet
 from django_filters.rest_framework import CharFilter, DateTimeFilter, NumberFilter
+from drf_spectacular.drainage import GENERATOR_STATS, reset_generator_stats
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
@@ -87,6 +88,36 @@ def _reset_widget_viewset_history_caches():
     for attr in ("_history_filterset_class", "_history_serializer_class"):
         if attr in WidgetViewSet.__dict__:
             delattr(WidgetViewSet, attr)
+
+
+def _history_component_warnings():
+    return [message for message in GENERATOR_STATS._warn_cache if "identical names" in message]
+
+
+class TestHistoryComponentPrefix:
+    def test_two_viewsets_over_one_model_get_one_component_each_once_one_is_prefixed(self):
+        class StaffWidgetViewSet(WidgetViewSet):
+            endpoint = "staff-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+            history_component_prefix = "Staff"
+
+        reset_generator_stats()
+        schema = generate_schema((WidgetViewSet, "widget"), (StaffWidgetViewSet, "staff-widget"))
+        assert {"WidgetHistory", "StaffWidgetHistory"} <= set(schema["components"]["schemas"])
+        assert _history_component_warnings() == []
+
+    def test_without_a_prefix_the_two_collide(self):
+        class OtherWidgetViewSet(WidgetViewSet):
+            endpoint = "other-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+
+        reset_generator_stats()
+        generate_schema((WidgetViewSet, "widget"), (OtherWidgetViewSet, "other-widget"))
+        assert len(_history_component_warnings()) == 1
+
+    def test_no_prefix_keeps_the_name_it_always_had(self):
+        assert WidgetViewSet.history_serializer_class.__name__ == "WidgetHistorySerializer"
+        assert "WidgetHistory" in generate_schema((WidgetViewSet, "widget"))["components"]["schemas"]
 
 
 class TestHistoryMixinSchema:

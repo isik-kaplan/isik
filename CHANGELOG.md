@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-05
+
+### Added
+
+- `Exemption` and `exemption_class()` (`isik.common.utils.exemptions`) - a `str` that skips one named
+  rule and carries why, made with `reason=` and held to a floor (40 characters by default, after
+  whitespace collapses). A type names its `rule` (a dotted slug, unique across the project) and its
+  `why`, which every refusal repeats; `min_length` and `shows_as` (`""` for a `help_text`/`db_comment`
+  sentinel) are optional. Equal to and hashed as what it shows as, copied and pickled as itself, and
+  written into migrations as the call that made it.
+- Listing exemptions by rule: `exemption_types()`, `declared_exemptions(rule=None)` (each records the
+  file and line that made it), `assert_exemption_budget(rule, at_most=...)` for a test that makes
+  adding one a reviewed change, and `unseen_exemption_calls(paths)` for calls that never ran.
+  `manage.py exemptions` (`--rule`, `--rules`, `--format json`) lists a Django project's, with each
+  routed `RequestPolicy`'s `{action: reason}` exemptions under `policy.<policy-name>`, and warns
+  about exemption calls in the project's own apps that the import didn't run.
+- `ViewSetRegistryExemption`, `SerializerRegistryExemption` and `WritesNoGuardedFields` - the types of
+  isik's own single opt-outs, under the rules `isik.viewset-registry`, `isik.serializer-registry` and
+  `isik.guarded-fields.writes-none`.
+- `object_stream_index()` - `track_events()` now gives every event table with a `pgh_obj` a
+  `(pgh_obj, -pgh_id)` index, so reading one object's history no longer costs the square of its
+  length. `obj_field=None` tables get none; a caller's own `meta["indexes"]` stay beside it.
+- `HistoryMixin.history_component_prefix` - goes in front of the generated history serializer's
+  name and schema component, so a second `HistoryMixin` viewset over a model (`"Staff"` ->
+  `StaffWidgetHistory`) no longer collides with the first. The default `""` changes no name.
+- `routed_views()` (`isik.django.drf.coverage`) - every routed view, DRF's or not, each entry's
+  `kind` a `ViewKind`: `DRF`, `CLASS` (a Django class-based view, one entry per method it implements)
+  or `FUNCTION` (once, `method=None`). `request_policy_coverage(..., plain_views=...)` takes the
+  project's own judgment of a view that isn't DRF's - `True`, `False` or a reason - and reports
+  those views too. `RoutedAction` gained `kind`, defaulting to `ViewKind.DRF`.
+
+### Changed
+
+- **Breaking - removed, no aliases:** `DeclaredString`, `DeclaredText`, `DeclaredAttribute`, `text()`
+  and `attribute()`, and the `isik.common.utils.declared_string` module. Their one use was building
+  exemption sentinels, which `Exemption` now does:
+
+  ```python
+  # Before
+  class NoHelpText(DeclaredString, displays_as=""):
+      reason = text(min_length=40)
+
+  help_text=NoHelpText("the labels of its choices already say what it holds")
+
+  # After
+  class NoHelpText(Exemption, rule="schema-docs.help-text", why="Every field should say what it holds in help_text.", shows_as=""):
+      pass
+
+  help_text=NoHelpText(reason="the labels of its choices already say what it holds")
+  ```
+
+  A reason is keyword-only, so a migration that wrote `NoHelpText('...')` needs regenerating (or
+  editing to `NoHelpText(reason='...')`).
+- **Breaking:** `exempt_from_registry` and `@writes_no_guarded_fields(...)` take a reason of at least
+  40 characters, or an instance of their type, and refuse a shorter one when the class is defined.
+  The attribute holds the typed exemption afterwards.
+- **Breaking:** a `{name: reason}` map (`unguarded_fields`, `<policy>_exempt_actions`,
+  `idempotency_exempt_actions`, ...) still has no floor, but refuses a placeholder (`n/a`, `tbd`,
+  `none`, `x`, `-`, `.`, `?`) as it does a blank reason.
+
+### Fixed
+
+- `DatabaseTimestampsModel`'s `stamp_updated_at` trigger assigned to `updated_at` by its field name,
+  so giving the field a `db_column` failed every UPDATE. It now stamps the quoted column. Every
+  project's trigger SQL changes from `NEW.updated_at` to `NEW."updated_at"`, so `makemigrations`
+  writes one migration replacing each model's trigger (and adding the new history indexes).
+
 ## [0.14.0] - 2026-10-04
 
 ### Added

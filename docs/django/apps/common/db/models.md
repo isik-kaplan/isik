@@ -32,7 +32,8 @@ selectively bypassed. `full_clean()` runs on every `save()` unless bypassed.
 by a `BEFORE UPDATE` trigger on every UPDATE, including `QuerySet.update()`/`bulk_update()`/raw
 SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever covered. Requires
 `pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `DatabaseTimestampsModel` raises
-`ImproperlyConfigured` at import time if it's missing.
+`ImproperlyConfigured` at import time if it's missing. The trigger stamps the column `updated_at` is
+stored in, so a subclass can give it a `db_column`.
 
 Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
 advances `updated_at` even though `"updated_at"` isn't in `update_fields`. Naming it explicitly

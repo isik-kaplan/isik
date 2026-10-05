@@ -1,7 +1,16 @@
 from django.core.exceptions import ImproperlyConfigured
 
-from isik._internal.reasons import require_reason
+from isik._internal.reasons import require_exemption
 from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import Exemption
+
+
+class SerializerRegistryExemption(
+    Exemption,
+    rule="isik.serializer-registry",
+    why="A model has one serializer in the registry, and a second one over it is usually a mistake.",
+):
+    """Why a serializer stays out of its registry - `exempt_from_registry`'s type."""
 
 
 class ModelSerializerRegistryMixin:
@@ -39,7 +48,10 @@ class ModelSerializerRegistryMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        require_reason(cls.__name__, "exempt_from_registry", cls.exempt_from_registry)
+        if "exempt_from_registry" in vars(cls):
+            cls.exempt_from_registry = require_exemption(
+                cls.__name__, "exempt_from_registry", cls.exempt_from_registry, SerializerRegistryExemption
+            )
         if cls.__dict__.get("is_base_class", False):  # pragma: no mutate
             # Must happen before the `model is None` guard below - a class marking itself as a
             # new base is almost always still abstract with no `Meta.model` of its own, which is

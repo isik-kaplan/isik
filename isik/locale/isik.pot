@@ -22,34 +22,9 @@ msgstr ""
 msgid "%(caller)s requires exactly one of property_ or attribute"
 msgstr ""
 
-#: isik/common/utils/declared_string.py:149
-#, python-format
-msgid "%(cls)s declares no %(names)s."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:134
-#, python-format
-msgid "%(cls)s declares no text() and no displays_as=, so it has nothing to be."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:145
-#, python-format
-msgid "%(cls)s got %(name)s twice."
-msgstr ""
-
 #: isik/common/utils/required_attributes.py:51
 #, python-format
 msgid "%(cls)s must define a `%(name)s` attribute"
-msgstr ""
-
-#: isik/common/utils/declared_string.py:157
-#, python-format
-msgid "%(cls)s needs a %(name)s."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:140
-#, python-format
-msgid "%(cls)s takes %(count)d positional argument(s), not %(given)d."
 msgstr ""
 
 #: isik/django/apps/templated_fields/drf.py:101
@@ -67,7 +42,7 @@ msgstr ""
 msgid "%(guard)s can't be combined with &, | or ~ - compose the predicate inside guarding() instead."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:288
+#: isik/django/drf/viewsets/guarded_fields.py:298
 #, python-format
 msgid "%(guard)s guards %(field)r, which no serializer of %(viewset)s has a field named."
 msgstr ""
@@ -87,7 +62,7 @@ msgstr ""
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:179
+#: isik/django/apps/common/db/history.py:197
 #, python-format
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
@@ -97,8 +72,8 @@ msgstr ""
 msgid "%(model)s has tracked field(s) named %(fields)s, which collide with generic_history_serializer()'s own field names - rename the model field or exclude it from tracking (track_events(exclude=[...]))."
 msgstr ""
 
-#: isik/django/drf/serializers/registry.py:57
-#: isik/django/drf/viewsets/registry.py:61
+#: isik/django/drf/serializers/registry.py:69
+#: isik/django/drf/viewsets/registry.py:73
 #, python-format
 msgid "%(model)s is already registered to %(existing)s"
 msgstr ""
@@ -128,44 +103,29 @@ msgstr ""
 msgid "%(node)s requires TemplateFeature.%(feature)s, not enabled for this field"
 msgstr ""
 
-#: isik/common/utils/declared_string.py:68
+#: isik/_internal/reasons.py:40
 #, python-format
-msgid "%(owner)s needs a %(name)s of at least %(length)d characters, not %(value)r."
+msgid "%(owner)s.%(attribute)s - %(error)s"
 msgstr ""
 
-#: isik/common/utils/declared_string.py:73
-#, python-format
-msgid "%(owner)s needs a %(name)s of at most %(length)d characters, not %(value)r."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:94
-#, python-format
-msgid "%(owner)s's %(name)s must be a %(type)s, not %(value)r."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:60
-#, python-format
-msgid "%(owner)s's %(name)s must be text, not %(value)r."
-msgstr ""
-
-#: isik/common/utils/declared_string.py:78
-#, python-format
-msgid "%(owner)s's %(name)s must match %(pattern)s, and %(value)r doesn't."
-msgstr ""
-
-#: isik/_internal/reasons.py:38
+#: isik/_internal/reasons.py:58
 #, python-format
 msgid "%(owner)s.%(attribute)s needs a reason for %(name)s, not %(reason)r."
 msgstr ""
 
-#: isik/_internal/reasons.py:23
+#: isik/_internal/reasons.py:43
 #, python-format
-msgid "%(owner)s.%(attribute)s needs a reason rather than %(value)r - say why, as a string."
+msgid "%(owner)s.%(attribute)s takes a %(type)s, or its reason as a str, not %(value)r."
 msgstr ""
 
-#: isik/_internal/reasons.py:32
+#: isik/_internal/reasons.py:52
 #, python-format
 msgid "%(owner)s.%(attribute)s takes {name: reason}, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:268
+#, python-format
+msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
 msgstr ""
 
 #: isik/django/drf/serializers/create_only.py:35
@@ -193,9 +153,69 @@ msgstr ""
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:157
+#: isik/django/drf/viewsets/guarded_fields.py:167
 #, python-format
 msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or name them in %(lenient)s.unguarded_fields with the reason they're open there."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:108
+#, python-format
+msgid "%(type)s claims the rule %(rule)r, which %(module)s.%(claimed)s already exempts from - name another."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:154
+#, python-format
+msgid "%(type)s is the base to make exemption types from - subclass it with rule= and why=."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:183
+#, python-format
+msgid "%(type)s needs a reason of at least %(length)d characters. %(why)s Got %(reason)r."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:165
+#, python-format
+msgid "%(type)s needs reason=."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:121
+#, python-format
+msgid "%(type)s needs rule= - the dotted name of the rule it exempts from."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:127
+#, python-format
+msgid "%(type)s needs why= - what the rule asks for, and why it matters."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:158
+#, python-format
+msgid "%(type)s takes its reason as reason=, not positionally."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:162
+#, python-format
+msgid "%(type)s takes only reason=, not %(names)s."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:133
+#, python-format
+msgid "%(type)s's min_length must be a whole number of at least 1, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:178
+#, python-format
+msgid "%(type)s's reason must be text, not %(value)r."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:101
+#, python-format
+msgid "%(type)s's rule must be a dotted slug like 'schema-docs.help-text', not %(rule)r."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:138
+#, python-format
+msgid "%(type)s's shows_as must be a str, not %(value)r."
 msgstr ""
 
 #: isik/django/drf/permissions.py:90
@@ -223,7 +243,7 @@ msgstr ""
 msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:125
+#: isik/django/drf/viewsets/guarded_fields.py:135
 #, python-format
 msgid "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own permission_classes entry, with any composition inside guarding()."
 msgstr ""
@@ -243,9 +263,14 @@ msgstr ""
 msgid "%(viewset)s sets ordering_fields but OrderingFilter (or a subclass) is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:220
+#: isik/django/drf/viewsets/guarded_fields.py:230
 #, python-format
 msgid "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields(\"<why>\") if it writes no guarded field."
+msgstr ""
+
+#: isik/django/apps/common/management/commands/exemptions.py:84
+#, python-format
+msgid "%(where)s makes a %(type)s that wasn't made while loading the project - it isn't listed above."
 msgstr ""
 
 #: isik/common/config/builder.py:52
@@ -337,7 +362,7 @@ msgstr ""
 msgid "Content is too large"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:95
+#: isik/django/apps/common/db/history.py:98
 #, python-format
 msgid "ContextField(%(name)r) needs cast= - can't infer a Postgres type for %(field)r (only %(inferred)s are inferred; ForeignKey always needs an explicit cast)."
 msgstr ""
@@ -440,6 +465,16 @@ msgstr ""
 
 #: isik/django/apps/feedback/comments/tiptap.py:47
 msgid "No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly."
+msgstr ""
+
+#: isik/common/utils/exemptions.py:255
+#, python-format
+msgid "No exemption type exempts from %(rule)r."
+msgstr ""
+
+#: isik/django/apps/common/management/commands/exemptions.py:48
+#, python-format
+msgid "No exemption type or policy exempts from %(rule)r."
 msgstr ""
 
 #: http.HTTPStatus
@@ -859,6 +894,11 @@ msgstr ""
 msgid "django_permission's message= takes a template, a message or a callable - not %(message)r"
 msgstr ""
 
+#: isik/common/utils/exemptions.py:234
+#, python-format
+msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
+msgstr ""
+
 #: isik/django/drf/permissions.py:669
 msgid "guarding requires at least one field or action"
 msgstr ""
@@ -897,6 +937,11 @@ msgstr ""
 
 #: isik/django/drf/permissions.py:229
 msgid "only_actions requires at least one action - with none it would refuse everything"
+msgstr ""
+
+#: isik/django/drf/coverage.py:124
+#, python-format
+msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""
 
 #: isik/django/apps/templated_fields/engine.py:37
@@ -956,7 +1001,7 @@ msgstr ""
 msgid "validate_inputs() was given validators for parameters %(func)r doesn't have: %(unknown)s."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:50
+#: isik/django/drf/viewsets/guarded_fields.py:59
 #, python-format
 msgid "writes_no_guarded_fields takes the reason the action writes no guarded field - @writes_no_guarded_fields(\"...\"), not %(value)r."
 msgstr ""

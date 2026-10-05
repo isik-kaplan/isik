@@ -47,7 +47,7 @@ def rotate_secret(self, request, pk=None):
     ...
 ```
 
-- Either decorator order works. `destroy` writes no fields and is already exempt; `actions_writing_no_guarded_fields = {"destroy": "...", "archive": "..."}` exempts inherited actions without overriding them. Every one of these opt-outs takes a reason - a bare `True`, a list of names or a bare `@writes_no_guarded_fields` raises `ImproperlyConfigured`.
+- Either decorator order works. `destroy` writes no fields and is already exempt; `actions_writing_no_guarded_fields = {"destroy": "...", "archive": "..."}` exempts inherited actions without overriding them. Every one of these opt-outs takes a reason - a bare `True`, a list of names or a bare `@writes_no_guarded_fields` raises `ImproperlyConfigured`. The decorator's reason is a `WritesNoGuardedFields` (rule `isik.guarded-fields.writes-none`, see [exemptions.md](../../../common/utils/exemptions.md)) of at least 40 characters; a map's reasons have no floor, but a blank one or a placeholder (`n/a`, `tbd`) is refused.
 - Calling `self.check_guarded_fields(serializer)` yourself also counts as having run the guards.
 - A failed request (status 400 or above) isn't checked afterwards.
 - **A refused request keeps nothing.** When DRF answers from an exception (a refused guard, a failed validation, any `APIException`), the transaction rolls back whatever the handler wrote before it, and `on_commit` callbacks registered along the way never run. An error response the handler returns on purpose (a 429 after counting an attempt) keeps its writes, as it does under `ATOMIC_REQUESTS`.

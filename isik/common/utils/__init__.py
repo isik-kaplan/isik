@@ -1,7 +1,14 @@
 from isik.common.utils.caching import get_cached
 from isik.common.utils.concurrency import ContextLocal, ThreadLocal, ThreadLock
-from isik.common.utils.declared_string import DeclaredString, attribute, text
 from isik.common.utils.error_handling import SuppressAndRun, TransformExceptions, suppress_callable
+from isik.common.utils.exemptions import (
+    Exemption,
+    assert_exemption_budget,
+    declared_exemptions,
+    exemption_class,
+    exemption_types,
+    unseen_exemption_calls,
+)
 from isik.common.utils.functional import (
     cloned,
     enabled_if,
@@ -23,7 +30,7 @@ from isik.common.utils.validation import validate_inputs
 __all__ = [
     "REQUIRED",
     "ContextLocal",
-    "DeclaredString",
+    "Exemption",
     "RequiredAttributesMixin",
     "Sentinel",
     "SuppressAndRun",
@@ -31,10 +38,13 @@ __all__ = [
     "ThreadLock",
     "TransformExceptions",
     "all_combinations",
-    "attribute",
+    "assert_exemption_budget",
     "camel_to_snake",
     "cloned",
+    "declared_exemptions",
     "enabled_if",
+    "exemption_class",
+    "exemption_types",
     "first_of",
     "get_cached",
     "identity",
@@ -48,8 +58,8 @@ __all__ = [
     "snake_to_human",
     "snake_to_pascal",
     "suppress_callable",
-    "text",
     "transform",
+    "unseen_exemption_calls",
     "validate_inputs",
     "with_attrs",
     "words_to_pascal",

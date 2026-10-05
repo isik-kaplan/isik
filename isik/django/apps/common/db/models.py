@@ -4,7 +4,7 @@ from uuid import uuid4
 import pgtrigger
 from django.apps import apps as django_apps
 from django.core.exceptions import ImproperlyConfigured
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
 from django_lifecycle import (
@@ -212,7 +212,10 @@ class BaseModel(UUIDPrimaryKeyModel, DatabaseTimestampsModel, FullCleanOnSaveMod
         abstract = True
 
 
-def _timestamp_triggers():
+def _timestamp_triggers(model):
+    # The column, not the field name: a subclass giving updated_at a db_column would otherwise leave
+    # the trigger assigning to a column that doesn't exist, failing every UPDATE.
+    updated_at = connection.ops.quote_name(model._meta.get_field("updated_at").column)
     return [
         # db_default=Now() only fires on INSERT - nothing stops a later UPDATE from changing
         # created_at, so it also needs protecting at the row level.
@@ -223,7 +226,7 @@ def _timestamp_triggers():
             name="stamp_updated_at",
             when=pgtrigger.Before,
             operation=pgtrigger.Update,
-            func="NEW.updated_at = NOW(); RETURN NEW;",
+            func=f"NEW.{updated_at} = NOW(); RETURN NEW;",
         ),
     ]
 
@@ -239,7 +242,7 @@ def _register_timestamp_triggers(sender, **kwargs):
         # under plain pytest, but not under mutmut: whichever variant is active the one time this
         # runs for a given class in a worker process is what that class is permanently stuck with,
         # regardless of which mutant mutmut later considers "active" for a later test.
-        pgtrigger.register(*_timestamp_triggers())(sender)
+        pgtrigger.register(*_timestamp_triggers(sender))(sender)
 
 
 class_prepared.connect(_register_timestamp_triggers, dispatch_uid="isik_base_model_timestamp_triggers")

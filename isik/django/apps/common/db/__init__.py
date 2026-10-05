@@ -3,6 +3,7 @@ from isik.django.apps.common.db.history import (
     ContextField,
     event_model_for,
     history_middleware_installed,
+    object_stream_index,
     open_history_context,
     track_events,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "event_model_for",
     "get_object_or_none",
     "history_middleware_installed",
+    "object_stream_index",
     "open_history_context",
     "starts_with",
     "track_events",
