@@ -78,7 +78,7 @@ class RequestPoliciesMixin:
 
     def check_permissions(self, request):
         super().check_permissions(request)
-        action = getattr(self, "action", None)  # pragma: no mutate - None names no exempt action either way
+        action = getattr(self, "action", None)
         for policy_cls in self.request_policies:
             if action in self.request_policy_exemptions(policy_cls):
                 continue

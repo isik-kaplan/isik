@@ -23,7 +23,10 @@ def test_every_post_honors_an_idempotency_key():
 ## routed_actions(urlconf=None)
 
 Every method of every DRF view a urlconf routes, in route order, as
-`RoutedAction(route, view, method, action, kind, urlconf)`. A viewset contributes one per method its router maps,
+`RoutedAction(route, view, method, action, kind, urlconf, callback)`. `callback` is what the urlconf
+routes to - `as_view()`'s function, carrying whatever a decorator around it in the urlconf set on it
+(`csrf_exempt(...)`, `transaction.non_atomic_requests(...)`), so a check reading those marks needs no
+walk of its own. A viewset contributes one per method its router maps,
 with `action` set; a plain `APIView` one per method it implements, with `action=None`. Plain Django
 views aren't DRF's and are left out, as is OPTIONS, which DRF answers for every view.
 

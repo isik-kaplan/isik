@@ -44,7 +44,40 @@ class WidgetViewSetWithDictStyleFilterFields(FilterSetMixin):
     filter_backends = [DjangoFilterBackend]
 
 
+@pytest.fixture(autouse=True)
+def _built_afresh():
+    # Built once and kept on the class - here, built by each test rather than inherited from an
+    # earlier one, so what's tested is the building.
+    for viewset in (
+        WidgetViewSet,
+        WidgetWithDeclaredFilterViewSet,
+        WidgetViewSetWithCustomFilterSetBase,
+        WidgetViewSetWithDictStyleFilterFields,
+    ):
+        if "_filterset_class" in vars(viewset):
+            del viewset._filterset_class
+
+
 class TestFilterSetMixin:
+    def test_it_is_built_once_per_class_and_named_for_what_it_is(self):
+        built = WidgetViewSet.filterset_class
+
+        assert WidgetViewSet.filterset_class is built
+        assert (built.__name__, built.Meta.__name__) == ("AutoFilterSet", "Meta")
+        assert WidgetWithDeclaredFilterViewSet.filterset_class is not built
+
+    def test_a_base_without_its_own_meta_starts_from_a_plain_one(self):
+        class NoMeta(FilterSet):
+            pass
+
+        class PlainBaseViewSet(FilterSetMixin):
+            model = Widget
+            filterset_base = NoMeta
+            filterset_fields = ["name"]
+            filter_backends = [DjangoFilterBackend]
+
+        assert PlainBaseViewSet.filterset_class.Meta.__mro__[1:] == (object,)
+
     def test_builds_a_filterset_class_for_the_model(self):
         assert issubclass(WidgetViewSet.filterset_class, FilterSet)
         assert WidgetViewSet.filterset_class.Meta.model is Widget

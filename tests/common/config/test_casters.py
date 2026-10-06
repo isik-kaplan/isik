@@ -65,7 +65,7 @@ class TestBoolean:
         assert boolean()(value) is False
 
     def test_unparseable_value_raises(self):
-        with pytest.raises(ValueError, match="can not be parsed"):
+        with pytest.raises(ValueError, match=r"^Value 'maybe' can not be parsed into a boolean\.$"):
             boolean()("maybe")
 
 

@@ -306,8 +306,15 @@ class TestBodyMaxLength:
         assert MaxLengthNoteHost.notes.model._meta.get_field("body").max_length == 280
         assert isinstance(MaxLengthNoteHost.notes.model._meta.get_field("body"), models.CharField)
 
+    @isolate_apps("tests.testapp")
     def test_no_body_max_length_leaves_the_field_an_unbounded_text_field(self):
-        body_field = Post.notes.model._meta.get_field("body")
+        class UnboundedNoteHost(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+            notes = notes(user_related_name="unbounded_note_host_notes", user_model=EmailUser)
+
+        body_field = UnboundedNoteHost.notes.model._meta.get_field("body")
         assert body_field.max_length is None
         assert isinstance(body_field, models.TextField)
 

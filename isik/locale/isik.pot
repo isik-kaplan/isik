@@ -27,12 +27,12 @@ msgstr ""
 msgid "%(cls)s must define a `%(name)s` attribute"
 msgstr ""
 
-#: isik/django/apps/templated_fields/drf.py:101
+#: isik/django/apps/templated_fields/drf.py:102
 #, python-format
 msgid "%(field)r is not a template field on this model."
 msgstr ""
 
-#: isik/common/utils/validation.py:98
+#: isik/common/utils/validation.py:97
 #, python-format
 msgid "%(func)s() got an invalid value for %(name)r: %(value)r"
 msgstr ""
@@ -57,7 +57,7 @@ msgstr ""
 msgid "%(middleware)s requires settings.SESSION_HEADER_NAME to be set."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:132
+#: isik/django/apps/common/_model_makers.py:134
 #, python-format
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
@@ -78,7 +78,7 @@ msgstr ""
 msgid "%(model)s is already registered to %(existing)s"
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:127
+#: isik/django/apps/common/_model_makers.py:129
 #, python-format
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
@@ -88,7 +88,7 @@ msgstr ""
 msgid "%(name)r was already used to build a %(builder)s - pass reuse=True if this is intentional, or build it once and reuse the resulting class instead of calling this again under the same name."
 msgstr ""
 
-#: isik/common/utils/metaclasses.py:52
+#: isik/common/utils/metaclasses.py:58
 #, python-format
 msgid "%(name)s can not be instantiated."
 msgstr ""
@@ -233,7 +233,7 @@ msgstr ""
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:125
+#: isik/django/apps/idempotency/drf.py:124
 #, python-format
 msgid "%(view)s honors idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
@@ -248,7 +248,7 @@ msgstr ""
 msgid "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own permission_classes entry, with any composition inside guarding()."
 msgstr ""
 
-#: isik/django/drf/viewsets/ordering.py:121
+#: isik/django/drf/viewsets/ordering.py:118
 #, python-format
 msgid "%(viewset)s sets declared_ordering but DeclaredOrderingFilter (or a subclass) is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
 msgstr ""
@@ -314,7 +314,7 @@ msgstr ""
 msgid "At least one condition dict must be provided."
 msgstr ""
 
-#: isik/django/http_exceptions/exceptions.py:74
+#: isik/django/http_exceptions/exceptions.py:64
 msgid "BASE_EXCEPTION must be a subclass of HTTPException."
 msgstr ""
 
@@ -460,11 +460,11 @@ msgstr ""
 msgid "Meta"
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:101
+#: isik/django/apps/idempotency/drf.py:100
 msgid "Must be a UUID."
 msgstr ""
 
-#: isik/django/http_exceptions/exceptions.py:102
+#: isik/django/http_exceptions/exceptions.py:109
 msgid "New exception must be a subclass of HTTPException."
 msgstr ""
 
@@ -635,7 +635,7 @@ msgstr ""
 msgid "Switching to new protocol; obey Upgrade header"
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:153
+#: isik/django/apps/tags/tags.py:152
 msgid "Tags from this pool."
 msgstr ""
 
@@ -644,7 +644,7 @@ msgstr ""
 msgid "The %(target)s bookmarked."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:128
+#: isik/django/apps/tags/tags.py:127
 #, python-format
 msgid "The %(target)s tagged."
 msgstr ""
@@ -734,11 +734,11 @@ msgstr ""
 msgid "The status the request was answered with."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:121
+#: isik/django/apps/tags/tags.py:120
 msgid "The tag applied."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:103
+#: isik/django/apps/tags/tags.py:102
 msgid "The tag's name, unique in its pool."
 msgstr ""
 
@@ -755,7 +755,7 @@ msgstr ""
 msgid "This field can't be changed once it's set."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:96
+#: isik/django/apps/idempotency/drf.py:95
 msgid "This header is required."
 msgstr ""
 
@@ -826,7 +826,7 @@ msgstr ""
 msgid "When the row last changed, by the database's clock."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:24
+#: isik/django/apps/common/_model_makers.py:26
 msgid "When the row last changed."
 msgstr ""
 
@@ -834,7 +834,7 @@ msgstr ""
 msgid "When the row was created, by the database's clock. Never changes."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:21
+#: isik/django/apps/common/_model_makers.py:23
 msgid "When the row was created."
 msgstr ""
 
@@ -880,7 +880,7 @@ msgstr ""
 msgid "You need the %(permission)s permission to do this."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:43
+#: isik/django/apps/common/_model_makers.py:45
 #, python-format
 msgid "base_model must be an abstract Model subclass, got %(base)r"
 msgstr ""
@@ -949,7 +949,7 @@ msgstr ""
 msgid "only_actions requires at least one action - with none it would refuse everything"
 msgstr ""
 
-#: isik/django/drf/coverage.py:130
+#: isik/django/drf/coverage.py:132
 #, python-format
 msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""
@@ -982,7 +982,7 @@ msgstr ""
 msgid "ref(dot=%(dot)r) is not a valid dotted path."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:67
+#: isik/django/apps/common/_model_makers.py:69
 #, python-format
 msgid "related_name=%(related_name)r on %(key)s is already claimed by %(existing)s - pick a different name for %(owner)s."
 msgstr ""

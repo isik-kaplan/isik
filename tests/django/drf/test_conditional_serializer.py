@@ -9,7 +9,7 @@ from isik.django.drf.serializers.conditional_serializer import (
     relational_serializer,
     serializer_method_include,
 )
-from tests.testapp.models import Widget
+from tests.testapp.models import Widget, WidgetProfile
 
 
 pytestmark = pytest.mark.django_db
@@ -80,6 +80,31 @@ class TestSerializerMethodIncludeFieldNameDerivation:
         request = make_request("/", {"only": "owner_detail.username"})
         serializer = FreshSerializer(widget, context={"request": request})
         assert serializer.data["owner_detail"] == {"username": widget.owner.username}
+
+    def test_nested_under_another_serializer_its_path_starts_with_the_parents(self, widget, make_request):
+        class InnerSerializer(ConditionalSerializerMixin, serializers.ModelSerializer):
+            owner_detail = serializers.SerializerMethodField()
+
+            class Meta:
+                model = Widget
+                fields = ["id", "owner_detail"]
+
+            @serializer_method_include
+            def get_owner_detail(self, obj):
+                return OwnerSerializer(obj.owner, context=self.context)
+
+        class OuterSerializer(ConditionalSerializerMixin, serializers.ModelSerializer):
+            class Meta:
+                model = WidgetProfile
+                fields = ["id", "widget"]
+                relational_fields = {"widget": relational_serializer(InnerSerializer)}
+
+        profile = WidgetProfile.objects.create(widget=widget)
+        request = make_request("/", {"only": "widget.owner_detail.username", "include": "widget"})
+
+        assert OuterSerializer(profile, context={"request": request}).data == {
+            "widget": {"owner_detail": {"username": "alice"}}
+        }
 
 
 @pytest.fixture

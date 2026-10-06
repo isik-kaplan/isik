@@ -27,11 +27,11 @@ class ProtectedDestroyMixin:
     @staticmethod
     def _protecting_field_name(protected_object, instance):
         for field in type(protected_object)._meta.get_fields():
-            if not getattr(field, "is_relation", False) or not getattr(field, "concrete", False):  # pragma: no mutate
+            if not field.is_relation or not field.concrete:
                 continue
             if field.related_model is not type(instance):
                 continue
-            fk_value = getattr(protected_object, field.attname, None)  # pragma: no mutate
+            fk_value = getattr(protected_object, field.attname)
             if fk_value == instance.pk:
                 return field.name
         return None

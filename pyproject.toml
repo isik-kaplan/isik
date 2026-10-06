@@ -43,7 +43,7 @@ dev-dependencies = [
     "psycopg[binary]>=3.2.0",
     "pre-commit>=3.0.0",
     "ruff>=0.9.0",
-    "mutmut>=3.7.0",
+    "mutmut>=3.8.0",
     "django-hosts>=7.0.0",
 ]
 
@@ -92,16 +92,9 @@ exclude_lines = [
 
 [tool.mutmut]
 source_paths = ["isik"]
-# metaclasses.py/exceptions.py: transform (the metaclass HTTPExceptions uses) invokes its
-# __checks__/__transform__ hooks eagerly at class-definition time, i.e. at import - mutmut's
-# trampoline instrumentation only works for functions invoked from inside a collected test, so
-# calling one eagerly during import breaks its bookkeeping (KeyError: '_mutmut_orig'). Both files
-# are almost entirely this metaclass pattern, so excluded rather than fought line-by-line.
-do_not_mutate = [
-    "*/migrations/*",
-    "isik/common/utils/metaclasses.py",
-    "isik/django/http_exceptions/exceptions.py",
-]
+# Run through scripts/mutation_run.py, which also mutates decorated functions - see
+# scripts/mutmut_decorators.py.
+do_not_mutate = ["*/migrations/*"]
 pytest_add_cli_args_test_selection = ["tests"]
 # --reuse-db: mutmut runs pytest many times over one session - without it, pytest-django would
 # recreate the whole Postgres schema (real migrations, not --no-migrations - see django_settings.py)

@@ -3,6 +3,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 from django_filters.rest_framework import CharFilter
+from pghistory.models import Events
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.routers import SimpleRouter
@@ -197,6 +198,17 @@ class TestHistoryMixin:
 
     def test_history_filterset_class_is_cached_per_class(self):
         assert WidgetViewSet.history_filterset_class is WidgetViewSet.history_filterset_class
+
+    def test_history_filterset_class_is_named_for_what_it_is_over_every_event(self):
+        built = WidgetViewSet.history_filterset_class
+
+        assert (built.__name__, built.Meta.__name__) == ("AutoHistoryFilterSet", "Meta")
+        assert (built.Meta.model, built.Meta.fields) == (Events, [])
+        assert built._meta.model is Events
+
+    def test_an_actor_context_field_filters_on_its_own_column(self):
+        # Before django-filter's metaclass would fill a missing field_name in from the key.
+        assert ContextTrackedWidgetViewSet.default_history_filters()["actor"].field_name == "actor"
 
     def test_history_serializer_class_is_cached_per_class(self):
         assert WidgetViewSet.history_serializer_class is WidgetViewSet.history_serializer_class

@@ -123,6 +123,27 @@ def upload(request): ...
 
 Under other decorators, it marks every function down the `__wrapped__` chain.
 
+### Under mutmut
+
+Stock mutmut never mutates a decorated function, so a `@makes_exemption` helper runs unchanged and
+needs nothing. A setup that patches mutmut to mutate decorated functions has to keep
+`@makes_exemption` on every mutant copy, because the copy is the code that runs and the exemption is
+only recorded at the caller if that copy is a registered maker. isik's own patch
+([scripts/mutmut_decorators.py](https://github.com/isik-kaplan/isik/blob/master/scripts/mutmut_decorators.py))
+emits the copies without their decorators, except the ones a copy needs:
+
+```python
+BINDING_DECORATORS = frozenset({"staticmethod", "classmethod"})
+MARKING_DECORATORS = frozenset({"makes_exemption"})
+
+
+def carried_by_copies(decorators):
+    binding = len(decorators) == 1 and _is_binding(decorators[0].decorator)
+    return [
+        d for d in decorators if (binding and _is_binding(d.decorator)) or _name_of(d.decorator) in MARKING_DECORATORS
+    ]
+```
+
 ## In a Django project
 
 `manage.py exemptions` puts these together. It loads the models and every urlconf the project serves,

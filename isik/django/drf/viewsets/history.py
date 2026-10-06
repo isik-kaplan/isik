@@ -179,11 +179,7 @@ class HistoryMixin:
         # pghistory.context() directly.
         actor_name = "actor"
         if _context_field(event_model, actor_name) is not None:
-            # django-filter's own FilterSetMetaclass backfills a filter's field_name from the
-            # dict key it's assigned under (actor_name, on both sides here) whenever it comes out
-            # falsy - so a wrong/missing name= passed to context_field_filter() is unobservable at
-            # this specific call site (field_name= itself is tested directly on the function).
-            filters[actor_name] = context_field_filter(event_model, actor_name)  # pragma: no mutate
+            filters[actor_name] = context_field_filter(event_model, actor_name)
         elif history_middleware_installed():
             filters["actor"] = context_filter("user")
         return filters

@@ -51,3 +51,9 @@ def test_all_combinations_produces_every_non_empty_subset(options):
     assert len(combinations) == expected_count
     assert all(len(combo) > 0 for combo in combinations)
     assert all(set(combo) <= set(options) for combo in combinations)
+
+
+def test_all_combinations_from_singles_up_to_everything():
+    assert all_combinations(["a", "b", "c"]) == [
+        ["a"], ["b"], ["c"], ["a", "b"], ["a", "c"], ["b", "c"], ["a", "b", "c"]
+    ]  # fmt: skip

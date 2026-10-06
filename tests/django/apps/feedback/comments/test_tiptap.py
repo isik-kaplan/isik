@@ -183,12 +183,12 @@ class TestGetMentions:
 class TestTiptapValidator:
     def test_raises_below_min_length(self):
         validator = tiptap.TiptapValidator(min_length=10, schema_path=SCHEMA_PATH)
-        with pytest.raises(ValidationError, match="at least 10"):
+        with pytest.raises(ValidationError, match=r"^\['Comment must be at least 10 characters, got 5\.'\]$"):
             validator(doc(paragraph(text("short"))))
 
     def test_raises_above_max_length(self):
         validator = tiptap.TiptapValidator(max_length=3, schema_path=SCHEMA_PATH)
-        with pytest.raises(ValidationError, match="at most 3"):
+        with pytest.raises(ValidationError, match=r"^\['Comment must be at most 3 characters, got 16\.'\]$"):
             validator(doc(paragraph(text("this is too long"))))
 
     def test_passes_within_bounds(self):

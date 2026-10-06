@@ -43,7 +43,7 @@ class RequiredAttributesMixin:
         # `is_base_class = True`. Both are read from cls.__dict__ specifically, not via getattr,
         # so the exemption applies only to the class that sets it directly - not to its
         # descendants, which inherit the attribute but not the exemption.
-        exempt = "required_attributes" in cls.__dict__ or cls.__dict__.get("is_base_class", False)  # pragma: no mutate
+        exempt = "required_attributes" in cls.__dict__ or cls.__dict__.get("is_base_class")
         if not exempt:
             for name in cls.required_attributes:
                 if getattr(cls, name, REQUIRED) is REQUIRED:

@@ -251,3 +251,12 @@ class TestDeclaredOrderingFilter:
             make_request("name,popularity"), Widget.objects.all(), WidgetViewSet()
         )
         assert tuple(queryset.query.order_by) == ("name", "count")
+
+
+def test_declared_ordering_filter_hands_drf_every_argument(monkeypatch):
+    seen = []
+    monkeypatch.setattr(OrderingFilter, "remove_invalid_fields", lambda self, *args: seen.append(args) or ["name"])
+    queryset, view, request = Widget.objects.all(), object(), object()
+
+    assert DeclaredOrderingFilter().remove_invalid_fields(queryset, ["name", "count"], view, request) == ["name"]
+    assert seen == [(queryset, ["name", "count"], view, request)]

@@ -5,7 +5,7 @@ from django.utils.module_loading import import_string
 
 
 def _first_segment(path):
-    return path.split(".", 1)[0]  # pragma: no mutate
+    return path.split(".", 1)[0]
 
 
 class ConditionalSerializerMixin:

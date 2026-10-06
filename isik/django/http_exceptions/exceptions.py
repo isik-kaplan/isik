@@ -56,6 +56,32 @@ class HTTPException(Exception):
         return self
 
 
+# HTTPExceptions' transform hooks, called while its class body is being turned into a class - module
+# level rather than in the body, which mutmut only finishes instrumenting once the class exists.
+def _exception_for_status(key, value, classdict):
+    base_exception = classdict.get("BASE_EXCEPTION") or HTTPException
+    if not issubclass(base_exception, HTTPException):
+        raise TypeError(_("BASE_EXCEPTION must be a subclass of HTTPException."))
+    return type(
+        value.name,
+        (base_exception,),
+        {"status": value.value, "description": value.description},
+    )
+
+
+def _is_a_status(key, value, classdict):
+    return all(
+        (
+            not is_dunder(key),
+            not callable(value),
+            not isinstance(value, Exception),
+            not isinstance(value, classmethod),
+            key != "encapsulated",
+            key not in classdict.get("encapsulated", []),
+        )
+    )
+
+
 class HTTPExceptions(metaclass=transform):
     """
     One raisable HTTPException subclass per member of http.HTTPStatus, built from the
@@ -68,27 +94,8 @@ class HTTPExceptions(metaclass=transform):
     encapsulated = ["exceptions", "register_base_exception"]
     exceptions = []
 
-    def __transform__(key, value, classdict):
-        base_exception = classdict.get("BASE_EXCEPTION") or HTTPException
-        if not issubclass(base_exception, HTTPException):
-            raise TypeError(_("BASE_EXCEPTION must be a subclass of HTTPException."))
-        return type(
-            value.name,
-            (base_exception,),
-            {"__module__": __name__, "status": value.value, "description": value.description},
-        )
-
-    def __checks__(key, value, classdict):
-        return all(
-            (
-                not is_dunder(key),
-                not callable(value),
-                not isinstance(value, Exception),
-                not isinstance(value, classmethod),
-                key != "encapsulated",
-                key not in classdict.get("encapsulated", []),
-            )
-        )
+    __transform__ = _exception_for_status
+    __checks__ = _is_a_status
 
     @classmethod
     def from_status(cls, code):

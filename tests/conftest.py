@@ -92,6 +92,31 @@ def _reset_claimed_related_names():
     _model_makers._claimed_related_names.clear()
 
 
+def memoized():
+    """Every function isik memoizes - tests/test_mutation_tooling.py checks none is missing."""
+    from isik.django.apps.feedback.comments import tiptap
+    from isik.django.apps.templated_fields import engine
+    from isik.django.apps.templated_fields.policy import TemplatePolicy
+
+    return [
+        tiptap._load_schema,
+        engine._build_environment,
+        engine._compile,
+        TemplatePolicy.VARIABLES_ONLY.__func__,
+        TemplatePolicy.STANDARD.__func__,
+        TemplatePolicy.PERMISSIVE.__func__,
+    ]
+
+
+@pytest.fixture(autouse=True)
+def _empty_memoized_caches():
+    # A cache sits in front of mutmut's dispatch (scripts/mutmut_decorators.py), so a mutant of a
+    # memoized function is only tested if its cache starts empty, rather than answered from what the
+    # original computed in the process mutmut forked it from.
+    for function in memoized():
+        function.cache_clear()
+
+
 @pytest.fixture
 def admin_site():
     return AdminSite()

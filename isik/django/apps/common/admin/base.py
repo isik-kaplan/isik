@@ -86,7 +86,7 @@ class BaseAdmin(DjangoObjectActions, DALFModelAdmin):
         fields = fields + self.global_force_field_as_current_user
         for field in fields:
             setattr(obj, field, request.user)
-        return super().save_model(request, obj, form, change)  # pragma: no mutate
+        return super().save_model(request, obj, form, change)
 
     @with_attrs(thread_lock=ThreadLock("BaseAdmin.formfield_for_manytomany"))
     def formfield_for_manytomany(self, db_field, request, **kwargs):

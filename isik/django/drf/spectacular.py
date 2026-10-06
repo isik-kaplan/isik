@@ -110,10 +110,7 @@ class AutoSchema(_BaseAutoSchema):
     def _is_list_view(self, serializer=None):
         if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
             return True
-        # Passing serializer=None here instead would be unobservable: the base implementation's
-        # own fallback (serializer is None -> serializer = self.get_response_serializers())
-        # recomputes the exact same value for whatever operation is currently being resolved.
-        return super()._is_list_view(serializer)  # pragma: no mutate
+        return super()._is_list_view(serializer)
 
     def get_operation_id(self):
         action = getattr(self.view, "action", None)

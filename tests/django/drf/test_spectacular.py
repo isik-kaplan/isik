@@ -386,3 +386,14 @@ class TestGetOverrideParametersRobustness:
 
         schema = generate_schema((NoSerializerClassViewSet, "no-serializer-widget"))
         assert "/no-serializer-widgets/" in schema["paths"]
+
+
+def test_anything_but_history_asks_drf_spectacular_about_the_serializer_it_was_given(monkeypatch):
+    from drf_spectacular.openapi import AutoSchema as Base
+
+    seen = []
+    monkeypatch.setattr(Base, "_is_list_view", lambda self, serializer=None: seen.append(serializer) or "asked")
+    serializer = object()
+
+    assert stub_schema(action="list")._is_list_view(serializer) == "asked"
+    assert seen == [serializer]

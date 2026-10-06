@@ -110,7 +110,7 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
 
     @transaction.atomic
     def save(self, *args, **kwargs):
-        skip_hooks = kwargs.pop("_skip_hooks", False)
+        skip_hooks = kwargs.pop("_skip_hooks", None)
         save = super(LifecycleModelMixin, self).save
 
         if skip_hooks:
@@ -153,7 +153,7 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
         transaction.on_commit(self._reset_initial_state)
 
     def update(self, **kwargs):
-        skip_hooks = kwargs.pop("_skip_hooks", False)  # pragma: no mutate
+        skip_hooks = kwargs.pop("_skip_hooks", None)
         update_fields = list(kwargs.keys())
         for key, val in kwargs.items():
             setattr(self, key, val)
@@ -236,12 +236,7 @@ def _register_timestamp_triggers(sender, **kwargs):
     # inherits an abstract base's Meta into a subclass that writes `class Meta(BaseModel.Meta)`,
     # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
     # via pgtrigger.register() on every concrete subclass instead needs no such cooperation.
-    if issubclass(sender, DatabaseTimestampsModel) and not sender._meta.abstract:  # pragma: no mutate
-        # class_prepared fires exactly once per model class, ever - a mutation here is provably
-        # caught by test_timestamp_triggers_are_registered_on_every_concrete_basemodel_subclass
-        # under plain pytest, but not under mutmut: whichever variant is active the one time this
-        # runs for a given class in a worker process is what that class is permanently stuck with,
-        # regardless of which mutant mutmut later considers "active" for a later test.
+    if issubclass(sender, DatabaseTimestampsModel) and not sender._meta.abstract:
         pgtrigger.register(*_timestamp_triggers(sender))(sender)
 
 

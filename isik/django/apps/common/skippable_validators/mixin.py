@@ -26,7 +26,7 @@ def _wrap_field_validators(sender, **kwargs):
 
 
 def _is_skippable(v):
-    return getattr(v, "_is_skippable", False)  # pragma: no mutate
+    return getattr(v, "_is_skippable", None)
 
 
 # One receiver for every model, connected once - not one per class with `sender=cls`. Django keys a

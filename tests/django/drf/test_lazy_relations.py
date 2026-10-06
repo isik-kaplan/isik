@@ -184,3 +184,14 @@ class TestLazyGenericRelatedFieldWithConditionalSerializerMixin:
         request = make_request("only=target.label")
         data = NoteSerializer(note, context={"request": request}).data
         assert data["target"] == {"label": "urgent"}
+
+
+def test_a_lazy_primary_key_field_takes_every_other_option_drf_does():
+    field = LazyPrimaryKeyRelatedField(queryset_func=lambda: Widget.objects.all(), allow_null=True, required=False)
+
+    assert (field.allow_null, field.required) == (True, False)
+
+
+def test_a_lazy_primary_key_field_takes_its_queryset_func_by_name_only():
+    with pytest.raises(TypeError):
+        LazyPrimaryKeyRelatedField(lambda: Widget.objects.all())

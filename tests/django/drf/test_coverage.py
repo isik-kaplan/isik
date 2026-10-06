@@ -256,3 +256,18 @@ def test_several_urlconfs_are_walked_in_order(settings):
     hosted = "tests.django.apps.common.hosted_urls"
 
     assert routed_views([hosted, URLCONF]) == [*routed_views(hosted), *routed_views(URLCONF)]
+
+
+def test_each_entry_carries_the_callable_the_urlconf_routes():
+    walked = routed_views("tests.django.drf.marked_urls")
+
+    assert [(a.route, a.kind, a.callback.marked_in_the_urlconf) for a in walked if a.kind is ViewKind.DRF] == [
+        ("drf/", ViewKind.DRF, True),
+        ("drf/", ViewKind.DRF, True),
+    ]
+    assert [(a.route, a.method, a.callback.marked_in_the_urlconf) for a in walked if a.kind is not ViewKind.DRF] == [
+        ("class/", "GET", True),
+        ("class/", "POST", True),
+        ("function/", None, True),
+    ]
+    assert all(a.callback.__name__ in ("view", "not_drf") for a in walked)

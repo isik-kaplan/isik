@@ -1,8 +1,11 @@
+import uuid
 from unittest.mock import patch
 
 import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import models
+from django.test.utils import isolate_apps
 
 from isik.django.apps.common.db import (
     BaseModel,
@@ -236,3 +239,38 @@ class TestComposingThePieces:
         Widget.objects.create(name="nut")
 
         assert list(widget.as_queryset()) == [widget]
+
+
+@pytest.mark.parametrize("before", [True, False])
+def test_skip_full_clean_puts_back_whatever_was_set_before(before):
+    widget = Widget(name="bolt", count=1)
+    widget.SKIP_FULL_CLEAN = before
+
+    with widget.skip_full_clean():
+        assert widget.SKIP_FULL_CLEAN is True
+
+    assert widget.SKIP_FULL_CLEAN is before
+
+
+def fresh_model(prefix, base, **meta):
+    # Uniquely named: pgtrigger keeps a process-wide registry keyed by table, which a second run of the
+    # same test in one process (as mutation testing does) would otherwise collide with.
+    meta_class = type("Meta", (), {"app_label": "testapp", **meta})
+    return type(f"{prefix}{uuid.uuid4().hex[:8]}", (base,), {"__module__": __name__, "Meta": meta_class})
+
+
+class TestTriggersAttachAsEachModelIsDefined:
+    """Models defined here, so the registration runs while the test does."""
+
+    @isolate_apps("tests.testapp")
+    def test_a_concrete_model_with_the_timestamps_gets_both(self):
+        assert {"protect_created_at", "stamp_updated_at"} <= triggers_of(
+            fresh_model("StampedNow", DatabaseTimestampsModel)
+        )
+
+    @isolate_apps("tests.testapp")
+    def test_an_abstract_one_and_a_model_without_them_get_none(self):
+        abstract = fresh_model("AbstractNow", DatabaseTimestampsModel, abstract=True)
+        plain = fresh_model("PlainNow", models.Model)
+
+        assert not {"protect_created_at", "stamp_updated_at"} & (triggers_of(abstract) | triggers_of(plain))

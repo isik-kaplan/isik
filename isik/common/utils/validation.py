@@ -82,9 +82,8 @@ def validate_inputs(*validators, **kwarg_validators):
 
         # strict=False (ruff B905 wants it spelled out): fewer validators than positional
         # parameters is fine, deliberately - a parameter with no validator is just unchecked, not
-        # an error (already enforced the other direction, too many validators, above). Any other
-        # falsy value here is equivalent - zip() only ever checks strict's truthiness.
-        positional_validators = dict(zip(positional_names, validators, strict=False))  # pragma: no mutate
+        # an error (already enforced the other direction, too many validators, above).
+        positional_validators = {positional_names[i]: validator for i, validator in enumerate(validators)}
         all_validators = {**positional_validators, **kwarg_validators}
 
         @wraps(func)

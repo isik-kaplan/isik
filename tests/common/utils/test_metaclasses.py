@@ -16,6 +16,14 @@ class TestIsDunder:
             ("plain", False),
             ("__", False),
             ("____", False),
+            ("__x__", True),
+            ("__a_b__", True),
+            ("___x__", False),
+            ("__x___", False),
+            ("__ab___", False),
+            ("___ab__", False),
+            ("__init__ ", False),
+            (" __init__", False),
         ],
     )
     def test_known_cases(self, name, expected):
@@ -75,6 +83,16 @@ def test_defaults_to_a_plain_class_without_hooks():
     assert Plain.value == "unchanged"
     Plain.value = "still unchanged"
     assert Plain.value == "still unchanged"
+
+
+def test_without_checks_every_value_is_transformed():
+    class Everything(metaclass=transform):
+        __transform__ = staticmethod(lambda key, value, classdict: f"<{value}>" if key in ("a", "b") else value)
+
+        a = "one"
+
+    Everything.b = "two"
+    assert (Everything.a, Everything.b) == ("<one>", "<two>")
 
 
 def test_abstract_blocks_instantiation():

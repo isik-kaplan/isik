@@ -101,7 +101,7 @@ class SuppressAndRun(suppress):
         self.func = func
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        suppressed = super().__exit__(exc_type, exc_val, exc_tb)  # pragma: no mutate
+        suppressed = super().__exit__(exc_type, exc_val, exc_tb)
         if suppressed:
             self.func(exc_val)
         return suppressed

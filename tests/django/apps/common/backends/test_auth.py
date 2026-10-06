@@ -143,3 +143,12 @@ class TestLoggingInThroughABackend:
         login(request, user, backend=self.MODULE_PATH)
 
         assert get_user(request).is_anonymous
+
+
+def test_an_unknown_username_still_hashes_the_password_it_was_given(db, monkeypatch):
+    # The same work as checking a real user's password, so the two take the same time.
+    hashed = []
+    monkeypatch.setattr(get_user_model(), "set_password", lambda self, raw: hashed.append(raw))
+
+    assert UsernameOREmailModelBackend().authenticate(None, username="nobody", password="hunter2") is None
+    assert hashed == ["hunter2"]

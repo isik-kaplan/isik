@@ -39,4 +39,4 @@ def all_combinations(options):
     """
     Returns all possible combinations of the given options
     """
-    return [list(comb) for r in range(1, len(options) + 1) for comb in combinations(options, r)]  # pragma: no mutate
+    return [list(comb) for r in range(len(options)) for comb in combinations(options, r + 1)]

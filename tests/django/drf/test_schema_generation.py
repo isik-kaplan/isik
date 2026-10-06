@@ -15,26 +15,41 @@ class WidgetSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "count"]
 
 
-class UserScopedWidgetViewSet(BaseModelViewSet):
-    model = Widget
-    endpoint = "widgets"
-    serializer_class = WidgetSerializer
-    exempt_from_registry = "a test's own class, defined again on every run"
+def user_scoped_viewset():
+    """Made per test, so the decorator runs while the test does."""
 
-    @none_during_schema_generation
-    def get_queryset(self):
-        return super().get_queryset().filter(name="mine")
+    class UserScopedWidgetViewSet(BaseModelViewSet):
+        model = Widget
+        endpoint = "widgets"
+        serializer_class = WidgetSerializer
+        exempt_from_registry = "a test's own class, defined again on every run"
+
+        @none_during_schema_generation
+        def get_queryset(self):
+            return super().get_queryset().filter(name="mine")
+
+    return UserScopedWidgetViewSet
 
 
 class TestNoneDuringSchemaGeneration:
     def test_returns_the_real_queryset_for_a_normal_request(self):
         Widget.objects.create(name="mine", count=1)
         Widget.objects.create(name="not-mine", count=2)
-        view = UserScopedWidgetViewSet()
+        view = user_scoped_viewset()()
         assert [w.name for w in view.get_queryset()] == ["mine"]
 
     def test_returns_an_empty_queryset_during_schema_generation(self):
         Widget.objects.create(name="mine", count=1)
-        view = UserScopedWidgetViewSet()
+        view = user_scoped_viewset()()
         view.swagger_fake_view = True
         assert list(view.get_queryset()) == []
+
+    def test_the_wrapped_method_gets_the_view_and_every_argument(self):
+        @none_during_schema_generation
+        def method(view, *args, **kwargs):
+            return view, args, kwargs
+
+        view = user_scoped_viewset()()
+
+        assert method(view, 1, key=2) == (view, (1,), {"key": 2})
+        assert method.__name__ == "method"

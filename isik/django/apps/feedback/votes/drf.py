@@ -19,5 +19,5 @@ def generic_vote_serializer(model, name=None):
         "fields": ["id", "value", "created_at", "user"],
         "read_only_fields": ["user", "created_at"],
     }
-    meta = type("Meta", (), meta_attrs)  # pragma: no mutate
+    meta = type("Meta", (), meta_attrs)
     return type(name or f"{model.__name__}Serializer", (BaseModelSerializer,), {"Meta": meta})

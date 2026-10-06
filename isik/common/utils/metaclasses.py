@@ -1,9 +1,15 @@
+import re
+
 from isik._internal.translation import gettext as _
+
+
+# Two underscores, a name that neither starts nor ends with one, two underscores.
+_DUNDER = re.compile(r"__[^_](.*[^_])?__")
 
 
 def is_dunder(name):
     """True for __dunder__-shaped names."""
-    return name[:2] == name[-2:] == "__" and name[2:3] != "_" and name[-3:-2] != "_" and len(name) > 4
+    return _DUNDER.fullmatch(name) is not None
 
 
 class transform(type):

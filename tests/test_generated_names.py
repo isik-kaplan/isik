@@ -67,6 +67,20 @@ class TestModelMakerNames:
             assert factory(model).__name__ == f"{model.__name__}Serializer"
         assert generic_tag_serializer(NamingHost.topics).__name__ == "NamingHostTopicsTagSerializer"
 
+        # The Meta classes the makers hand DRF are named like the ones a person writes.
+        generated = [NamingHost.votes.model, NamingHost.comments.model, NamingHost.notes.model]
+        generated += [NamingHost.bookmarks.model]
+        serializers = [factory(model) for factory, model in zip(
+            [generic_vote_serializer, generic_comment_serializer, generic_note_serializer, generic_bookmark_serializer],
+            generated,
+            strict=False,
+        )] + [generic_tag_serializer(NamingHost.topics)]  # fmt: skip
+        assert {serializer.Meta.__name__ for serializer in serializers} == {"Meta"}
+
+        # What a tags field knows about itself, set as it's attached.
+        assert NamingHost.topics.config.attname == "topics"
+        assert NamingHost.topics.model._normalize is None
+
     @isolate_apps("tests.testapp")
     def test_every_maker_takes_a_model_name(self):
         class NamedHost(models.Model):
@@ -111,3 +125,14 @@ class TestSerializerFactoryNames:
 
         assert FakeErrorSerializer(ThingSerializer, reuse=True).__name__ == "ThingError"
         assert FakeErrorSerializer(ThingSerializer, name="ThingProblems", reuse=True).__name__ == "ThingProblems"
+
+
+@isolate_apps("tests.testapp")
+def test_a_tags_field_hands_its_normalize_to_the_tag_model():
+    class NormalizingHost(models.Model):
+        class Meta:
+            app_label = "testapp"
+
+        topics = tags(related_name="normalizing_host_topics", normalize=str.lower)
+
+    assert NormalizingHost.topics.model._normalize is str.lower

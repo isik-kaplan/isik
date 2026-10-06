@@ -6,6 +6,8 @@ object - so `Host.<name>.model`/`.config` work for introspection while `host_ins
 stays Django's own manager. Not tied to either app.
 """
 
+from types import SimpleNamespace
+
 from django.conf import settings
 from django.db import models
 from django.utils.module_loading import import_string
@@ -141,6 +143,7 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     any `contribute_to_class`-having value in `fields` (e.g. another maker via `extra_fields=`)
     wires up exactly like a hand-written field, with no special-casing needed here.
     """
-    meta = type("Meta", (), {"app_label": host_cls._meta.app_label, **(meta_attrs or {})})  # pragma: no mutate
+    # Django reads only a Meta's attributes, so a namespace holding them is all it needs.
+    meta = SimpleNamespace(app_label=host_cls._meta.app_label, **(meta_attrs or {}))
     attrs = {**fields, **(extra_attrs or {}), "Meta": meta, "__module__": host_cls.__module__}
     return type(model_name, (base_model,), attrs)

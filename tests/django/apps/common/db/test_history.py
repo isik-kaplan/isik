@@ -154,9 +154,24 @@ class TestContextField:
         assert ContextField("f", field=field).resolved_cast() == cast
 
     def test_resolved_cast_raises_for_an_uninferrable_field_type_without_an_explicit_cast(self):
-        cf = ContextField("f", field=models.JSONField())
-        with pytest.raises(TypeError, match="needs cast="):
+        field = models.JSONField()
+        cf = ContextField("f", field=field)
+        with pytest.raises(TypeError) as raised:
             cf.resolved_cast()
+
+        inferred = ", ".join(t.__name__ for t in history_module._INFERRED_CASTS)
+        assert str(raised.value) == (
+            f"ContextField('f') needs cast= - can't infer a Postgres type for {field!r} (only {inferred} are "
+            "inferred; ForeignKey always needs an explicit cast)."
+        )
+
+    def test_column_leaves_the_field_it_was_given_alone(self):
+        field = models.IntegerField()
+        cf = ContextField("org", field=field)
+        before = dict(vars(field))
+
+        assert cf.column() == "org"
+        assert vars(field) == before
 
     def test_resolved_cast_raises_for_a_foreign_key_without_an_explicit_cast(self):
         # The related model may not be resolvable yet (this can run at import time, before

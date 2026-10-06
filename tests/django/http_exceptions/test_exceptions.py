@@ -4,6 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from isik.django.http_exceptions import exceptions
 from isik.django.http_exceptions.exceptions import HTTPException, HTTPExceptions
 
 
@@ -104,10 +105,10 @@ class TestErrorHandlers:
 
 
 def test_calling_the_exception_appends_to_its_args():
-    exception = _IsolatedException()
+    exception = _IsolatedException("first")
     result = exception("extra", "info")
     assert result is exception
-    assert exception.args == ("extra", "info")
+    assert exception.args == ("first", "extra", "info")
 
 
 def test_transform_rejects_a_base_exception_that_is_not_an_http_exception_subclass():
@@ -118,16 +119,15 @@ def test_transform_rejects_a_base_exception_that_is_not_an_http_exception_subcla
 
 class TestRegisterBaseException:
     def test_rejects_a_base_that_is_not_an_http_exception_subclass(self):
-        with pytest.raises(TypeError, match="must be a subclass of HTTPException"):
+        with pytest.raises(TypeError, match=r"^New exception must be a subclass of HTTPException\.$"):
             HTTPExceptions.register_base_exception(ValueError)
 
     def test_reassigns_bases_for_each_registered_exception(self):
         class Foo(HTTPException):
             pass
 
-        class Container:
+        class Container(HTTPExceptions):
             exceptions = ["Foo"]
-            register_base_exception = classmethod(HTTPExceptions.register_base_exception.__func__)
 
         Container.Foo = Foo
 
@@ -139,11 +139,50 @@ class TestRegisterBaseException:
         assert Foo.__bases__ == (NewBase,)
 
     def test_is_a_noop_when_no_exceptions_are_registered(self):
-        class Container:
+        class Container(HTTPExceptions):
             exceptions = []
-            register_base_exception = classmethod(HTTPExceptions.register_base_exception.__func__)
 
         class NewBase(HTTPException):
             pass
 
         Container.register_base_exception(NewBase)
+
+
+class TestTheHooksThatBuildEachException:
+    """HTTPExceptions runs these while its own class is created - here, each is asked directly."""
+
+    def test_a_status_becomes_an_exception_class_named_for_it(self):
+        made = exceptions._exception_for_status("NOT_FOUND", HTTPStatus.NOT_FOUND, {})
+
+        assert (made.__name__, made.__bases__, made.__module__) == ("NOT_FOUND", (HTTPException,), exceptions.__name__)
+        assert (made.status, made.description) == (404, HTTPStatus.NOT_FOUND.description)
+
+    def test_on_the_base_exception_the_class_names(self):
+        class Base(HTTPException):
+            pass
+
+        made = exceptions._exception_for_status("GONE", HTTPStatus.GONE, {"BASE_EXCEPTION": Base})
+
+        assert made.__bases__ == (Base,)
+
+    def test_a_base_exception_that_is_not_an_http_exception_is_refused(self):
+        with pytest.raises(TypeError, match=r"^BASE_EXCEPTION must be a subclass of HTTPException\.$"):
+            exceptions._exception_for_status("GONE", HTTPStatus.GONE, {"BASE_EXCEPTION": ValueError})
+
+    def test_a_plain_status_is_turned_into_an_exception(self):
+        assert exceptions._is_a_status("GONE", HTTPStatus.GONE, {}) is True
+        assert exceptions._is_a_status("GONE", HTTPStatus.GONE, {"encapsulated": ["other"]}) is True
+
+    @pytest.mark.parametrize(
+        ("key", "value", "classdict"),
+        [
+            ("__doc__", "a dunder", {}),
+            ("helper", lambda: None, {}),
+            ("raised", ValueError(), {}),
+            ("built", classmethod(lambda cls: None), {}),
+            ("encapsulated", ["exceptions"], {}),
+            ("exceptions", [], {"encapsulated": ["exceptions"]}),
+        ],
+    )
+    def test_everything_else_is_left_alone(self, key, value, classdict):
+        assert exceptions._is_a_status(key, value, classdict) is False

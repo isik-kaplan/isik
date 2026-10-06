@@ -4,7 +4,6 @@ needed. TemplateFieldPreviewMixin adds a viewset action to render an edit-in-pro
 without saving it. See each mixin's own docstring."""
 
 import jinja2
-from django.core.exceptions import FieldDoesNotExist
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -92,11 +91,13 @@ class TemplateFieldPreviewMixin:
     def preview_template(self, request, pk=None):
         instance = self.get_object()
         field_name = request.data.get("field")
-        try:
-            model_field = instance._meta.get_field(field_name)
-        except FieldDoesNotExist:
-            model_field = None
-        if not isinstance(model_field, (TemplateCharField, TemplateTextField)):
+        template_fields = {
+            field.name: field
+            for field in instance._meta.concrete_fields
+            if isinstance(field, (TemplateCharField, TemplateTextField))
+        }
+        model_field = template_fields.get(field_name)
+        if model_field is None:
             raise serializers.ValidationError(
                 {"field": [_("%(field)r is not a template field on this model.") % {"field": field_name}]}
             )

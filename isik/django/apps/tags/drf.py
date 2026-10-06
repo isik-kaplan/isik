@@ -51,6 +51,6 @@ def generic_tag_serializer(field, name=None):
     """
     tag_model = field.model
     meta_attrs = {"model": tag_model, "fields": ["id", "name", "usage_count"]}
-    meta = type("Meta", (), meta_attrs)  # pragma: no mutate
+    meta = type("Meta", (), meta_attrs)
     attrs = {"Meta": meta, "usage_count": ModelRelatedCountField(related_name=field.config.related_name)}
     return type(name or f"{tag_model.__name__}Serializer", (BaseModelSerializer,), attrs)

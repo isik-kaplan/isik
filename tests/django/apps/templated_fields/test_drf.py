@@ -177,3 +177,35 @@ class TestPreviewAction:
         # context key, not one that's present with a None value).
         assert response.status_code == status.HTTP_200_OK
         assert response.data == {"rendered": "me=None"}
+
+
+class TestPreviewDetails:
+    def test_no_raw_value_previews_as_empty(self, post, preview_view):
+        request = APIRequestFactory().post(f"/templated-posts/{post.pk}/preview-template/", {"field": "default_text"})
+
+        assert preview_view(request, pk=post.pk).data == {"rendered": ""}
+
+    def test_the_request_reaches_the_context_it_renders_with(self, post, preview_view):
+        request = APIRequestFactory().post(
+            f"/templated-posts/{post.pk}/preview-template/", {"field": "default_text", "raw": "me={{ me }}"}
+        )
+        request.me = "alice"
+
+        assert preview_view(request, pk=post.pk).data == {"rendered": "me=alice"}
+
+    def test_a_refused_raw_value_says_why(self, post, preview_view):
+        request = APIRequestFactory().post(
+            f"/templated-posts/{post.pk}/preview-template/", {"field": "default_text", "raw": "{{ totally_missing }}"}
+        )
+
+        assert preview_view(request, pk=post.pk).data == {"raw": ["'totally_missing' is undefined"]}
+
+    @pytest.mark.parametrize("field", ["title", "nope"])
+    def test_a_field_that_is_not_a_template_field_says_so(self, post, preview_view, field):
+        request = APIRequestFactory().post(
+            f"/templated-posts/{post.pk}/preview-template/", {"field": field, "raw": "x"}
+        )
+
+        assert preview_view(request, pk=post.pk).data == {
+            "field": [f"{field!r} is not a template field on this model."]
+        }

@@ -1,5 +1,6 @@
 import pytest
 from dalf.admin import DALFRelatedFieldAjax
+from django.contrib.admin import ModelAdmin
 from django.test import RequestFactory
 
 from isik.django.apps.common.admin import BaseAdmin
@@ -124,3 +125,32 @@ class TestFormfieldForManyToMany:
         admin.formfield_for_manytomany(field, request)
 
         assert field.remote_field.through._meta.auto_created is False
+
+
+class TestWhatReachesDjangosOwnAdmin:
+    """Django's ModelAdmin ignores some of these arguments today; BaseAdmin still hands every one on."""
+
+    def test_save_model_hands_on_every_argument(self, admin_site, rf, admin_user, monkeypatch):
+        seen = []
+        monkeypatch.setattr(ModelAdmin, "save_model", lambda self, *args: seen.append(args) or "saved")
+        admin = make_admin()
+        request, widget, form = rf.post("/"), Widget(name="bolt", count=1), object()
+        request.user = admin_user
+
+        assert admin.save_model(request, widget, form, True) == "saved"
+        assert seen == [(request, widget, form, True)]
+
+    @pytest.mark.parametrize("safe", [[], ["tags"]])
+    def test_formfield_for_manytomany_hands_on_every_argument(self, admin_site, rf, monkeypatch, safe):
+        seen = []
+
+        def formfield(self, db_field, request, **kwargs):
+            seen.append((self, db_field, request, kwargs))
+            return "form field"
+
+        monkeypatch.setattr(ModelAdmin, "formfield_for_manytomany", formfield)
+        admin = make_admin(model=TaggedWidget, admin_site=admin_site, safe_m2m_fields=safe)
+        field, request = TaggedWidget._meta.get_field("tags"), rf.get("/")
+
+        assert admin.formfield_for_manytomany(field, request, required=False) == "form field"
+        assert seen == [(admin, field, request, {"required": False})]

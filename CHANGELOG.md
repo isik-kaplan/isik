@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-06
+
+### Added
+
+- `RoutedAction.callback` - the callable the urlconf routes to, so a decorator applied around
+  `as_view()` in a urlconf (`csrf_exempt(...)`, `transaction.non_atomic_requests(...)`, a project's
+  own marker) can be read off the entry without a second walk of the urlconf.
+
+### Changed
+
+- **Breaking:** `LazyPrimaryKeyRelatedField` takes `queryset_func=` by keyword only, like the rest of
+  its options - DRF's related fields never took positional ones.
+
+### Fixed
+
+- `unseen_exemption_calls()` no longer reports the exemption a `@makes_exemption` helper builds
+  inside its own body - what a maker makes is recorded at its caller, so that line never appeared
+  among the recorded ones and was flagged on every run. Calls inside a maker are skipped; calls to
+  it still count.
+- `MediaWhiteNoiseMiddleware` takes the script prefix off `MEDIA_URL` only as a whole path segment:
+  under a `/sub/` prefix, a `MEDIA_URL` of `/subway/media/` is no longer cut down to `way/media/`.
+
+### Mutation testing
+
+isik is now mutation-tested in full, and every mutant is killed.
+
+- Decorated functions are mutated too: `scripts/mutation_run.py` runs mutmut with a patch
+  (`scripts/mutmut_decorators.py`) that emits each mutant copy without the decorators - they stay on
+  the dispatching trampoline, so each still runs exactly once - instead of skipping the function. A
+  `@makes_exemption` helper keeps its mark on every copy; the exemptions docs show how.
+- mutmut 3.8, which recurses into decorated classes.
+- No `# pragma: no mutate` remains, and only migrations are left out (`do_not_mutate`). The two
+  files that were excluded whole - `metaclasses.py` and `http_exceptions/exceptions.py` - are
+  mutated: `HTTPExceptions`' transform hooks are module-level functions now, which mutmut can
+  instrument before the class that calls them exists.
+- Memoized functions start every test with an empty cache, so a mutant isn't answered from what the
+  original computed.
+
 ## [0.16.0] - 2026-10-06
 
 ### Added

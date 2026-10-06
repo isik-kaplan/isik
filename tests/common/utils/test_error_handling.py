@@ -158,3 +158,27 @@ class TestSuppressCallable:
 
         parse(1)
         assert len(seen) == 1
+
+
+def test_suppress_and_run_hands_suppress_every_argument(monkeypatch):
+    import contextlib
+
+    seen = []
+    monkeypatch.setattr(contextlib.suppress, "__exit__", lambda self, *args: seen.append(args) or True)
+    error = ValueError("x")
+
+    with SuppressAndRun(ValueError, func=lambda e: None):
+        raise error
+
+    assert seen == [(ValueError, error, error.__traceback__)]
+
+
+def test_suppress_callable_hands_every_argument_to_the_function_and_to_return_func():
+    def raising(*args, **kwargs):
+        raise ValueError((args, kwargs))
+
+    assert suppress_callable(ValueError)(lambda *a, **kw: (a, kw))(1, key=2) == ((1,), {"key": 2})
+    assert suppress_callable(ValueError, return_func=lambda *a, **kw: (a, kw))(raising)(1, key=2) == (
+        (1,),
+        {"key": 2},
+    )

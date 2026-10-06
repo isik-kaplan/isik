@@ -80,8 +80,7 @@ class IdempotencyMixin:
     @property
     def idempotency_action(self):
         """The viewset action being served - None on a view that isn't a viewset, which has no actions."""
-        # No mutant of the default is told apart: no action dict holds None or what a mutant puts there.
-        return getattr(self, "action", None)  # pragma: no mutate
+        return getattr(self, "action", None)
 
     def is_idempotent(self, request):
         """Whether this request is covered - its method is, and its action isn't exempt."""

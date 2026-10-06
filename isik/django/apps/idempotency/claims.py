@@ -229,14 +229,14 @@ def _lock_timeout(using, milliseconds):
         yield
         return
     with connections[using].cursor() as cursor:
-        cursor.execute("SELECT current_setting('lock_timeout')")
+        cursor.execute("""SELECT current_setting('lock_timeout')""")
         previous = cursor.fetchone()[0]
-        cursor.execute("SELECT set_config('lock_timeout', %s, true)", [str(milliseconds)])
+        cursor.execute("""SELECT set_config('lock_timeout', %s, true)""", [str(milliseconds)])
     yield
     # Only reached when the insert went through. When it didn't, rolling back its savepoint puts the
     # old value back on its own.
     with connections[using].cursor() as cursor:
-        cursor.execute("SELECT set_config('lock_timeout', %s, true)", [previous])
+        cursor.execute("""SELECT set_config('lock_timeout', %s, true)""", [previous])
 
 
 def claim_idempotency_key(model, claimed_by, key, fingerprint, lock_timeout=None):

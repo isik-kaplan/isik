@@ -1,9 +1,15 @@
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import models
 from django.test import override_settings
 
 from isik.django.apps.templated_fields.delimiters import TemplateDelimiters
-from isik.django.apps.templated_fields.field import TemplateCharField, TemplateString, TemplateTextField
+from isik.django.apps.templated_fields.field import (
+    TemplateCharField,
+    TemplateFieldDescriptor,
+    TemplateString,
+    TemplateTextField,
+)
 from isik.django.apps.templated_fields.policy import TemplatePolicy
 from tests.testapp.models import TemplatedPost, default_text_context
 
@@ -175,3 +181,37 @@ class TestDeconstruct:
         assert reconstructed.available is default_text_context
         assert reconstructed.policy == TemplatePolicy.VARIABLES_ONLY()
         assert reconstructed.undefined == "strict"
+
+
+@pytest.mark.django_db
+class TestEveryReadIsATemplateString:
+    def test_read_after_a_deferred_load(self):
+        saved = TemplatedPost.objects.create(title="hello", default_text="hi {{ title }}")
+
+        deferred = TemplatedPost.objects.only("title").get(pk=saved.pk)
+
+        assert isinstance(deferred.default_text, TemplateString)
+        assert deferred.default_text.render() == "hi hello"
+
+    def test_read_after_a_plain_load_and_after_an_assignment(self):
+        saved = TemplatedPost.objects.create(title="hello", default_text="hi {{ title }}")
+        loaded = TemplatedPost.objects.get(pk=saved.pk)
+        loaded.default_text = "bye {{ title }}"
+
+        assert isinstance(TemplatedPost.objects.get(pk=saved.pk).default_text, TemplateString)
+        assert loaded.default_text.render() == "bye hello"
+
+    def test_the_descriptor_itself_from_the_class(self):
+        assert isinstance(TemplatedPost.default_text, TemplateFieldDescriptor)
+
+
+def test_validate_hands_the_field_s_own_checks_the_value_and_the_instance(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        models.CharField, "validate", lambda self, value, model_instance: seen.append((value, model_instance))
+    )
+    instance = TemplatedPost(title="t")
+
+    TemplatedPost._meta.get_field("greeting").validate("hi", instance)
+
+    assert seen == [("hi", instance)]

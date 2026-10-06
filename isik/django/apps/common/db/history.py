@@ -108,7 +108,7 @@ class ContextField:
         # when this same field instance is actually attached to the event model (in
         # _context_fields_attrs_and_trigger() below), and doing it here first, just to read the
         # resulting column name for the trigger SQL, must not disturb that later, real attach.
-        probe = copy.deepcopy(self.field)
+        probe = copy.copy(self.field)
         probe.set_attributes_from_name(self.name)
         return probe.column
 

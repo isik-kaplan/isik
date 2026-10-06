@@ -22,7 +22,7 @@ def none_during_schema_generation(method):
 
     @wraps(method)
     def wrapper(self, *args, **kwargs):
-        if getattr(self, "swagger_fake_view", False):
+        if getattr(self, "swagger_fake_view", None):
             return self.model.objects.none()
         return method(self, *args, **kwargs)
 

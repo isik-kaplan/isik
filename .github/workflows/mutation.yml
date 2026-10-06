@@ -74,7 +74,7 @@ jobs:
 
       - name: Run mutation testing
         run: |
-          uv run mutmut run
+          uv run python scripts/mutation_run.py
 
       - name: Export stats
         run: |
@@ -103,10 +103,10 @@ jobs:
           stats = json.load(open('mutants/mutmut-cicd-stats.json'))
           survived = stats['survived']
           if survived:
-              print(f'{survived} mutant(s) survived - run \`uv run mutmut run\` locally, then')
-              print('\`uv run mutmut results\` to see which, and either add a test that kills')
-              print('each one or mark it \`# pragma: no mutate\` with a comment explaining why')
-              print('it is equivalent.')
+              print(f'{survived} mutant(s) survived - run \`uv run python scripts/mutation_run.py\`')
+              print('locally, then \`uv run mutmut results\` to see which, and add a test that kills')
+              print('each one - or, for one no test can tell apart, change the code so it no longer')
+              print('produces it.')
               raise SystemExit(1)
           print('No mutants survived.')
           "

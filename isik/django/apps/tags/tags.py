@@ -30,7 +30,7 @@ class TagQuerySet(models.QuerySet):
         """Get-or-create by name, applying the maker's `normalize=` first if configured, then
         enforcing the `name` field's validators (e.g. `name_validators`) - `create()` bypasses
         `full_clean()`, so without this an invalid name would otherwise slip through untouched."""
-        normalize = getattr(self.model, "_normalize", None)
+        normalize = self.model._normalize
         if normalize:
             name = normalize(name)
         self.model._meta.get_field("name").run_validators(name)
@@ -87,10 +87,9 @@ class _TagsField:
         self.through_extra_fields = through_extra_fields or {}
         self.tag_model_name = tag_model_name
         self.through_model_name = through_model_name
-        self.attname = None  # pragma: no mutate
 
     def contribute_to_class(self, host_cls, name):
-        self.attname = name  # pragma: no mutate
+        self.attname = name
         tag_model_name = self.tag_model_name or f"{host_cls.__name__}{name.capitalize()}Tag"
         through_model_name = self.through_model_name or f"{host_cls.__name__}{name.capitalize()}ObjectTag"
         claim_related_name(host_cls, self.target_related_name, through_model_name)
@@ -111,7 +110,7 @@ class _TagsField:
             host_cls,
             fields=tag_fields,
             base_model=resolve_base_model(self.tag_base_model, "TAGS_TAG_BASE_MODEL"),
-            extra_attrs={"_normalize": self.normalize} if self.normalize else None,
+            extra_attrs={"_normalize": self.normalize},
         )
 
         through_fields = {

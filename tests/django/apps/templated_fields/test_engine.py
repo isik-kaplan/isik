@@ -244,3 +244,15 @@ class TestValidateSyntax:
             validate_syntax(
                 "{% if x %}", delimiters=DEFAULT_DELIMITERS, policy=TemplatePolicy.STANDARD(), undefined="strict"
             )
+
+
+class TestSourceLengthAndEscaping:
+    def test_a_source_exactly_at_the_limit_is_accepted_and_one_over_is_refused_saying_so(self):
+        policy = TemplatePolicy(max_source_length=5)
+
+        assert _render("hello", policy=policy) == "hello"
+        with pytest.raises(TemplateSecurityError, match=r"^template source is 6 chars, over the 5 limit$"):
+            _render("hello!", policy=policy)
+
+    def test_values_are_html_escaped(self):
+        assert _render("{{ x }}", context={"x": "<b>&</b>"}) == "&lt;b&gt;&amp;&lt;/b&gt;"

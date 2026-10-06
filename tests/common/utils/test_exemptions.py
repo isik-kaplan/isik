@@ -605,7 +605,6 @@ class TestTypesAndMakersReadFromSource:
             (calls, 7, "not_atomic"),
             (calls, 8, "not_atomic"),
             (calls, 12, "not_atomic"),
-            (declarations, 18, "Local"),
         ]
 
     def test_a_type_is_unimported_unless_its_own_module_defined_it(self, tmp_path, monkeypatch):
@@ -679,3 +678,46 @@ class TestRunMakersAreSeen:
             4,
         )
         assert unseen_exemption_calls([tmp_path]) == [(source, 10, "budget_for")]
+
+
+class TestMakerBodies:
+    """What a maker makes is recorded at its caller, so the calls in its own body are never unseen."""
+
+    def test_calls_inside_a_maker_are_not_unseen_and_calls_to_it_are(self, tmp_path):
+        source = write(
+            tmp_path / "transactions.py",
+            "from isik.common.utils.exemptions import makes_exemption\n"
+            "\n"
+            "\n"
+            "@makes_exemption(NotAtomic)\n"
+            "def not_atomic(reason):\n"
+            "    made = NotAtomic(reason=reason)\n"
+            "\n"
+            "    def nested():\n"
+            "        return NoHelpText(reason='inside a function inside the maker')\n"
+            "\n"
+            "    return made\n"
+            "\n"
+            "\n"
+            "@makes_exemption(NotAtomic)\n"
+            "async def not_atomic_either(reason):\n"
+            "    return not_atomic(reason)\n"
+            "\n"
+            "\n"
+            "def plain(reason):\n"
+            "    return NotAtomic(reason=reason)\n"
+            "\n"
+            "\n"
+            "not_atomic('never run, so never made')\n",
+        )
+
+        assert unseen_exemption_calls([tmp_path]) == [(source, 20, "NotAtomic"), (source, 23, "not_atomic")]
+
+    def test_a_maker_registered_without_the_decorator_syntax_counts_too(self, tmp_path, monkeypatch):
+        monkeypatch.setitem(exemptions._makers, Code("elsewhere.py"), "registered_maker")
+        source = write(
+            tmp_path / "helpers.py",
+            "def registered_maker(reason):\n    return NoHelpText(reason=reason)\n\n\nregistered_maker('never run')\n",
+        )
+
+        assert unseen_exemption_calls([tmp_path]) == [(source, 5, "registered_maker")]

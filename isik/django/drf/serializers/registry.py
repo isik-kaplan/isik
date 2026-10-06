@@ -52,7 +52,7 @@ class ModelSerializerRegistryMixin:
             cls.exempt_from_registry = require_exemption(
                 cls.__name__, "exempt_from_registry", cls.exempt_from_registry, SerializerRegistryExemption
             )
-        if cls.__dict__.get("is_base_class", False):  # pragma: no mutate
+        if cls.__dict__.get("is_base_class"):
             # Must happen before the `model is None` guard below - a class marking itself as a
             # new base is almost always still abstract with no `Meta.model` of its own, which is
             # exactly the common case this fork needs to fire for.

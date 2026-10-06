@@ -51,11 +51,8 @@ class TemplateString(str):
 
 
 class TemplateFieldDescriptor(DeferredAttribute):
-    def __get__(self, instance, cls=None):
-        if instance is None:
-            return self
-        value = super().__get__(instance, cls)  # pragma: no mutate
-        return self._wrap(instance, value) if value else value
+    """Wraps whatever is assigned - by Model.__init__, from_db and a deferred load alike, each of which
+    sets the attribute - so every read finds a TemplateString already there."""
 
     def __set__(self, instance, value):
         # DeferredAttribute has no __set__, so without this override a plain attribute assignment
@@ -97,7 +94,7 @@ class _TemplateFieldMixin:
         return name, path, args, kwargs
 
     def validate(self, value, model_instance):
-        super().validate(value, model_instance)  # pragma: no mutate
+        super().validate(value, model_instance)
         if not value:
             return
         try:

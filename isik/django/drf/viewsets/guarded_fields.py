@@ -181,7 +181,7 @@ class GuardedFieldsMixin:
     def dispatch(self, request, *args, **kwargs):
         if request.method in SAFE_METHODS or not self._declared_guarded_names():
             return super().dispatch(request, *args, **kwargs)
-        self._field_guards_checked = False  # pragma: no mutate - only ever read for truthiness
+        self._field_guards_checked = False
         token = _active_guarded_view.set(self)
         aliases = self.field_guard_databases if self.field_guard_databases is not None else list(connections)
         try:
@@ -190,7 +190,7 @@ class GuardedFieldsMixin:
                     stack.enter_context(transaction.atomic(using=alias))
                 response = super().dispatch(request, *args, **kwargs)
                 # a plain Django HttpResponse has no `exception` - it didn't come from DRF's handler
-                if getattr(response, "exception", False):  # pragma: no mutate - False and None are alike
+                if getattr(response, "exception", False):
                     # DRF turned an exception - a refused guard, a failed validation - into this response,
                     # so no exception reaches the transaction; roll back whatever the handler wrote first.
                     # An error response the handler returned on purpose keeps its writes, as it does
@@ -221,8 +221,8 @@ class GuardedFieldsMixin:
             return
         # A request only succeeds with its action set, so the `or ""`/default fallbacks just keep a hand-rolled
         # dispatch from a TypeError - no test can reach them.
-        handler = getattr(self, self.action or "", None)  # pragma: no mutate
-        if getattr(handler, "writes_no_guarded_fields", False):  # pragma: no mutate
+        handler = getattr(self, self.action or "", None)
+        if getattr(handler, "writes_no_guarded_fields", False):
             return
         if not self.get_field_guards():  # a get_permissions() override dropped them for this action
             return

@@ -394,8 +394,15 @@ class _Scan:
         seen = {(exemption.file, exemption.line) for exemption in _declared}
         unseen = []
         for file, tree, aliases in self.files:
+            # What a maker makes is recorded at the maker's caller, never inside its own body.
+            in_makers = {
+                id(inner)
+                for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name in self.makers
+                for inner in ast.walk(node)
+            }
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Call) or (file, node.lineno) in seen:
+                if not isinstance(node, ast.Call) or id(node) in in_makers or (file, node.lineno) in seen:
                     continue
                 name = aliases.get(_name(node.func), _name(node.func))
                 gives_reason = any(keyword.arg == "reason" for keyword in node.keywords)

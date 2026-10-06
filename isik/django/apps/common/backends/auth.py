@@ -21,7 +21,7 @@ class UsernameOREmailModelBackend(ModelBackend):
         except user_model.DoesNotExist:
             # Run the default password hasher once to reduce the timing
             # difference between an existing and a non-existing user (#20760).
-            user_model().set_password(password)  # pragma: no mutate
+            user_model().set_password(password)
             # This instance is local and never saved/returned - set_password()'s only real effect
             # is the CPU time it burns, not the resulting hash, so which value it hashes (the
             # caller's password vs. e.g. None) is unobservable through any assertion.

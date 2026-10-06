@@ -35,3 +35,14 @@ def test_errorify_on_a_class_based_view_wraps_dispatch(rf):
 
     assert exc_info.value.response.content == b"this endpoint is retired"
     assert exc_info.value.response.status_code == HTTPExceptions.GONE.status
+
+
+def test_an_errorified_function_view_gets_every_argument():
+    @errorify(HTTPExceptions.NOT_FOUND)
+    def view(request, *args, **kwargs):
+        return HttpResponse(f"{args} {kwargs}")
+
+    with pytest.raises(HTTPExceptions.NOT_FOUND) as raised:
+        view(RequestFactory().get("/"), 1, slug="x")
+
+    assert raised.value.response.content == b"(1,) {'slug': 'x'}"

@@ -106,3 +106,22 @@ def test_script_prefix_is_stripped_from_the_static_prefix(settings):
     finally:
         set_script_prefix(previous_prefix)
     assert middleware.directories[0][1] == "/media/"
+
+
+@pytest.mark.parametrize(
+    ("script_prefix", "media_url", "served_at"),
+    [
+        ("/sub/", "/sub/media/", "/media/"),
+        ("/sub/", "/subway/media/", "/subway/media/"),
+        ("/", "/media/", "/media/"),
+    ],
+)
+def test_the_script_prefix_is_taken_off_only_as_a_whole_segment(settings, script_prefix, media_url, served_at):
+    settings.MEDIA_URL = media_url
+    previous_prefix = get_script_prefix()
+    set_script_prefix(script_prefix)
+    try:
+        middleware = make_middleware()
+    finally:
+        set_script_prefix(previous_prefix)
+    assert middleware.directories[0][1] == served_at

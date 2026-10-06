@@ -103,4 +103,4 @@ class AutoGenericForeignKey(GenericForeignKey):
         self.ct_field = self.ct_field_name
         self.fk_field = self.fk_field_name
 
-        super().contribute_to_class(cls, name)  # pragma: no mutate
+        super().contribute_to_class(cls, name)

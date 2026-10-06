@@ -96,6 +96,35 @@ class TestRequireExclusiveKeys:
 
         assert connect(url="u", db=1) == ("u", 1)
 
+    def test_positional_and_keyword_arguments_reach_the_function_either_way(self):
+        @require_exclusive_keys({"by_url": ["url"]}, allow_empty=True)
+        def connect(*args, **kwargs):
+            return args, kwargs
+
+        assert connect(1, 2, url="x", db=3) == ((1, 2), {"url": "x", "db": 3})
+        assert connect(1, 2, db=3) == ((1, 2), {"db": 3})
+
+    def test_the_refusal_names_the_governed_and_the_ignored_arguments(self):
+        @require_exclusive_keys({"by_url": ["url"]}, {"by_host": ["host", "port"]})
+        def connect(url=None, host=None, port=None, db=None):
+            pass
+
+        with pytest.raises(ValueError) as raised:
+            connect(url="u", host="h", port=None, db=1)
+
+        assert str(raised.value) == (
+            "Arguments to 'connect': the governed arguments {'url': 'u', 'host': 'h'} must match exactly one "
+            "of: {'by_url': ['url'], 'by_host': ['host', 'port']}. Other arguments {'db': 1} are unconstrained "
+            "and were ignored."
+        )
+
+
+def test_cloned_passes_every_argument_on():
+    def original(*args, **kwargs):
+        return args, kwargs
+
+    assert cloned(original)(1, key=2) == ((1,), {"key": 2})
+
 
 def test_cloned_produces_an_independent_copy():
     def original(x):

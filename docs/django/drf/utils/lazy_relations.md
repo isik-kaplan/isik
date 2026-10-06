@@ -8,7 +8,8 @@ Relation fields that resolve their target(s) lazily on every access rather than 
 reviewer = LazyPrimaryKeyRelatedField(queryset_func=lambda: User.objects.all())
 ```
 
-- `queryset_func` is called fresh on every `get_queryset()`, not memoized.
+- `queryset_func` is called fresh on every `get_queryset()`, not memoized. It's keyword-only, like
+  every other option DRF's related fields take.
 
 ## LazyGenericRelatedField
 

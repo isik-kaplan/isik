@@ -188,6 +188,16 @@ class TestMessages:
         language["current"] = "tr"
         assert self.refused(permission_cls, stranger) == "Sadece testapp.view_widget holders."
 
+    def test_a_plain_message_is_looked_up_and_a_lazy_one_is_left_to_translate_itself(self, stranger, monkeypatch):
+        monkeypatch.setattr("isik.django.drf.permissions.translate_text", lambda text: f"looked up: {text}")
+
+        assert self.refused(django_permission(VIEW_WIDGET, message="Ask an admin."), stranger) == (
+            "looked up: Ask an admin."
+        )
+        assert self.refused(django_permission(VIEW_WIDGET, message=gettext_lazy("Ask an admin.")), stranger) == (
+            "Ask an admin."
+        )
+
     def test_the_default_is_translated_too(self, stranger, monkeypatch):
         monkeypatch.setattr("django.utils.translation.gettext", lambda text: text.replace("You need", "Gerekli:"))
         assert self.refused(django_permission(VIEW_WIDGET), stranger).startswith("Gerekli: the testapp.view_widget")

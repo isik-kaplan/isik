@@ -90,7 +90,7 @@ class IsAuthenticatedANDSignupCompleted(SignedInPermission):
                 _("%(user_model)s must define SIGNUP_COMPLETED_FIELD to use %(permission)s.")
                 % {"user_model": user.__class__.__name__, "permission": self.__class__.__name__}
             ) from exc
-        return bool(getattr(user, signup_completed_field, False))  # pragma: no mutate
+        return bool(getattr(user, signup_completed_field, None))
 
 
 def _accessor(spec):
@@ -484,7 +484,7 @@ class Guard(BasePermission, metaclass=_GuardMetaclass):
                 % {"guard": type(self).__name__, "view": type(view).__name__}
             )
         if self.fields is not None:
-            if not getattr(view, "runs_field_guards", False):  # pragma: no mutate
+            if not getattr(view, "runs_field_guards", False):
                 # Answering True here would permit everything and say nothing, since
                 # permission_classes are ANDed - fail closed and loud instead.
                 raise ImproperlyConfigured(

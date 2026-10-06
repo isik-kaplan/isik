@@ -20,7 +20,7 @@ class TestValidateInputsPositional:
         def thing(value):
             return value
 
-        with pytest.raises(ValueError, match=r"thing\(\) got an invalid value for 'value': -1"):
+        with pytest.raises(ValueError, match=r"^thing\(\) got an invalid value for 'value': -1$"):
             thing(-1)
 
     def test_a_positional_arg_passed_by_keyword_is_still_validated(self):

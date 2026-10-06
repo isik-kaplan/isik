@@ -126,7 +126,10 @@ class TestClaimIdempotencyKey:
         assert created is True
 
     def test_a_lock_timeout_lasts_only_as_long_as_the_insert(self):
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '7s'")
         before = lock_timeout()
+        assert before == "7s"
 
         claim_idempotency_key(IdempotencyClaim, make_user("alice"), uuid.uuid4(), "a" * 64, lock_timeout=250)
 

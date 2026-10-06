@@ -35,7 +35,8 @@ class RoutedAction:
     what answers it: a DRF view (`view` is its class), a Django class-based view (`view` is its class),
     or a function view (`view` is the function, and `method` is None - which methods a function
     answers can't be read from it). `urlconf` names the urlconf that routes it - under django-hosts, one
-    route can be in several.
+    route can be in several. `callback` is what the urlconf routes to: `as_view()`'s function, with
+    whatever a decorator around it in the urlconf (`csrf_exempt(SomeView.as_view())`) set on it.
     """
 
     route: str
@@ -44,6 +45,7 @@ class RoutedAction:
     action: str | None
     kind: ViewKind = ViewKind.DRF
     urlconf: str | None = None
+    callback: object = None
 
 
 class CoverageStatus(StrEnum):
@@ -100,12 +102,12 @@ def routed_views(urlconf=None):
         for route, view in _walk(get_resolver(each).url_patterns, ""):
             if getattr(view, "cls", None) is not None:
                 for method, action in _answers(view):
-                    found.append(RoutedAction(route, view.cls, method, action, urlconf=name))
+                    found.append(RoutedAction(route, view.cls, method, action, urlconf=name, callback=view))
             elif getattr(view, "view_class", None) is not None:
                 for method in _handlers(view.view_class):
-                    found.append(RoutedAction(route, view.view_class, method, None, ViewKind.CLASS, name))
+                    found.append(RoutedAction(route, view.view_class, method, None, ViewKind.CLASS, name, view))
             else:
-                found.append(RoutedAction(route, view, None, None, ViewKind.FUNCTION, name))
+                found.append(RoutedAction(route, view, None, None, ViewKind.FUNCTION, name, view))
     return found
 
 

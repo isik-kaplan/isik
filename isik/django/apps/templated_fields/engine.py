@@ -53,11 +53,11 @@ def _build_environment(delimiters, policy, undefined):
     )
 
     for name in DROPPED_GLOBALS:
-        env.globals.pop(name, None)
+        del env.globals[name]
     if TemplateFeature.FOR_LOOP in policy:
         env.globals["range"] = _capped_range(policy.max_loop_iterations)
     else:
-        env.globals.pop("range", None)
+        del env.globals["range"]
 
     allowed_filters = policy.allowed_filters
     if TemplateFeature.FILTERS not in policy:
