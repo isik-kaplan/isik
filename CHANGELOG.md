@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-08
+
+### Fixed
+
+- **isik's own exemptions no longer show up as the project's.** The reasons isik gives for Django's
+  validators without a database form (regex, email, URL and the rest) are made from `ready()`, so
+  they were recorded at the first frame outside the libraries - `manage.py` - and listed as the
+  project's: seven entries under `isik.validators.database-form` on a fresh project, every one at
+  `manage.py:15`, and a budget for that rule starting at seven. They are now recorded at the line in
+  isik that makes them and left out by default.
+
+### Added
+
+- `@makes_own_exemptions` marks a library function whose exemptions are the library's own. Each is
+  recorded at the function's own line with `library=True`. `--include-library` on
+  `manage.py exemptions`, and `include_library=True` on `declared_exemptions()`,
+  `project_exemptions()` and `project_exemption_rules()`, list them; JSON entries carry `"library"`.
+- `lifted_constraint(model, name)`, for a test: lifts one CHECK for a block, from
+  `_meta.constraints` and from the table, inside the test's own transaction, and puts it back
+  afterwards (`NOT VALID` at the column, so the rows the block wrote stay until the rollback).
+- `docs/django/apps/common/db/constraints.md` says what a callable `choices` does: its CHECK is a
+  snapshot taken when the app starts. Changing the setting it reads needs a migration, and a test
+  that overrides the setting has to lift the constraint.
+
+### Breaking
+
+- `declared_exemptions()` leaves out a library's own exemptions unless `include_library=True`, and
+  `assert_exemption_budget()` never counts them. `ExemptionEntry` gains `library`.
+
 ## [0.19.0] - 2026-10-08
 
 ### Added

@@ -19,6 +19,7 @@ from isik.common.utils.exemptions import (
     exemption_class,
     exemption_types,
     makes_exemption,
+    makes_own_exemptions,
     unimported_exemption_types,
     unseen_exemption_calls,
 )
@@ -484,6 +485,77 @@ class TestMakers:
             makes_exemption(value)
 
         assert str(raised.value) == f"makes_exemption() takes an exemption type, not {value!r}."
+
+
+class TestALibrarysOwn:
+    """A library function making exemptions for itself - recorded at its own line, and left out of a project's."""
+
+    def test_each_is_recorded_where_the_function_made_it_and_flagged(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_own", set())
+
+        def teach():
+            return Budgeted(reason="made by a library for itself, not by the project"), sys._getframe().f_lineno
+
+        assert makes_own_exemptions(teach) is teach
+        made, line = teach()
+
+        assert (made.file, made.line, made.library) == (HERE, line, True)
+        assert exemptions._own == {teach.__code__}
+
+    def test_it_is_listed_only_when_asked_for_and_never_counted(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_own", set())
+        count = len(declared_exemptions("tests.budgeted"))
+
+        @makes_own_exemptions
+        def teach():
+            return Budgeted(reason="made by a library for itself, not by the project")
+
+        made = teach()
+
+        assert made not in declared_exemptions("tests.budgeted")
+        assert made not in declared_exemptions()
+        assert declared_exemptions("tests.budgeted", include_library=True)[-1] is made
+        assert made in declared_exemptions(include_library=True)
+        assert_exemption_budget("tests.budgeted", at_most=count)
+
+    def test_under_a_shared_wrapper_only_the_function_inside_is_marked(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_own", set())
+
+        def shared(function):
+            @functools.wraps(function)
+            def wrapper(*args, **kwargs):
+                return function(*args, **kwargs)
+
+            return wrapper
+
+        @makes_own_exemptions
+        @shared
+        def teach():
+            return Budgeted(reason="made by a library for itself, not by the project")
+
+        @shared
+        def project_helper():
+            return Budgeted(reason="made through the same wrapper, for the project")
+
+        assert exemptions._own == {teach.__wrapped__.__code__}
+        assert (teach().library, project_helper().library) == (True, False)
+
+    def test_anyone_elses_is_not_flagged(self):
+        made = Budgeted(reason="made by the project, so the project's own")
+
+        assert made.library is False
+        assert pickle.loads(pickle.dumps(made)).library is False
+
+    def test_its_frame_is_the_site_even_inside_isik(self, monkeypatch):
+        monkeypatch.setattr(exemptions, "_ISIK", "/isik/")
+        monkeypatch.setattr(exemptions, "_LIBRARIES", ("/libraries/",))
+        own_code = Code("/isik/constraints.py")
+        monkeypatch.setattr(exemptions, "_own", {own_code})
+        manage = frame_at("/libraries/django.py", frame_at("/project/manage.py"))
+        own = frame_at("/isik/constraints.py", manage, own_code)
+        inner = frame_at("/isik/exemptions.py", own)
+
+        assert exemptions._call_site(inner) == (own, "/isik/constraints.py")
 
 
 def write(path, source):

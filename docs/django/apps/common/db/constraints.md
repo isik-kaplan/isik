@@ -1,7 +1,8 @@
 # constraints
 
 `as_condition`, `no_database_form`, `python_only_validator` — a validator says whether its rule can
-hold at the column, and the ones that can become `CheckConstraint`s.
+hold at the column, and the ones that can become `CheckConstraint`s. `lifted_constraint` lifts one
+for a test.
 
 ## The problem
 
@@ -84,6 +85,36 @@ Enforcing it at the column takes the escape hatch away, and does it silently.
 
 A field with `choices` gets `IN (...)`, admitting null where the column is nullable and the empty
 string where it is `blank` — refusing either would refuse what the field was declared to allow.
+
+### A callable `choices` is a snapshot
+
+`choices=language_choices`, built from `settings.LANGUAGES`, is evaluated once, when the app starts,
+into both `Meta.constraints` and the migration. The CHECK holds the list as it was then:
+
+- Changing the setting in production does not change the column. The two disagree until someone runs
+  `makemigrations`, and the migration it writes is the change.
+- Changing it in a test (`override_settings`, a fixture) does not change the constraint either.
+  `full_clean()` validates it in Python against the startup list, and the column refuses the value
+  too.
+
+To test a value the project's own settings don't allow, lift that one CHECK for the block:
+
+```python
+from isik.django.apps.common.db.constraints import lifted_constraint
+
+
+@override_settings(LANGUAGES=[("en", "English"), ("tr", "Turkish")])
+def test_a_second_language(db):
+    with lifted_constraint(User, "users_user_language_choices"):
+        User.objects.create(username="ayse", language="tr")
+```
+
+It lifts the constraint from `_meta.constraints`, which `full_clean()` validates against, and drops it
+from the table. Dropping it is DDL, so it runs only inside a transaction that rolls back, the test's
+own, and is refused outside one. Afterwards the Python list is put back as it was, and the column gets
+the constraint back `NOT VALID`: later writes are checked again, while the rows the block wrote stay
+until the rollback. A block that raises gets it back in Python only. Its transaction is likely broken,
+and the rollback restores the column.
 
 ## Notes
 

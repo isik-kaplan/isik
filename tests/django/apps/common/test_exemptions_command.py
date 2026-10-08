@@ -10,8 +10,10 @@ from pathlib import Path
 import pytest
 from django.core.management import CommandError, call_command
 
-from isik.common.utils.exemptions import exemption_class
+from isik.common.utils.exemptions import declared_exemptions, exemption_class
 from isik.django.apps.common import exemptions as project
+from isik.django.apps.common.db import constraints
+from isik.django.apps.common.db.constraints import DJANGO_VALIDATORS_WITHOUT_ONE
 from isik.django.apps.common.exemptions import (
     ExemptionEntry,
     ExemptionRule,
@@ -29,6 +31,8 @@ from tests.testapp import models
 URLCONF = "tests.django.drf.test_coverage"
 MODELS = str(Path(models.__file__).resolve())
 COVERAGE = inspect.getsourcefile(Gated)
+CONSTRAINTS = str(Path(constraints.__file__).resolve())
+DATABASE_FORM = "isik.validators.database-form"
 
 
 Unused = exemption_class("Unused", rule="tests.command-unused", why="Nothing here ever skips it.")
@@ -126,6 +130,7 @@ class TestTheCommand:
             "reason": "the model's own name already says what the text is",
             "file": MODELS,
             "line": help_text_line(),
+            "library": False,
         } in payload["exemptions"]
         assert payload["unseen"] == []
         assert payload["unimported_types"] == []
@@ -177,6 +182,51 @@ class TestTheCommand:
         ]
 
 
+def teaching_site():
+    """
+    The one place isik made its exemptions for Django's validators without a database form, checked to be
+    the line in isik's constraints making them - found from the record rather than searched for, because
+    mutmut's copy of the file holds that line once per mutant.
+    """
+    [(file, line)] = {(e.file, e.line) for e in declared_exemptions(DATABASE_FORM, include_library=True) if e.library}
+    assert file == CONSTRAINTS
+    assert "NoDatabaseForm(reason=why)" in Path(file).read_text().splitlines()[line - 1]
+    return file, line
+
+
+class TestALibrarysOwn:
+    """isik's exemptions for Django's own validators are isik's, not the project's."""
+
+    def test_they_are_left_out_of_the_projects_listing_and_counts(self):
+        # testapp's models make some of their own, which are the project's and stay.
+        projects = [e for e in project_exemptions(URLCONF) if e.rule == DATABASE_FORM]
+
+        assert projects
+        assert [e for e in projects if e.file == CONSTRAINTS or e.library] == []
+        assert {rule.rule: rule.count for rule in project_exemption_rules(URLCONF)}[DATABASE_FORM] == len(projects)
+        assert command._where(*teaching_site()) not in run("--rule", DATABASE_FORM)[0]
+
+    def test_asked_for_they_are_listed_where_isik_made_them(self):
+        own = [e for e in project_exemptions(URLCONF, include_library=True) if e.rule == DATABASE_FORM]
+
+        isiks = [e for e in own if e.library]
+
+        assert {(e.file, e.line) for e in isiks} == {teaching_site()}
+        assert {e.reason for e in isiks} == set(DJANGO_VALIDATORS_WITHOUT_ONE.values())
+        assert [e for e in own if not e.library] == [e for e in project_exemptions(URLCONF) if e.rule == DATABASE_FORM]
+        rules = {rule.rule: rule.count for rule in project_exemption_rules(URLCONF, include_library=True)}
+        assert rules[DATABASE_FORM] == len(own)
+
+    def test_the_command_lists_them_when_asked(self):
+        out, _ = run("--rule", DATABASE_FORM, "--include-library")
+        listed = json.loads(run("--rule", DATABASE_FORM, "--include-library", "--format", "json")[0])["exemptions"]
+        rules = json.loads(run("--rules", "--include-library", "--format", "json")[0])["rules"]
+
+        assert f"{command._where(*teaching_site())}  " in out
+        assert {(e["file"], e["line"]) for e in listed if e["library"]} == {teaching_site()}
+        assert next(r["count"] for r in rules if r["rule"] == DATABASE_FORM) == len(listed)
+
+
 class TestEdges:
     def test_a_class_without_source_has_no_site(self):
         assert project._source(type("Dynamic", (), {})) == (None, None)
@@ -191,7 +241,7 @@ class TestEdges:
         assert run("--rule", "tests.command-unused") == ("", "")
 
     def test_no_rules_print_nothing(self, monkeypatch):
-        monkeypatch.setattr(command, "project_exemption_rules", lambda urlconf: [])
+        monkeypatch.setattr(command, "project_exemption_rules", lambda urlconf, include_library: [])
 
         assert run("--rules") == ("", "")
 
@@ -235,14 +285,14 @@ class TestTheOutput:
             ExemptionEntry("a.rule", "A", "why a", None, None),
             ExemptionEntry("b.rule", "B", "why b", None, None, "list"),
         ]
-        monkeypatch.setattr(command, "project_exemptions", lambda urlconf: entries)
+        monkeypatch.setattr(command, "project_exemptions", lambda urlconf, include_library: entries)
         monkeypatch.setattr(command, "unseen_project_exemptions", lambda urlconf: [])
 
         assert run() == ("a.rule  ?  why a\nb.rule  ?  list - why b\n", "")
 
     def test_rules_are_one_per_line_with_their_counts(self, monkeypatch):
         found = [ExemptionRule("a.rule", "Why a.", 2), ExemptionRule("bb.rule", "Why b.", 10)]
-        monkeypatch.setattr(command, "project_exemption_rules", lambda urlconf: found)
+        monkeypatch.setattr(command, "project_exemption_rules", lambda urlconf, include_library: found)
 
         assert run("--rules") == ("a.rule   2   Why a.\nbb.rule  10  Why b.\n", "")
 
@@ -265,6 +315,8 @@ class TestTheOutput:
             "A urlconf to load views from - repeat it for several. Every urlconf the project serves by default."
         )
         assert (actions["urlconf"].default, type(actions["urlconf"]).__name__) == (None, "_AppendAction")
+        assert actions["include_library"].help == "Also the exemptions isik and other libraries make for themselves."
+        assert (actions["include_library"].default, actions["include_library"].const) == (False, True)
         with pytest.raises(CommandError):
             run("--format", "yaml")
 

@@ -24,6 +24,7 @@ was made - `exemption_types()`, `declared_exemptions()`, `assert_exemption_budge
 """
 
 import ast
+import inspect
 import os
 import re
 import sys
@@ -39,11 +40,13 @@ NOT_GIVEN = Sentinel("EXEMPTION_NOT_GIVEN")
 RULE_PATTERN = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)*")
 DEFAULT_MIN_LENGTH = 40
 
-# {rule: type}, every exemption made so far in the order made, and {code: name} for each function that
-# makes exemptions for its caller (`makes_exemption()`).
+# {rule: type}, every exemption made so far in the order made, {code: name} for each function that
+# makes exemptions for its caller (`makes_exemption()`), and the code of each library function whose
+# exemptions are the library's own (`makes_own_exemptions()`).
 _types = {}
 _declared = []
 _makers = {}
+_own = set()
 
 _ISIK = str(Path(__file__).resolve().parents[2]) + os.sep
 # Where installed libraries and the standard library live - a frame there is a metaclass or a decorator
@@ -59,12 +62,15 @@ _LIBRARIES = tuple(
 def _call_site(frame=None):
     """
     (frame, file) of the code that made an exemption: the nearest frame outside isik and the libraries,
-    and not in a function that makes exemptions for its caller (`makes_exemption()`).
+    and not in a function that makes exemptions for its caller (`makes_exemption()`) - or, nearer still,
+    a library function making its own (`makes_own_exemptions()`), wherever it lives.
     """
     frame = frame or sys._getframe()
     in_libraries = []
     while frame is not None:
         file = str(Path(frame.f_code.co_filename).resolve())
+        if frame.f_code in _own:
+            return frame, file
         if not file.startswith(_ISIK) and frame.f_code not in _makers:
             if not file.startswith(_LIBRARIES):
                 return frame, file
@@ -173,6 +179,7 @@ class Exemption(str):
         frame, file = _call_site()
         if frame is not None:
             self.file, self.line = file, frame.f_lineno
+            self.library = frame.f_code in _own
             if not _in_a_migration(frame):
                 _declared.append(self)
         return self
@@ -196,6 +203,7 @@ class Exemption(str):
         self = super().__new__(cls, reason if cls.shows_as is None else cls.shows_as)
         self.reason = reason
         self.file = self.line = None
+        self.library = False
         return self
 
     def __reduce__(self):
@@ -271,17 +279,42 @@ def makes_exemption(exemption_type):
     return mark
 
 
+def makes_own_exemptions(function):
+    """
+    Marks a library function whose exemptions are the library's own, not its caller's. Each is recorded
+    at the function's own line and flagged `library`, so a project's listing and budgets leave it out:
+
+        @makes_own_exemptions
+        def teach_django_its_validators():
+            for validator, why in DJANGO_VALIDATORS_WITHOUT_ONE.items():
+                validator.no_database_form = NoDatabaseForm(reason=why)
+
+    Without it, an exemption made while the project loads - from an `AppConfig.ready()`, say - is
+    recorded at the nearest frame outside the libraries, `manage.py`, and counted as the project's.
+
+    Under other decorators it marks only the innermost function, whose body makes them: a wrapper's
+    code can be shared by every function it wraps, and marking it would claim theirs too.
+    """
+    _own.add(inspect.unwrap(function).__code__)
+    return function
+
+
 def exemption_types():
     """`{rule: type}` for every exemption type defined so far."""
     return dict(sorted(_types.items()))
 
 
-def declared_exemptions(rule=None):
+def declared_exemptions(rule=None, *, include_library=False):
     """
     Every exemption made so far, in the order made - or only `rule`'s. One made in a function exists
-    once the function runs; `unseen_exemption_calls()` finds those that haven't.
+    once the function runs; `unseen_exemption_calls()` finds those that haven't. A library's own
+    (`makes_own_exemptions()`) are left out unless `include_library`.
     """
-    return [exemption for exemption in _declared if rule is None or exemption.rule == rule]
+    return [
+        exemption
+        for exemption in _declared
+        if (rule is None or exemption.rule == rule) and (include_library or not exemption.library)
+    ]
 
 
 def _known_rule(rule):
@@ -292,7 +325,8 @@ def _known_rule(rule):
 def assert_exemption_budget(rule, *, at_most):
     """
     Fails unless `rule` has at most `at_most` exemptions - so adding one is a change to a test, made in
-    review, not a silent one. Call it once everything that declares them is imported.
+    review, not a silent one. Call it once everything that declares them is imported. A library's own
+    don't count.
     """
     _known_rule(rule)
     found = declared_exemptions(rule)

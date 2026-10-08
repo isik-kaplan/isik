@@ -26,7 +26,10 @@ from isik.django.apps.common.urlconfs import project_urlconfs
 
 @dataclass(frozen=True)
 class ExemptionEntry:
-    """One exemption: the rule it skips, what declared it, why, and where - `action` for a policy's own."""
+    """
+    One exemption: the rule it skips, what declared it, why, and where - `action` for a policy's own, and
+    `library` for one a library made for itself (`makes_own_exemptions()`).
+    """
 
     rule: str
     declared_by: str
@@ -34,6 +37,7 @@ class ExemptionEntry:
     file: str | None
     line: int | None
     action: str | None = None
+    library: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,24 +88,35 @@ def _load_everything(urlconf):
         get_resolver(each).url_patterns  # noqa: B018 - loading it is the point
 
 
-def project_exemptions(urlconf=None):
+def project_exemptions(urlconf=None, *, include_library=False):
     """
     Every exemption the project declares, by rule - within one, in the order they were made, and a
     policy's in route order. It loads every urlconf the project serves (`project_urlconfs()`), or
-    `urlconf` - one, or several in a list - to find them.
+    `urlconf` - one, or several in a list - to find them. The ones isik and other libraries make for
+    themselves are left out unless `include_library`.
     """
     _load_everything(urlconf)
     typed = [
-        ExemptionEntry(exemption.rule, type(exemption).__qualname__, exemption.reason, exemption.file, exemption.line)
-        for exemption in declared_exemptions()
+        ExemptionEntry(
+            exemption.rule,
+            type(exemption).__qualname__,
+            exemption.reason,
+            exemption.file,
+            exemption.line,
+            library=exemption.library,
+        )
+        for exemption in declared_exemptions(include_library=include_library)
     ]
     policies, _ = _policy_entries(urlconf)
     return sorted([*typed, *policies], key=attrgetter("rule"))
 
 
-def project_exemption_rules(urlconf=None):
-    """Each rule the project can be exempted from, why it's there, and how many exemptions it has."""
-    counts = Counter(entry.rule for entry in project_exemptions(urlconf))
+def project_exemption_rules(urlconf=None, *, include_library=False):
+    """
+    Each rule the project can be exempted from, why it's there, and how many exemptions it has - with
+    the libraries' own counted only when `include_library`.
+    """
+    counts = Counter(entry.rule for entry in project_exemptions(urlconf, include_library=include_library))
     whys = {rule: cls.why for rule, cls in exemption_types().items()}
     for rule, policy in _policy_entries(urlconf)[1].items():
         whys[rule] = _policy_why(policy)

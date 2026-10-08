@@ -23,13 +23,16 @@ the direction to be wrong in.
 
 import hashlib
 import inspect
+from contextlib import contextmanager
 
 from django.core import validators as django_validators
 from django.db import connection, models
 from django.db.models.signals import class_prepared
+from django.db.transaction import TransactionManagementError
 from django.utils.deconstruct import deconstructible
 
-from isik.common.utils.exemptions import Exemption
+from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import Exemption, makes_own_exemptions
 from isik.django.apps.common.db.models import FullCleanOnSaveModel
 
 
@@ -166,11 +169,13 @@ DJANGO_VALIDATORS_WITHOUT_ONE = {
 }
 
 
+@makes_own_exemptions
 def teach_django_its_validators():
     """Attach the answers to Django's classes, in place.
 
     In place rather than by subclass so that the instances Django has already built are answered,
-    and so no second class exists for an `isinstance` elsewhere to disagree about.
+    and so no second class exists for an `isinstance` elsewhere to disagree about. The exemptions are
+    isik's own, so a project's listing leaves them out.
     """
     for validator, build in DJANGO_VALIDATORS.items():
         validator.as_condition = staticmethod(build)
@@ -302,3 +307,44 @@ def unclassified_validators(over=None):
             if not classified(v)
         }
     )
+
+
+@contextmanager
+def lifted_constraint(model, name):
+    """For a test: the CHECK named `name` lifted from `model` for the block, in Python and at the column.
+
+        with lifted_constraint(User, "users_user_language_choices"):
+            User.objects.create(language="tr")
+
+    What a callable `choices` allowed when the app started is in the CHECK, and changing the setting
+    it reads - `override_settings`, a fixture - changes neither the constraint `full_clean()`
+    validates nor the column's. This lifts both. It drops the constraint from the table, so it runs
+    inside a transaction that rolls back - the test's own - and is refused outside one.
+
+    Put back at the column afterwards `NOT VALID`: later writes are checked, and the rows the block
+    wrote, which it may well refuse, stay until the test's rollback. A block that raises gets it back
+    in Python only - its transaction is likely broken, and the rollback puts the column's back.
+    """
+    lifted = next((each for each in model._meta.constraints if each.name == name), None)
+    if not isinstance(lifted, models.CheckConstraint):
+        raise LookupError(
+            _("%(model)s has no CHECK constraint named %(name)r.") % {"model": model._meta.label, "name": name}
+        )
+    if not connection.in_atomic_block:
+        raise TransactionManagementError(
+            _(
+                "lifted_constraint() drops %(name)r from the table, so it runs inside a transaction that rolls "
+                "back - a test's own."
+            )
+            % {"name": name}
+        )
+    with connection.schema_editor() as editor:
+        editor.remove_constraint(model, lifted)
+    constraints = model._meta.constraints
+    model._meta.constraints = [each for each in constraints if each is not lifted]
+    try:
+        yield
+    finally:
+        model._meta.constraints = constraints
+    with connection.schema_editor() as editor:
+        editor.execute(f"{lifted.create_sql(model, editor)} NOT VALID")

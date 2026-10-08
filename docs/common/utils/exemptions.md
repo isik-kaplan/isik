@@ -73,9 +73,11 @@ made it: the nearest frame outside isik and the installed libraries. An exemptio
 is a replay rather than a new declaration, so it isn't recorded.
 
 - `exemption_types()` returns `{rule: type}`.
-- `declared_exemptions(rule=None)` returns every exemption made so far, or only `rule`'s.
+- `declared_exemptions(rule=None, include_library=False)` returns every exemption made so far, or
+  only `rule`'s. A library's own (see below) are left out unless `include_library=True`.
 - `assert_exemption_budget(rule, at_most=3)` fails if `rule` has more exemptions than that. Adding
-  one then means changing a test in review instead of slipping in unnoticed.
+  one then means changing a test in review instead of slipping in unnoticed. A library's own don't
+  count.
 - `unseen_exemption_calls(paths, exclude=TEST_CODE)` returns `[(file, line, name)]` for each call
   under `paths` that makes an exemption but never ran, e.g. one inside a function. "Every exemption"
   means every one, not just every one that happened to execute.
@@ -123,6 +125,27 @@ def upload(request): ...
 
 Under other decorators, it marks every function down the `__wrapped__` chain.
 
+## A library's own exemptions
+
+A library can make exemptions for itself. isik does: it says why each of Django's validators without
+a database form stays Python-only. These are made from `AppConfig.ready()`, so the nearest frame
+outside the libraries is `manage.py`, and they would be recorded there as the project's own.
+`@makes_own_exemptions` marks the function that makes them:
+
+```python
+from isik.common.utils.exemptions import makes_own_exemptions
+
+
+@makes_own_exemptions
+def teach_django_its_validators():
+    for validator, why in DJANGO_VALIDATORS_WITHOUT_ONE.items():
+        validator.no_database_form = NoDatabaseForm(reason=why)
+```
+
+Each one it makes is recorded at the function's own file and line and has `library` set to `True`.
+`declared_exemptions()` and the project listing leave it out unless asked, and budgets never count
+it. A project's exemption count for a rule starts at zero.
+
 ### Under mutmut
 
 Stock mutmut never mutates a decorated function, so a `@makes_exemption` helper runs unchanged and
@@ -134,7 +157,7 @@ emits the copies without their decorators, except the ones a copy needs:
 
 ```python
 BINDING_DECORATORS = frozenset({"staticmethod", "classmethod"})
-MARKING_DECORATORS = frozenset({"makes_exemption"})
+MARKING_DECORATORS = frozenset({"makes_exemption", "makes_own_exemptions"})
 
 
 def carried_by_copies(decorators):
@@ -160,7 +183,12 @@ $ python manage.py exemptions --rule schema-docs.help-text   # one rule
 $ python manage.py exemptions --rules                        # each rule, its count, and its why
 $ python manage.py exemptions --format json                  # for tooling and CI diffing
 $ python manage.py exemptions --urlconf config.urls.api --urlconf config.urls.admin
+$ python manage.py exemptions --include-library              # isik's and other libraries' own too
 ```
+
+`--include-library`, or `include_library=True` on `project_exemptions()` and
+`project_exemption_rules()`, adds the exemptions libraries make for themselves, at the library's own
+file and line. In JSON each entry says whether it is one with `"library"`.
 
 By default the urlconfs are `project_urlconfs()`: `ROOT_URLCONF`, plus every host's urlconf when
 django-hosts is installed and `ROOT_HOSTCONF` is set. `--urlconf`, given once or more, names them

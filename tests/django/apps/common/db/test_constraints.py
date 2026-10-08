@@ -10,6 +10,7 @@ from django.core import validators as django_validators
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, models, transaction
 from django.db.models.signals import class_prepared
+from django.db.transaction import TransactionManagementError
 from django.test.utils import isolate_apps
 
 from isik.django.apps.common.db import BaseModel
@@ -25,6 +26,7 @@ from isik.django.apps.common.db.constraints import (
     condition_for,
     constrain,
     install,
+    lifted_constraint,
     no_database_form,
     python_only_validator,
     teach_django_its_validators,
@@ -744,3 +746,81 @@ def test_a_class_marked_validator_leaves_its_column_unconstrained():
 
     assert not [name for name in names if "seen_at" in name]
     assert unclassified_validators(over=[CleanedNote]) == []
+
+
+def _kind_choices():
+    return _name(CleanedNote._meta.get_field("kind"), "choices")
+
+
+def _set_kind(note, kind):
+    CleanedNote.objects.filter(pk=note.pk).update(kind=kind)
+
+
+class TestLiftedConstraint:
+    """A test lifting one CHECK for a block - a callable `choices` froze it at startup, say."""
+
+    def test_inside_the_block_neither_python_nor_the_column_holds_it(self):
+        note = CleanedNote.objects.create(count=1)
+        note.kind = "nonsense"
+        before = CleanedNote._meta.constraints
+
+        with lifted_constraint(CleanedNote, _kind_choices()):
+            assert [each.name for each in CleanedNote._meta.constraints] == [
+                each.name for each in before if each.name != _kind_choices()
+            ]
+            note.validate_constraints()
+            _set_kind(note, "nonsense")
+
+        assert CleanedNote._meta.constraints is before
+        assert CleanedNote.objects.get(pk=note.pk).kind == "nonsense"
+        with pytest.raises(ValidationError):
+            note.validate_constraints()
+
+    def test_afterwards_the_column_refuses_again_and_keeps_what_the_block_wrote(self):
+        written, later = CleanedNote.objects.create(count=1), CleanedNote.objects.create(count=1)
+
+        with lifted_constraint(CleanedNote, _kind_choices()):
+            _set_kind(written, "nonsense")
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            _set_kind(later, "nonsense")
+        assert CleanedNote.objects.get(pk=written.pk).kind == "nonsense"
+
+    def test_a_block_that_raises_gets_it_back_in_python(self):
+        before = CleanedNote._meta.constraints
+
+        with pytest.raises(ZeroDivisionError), lifted_constraint(CleanedNote, _kind_choices()):
+            1 / 0  # noqa: B018 - raising is the point
+
+        assert CleanedNote._meta.constraints is before
+
+    def test_only_the_named_one_is_lifted(self):
+        note = CleanedNote.objects.create(count=1)
+
+        with lifted_constraint(CleanedNote, _kind_choices()), pytest.raises(IntegrityError), transaction.atomic():
+            CleanedNote.objects.filter(pk=note.pk).update(count=-1)
+
+    @pytest.mark.parametrize("name", ["testapp_cleanednote_nothing", "a_unique_one"])
+    def test_a_name_that_is_no_check_on_the_model_is_refused(self, name, monkeypatch):
+        unique = models.UniqueConstraint(fields=["count"], name="a_unique_one")
+        monkeypatch.setattr(CleanedNote._meta, "constraints", [*CleanedNote._meta.constraints, unique])
+
+        with pytest.raises(LookupError) as raised, lifted_constraint(CleanedNote, name):
+            pass
+
+        assert str(raised.value) == f"testapp.CleanedNote has no CHECK constraint named {name!r}."
+
+    @pytest.mark.django_db(transaction=True)
+    def test_outside_a_transaction_it_is_refused(self):
+        before = CleanedNote._meta.constraints
+
+        with pytest.raises(TransactionManagementError) as raised, lifted_constraint(CleanedNote, _kind_choices()):
+            pass
+
+        assert str(raised.value) == (
+            f"lifted_constraint() drops {_kind_choices()!r} from the table, so it runs inside a transaction that "
+            "rolls back - a test's own."
+        )
+        assert CleanedNote._meta.constraints is before
+        with pytest.raises(IntegrityError), transaction.atomic():
+            CleanedNote.objects.filter(pk=CleanedNote.objects.create(count=1).pk).update(kind="nonsense")

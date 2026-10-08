@@ -18,8 +18,8 @@ What a copy keeps:
 - `@staticmethod`/`@classmethod` when it's the function's only decorator - mutmut binds those copies
   itself. Stacked with anything else, the outer decorator already passes the class, so the copy is a
   plain function.
-- `@makes_exemption(...)`, which only marks the function it's given: the copy is what actually runs,
-  and has to be recorded as a maker for its exemptions to be recorded at its caller.
+- `@makes_exemption(...)` and `@makes_own_exemptions`, which only mark the function they're given: the
+  copy is what actually runs, and has to be marked for its exemptions to be recorded where they belong.
 
 A mutation inside a decorator's own arguments is dropped: a copy carries no decorator for it to apply
 to, so it would be a twin of the original that no test could ever kill.
@@ -35,7 +35,7 @@ import libcst as cst
 
 
 BINDING_DECORATORS = frozenset({"staticmethod", "classmethod"})
-MARKING_DECORATORS = frozenset({"makes_exemption"})
+MARKING_DECORATORS = frozenset({"makes_exemption", "makes_own_exemptions"})
 
 
 def _name_of(decorator):

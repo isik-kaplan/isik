@@ -41,12 +41,17 @@ class Command(BaseCommand):
             action="append",
             help="A urlconf to load views from - repeat it for several. Every urlconf the project serves by default.",
         )
+        parser.add_argument(
+            "--include-library",
+            action="store_true",
+            help="Also the exemptions isik and other libraries make for themselves.",
+        )
 
-    def handle(self, *args, rule, rules, format, urlconf, **options):
+    def handle(self, *args, rule, rules, format, urlconf, include_library, **options):
         if rules:
-            self._rules(project_exemption_rules(urlconf), format)
+            self._rules(project_exemption_rules(urlconf, include_library=include_library), format)
             return
-        entries = project_exemptions(urlconf)
+        entries = project_exemptions(urlconf, include_library=include_library)
         if rule is not None:
             known = {each.rule for each in project_exemption_rules(urlconf)}
             if rule not in known:
@@ -66,6 +71,7 @@ class Command(BaseCommand):
                                 "reason": entry.reason,
                                 "file": entry.file,
                                 "line": entry.line,
+                                "library": entry.library,
                             }
                             for entry in entries
                         ],
