@@ -9,6 +9,7 @@ from isik.django.drf.permissions import (
     IsSuperUser,
     ReadOnly,
     SignedInPermission,
+    evaluate_permission,
     is_owner,
     object_property,
     only_actions,
@@ -430,3 +431,23 @@ class TestDescriptorResolution:
         permission = object_property(EmailUser.is_staff)()
         staff = django_user_model.objects.create_user(username="s", email="s@example.com", is_staff=True)
         assert permission.has_object_permission(rf.get("/"), view=None, obj=staff) is True
+
+
+class TestEvaluatePermission:
+    """The predicate behind a guard, read directly: True, False, or None for a rule only a row can
+    settle. A guard reads None as allowed, so nothing downstream tells the two apart - which is why
+    the three-valued part is asserted here rather than through one."""
+
+    def test_an_object_only_leaf_without_an_object_is_unknown(self, rf, django_user_model):
+        request = rf.get("/")
+        request.user = django_user_model.objects.create_user(username="alice", password="password")
+
+        assert evaluate_permission(is_owner("owner")(), request, FakeView("create")) is None
+
+    def test_negating_an_unknown_leaves_it_unknown(self, rf, django_user_model):
+        """`not None` is True, which turns "only a row can answer this" into "allowed" one level up,
+        and an AND above it then settles on a value it has not earned."""
+        request = rf.get("/")
+        request.user = django_user_model.objects.create_user(username="alice", password="password")
+
+        assert evaluate_permission((~is_owner("owner"))(), request, FakeView("create")) is None

@@ -9,6 +9,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Now
+from django.utils import timezone
 from django_lifecycle import (
     AFTER_CREATE,
     AFTER_DELETE,
@@ -29,6 +30,7 @@ from isik.django.apps.common.db import (
     ReprModel,
     track_events,
 )
+from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
@@ -39,9 +41,18 @@ from isik.django.apps.templated_fields import TemplateCharField, TemplatePolicy,
 from tests.testapp.exemptions import NoComment, NoHelpText
 
 
+@as_condition(lambda field, validator: models.Q(**{f"{field.name}__gte": 0}))
 def positive_only(value):
+    """A custom validator that knows its own SQL, so a constraint follows it to the column."""
     if value < 0:
         raise ValidationError("Must be positive.")
+
+
+@no_database_form("It asks the clock, and a column cannot be re-judged every time it is read.")
+def not_in_the_future(value):
+    """A custom validator no column could hold, for the other half of the same rule."""
+    if value and value > timezone.now():
+        raise ValidationError("Must not be in the future.")
 
 
 class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixin, AbstractUser):
@@ -60,7 +71,17 @@ class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixi
 @track_events()
 class Widget(BaseModel):
     name = models.CharField(max_length=100)
-    count = models.IntegerField(default=0, validators=[positive_only])
+    # Declined at the column on purpose: the skippable-validator suite lifts this one, and a CHECK
+    # cannot be lifted. The pair with CleanedNote below is what shows both halves of that choice.
+    count = models.IntegerField(
+        default=0,
+        validators=[
+            python_only_validator(
+                positive_only,
+                reason="SkipFieldValidators lifts this one, and a CHECK constraint cannot be lifted.",
+            )
+        ],
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -335,11 +356,22 @@ class ExemptedNote(models.Model):
 
 
 class CleanedNote(FullCleanOnSaveModel, ReprModel):
-    """Validated on save and given a repr, with neither a UUID pk nor database timestamps."""
+    """Validated on save and given a repr, with neither a UUID pk nor database timestamps.
+
+    The enforced half of the pair: its `count` carries `positive_only` bare, so the rule reaches the
+    column and a write going nowhere near `full_clean()` is refused anyway.
+    """
+
+    class Kind(models.TextChoices):
+        BOLT = "bolt", "Bolt"
+        NUT = "nut", "Nut"
 
     STR = "note of {self.count}"
 
     count = models.IntegerField(default=0, validators=[positive_only])
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.BOLT)
+    # A rule no column could hold, so the field carries the validator and no constraint.
+    seen_at = models.DateTimeField(null=True, blank=True, validators=[not_in_the_future])
 
     class Meta:
         app_label = "testapp"

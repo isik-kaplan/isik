@@ -422,6 +422,10 @@ msgstr ""
 msgid "Expect condition could not be satisfied"
 msgstr ""
 
+#: isik/django/apps/common/checks.py:25
+msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Headers sent to prepare for the response"
 msgstr ""
@@ -806,6 +810,11 @@ msgstr ""
 #: isik/django/drf/permissions.py:375
 #, python-format
 msgid "User property %(property)s is False"
+msgstr ""
+
+#: isik/django/apps/common/checks.py:23
+#, python-format
+msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
 
 #: isik/common/config/casters.py:54

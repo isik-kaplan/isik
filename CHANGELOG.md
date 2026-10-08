@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-08
+
+### Added
+
+- **A validator says whether its rule can hold at the column.** One kept only in `full_clean()` is
+  one a `QuerySet.update()`, a `bulk_create`, a data migration or a psql session writes straight
+  past, so where the rule is expressible in SQL it now also becomes a `CheckConstraint`. Three
+  answers and no fourth: `as_condition` on the class, `@no_database_form(reason)` for a rule no
+  column could hold, and `python_only_validator(validator, reason=...)` for one instance that
+  declines. See `docs/django/apps/common/db/constraints.md`.
+- Translations for Django's `MinLengthValidator`, `MaxLengthValidator`, `MinValueValidator` and
+  `MaxValueValidator`, attached to Django's own classes rather than subclassed - so nothing has to be
+  imported to get them, and the validators Django builds for itself are answered too. Each returns
+  nothing where the column carries the rule already: a `varchar(n)` refuses a longer value by itself,
+  and `PositiveIntegerField`'s bounds are the `integer` type plus a CHECK Django writes.
+- A field's `choices` becomes a CHECK as well. Django validates them in `full_clean()` and nowhere
+  else, so the column took whatever it was handed.
+- `isik.E001`, this library's first system check, naming every validator that has said nothing.
+
+### Breaking
+
+- **A hand-written validator that says nothing fails `isik.E001`.** Every project on `BaseModel`
+  will name its own validators once, which is the point of the change. Django's auto-added ones are
+  not affected - the check reads `_validators`, what a model actually passed.
+- **New constraints appear in migrations.** A `makemigrations` after upgrading writes a `CHECK` for
+  every `choices` field and for every validator with a database form. Existing rows are checked when
+  it applies, so a column holding something outside its own choices will refuse to migrate - which is
+  the bug the constraint exists to have caught.
+- **A rule enforced at the column can no longer be skipped.** `skip_full_clean()` and
+  `SkipFieldValidators` lift a validator; nothing lifts a `CheckConstraint`, and Postgres refuses
+  `DEFERRABLE` on one. A rule that has to stay liftable belongs in `python_only_validator`.
+
 ## [0.18.0] - 2026-10-08
 
 ### Fixed
