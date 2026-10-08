@@ -96,6 +96,13 @@ jobs:
           path: mutants/mutmut-cicd-stats.json
           retention-days: 14
 
+      # Named here rather than left for a local run: a mutant that survives on a two-core runner and
+      # dies on a laptop is exactly the one nobody can reproduce by being told to go and look.
+      - name: Name anything that is not a kill
+        if: always()
+        run: |
+          uv run mutmut results | grep -v ': killed$' || true
+
       - name: Fail if any mutant survived
         run: |
           uv run python -c "
@@ -103,10 +110,9 @@ jobs:
           stats = json.load(open('mutants/mutmut-cicd-stats.json'))
           survived = stats['survived']
           if survived:
-              print(f'{survived} mutant(s) survived - run \`uv run python scripts/mutation_run.py\`')
-              print('locally, then \`uv run mutmut results\` to see which, and add a test that kills')
-              print('each one - or, for one no test can tell apart, change the code so it no longer')
-              print('produces it.')
+              print(f'{survived} mutant(s) survived - the step above names them. Add a test that')
+              print('kills each one, or, for one no test can tell apart, change the code so it no')
+              print('longer produces it.')
               raise SystemExit(1)
           print('No mutants survived.')
           "
