@@ -287,7 +287,7 @@ msgstr ""
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:52
+#: isik/django/apps/common/db/models.py:55
 msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
@@ -380,11 +380,11 @@ msgstr ""
 msgid "Could not determine a unique serializer for the given data."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:72
+#: isik/django/apps/common/db/models.py:75
 msgid "Created At"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:31
+#: isik/django/apps/common/db/models.py:34
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
@@ -426,7 +426,7 @@ msgstr ""
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:51
+#: isik/django/apps/common/db/models.py:54
 msgid "ID"
 msgstr ""
 
@@ -795,7 +795,7 @@ msgstr ""
 msgid "URI not available in preferred format"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:84
+#: isik/django/apps/common/db/models.py:87
 msgid "Updated At"
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "When the key was spent."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:85
+#: isik/django/apps/common/db/models.py:88
 msgid "When the row last changed, by the database's clock."
 msgstr ""
 
@@ -830,7 +830,7 @@ msgstr ""
 msgid "When the row last changed."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:73
+#: isik/django/apps/common/db/models.py:76
 msgid "When the row was created, by the database's clock. Never changes."
 msgstr ""
 

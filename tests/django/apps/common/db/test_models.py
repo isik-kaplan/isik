@@ -6,6 +6,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 from django.test.utils import isolate_apps
+from django_lifecycle import AFTER_DELETE, BEFORE_DELETE, bypass_hooks_for
 
 from isik.django.apps.common.db import (
     BaseModel,
@@ -167,6 +168,31 @@ class TestLifecycleHookOrdering:
         recorder.update(name="rec-2", _skip_hooks=True)
         assert recorder.hook_log == []
 
+    def test_delete_runs_before_delete_then_after_delete(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        recorder.hook_log = []
+        recorder.delete()
+        assert recorder.hook_log == ["before_delete", "after_delete"]
+
+    def test_delete_returns_what_the_model_returns(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        deleted, _per_model = recorder.delete()
+        assert deleted == 1
+
+    def test_delete_forwards_its_arguments_to_the_model(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        with patch.object(models.Model, "delete", autospec=True, return_value=(1, {})) as spy:
+            recorder.delete("default", keep_parents=True)
+        assert spy.call_args.args[1:] == ("default",)
+        assert spy.call_args.kwargs == {"keep_parents": True}
+
+    def test_delete_forwards_its_keyword_arguments_to_the_hooks(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        with patch.object(Recorder, "_run_hooked_methods", autospec=True) as spy:
+            recorder.delete(keep_parents=True)
+        assert [call.args[1] for call in spy.call_args_list] == [BEFORE_DELETE, AFTER_DELETE]
+        assert all(call.kwargs == {"keep_parents": True} for call in spy.call_args_list)
+
     def test_update_persists_fields_a_hook_mutates_beyond_the_explicit_kwargs(self):
         # Recorder's BEFORE_SAVE hook sets self.slug from self.name - update(name=...) only
         # tells save() about "name", so slug must be widened into update_fields for the
@@ -274,3 +300,58 @@ class TestTriggersAttachAsEachModelIsDefined:
         plain = fresh_model("PlainNow", models.Model)
 
         assert not {"protect_created_at", "stamp_updated_at"} & (triggers_of(abstract) | triggers_of(plain))
+
+
+class TestBypassHooksFor:
+    """django-lifecycle checks the bypass inside its own save(), which FullCleanOnSaveModel replaces
+    rather than extends - so every one of these would pass vacuously if it asked nothing itself."""
+
+    def test_it_skips_the_save_hooks(self):
+        recorder = Recorder(name="rec-1")
+        with bypass_hooks_for([Recorder]):
+            recorder.save()
+        assert recorder.hook_log == []
+
+    def test_it_skips_the_delete_hooks_that_upstream_leaves_running(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        recorder.hook_log = []
+        with bypass_hooks_for([Recorder]):
+            recorder.delete()
+        assert recorder.hook_log == []
+
+    def test_a_bypassed_delete_still_forwards_its_arguments_to_the_model(self):
+        recorder = Recorder.objects.create(name="rec-1")
+        with (
+            bypass_hooks_for([Recorder]),
+            patch.object(models.Model, "delete", autospec=True, return_value=(1, {})) as spy,
+        ):
+            recorder.delete("default", keep_parents=True)
+        assert spy.call_args.args[1:] == ("default",)
+        assert spy.call_args.kwargs == {"keep_parents": True}
+
+    def test_a_model_it_does_not_name_still_runs_its_hooks(self):
+        recorder = Recorder(name="rec-1")
+        with bypass_hooks_for([Widget]):
+            recorder.save()
+        assert recorder.hook_log == ["before_create", "before_save", "after_save", "after_create"]
+
+    def test_the_hooks_are_back_once_it_exits(self):
+        recorder = Recorder(name="rec-1")
+        with bypass_hooks_for([Recorder]):
+            pass
+        recorder.save()
+        assert recorder.hook_log == ["before_create", "before_save", "after_save", "after_create"]
+
+    def test_it_still_runs_full_clean(self):
+        """Whether a row is valid is not a question about hooks, so bypassing them answers nothing
+        about it - only SKIP_FULL_CLEAN does."""
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.count = -9
+        with bypass_hooks_for([Widget]), pytest.raises(ValidationError):
+            widget.save()
+
+    def test_combined_with_skip_full_clean_it_bypasses_validation_too(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+        with bypass_hooks_for([Widget]), widget.skip_full_clean():
+            widget.update(count=-9)
+        assert Widget.objects.get(pk=widget.pk).count == -9

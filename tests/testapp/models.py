@@ -9,7 +9,17 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Now
-from django_lifecycle import AFTER_CREATE, AFTER_SAVE, AFTER_UPDATE, BEFORE_CREATE, BEFORE_SAVE, BEFORE_UPDATE, hook
+from django_lifecycle import (
+    AFTER_CREATE,
+    AFTER_DELETE,
+    AFTER_SAVE,
+    AFTER_UPDATE,
+    BEFORE_CREATE,
+    BEFORE_DELETE,
+    BEFORE_SAVE,
+    BEFORE_UPDATE,
+    hook,
+)
 
 from isik.django.apps.common.db import (
     BaseModel,
@@ -210,6 +220,14 @@ class Recorder(BaseModel):
     @hook(AFTER_SAVE)
     def _after_save(self):
         self.hook_log.append("after_save")
+
+    @hook(BEFORE_DELETE)
+    def _before_delete(self):
+        self.hook_log.append("before_delete")
+
+    @hook(AFTER_DELETE)
+    def _after_delete(self):
+        self.hook_log.append("after_delete")
 
 
 class Post(TaggableMixin, BaseModel):

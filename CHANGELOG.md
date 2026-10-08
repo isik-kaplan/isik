@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-08
+
+### Fixed
+
+- django-lifecycle's `bypass_hooks_for(models)` now does something. `FullCleanOnSaveModel.save()`
+  replaces `LifecycleModelMixin.save()` rather than extending it, and the bypass is checked inside
+  the method that was replaced - so the context manager ran, suppressed nothing, and raised nothing
+  to say so. It is now asked about on every save.
+
+### Added
+
+- `bypass_hooks_for` covers deletes as well as saves. `FullCleanOnSaveModel` overrides `delete()` to
+  consult it; upstream's `LifecycleModelMixin.delete()` does not, so this goes further than
+  django-lifecycle on purpose - the name says hooks, not saves, and a bypass that quietly covers
+  half of them is the same trap as one that covers none.
+
+Bypassing hooks still runs `full_clean()`, exactly as `save(_skip_hooks=True)` always has: whether a
+row is valid is not a question about hooks, and `SKIP_FULL_CLEAN` remains the only thing that
+answers it. Both opt-outs are kept; neither replaces the other.
+
 ## [0.17.0] - 2026-10-06
 
 ### Added

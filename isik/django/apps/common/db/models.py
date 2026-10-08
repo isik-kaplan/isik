@@ -9,13 +9,16 @@ from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
 from django_lifecycle import (
     AFTER_CREATE,
+    AFTER_DELETE,
     AFTER_SAVE,
     AFTER_UPDATE,
     BEFORE_CREATE,
+    BEFORE_DELETE,
     BEFORE_SAVE,
     BEFORE_UPDATE,
     LifecycleModelMixin,
 )
+from django_lifecycle.mixins import _bypass_state
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
@@ -98,6 +101,13 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
     skips validation; `save(_skip_hooks=True)` skips the hooks. Validators are skippable per call - see
     `SkippableValidatorsMixin`.
 
+    django-lifecycle's own `bypass_hooks_for(models)` works here too, on saves and on deletes. Both
+    methods below are replacements rather than extensions of `LifecycleModelMixin`'s, so each asks
+    about the bypass itself; without that the context manager would run and suppress nothing. Deletes
+    are covered because the name says hooks rather than saves - `LifecycleModelMixin.delete` does not
+    consult it upstream. Skipping hooks never skips `full_clean()`: whether a row is valid is not a
+    question about hooks, and only `SKIP_FULL_CLEAN` answers it.
+
     Don't put a `classproperty` with a query-building body on a subclass of this - use a plain
     `classmethod` instead. `django_lifecycle`'s `LifecycleModelMixin` scans class attributes via
     `getattr(cls, name)` on every instantiation to find hook methods, which evaluates a
@@ -110,7 +120,7 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
 
     @transaction.atomic
     def save(self, *args, **kwargs):
-        skip_hooks = kwargs.pop("_skip_hooks", None)
+        skip_hooks = kwargs.pop("_skip_hooks", None) or _bypass_state.is_bypassed_for(type(self))
         save = super(LifecycleModelMixin, self).save
 
         if skip_hooks:
@@ -151,6 +161,15 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
             self._run_hooked_methods(AFTER_UPDATE, **kwargs)
 
         transaction.on_commit(self._reset_initial_state)
+
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        if _bypass_state.is_bypassed_for(type(self)):
+            return super(LifecycleModelMixin, self).delete(*args, **kwargs)
+        self._run_hooked_methods(BEFORE_DELETE, **kwargs)
+        deleted = super(LifecycleModelMixin, self).delete(*args, **kwargs)
+        self._run_hooked_methods(AFTER_DELETE, **kwargs)
+        return deleted
 
     def update(self, **kwargs):
         skip_hooks = kwargs.pop("_skip_hooks", None)
