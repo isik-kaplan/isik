@@ -484,7 +484,9 @@ class Guard(BasePermission, metaclass=_GuardMetaclass):
                 % {"guard": type(self).__name__, "view": type(view).__name__}
             )
         if self.fields is not None:
-            if not getattr(view, "runs_field_guards", False):
+            # Its presence is the claim - `GuardedFieldsMixin` sets it, and a view without the mixin
+            # does not carry it at all.
+            if not hasattr(view, "runs_field_guards"):
                 # Answering True here would permit everything and say nothing, since
                 # permission_classes are ANDed - fail closed and loud instead.
                 raise ImproperlyConfigured(

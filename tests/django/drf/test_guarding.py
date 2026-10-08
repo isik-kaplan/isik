@@ -72,7 +72,10 @@ def seen():
 class FakeView:
     def __init__(self, action, runs_field_guards=False):
         self.action = action
-        self.runs_field_guards = runs_field_guards
+        # Set only when true, because that is the shape being stood in for: a view without
+        # GuardedFieldsMixin has no such attribute, rather than one set to False.
+        if runs_field_guards:
+            self.runs_field_guards = True
 
 
 class WidgetSerializer(serializers.ModelSerializer):

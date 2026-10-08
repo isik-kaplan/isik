@@ -42,7 +42,7 @@ msgstr ""
 msgid "%(guard)s can't be combined with &, | or ~ - compose the predicate inside guarding() instead."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:298
+#: isik/django/drf/viewsets/guarded_fields.py:303
 #, python-format
 msgid "%(guard)s guards %(field)r, which no serializer of %(viewset)s has a field named."
 msgstr ""
@@ -153,7 +153,7 @@ msgstr ""
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:167
+#: isik/django/drf/viewsets/guarded_fields.py:170
 #, python-format
 msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or name them in %(lenient)s.unguarded_fields with the reason they're open there."
 msgstr ""
@@ -228,7 +228,7 @@ msgstr ""
 msgid "%(value)r isn't a registered type, Field subclass, or Field instance"
 msgstr ""
 
-#: isik/django/drf/permissions.py:491
+#: isik/django/drf/permissions.py:493
 #, python-format
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
@@ -243,7 +243,7 @@ msgstr ""
 msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:135
+#: isik/django/drf/viewsets/guarded_fields.py:138
 #, python-format
 msgid "%(viewset)s composes %(guard)s with &, | or ~ - a guard must be its own permission_classes entry, with any composition inside guarding()."
 msgstr ""
@@ -263,7 +263,7 @@ msgstr ""
 msgid "%(viewset)s sets ordering_fields but OrderingFilter (or a subclass) is not in filter_backends - add it to REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] or set filter_backends directly."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:230
+#: isik/django/drf/viewsets/guarded_fields.py:235
 #, python-format
 msgid "%(viewset)s.%(action)s succeeded without running its field guards, so its database writes are rolled back. Save through a serializer with FieldGuardsOnSaveMixin (BaseModelSerializer), call self.check_guarded_fields(serializer), or mark the action @writes_no_guarded_fields(\"<why>\") if it writes no guarded field."
 msgstr ""
@@ -867,12 +867,12 @@ msgstr ""
 msgid "Who wrote this note."
 msgstr ""
 
-#: isik/django/drf/permissions.py:679
-#: isik/django/drf/permissions.py:683
+#: isik/django/drf/permissions.py:681
+#: isik/django/drf/permissions.py:685
 msgid "You may not change this field."
 msgstr ""
 
-#: isik/django/drf/permissions.py:687
+#: isik/django/drf/permissions.py:689
 msgid "You may not perform this action."
 msgstr ""
 
@@ -913,35 +913,35 @@ msgstr ""
 msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
 msgstr ""
 
-#: isik/django/drf/permissions.py:669
+#: isik/django/drf/permissions.py:671
 msgid "guarding requires at least one field or action"
 msgstr ""
 
-#: isik/django/drf/permissions.py:667
+#: isik/django/drf/permissions.py:669
 msgid "guarding requires exactly one of fields, setting or actions"
 msgstr ""
 
-#: isik/django/drf/permissions.py:671
+#: isik/django/drf/permissions.py:673
 msgid "guarding takes a list of fields or actions, not a single string"
 msgstr ""
 
-#: isik/django/drf/permissions.py:673
+#: isik/django/drf/permissions.py:675
 msgid "guarding's fields= takes field names - for target values use setting="
 msgstr ""
 
-#: isik/django/drf/permissions.py:675
+#: isik/django/drf/permissions.py:677
 msgid "guarding's setting= takes a dict of field names to target values"
 msgstr ""
 
-#: isik/django/drf/permissions.py:610
+#: isik/django/drf/permissions.py:612
 msgid "guarding.matching requires a callable"
 msgstr ""
 
-#: isik/django/drf/permissions.py:598
+#: isik/django/drf/permissions.py:600
 msgid "guarding.other_than requires at least one value"
 msgstr ""
 
-#: isik/django/drf/permissions.py:586
+#: isik/django/drf/permissions.py:588
 msgid "guarding.values requires at least one value"
 msgstr ""
 
@@ -1020,7 +1020,7 @@ msgstr ""
 msgid "validate_inputs() was given validators for parameters %(func)r doesn't have: %(unknown)s."
 msgstr ""
 
-#: isik/django/drf/viewsets/guarded_fields.py:59
+#: isik/django/drf/viewsets/guarded_fields.py:60
 #, python-format
 msgid "writes_no_guarded_fields takes the reason the action writes no guarded field - @writes_no_guarded_fields(\"...\"), not %(value)r."
 msgstr ""

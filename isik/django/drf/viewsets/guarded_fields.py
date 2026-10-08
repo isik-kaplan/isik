@@ -4,6 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connections, transaction
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import SAFE_METHODS, OperandHolder, SingleOperandHolder
+from rest_framework.response import Response
 from rest_framework.serializers import ListSerializer
 
 from isik._internal.reasons import require_exemption, require_reasons
@@ -118,6 +119,8 @@ class GuardedFieldsMixin:
     """
 
     runs_field_guards = True
+    # A view instance serves one request, so the class default is the reset `dispatch` would do.
+    _field_guards_checked = False
     # {field name: reason} - a field another viewset over the same serializer guards, left open here.
     unguarded_fields = {}
     actions_writing_no_guarded_fields = {"destroy": "deleting a row writes none of its fields"}
@@ -181,7 +184,6 @@ class GuardedFieldsMixin:
     def dispatch(self, request, *args, **kwargs):
         if request.method in SAFE_METHODS or not self._declared_guarded_names():
             return super().dispatch(request, *args, **kwargs)
-        self._field_guards_checked = False
         token = _active_guarded_view.set(self)
         aliases = self.field_guard_databases if self.field_guard_databases is not None else list(connections)
         try:
@@ -189,8 +191,9 @@ class GuardedFieldsMixin:
                 for alias in aliases:
                     stack.enter_context(transaction.atomic(using=alias))
                 response = super().dispatch(request, *args, **kwargs)
-                # a plain Django HttpResponse has no `exception` - it didn't come from DRF's handler
-                if getattr(response, "exception", False):
+                # A plain Django HttpResponse did not come from DRF's handler, so nothing turned an
+                # exception into it and there is nothing to roll back.
+                if isinstance(response, Response) and response.exception:
                     # DRF turned an exception - a refused guard, a failed validation - into this response,
                     # so no exception reaches the transaction; roll back whatever the handler wrote first.
                     # An error response the handler returned on purpose keeps its writes, as it does
@@ -219,10 +222,12 @@ class GuardedFieldsMixin:
             return
         if self.action in self.actions_writing_no_guarded_fields:
             return
-        # A request only succeeds with its action set, so the `or ""`/default fallbacks just keep a hand-rolled
-        # dispatch from a TypeError - no test can reach them.
-        handler = getattr(self, self.action or "", None)
-        if getattr(handler, "writes_no_guarded_fields", False):
+        # Named by the action map, so it is always a method this viewset has - `dispatch` answered
+        # an unmapped method with a 405 and returned above.
+        handler = getattr(self, self.action)
+        # Its presence is the claim: the decorator sets it to a reason of at least forty characters,
+        # and nothing sets it to anything falsy.
+        if hasattr(handler, "writes_no_guarded_fields"):
             return
         if not self.get_field_guards():  # a get_permissions() override dropped them for this action
             return
