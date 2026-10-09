@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-09
+
+### Changed
+
+- **History shows what the resource shows, and nothing else.** `HistoryMixin` served every tracked
+  column minus `history_withhold`, with nothing tying that list to the viewset's serializer, so a
+  `User` viewset that hid `password` served the hash from `/users/{pk}/history/` the moment someone
+  forgot the line. The history now follows the serializer `retrieve` uses: each of its fields that
+  renders one tracked column appears under the same name and rendered by the same field, so an entry
+  reads like the resource did at that moment. A column the serializer leaves out stays out, `changes`
+  included, and an update that changed only such columns isn't listed. Method fields, nested
+  serializers, dotted sources and non-primary-key relations are left out - they'd read today's rows.
+- `history_shows_change_of = ["password"]` (`shows_change_of=` on `generic_history_serializer()`)
+  keeps a hidden field's changes listed as `[None, None]`, as `history_withhold` did - the event says
+  the password changed, never the hash. `history_source_serializer()` picks another serializer to
+  follow. The history serializer renders with the viewset's context.
+
+### Added
+
+- `HistoryMixin.scope_history(events)` narrows the events both history endpoints return, per
+  request - one override for rules about the events themselves, such as only those recorded while
+  the caller owned the object (`events.filter(pgh_data__owner_id=request.user.pk)`) or only those
+  the caller made. Until now that meant overriding `get_history_queryset()` and
+  `get_all_history_queryset()` separately; the hook also covers either override.
+
+### Fixed
+
+- **A template field's loops have one budget per render.** `max_loop_iterations` capped each
+  `range()` call on its own, and `max_render_length` only counted output, so three nested
+  `range(1000)` loops that wrote nothing ran 300M iterations under `TemplatePolicy.STANDARD()`, and a
+  fourth level ran for hours. Every `{% for %}` iteration of a render now counts against
+  `max_loop_iterations`, including loops over literals and over the context. Each `range()` call is
+  still capped as well.
+- **`*` and `**` in a template can't build a huge value.** `{{ "x" * 400000000 }}` allocated 400MB
+  before the output check saw it, and `{{ 9 ** (9 ** 9) }}` never finished. A `*` or `**` whose
+  result would be longer than `max_render_length` is refused before it's computed.
+- **A tag name can't be empty.** `get_tag("")` created a tag named `""`, because the default regex
+  ended in `*` and Django skips validators for an empty value. The regex now needs at least one
+  character, and `get_tag()` cleans the name through the field, blank check included. The message
+  names `.`, which was always allowed, and is translatable.
+- **An empty list variable is the empty list.** `comma_separated_list()` read `ALLOWED_HOSTS=` as
+  `[""]`, and the int and float lists raised. All three now return `[]` for a value that is set but
+  empty. An empty item between two commas is unchanged.
+- **A config parse error doesn't print the value.** The `ConfigError` for an unparseable variable
+  printed the raw value, so a malformed secret ended up in logs and Sentry. It names the variable and
+  the caster (by name, not `<function ... at 0x...>`) instead. The caster's own error is still its
+  `__cause__`.
+
+### Removed
+
+- **`UsernameOREmailModelBackend`.** Its `.get(Q(email=x) | Q(username=x))` found two users when one's
+  username was another's email, or when two accounts shared an email, and the login was a 500 - so
+  one signup could lock someone out of password login. Which lookups are safe depends on what a
+  project keeps unique, so isik leaves the backend to the project, or to django-allauth's
+  `AuthenticationBackend` (`ACCOUNT_LOGIN_METHODS = {"username", "email"}`). `login_through()` and
+  `listed_backend_path()` stay.
+
+### Breaking
+
+- `history_withhold` and `generic_history_serializer(withhold=)` are gone, with no alias: a field
+  is withheld by leaving it out of the serializer, and `history_shows_change_of` lists the ones
+  whose changes should still show. `generic_history_serializer(model, serializer, ...)` takes the
+  resource's serializer. History responses lose every column their serializer doesn't show, use the
+  serializer's names and formats (`owner`, not `owner_id`, for a `ModelSerializer`'s foreign key),
+  and leave out updates that changed nothing shown.
+- `UsernameOREmailModelBackend` is gone, with no alias: a project listing it in
+  `AUTHENTICATION_BACKENDS` needs allauth's backend or its own.
+- `max_loop_iterations` is a total for the render, not a per-`range()` cap, so a template with two
+  loops of 600 now fails under the default 1000. Raise the limit on the policy if one needs more.
+- A `*` or `**` in a template whose result would be longer than `max_render_length` raises
+  `TemplateSecurityError`, even when the value is never printed (`{% if "x" * 20000 %}`).
+- Tag fields get a migration: the default validator's regex and message changed (no SQL).
+- `get_tag("")` raises `ValidationError` ("This field cannot be blank.") instead of creating a tag
+  named `""`.
+- A list caster over a variable that is set but empty returns `[]`: `comma_separated_list()` used
+  to give `[""]`, and the int and float lists used to raise, which an `error_default` would have
+  caught.
+- `ConfigError`'s parse message no longer has the value in it, so code matching on that text needs
+  updating.
+
 ## [0.20.0] - 2026-10-08
 
 ### Fixed

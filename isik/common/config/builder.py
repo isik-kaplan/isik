@@ -130,6 +130,10 @@ def _fallback(caster, attr_name, root_schema, prefix, sep, seen, on_missing):
     return default
 
 
+def _caster_name(caster):
+    return getattr(caster, "__qualname__", None) or repr(caster)
+
+
 def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
     seen = seen | {tuple(path)}
     environment_key = _environment_key(prefix, path, sep)
@@ -165,11 +169,13 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
                 sep,
                 seen,
                 on_missing=lambda: ConfigError(
+                    # The value stays out: a caster over a secret would put it in logs and Sentry
+                    # the first time it's malformed. The caster's own error is the cause below.
                     _(
-                        "Error while parsing %(key)s=%(value)r with '%(caster)s'."
+                        "Error while parsing %(key)s with '%(caster)s'."
                         " Please check the value and the caster or provide an `error_default` to your caster."
                     )
-                    % {"key": environment_key, "value": raw_value, "caster": caster}
+                    % {"key": environment_key, "caster": _caster_name(caster)}
                 ),
             )
         except ConfigError as config_error:

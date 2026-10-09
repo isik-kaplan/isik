@@ -116,8 +116,13 @@ class TestModelMakerNames:
 @pytest.mark.django_db
 class TestSerializerFactoryNames:
     def test_history_serializer(self):
-        assert generic_history_serializer(Widget).__name__ == "WidgetHistorySerializer"
-        assert generic_history_serializer(Widget, name="WidgetLog").__name__ == "WidgetLog"
+        class WidgetSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = Widget
+                fields = ["id", "name"]
+
+        assert generic_history_serializer(Widget, WidgetSerializer).__name__ == "WidgetHistorySerializer"
+        assert generic_history_serializer(Widget, WidgetSerializer, name="WidgetLog").__name__ == "WidgetLog"
 
     def test_fake_error_serializer(self):
         class ThingSerializer(serializers.Serializer):

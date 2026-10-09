@@ -204,7 +204,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
-                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]*$', 'Tags can only contain letters, numbers, - and _.')])),
+                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
             ],
         ),
         migrations.CreateModel(
@@ -231,7 +231,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
-                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]*$', 'Tags can only contain letters, numbers, - and _.')])),
+                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
             ],
         ),
         migrations.CreateModel(

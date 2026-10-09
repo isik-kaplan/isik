@@ -19,6 +19,7 @@ Post.topics.through                  # generated PostTopicsObjectTag through mod
 
 - `related_name` is required (Tag -> host reverse accessor, `tag.<related_name>`). Two `tags()` on the same host default to the same `target_related_name` ("tags") - give at least one a distinct value or it raises at class-definition time.
 - `normalize` (e.g. `str.lower`) is off by default - `"Python"` and `"python"` are different tags unless you opt in.
+- A name is one or more letters, digits, `.`, `-` or `_` by default; `name_validators=` replaces that rule. The empty name is refused.
 - A host can attach `tags()` more than once - pass `field=Post.topics` to disambiguate when there's more than one.
 
 ## TaggableMixin

@@ -3,6 +3,7 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from rest_framework import serializers
+from rest_framework.relations import PKOnlyObject, RelatedField
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
@@ -34,93 +35,170 @@ _FIELD_TYPES = {
 }
 
 # event_id/event_created_at (not id/created_at) - a model built on BaseModel already has its own
-# id/created_at among the tracked fields below, and those have to win: they're the real object's
+# id/created_at among the fields a serializer shows, and those have to win: they're the real object's
 # identity/timestamp at that point in history, not metadata about the history record itself.
 _META_FIELD_NAMES = {"event_id", "event_created_at", "action", "changes", "actor_id"}
 
 
-class _ChangesField(serializers.JSONField):
-    """`pgh_diff`, minus any keys a `ContextField` put there (see generic_history_serializer()'s
-    own docstring for why those aren't a real change to the object), and with any `withhold=`
-    key's `[old, new]` pair replaced by `[None, None]` - present, so the event is still visible and
-    datable as touching that field, with none of the actual value in it."""
+class _ReadsTheSnapshot:
+    """Mixed into a copy of one of the resource serializer's own fields, so it renders exactly as it
+    does on the resource - same type, same format - but reads its value out of an event's `pgh_data`
+    snapshot instead of off a live object. `snapshot_of` is `(event_model, field name)` rather than
+    the field itself: DRF rebuilds a field from its kwargs on every deepcopy, and a model class
+    copies as itself."""
 
-    def __init__(self, *, context_field_names, withhold_names, **kwargs):
-        self._context_field_names = context_field_names
-        self._withhold_names = withhold_names
+    def __init__(self, *args, snapshot_of, **kwargs):
+        self.snapshot_of = snapshot_of
+        super().__init__(*args, **kwargs)
+
+    def value_of(self, raw):
+        event_model, name = self.snapshot_of
+        value = event_model._meta.get_field(name).to_python(raw)
+        # A relation shows its primary key only (see _renders_one_column()), which DRF's related
+        # fields read off a PKOnlyObject - the related row as it is today is never fetched.
+        return PKOnlyObject(pk=value) if isinstance(self, RelatedField) else value
+
+    def get_attribute(self, event):
+        # A null comes back as None (or a PKOnlyObject of None), which DRF renders as null itself.
+        event_model, name = self.snapshot_of
+        return self.value_of(event.pgh_data[event_model._meta.get_field(name).column])
+
+    def render(self, raw):
+        """One raw snapshot value, as the resource would render it."""
+        return None if raw is None else self.to_representation(self.value_of(raw))
+
+
+def _reading_the_snapshot(field, event_model, name):
+    field_cls = type(field)
+    reading_cls = type(field_cls.__name__, (_ReadsTheSnapshot, field_cls), {})
+    return reading_cls(*field._args, snapshot_of=(event_model, name), **field._kwargs)
+
+
+class _ChangesField(serializers.JSONField):
+    """`pgh_diff`, keyed and rendered like the rest of the history: a column the resource shows
+    appears under the serializer's name for it, its `[old, new]` rendered by that field; a column
+    named in `shows_change_of` appears as `[None, None]`, so the change is visible but neither value
+    is; every other column - a `ContextField` included, since who acted isn't a change to the object -
+    is left out."""
+
+    def __init__(self, *, shown, marked, **kwargs):
+        self._shown = shown
+        self._marked = marked
         super().__init__(**kwargs)
 
     def to_representation(self, value):
-        diff = super().to_representation(value)
         result = {}
-        for key, change in diff.items():
-            if key in self._context_field_names:
-                continue
-            result[key] = [None, None] if key in self._withhold_names else change
+        for column, change in super().to_representation(value).items():
+            if column in self._shown:
+                field = self.parent.fields[self._shown[column]]
+                result[self._shown[column]] = [field.render(raw) for raw in change]
+            elif column in self._marked:
+                result[self._marked[column]] = [None, None]
         return result or None
 
 
-def generic_history_serializer(model, *, withhold=(), name=None):
-    """
-    Builds a read-only `Serializer` for the history of a model tracked with `@track_events()` -
-    `event_id`, `event_created_at`, `action` ("insert"/"update"/"delete"), `changes` (a dict of
-    `{field: [old, new]}` for whatever changed since the previous event of the same object, `None`
-    on insert), plus every tracked field flattened at the top level under its own name, typed to
-    match the real model field. A foreign key surfaces as `<field>_id` - the raw stored id, not a
-    hydrated relation, since this reads from a JSON snapshot rather than a live queryset. Adds
-    `actor_id` too, if `pghistory.middleware.HistoryMiddleware` (or a subclass) is installed - see
-    `history_middleware_installed()`.
+def _renders_one_column(field, source, event_field):
+    """Whether `field`, reading `source`, renders `event_field`'s own value and nothing else."""
+    if source == event_field.attname:
+        return not isinstance(field, RelatedField)
+    # The relation by its own name: only its primary key can be rendered without reading the related
+    # row, which would be today's row presented as history.
+    return isinstance(field, RelatedField) and field.use_pk_only_optimization()
 
-        WidgetHistorySerializer = generic_history_serializer(Widget)
+
+def _shown_fields(serializer, tracked):
+    """{output name: (serializer field, event model field)} for every field `serializer` reads that
+    renders one tracked column. A method field, a nested serializer, a dotted source or `"*"` can't
+    be rebuilt from a snapshot, so the history leaves it out."""
+    by_attribute = {}
+    for event_field in tracked.values():
+        by_attribute[event_field.name] = event_field
+        by_attribute[event_field.attname] = event_field
+    shown = {}
+    for name, field in serializer().fields.items():
+        if field.write_only or len(field.source_attrs) != 1:
+            continue
+        source = field.source_attrs[0]
+        event_field = by_attribute.get(source)
+        if event_field is not None and _renders_one_column(field, source, event_field):
+            shown[name] = (field, event_field)
+    return shown
+
+
+def generic_history_serializer(model, serializer, *, shows_change_of=(), name=None):
+    """
+    Builds a read-only `Serializer` for the history of a model tracked with `@track_events()`,
+    showing what `serializer` - the resource's own serializer - shows, and nothing else. History is
+    the resource over time, so it never shows a column the resource doesn't: a field left out of
+    `serializer` is left out of the history too, with nothing to keep in step.
+
+        WidgetHistorySerializer = generic_history_serializer(Widget, WidgetSerializer)
         WidgetHistorySerializer(some_queryset, many=True).data
+
+    Each entry has `event_id`, `event_created_at`, `action` ("insert"/"update"/"delete") and
+    `changes`, then every field of `serializer` that renders one tracked column, under the
+    serializer's name for it and rendered by the serializer's own field - so a history entry reads
+    like the resource did at that moment. That covers a plain column (`name`, or `title` with
+    `source="name"`) and a relation as its primary key (`PrimaryKeyRelatedField`, or `owner_id`). A
+    method field, a nested serializer, a dotted source (`owner.name`) or `source="*"` is left out:
+    it would read today's related rows or computed state, and present it as history.
+
+    `changes` is `{name: [old, new]}` over the same fields, for whatever changed since the object's
+    previous event (`None` on insert). Computed in SQL by `pghistory.models.Events`.
+
+    `shows_change_of` names tracked model fields the resource hides whose changes should still
+    appear, as `[None, None]` - the event shows that the password changed, never either hash:
+
+        generic_history_serializer(User, UserSerializer, shows_change_of=["password"])
+        # {"event_id": 4, "action": "update", "changes": {"password": [None, None]}, ...}
+
+    A real `ContextField` column (`track_events(context_fields=[...])`) is shown under its own name
+    - it records who acted, not a field of the object - and `actor_id` is added if
+    `pghistory.middleware.HistoryMiddleware` (or a subclass) is installed and no `ContextField`
+    already provides it.
+
+    The class carries `history_columns`, the tracked columns whose change shows in `changes` -
+    `HistoryMixin` leaves out an update that changed none of them.
 
     `name=` overrides the generated class name (default `<Model>HistorySerializer`).
 
-    Built off `pghistory.models.Events` (its cross-table aggregate, here scoped to just this one
-    model's Event table) rather than the concrete `<Model>Event` model directly - that's what
-    computes `changes` in SQL, comparing each event to the previous one of the same object.
-
-    `changes` never includes a `ContextField` (`track_events(context_fields=[...])`) - pghistory
-    computes the diff generically over every non-`pgh_`-prefixed column on the event row, so a
-    `ContextField`'s own column would otherwise show up as a "change" whenever the acting context
-    differs from the previous event (e.g. `{"actor_id": [alice.pk, bob.pk]}`), even though nothing
-    about the tracked object itself changed - it's who acted, not what changed.
-
-    `withhold` names tracked fields (by their output name, e.g. `"owner_id"` for a `ForeignKey`
-    named `owner`) to keep out of the flattened output entirely, while `changes` still records
-    that the field changed at that event, just with its `[old, new]` pair nulled out. This is a
-    different question from `track_events(exclude=[...])`, which drops a field from the event
-    table itself: whether a value is in the log is retention, whether an API renders it is
-    exposure, and a field can reasonably want yes to the first and no to the second - a password
-    hash is worth knowing changed, never worth serving. `withhold` is deliberately explicit, one
-    name at a time, rather than isik guessing at what "looks sensitive" - only the consuming
-    project knows which of its own fields that is.
-
-        generic_history_serializer(User, withhold=["password"])
-        # {"event_id": 4, "action": "update", "changes": {"password": [None, None]}, ...}
-        # ("password" itself is absent from the flattened output, not merely null)
-
-    Raises `ImproperlyConfigured` if a tracked field is itself named `event_id`/`event_created_at`/
-    `action`/`changes`/`actor_id` - rather than silently letting one clobber the other. Exception:
-    an `actor_id` produced by a `ContextField` (see `track_events(context_fields=[...])`) isn't a
-    collision - it's the same fact `actor_id` would otherwise annotate from JSON, just as a real,
-    typed column, so it wins instead of raising. A withheld field never reaches this check either -
-    it's already gone from the output, so there's nothing left for it to collide with.
+    Raises `ImproperlyConfigured` if a shown field is named `event_id`/`event_created_at`/`action`/
+    `changes`/`actor_id` or after a `ContextField`, and if `shows_change_of` names a field that isn't
+    tracked or that the serializer already shows.
     """
     event_model = event_model_for(model)
-    withhold_names = frozenset(withhold)
-    tracked = {name: field for name, field in _tracked_fields(event_model).items() if name not in withhold_names}
-    context_field_names = getattr(event_model, "pgh_context_field_names", frozenset())
-    collisions = (_META_FIELD_NAMES & tracked.keys()) - context_field_names
+    context_fields = getattr(event_model, "pgh_context_fields", ())
+    context_names = {context_field.name for context_field in context_fields}
+    tracked = {
+        field.name: field
+        for field in event_model._meta.fields
+        if not field.name.startswith("pgh_") and field.name not in context_names
+    }
+    shown = _shown_fields(serializer, tracked)
+    context = _context_fields(event_model, context_names)
+
+    collisions = shown.keys() & (_META_FIELD_NAMES | context.keys())
     if collisions:
         raise ImproperlyConfigured(
             _(
-                "%(model)s has tracked field(s) named %(fields)s, which collide with "
-                "generic_history_serializer()'s own field names - rename the model field or exclude it "
-                "from tracking (track_events(exclude=[...]))."
+                "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for "
+                "its own - rename them in the serializer, or give the history a serializer of its own."
             )
-            % {"model": model.__name__, "fields": sorted(collisions)}
+            % {"serializer": serializer.__name__, "fields": sorted(collisions), "model": model.__name__}
         )
+
+    shown_names = {event_field.name for _field, event_field in shown.values()}
+    marked = {}
+    for field_name in shows_change_of:
+        if field_name not in tracked or field_name in shown_names:
+            raise ImproperlyConfigured(
+                _(
+                    "shows_change_of names %(field)r, which isn't a tracked field of %(model)s that "
+                    "%(serializer)s hides - list only fields the history would otherwise leave out."
+                )
+                % {"field": field_name, "model": model.__name__, "serializer": serializer.__name__}
+            )
+        marked[tracked[field_name].column] = field_name
 
     attrs = {
         "event_id": serializers.IntegerField(source="pgh_id", read_only=True),
@@ -130,29 +208,34 @@ def generic_history_serializer(model, *, withhold=(), name=None):
             source="pgh_diff",
             read_only=True,
             allow_null=True,
-            context_field_names=context_field_names,
-            withhold_names=withhold_names,
+            shown={event_field.column: output_name for output_name, (_field, event_field) in shown.items()},
+            marked=marked,
         ),
-        **tracked,
+        **{
+            output_name: _reading_the_snapshot(field, event_model, event_field.name)
+            for output_name, (field, event_field) in shown.items()
+        },
+        **context,
+        "history_columns": frozenset([*(event_field.column for _field, event_field in shown.values()), *marked]),
     }
-    if history_middleware_installed() and "actor_id" not in tracked:
+    if history_middleware_installed() and "actor_id" not in context:
         # A queryset-level annotation (see HistoryMixin._history_base_queryset) rather than sourced
         # off pgh_context directly - pgh_context is null for any event that wasn't created inside a
         # request (a migration, a shell, a background job), and a plain `source="pgh_context.user"`
         # would crash DRF's attribute traversal on that None instead of quietly serializing null.
-        # Skipped when tracked already has a real actor_id column (a ContextField) - that's typed
-        # and indexed, this JSON fallback is neither.
+        # Skipped when a ContextField already put a real actor_id column there - that's typed and
+        # indexed, this JSON fallback is neither.
         attrs["actor_id"] = serializers.CharField(read_only=True, allow_null=True)
 
     return type(name or f"{model.__name__}HistorySerializer", (serializers.Serializer,), attrs)
 
 
-def _tracked_fields(event_model):
-    """{field_name: Field} for every tracked (non pgh_*) column on event_model, read from the
-    `pgh_data` JSON snapshot rather than the column directly."""
+def _context_fields(event_model, context_names):
+    """{output name: Field} for every `ContextField` column on event_model, read from the `pgh_data`
+    snapshot and typed after the column."""
     fields = {}
     for field in event_model._meta.fields:
-        if field.name.startswith("pgh_"):
+        if field.name not in context_names:
             continue
         if isinstance(field, models.ForeignKey):
             output_name = f"{field.name}_id"

@@ -9,7 +9,7 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 
 - [model_makers](model_makers.md) — shared plumbing behind feedback/tags' model-generating "makers"
 - [admin/](admin/README.md) — `BaseAdmin` and the `action` decorator
-- [backends/](backends/auth.md) — `UsernameOREmailModelBackend` auth backend, `login_through()`
+- [backends/](backends/auth.md) — `login_through()`, `listed_backend_path()`
 - [db/](db/README.md) — `BaseModel`, history tracking, lookups, ORM helpers
 - [email/](email/templates.md) — MJML/text email template rendering
 - [fields/](fields/generic_foreign_key.md) — `AutoGenericForeignKey`

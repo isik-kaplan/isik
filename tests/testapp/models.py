@@ -56,7 +56,7 @@ def not_in_the_future(value):
 
 
 class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixin, AbstractUser):
-    """A real AUTH_USER_MODEL with USERNAME_FIELD != "username", for UsernameOREmailModelBackend tests."""
+    """A real AUTH_USER_MODEL with USERNAME_FIELD != "username"."""
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]

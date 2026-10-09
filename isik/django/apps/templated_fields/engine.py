@@ -8,7 +8,7 @@ distinct template sources tend to repeat across renders of the same field value.
 
 import functools
 
-from jinja2 import StrictUndefined, Undefined
+from jinja2 import StrictUndefined, Undefined, nodes
 from jinja2.sandbox import SandboxedEnvironment
 
 from isik._internal.translation import gettext as _
@@ -28,6 +28,59 @@ class TemplateSecurityError(Exception):
 
 _UNDEFINED_CLASSES = {"strict": StrictUndefined, "blank": Undefined}
 
+# Where a render keeps its loop count - not an identifier, so no template can name it.
+_LOOP_COUNT = "isik:loop count"
+
+
+def _digits(number):
+    # An upper bound on len(str(number)), from its bit length - converting a huge int to find out
+    # would be the very work this avoids.
+    return number.bit_length() // 3 + 1
+
+
+def _result_length(operator, left, right):
+    """An upper bound on how long `left <operator> right` would be, worked out without computing it."""
+    if operator == "*":
+        for sequence, count in ((left, right), (right, left)):
+            if isinstance(sequence, (str, list, tuple)) and isinstance(count, int):
+                return len(sequence) * count
+        if isinstance(left, int) and isinstance(right, int):
+            return _digits(left) + _digits(right)
+    elif isinstance(left, int) and isinstance(right, int):
+        return right * _digits(left)
+    return 0
+
+
+class _Environment(SandboxedEnvironment):
+    # Neither is folded at compile time once intercepted, so call_binop() sees every one.
+    intercepted_binops = frozenset({"*", "**"})
+
+    def __init__(self, *, policy, **kwargs):
+        self.isik_policy = policy
+        super().__init__(**kwargs)
+
+    def call_binop(self, context, operator, left, right):
+        limit = self.isik_policy.max_render_length
+        if limit is not None and _result_length(operator, left, right) > limit:
+            raise TemplateSecurityError(
+                _("%(operator)s would build a value over the %(limit)s char limit")
+                % {"operator": operator, "limit": limit}
+            )
+        return self.binop_table[operator](left, right)
+
+    def count_loop(self, context, iterable):
+        # Every {% for %}'s iterable goes through here (see _compile), so one count covers the whole
+        # render: nested loops multiply, and a loop that writes nothing still counts.
+        count = context[_LOOP_COUNT]
+        limit = self.isik_policy.max_loop_iterations
+        for item in iterable:
+            count[0] += 1
+            if count[0] > limit:
+                raise TemplateSecurityError(
+                    _("the loops in this template ran over the %(limit)s iteration limit") % {"limit": limit}
+                )
+            yield item
+
 
 def _capped_range(limit):
     def capped_range(*args):
@@ -45,7 +98,8 @@ def _capped_range(limit):
 @functools.lru_cache(maxsize=64)
 def _build_environment(delimiters, policy, undefined):
     extensions = ["jinja2.ext.loopcontrols"] if TemplateFeature.LOOP_CONTROLS in policy else []
-    env = SandboxedEnvironment(
+    env = _Environment(
+        policy=policy,
         autoescape=True,
         extensions=extensions,
         undefined=_UNDEFINED_CLASSES[undefined],
@@ -99,7 +153,12 @@ def _compile(source, delimiters, policy, undefined):
     env = _build_environment(delimiters, policy, undefined)
     ast = env.parse(source)
     _check_policy(ast, policy)
-    return env.from_string(source)
+    if policy.max_loop_iterations is not None:
+        for loop in ast.find_all(nodes.For):
+            loop.iter = nodes.Call(
+                nodes.EnvironmentAttribute("count_loop"), [nodes.ContextReference(), loop.iter], [], None, None
+            )
+    return env.from_string(ast)
 
 
 def validate_syntax(source, *, delimiters, policy, undefined):
@@ -116,11 +175,12 @@ def render(source, *, delimiters, policy, context, undefined):
     `.render()`, so a runaway loop/recursive macro aborts as soon as it crosses the limit instead
     of building the whole (potentially huge) string first."""
     template = _compile(source, delimiters, policy, undefined)
+    context = {**context, _LOOP_COUNT: [0]}
     if policy.max_render_length is None:
-        return template.render(**context)
+        return template.render(context)
     chunks = []
     total = 0
-    for chunk in template.generate(**context):
+    for chunk in template.generate(context):
         chunks.append(chunk)
         total += len(chunk)
         if total > policy.max_render_length:

@@ -26,19 +26,25 @@ def caster(f):
     return wrapper
 
 
+def _comma_separated(value):
+    # A variable that is set but empty (`ALLOWED_HOSTS=` in a compose file) is the empty list, not
+    # one empty item. An empty item between two commas stays what it is.
+    return value.split(",") if value else []
+
+
 @caster
 def comma_separated_list(value):
-    return value.split(",")
+    return _comma_separated(value)
 
 
 @caster
 def comma_separated_int_list(value):
-    return [int(i) for i in value.split(",")]
+    return [int(i) for i in _comma_separated(value)]
 
 
 @caster
 def comma_separated_float_list(value):
-    return [float(i) for i in value.split(",")]
+    return [float(i) for i in _comma_separated(value)]
 
 
 @caster

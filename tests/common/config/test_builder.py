@@ -74,10 +74,38 @@ def test_unparseable_value_without_a_default_raises_config_error(monkeypatch):
 
     with pytest.raises(
         ConfigError,
-        match=r"^Error while parsing FLAG='not-a-bool' with '.*'\."
+        match=r"^Error while parsing FLAG with 'boolean'\."
         r" Please check the value and the caster or provide an `error_default` to your caster\.$",
     ):
         config({"FLAG": boolean()})
+
+
+def malformed_dsn(value):
+    raise ValueError("malformed")
+
+
+def test_a_parse_error_names_the_key_and_the_caster_and_leaves_the_value_out(monkeypatch):
+    monkeypatch.setenv("SECRET", "hunter2")
+
+    with pytest.raises(ConfigError, match=r"^Error while parsing SECRET with 'malformed_dsn'\.") as raised:
+        config({"SECRET": malformed_dsn})
+
+    assert "hunter2" not in str(raised.value)
+    assert str(raised.value.__cause__) == "malformed"
+
+
+def test_a_parse_error_names_a_caster_without_a_qualname_by_its_repr(monkeypatch):
+    monkeypatch.setenv("PORT", "eighty")
+
+    class Caster:
+        def __call__(self, value):
+            raise ValueError(value)
+
+        def __repr__(self):
+            return "<port caster>"
+
+    with pytest.raises(ConfigError, match=r"^Error while parsing PORT with '<port caster>'\."):
+        config({"PORT": Caster()})
 
 
 def test_unparseable_value_uses_error_default(monkeypatch):

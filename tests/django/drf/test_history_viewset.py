@@ -286,21 +286,173 @@ class TestHistoryMixin:
         assert response.status_code == 400
         assert "created_after" in response.data
 
-    def test_history_withhold_removes_the_field_from_both_endpoints(self):
-        class WithholdCountViewSet(WidgetViewSet):
-            model = Widget
-            endpoint = "withhold-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
-            history_withhold = ["count"]
-
-        widget = Widget.objects.create(name="bolt", count=1)
+    def test_a_column_the_serializer_hides_is_left_out_of_both_endpoints(self, superuser, alice):
+        # WidgetSerializer shows id/name/count - not owner, created_at or updated_at.
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
         widget.update(count=5)
 
-        response = call_history(WithholdCountViewSet, widget)
+        for response in (call_history(WidgetViewSet, widget), call_history_list(WidgetViewSet, user=superuser)):
+            update, insert = response.data
+            assert set(insert) == {"event_id", "event_created_at", "action", "changes", "id", "name", "count"}
+            assert update["changes"] == {"count": [1, 5]}
 
-        assert "count" not in response.data[0]
-        # Newest first - index 0 is the update event, whose diff still names "count".
-        assert response.data[0]["changes"]["count"] == [None, None]
+    def test_an_update_that_changed_only_hidden_columns_is_not_listed(self, alice):
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(owner=alice)
+        widget.update(count=2)
+
+        assert [event["action"] for event in call_history(WidgetViewSet, widget).data] == ["update", "insert"]
+
+    def test_inserts_and_deletes_are_always_listed(self, superuser):
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget_id = str(widget.pk)
+        widget.delete()
+
+        response = call_history_list(WidgetViewSet, user=superuser, object_id=widget_id)
+
+        assert [event["action"] for event in response.data] == ["delete", "insert"]
+
+    def test_history_shows_change_of_lists_a_hidden_change_without_its_value(self, alice):
+        class OwnerChangesViewSet(WidgetViewSet):
+            endpoint = "owner-changes-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+            history_shows_change_of = ["owner"]
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(owner=alice)
+
+        update, _insert = call_history(OwnerChangesViewSet, widget).data
+        assert update["changes"] == {"owner": [None, None]}
+        assert "owner" not in update
+        assert "owner_id" not in update
+
+    def test_history_follows_the_serializer_retrieve_uses(self):
+        class DetailSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = Widget
+                fields = ["id", "name"]
+
+        class DetailWidgetViewSet(WidgetViewSet):
+            endpoint = "detail-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+            serializer_class_action_map = {"retrieve": DetailSerializer, "list": WidgetSerializer}
+
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        assert DetailWidgetViewSet.history_source_serializer() is DetailSerializer
+        assert "count" not in call_history(DetailWidgetViewSet, widget).data[0]
+
+    def test_history_falls_back_to_serializer_class(self):
+        assert WidgetViewSet.history_source_serializer() is WidgetSerializer
+
+    def test_history_source_serializer_is_overridable(self):
+        class NameOnlySerializer(serializers.Serializer):
+            name = serializers.CharField()
+
+        class NameOnlyWidgetViewSet(WidgetViewSet):
+            endpoint = "name-only-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+
+            @classmethod
+            def history_source_serializer(cls):
+                return NameOnlySerializer
+
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        assert call_history(NameOnlyWidgetViewSet, widget).data[0]["name"] == "bolt"
+        assert "count" not in call_history(NameOnlyWidgetViewSet, widget).data[0]
+
+    def test_the_history_renders_with_the_viewsets_context(self):
+        class NameWithMethod(serializers.CharField):
+            def to_representation(self, value):
+                return f"{value} via {self.context['request'].method}"
+
+        class RequestAwareSerializer(serializers.ModelSerializer):
+            name = NameWithMethod()
+
+            class Meta:
+                model = Widget
+                fields = ["id", "name"]
+
+        class RequestAwareWidgetViewSet(WidgetViewSet):
+            endpoint = "request-aware-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+            serializer_class = RequestAwareSerializer
+
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        assert call_history(RequestAwareWidgetViewSet, widget).data[0]["name"] == "bolt via GET"
+
+
+class OwnedWhileTheCallerOwnedItViewSet(WidgetViewSet):
+    endpoint = "owned-widgets"
+    exempt_from_registry = "a test's own class, defined again on every run"
+    history_list_permission_classes = [BasePermission]
+    history_shows_change_of = ["owner"]
+
+    def scope_history(self, events):
+        if self.request.user.is_staff:
+            return events
+        return events.filter(pgh_data__owner_id=self.request.user.pk)
+
+
+class TestScopeHistory:
+    @pytest.fixture
+    def handed_over(self, alice, django_user_model):
+        bob = django_user_model.objects.create_user(username="bob", email="bob@example.com", password="x")
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+        widget.update(count=2)
+        widget.update(owner=bob)
+        widget.update(count=3)
+        return widget, bob
+
+    def call(self, widget, user, **query_params):
+        request = APIRequestFactory().get(f"/widgets/{widget.pk}/history/", query_params)
+        request.user = user
+        return OwnedWhileTheCallerOwnedItViewSet.as_view({"get": "history"})(request, pk=widget.pk)
+
+    def test_sees_every_event_by_default(self, handed_over):
+        widget, _bob = handed_over
+
+        assert [event["count"] for event in call_history(WidgetViewSet, widget).data] == [3, 2, 1]
+
+    def test_narrows_the_per_object_endpoint(self, alice, handed_over):
+        widget, bob = handed_over
+
+        assert [event["count"] for event in self.call(widget, alice).data] == [2, 1]
+        assert [event["count"] for event in self.call(widget, bob).data] == [3, 2]
+
+    def test_narrows_the_cross_object_endpoint(self, alice, handed_over):
+        widget, _bob = handed_over
+
+        response = call_history_list(OwnedWhileTheCallerOwnedItViewSet, user=alice)
+
+        assert [event["count"] for event in response.data] == [2, 1]
+
+    def test_returning_everything_for_some_callers_works(self, superuser, handed_over):
+        widget, _bob = handed_over
+
+        assert [event["count"] for event in self.call(widget, superuser).data] == [3, 2, 2, 1]
+
+    def test_query_filters_apply_on_top_of_it(self, alice, handed_over):
+        widget, _bob = handed_over
+
+        assert [event["action"] for event in self.call(widget, alice, action="insert").data] == ["insert"]
+
+    def test_an_overridden_get_history_queryset_is_still_scoped(self, alice, handed_over):
+        class OverridingViewSet(OwnedWhileTheCallerOwnedItViewSet):
+            endpoint = "overriding-owned-widgets"
+
+            def get_history_queryset(self, obj):
+                return super().get_history_queryset(obj).filter(pgh_label="update")
+
+        widget, _bob = handed_over
+        request = APIRequestFactory().get(f"/widgets/{widget.pk}/history/")
+        request.user = alice
+
+        response = OverridingViewSet.as_view({"get": "history"})(request, pk=widget.pk)
+
+        assert [event["count"] for event in response.data] == [2]
 
 
 class TestHistoryList:

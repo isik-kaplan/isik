@@ -423,6 +423,20 @@ class TestNameValidation:
         with pytest.raises(ValidationError):
             Post.topics.model.objects.get_tag("not valid!")
 
+    def test_get_tag_refuses_an_empty_name(self):
+        with pytest.raises(ValidationError) as exc_info:
+            Post.topics.model.objects.get_tag("")
+        assert exc_info.value.messages == ["This field cannot be blank."]
+        assert not Post.topics.model.objects.filter(name="").exists()
+
+    def test_the_default_regex_refuses_an_empty_name_too(self):
+        with pytest.raises(ValidationError) as exc_info:
+            Post.topics.model._meta.get_field("name").validators[0]("")
+        assert exc_info.value.messages == ["Tags can only contain letters, numbers, ., - and _."]
+
+    def test_get_tag_accepts_a_name_with_a_dot(self):
+        assert Post.topics.model.objects.get_tag("v1.2").name == "v1.2"
+
     def test_add_tag_with_an_invalid_name_raises(self, post):
         with pytest.raises(ValidationError):
             post.add_tag("not valid!", field=Post.topics)

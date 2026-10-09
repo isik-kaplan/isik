@@ -4,7 +4,13 @@
 [`@track_events()`](../../apps/common/db/history.md), both paginated (via the viewset's own
 `pagination_class`), newest first, using an auto-built serializer over the model's history (see
 [`generic_history_serializer()`](../serializers/history.md)). No other configuration required -
-everything is resolved from `self.model` alone.
+everything is resolved from `self.model` and the viewset's own serializer.
+
+**The history shows what the resource shows.** It follows the serializer `retrieve` uses
+(`serializer_class_action_map["retrieve"]`, else `serializer_class`): each of its fields that
+renders one tracked column appears under the same name, rendered the same way, and nothing else
+does. A column that serializer leaves out stays out of the history, and an update that changed only
+such columns isn't listed at all - so a field nobody thought about is hidden, never served.
 
 ```python
 class WidgetViewSet(HistoryMixin, BaseModelViewSet):
@@ -64,13 +70,35 @@ GET /widgets/history/?object_id=3&action=update
 
 - Override `default_history_filters()` instead to replace the built-in set entirely -
   `extra_history_filters` still layers on top of whatever that returns.
-- `history_withhold = [...]` names tracked fields to keep out of both endpoints' output entirely -
-  forwarded straight into `generic_history_serializer(cls.model, withhold=cls.history_withhold)`,
-  see its own docstring for what that does to `changes`.
+- `history_shows_change_of = ["password"]` lists hidden fields whose changes should still be
+  listed, as `"changes": {"password": [None, None]}` - the history says the password changed at
+  14:02, never either hash. A name that isn't tracked, or that the serializer already shows, raises
+  `ImproperlyConfigured`.
+- Override the `history_source_serializer()` classmethod when the history should follow another
+  serializer than the one `retrieve` uses.
+- A serializer that drops fields per request (in `__init__`, from its context) isn't followed: the
+  history shows the fields the class declares.
 - `history_component_prefix = "Staff"` goes in front of the generated serializer's name, and so of
   its schema component (`StaffWidgetHistory` rather than `WidgetHistory`). A second `HistoryMixin`
   viewset over the same model needs one. Without it, the two components collide and the schema keeps
   only one of their shapes. The default, `""`, leaves the names as they were.
+- `scope_history(self, events)` narrows the events both endpoints return, per request. Who may
+  reach an object is still the viewset's own business (`get_queryset()`, permissions); this is for
+  rules about the events themselves. Every history query passes through it, including one from an
+  overridden `get_history_queryset()`/`get_all_history_queryset()`, and the query filters apply on
+  top of it:
+
+  ```python
+  def scope_history(self, events):
+      if self.request.user.is_staff:
+          return events
+      # only what happened while the caller owned it - a snapshot is the row after the change,
+      # so the event that hands an object over belongs to its new owner
+      return events.filter(pgh_data__owner_id=self.request.user.pk)
+      # or only what the caller did (needs HistoryMiddleware):
+      # return events.filter(pgh_context__user=self.request.user.pk)
+  ```
+
 - `history_list_scoped_to_queryset = True` restricts `GET <endpoint>/history/` to events for
   objects `self.get_queryset()` would return, instead of every instance of the model regardless of
   scope (the default, unaffected unless you opt in). Turn it on when a viewset's `get_queryset()`

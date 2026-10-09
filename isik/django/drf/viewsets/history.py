@@ -1,6 +1,7 @@
 """HistoryMixin + context_filter()/context_field_filter() - see each one's own docstring."""
 
 from django import forms
+from django.db.models import Q
 from django.db.models.fields.json import KeyTransform
 from django.utils.functional import classproperty
 from django_filters.rest_framework import CharFilter, ChoiceFilter, DateTimeFilter, FilterSet, NumberFilter
@@ -98,7 +99,14 @@ class HistoryMixin:
     Adds two endpoints to a `BaseModelViewSet` for a model tracked with `@track_events()`, both
     paginated (via the viewset's own `pagination_class`), newest first, using an auto-built
     serializer over the model's history (see `generic_history_serializer()`). No other
-    configuration required - everything is resolved from `self.model` alone.
+    configuration required - everything is resolved from `self.model` and the viewset's own
+    serializer.
+
+    The history shows what the resource shows: the fields of the serializer `retrieve` uses
+    (`serializer_class_action_map["retrieve"]`, else `serializer_class`), each under the same name
+    and rendered the same way. A column that serializer leaves out is left out of the history too,
+    and an update that changed only such columns isn't listed - so forgetting something hides it,
+    rather than serving it.
 
     `GET <endpoint>/{pk}/history/` - one object's history, governed by the viewset's own
     permissions same as any other detail action (`history()` calls `self.get_object()` first, so
@@ -116,6 +124,7 @@ class HistoryMixin:
         GET /widgets/history/?object_id=3&action=update
         # [{"event_id": 12, "event_created_at": "...", "action": "update",
         #   "changes": {"count": [0, 5]}, "id": "...", "name": "New name", "count": 5}, ...]
+        # (whichever of WidgetSerializer's fields render one column - see generic_history_serializer())
 
     Filtering is built in on `action` (insert/update/delete), `created_after`/`created_before`
     (`pgh_created_at` range), `object_id` (which instance - redundant but harmless on the
@@ -135,9 +144,25 @@ class HistoryMixin:
     Override `default_history_filters()` instead to replace the built-in set entirely -
     `extra_history_filters` still layers on top of whatever that returns.
 
-    `history_withhold` names tracked fields to keep out of both endpoints' output entirely, while
-    still recording them - see `generic_history_serializer()`'s own `withhold=` for what that
-    means for `changes`.
+    `history_shows_change_of` names hidden fields whose changes should still be listed, as
+    `[None, None]` - "the password changed at 14:02", never the hash:
+
+        class UserViewSet(HistoryMixin, BaseModelViewSet):
+            ...
+            history_shows_change_of = ["password"]
+
+    Override `history_source_serializer()` when the history should follow a serializer other than
+    the one `retrieve` uses.
+
+    `scope_history(events)` narrows the events either endpoint returns, per request - every history
+    query passes through it, including one from an overridden `get_history_queryset()`. Access to an
+    object is the viewset's own business (`get_queryset()`, permissions); this is for rules about the
+    events themselves, e.g. only those recorded while the caller owned the object:
+
+        def scope_history(self, events):
+            if self.request.user.is_staff:
+                return events
+            return events.filter(pgh_data__owner_id=self.request.user.pk)
 
     `history_list_scoped_to_queryset` (default `False`, preserving today's behavior) restricts
     `GET <endpoint>/history/` to events for objects `self.get_queryset()` would return, instead of
@@ -158,7 +183,7 @@ class HistoryMixin:
 
     extra_history_filters = {}
     history_list_permission_classes = [IsSuperUser]
-    history_withhold = ()
+    history_shows_change_of = ()
     history_list_scoped_to_queryset = False
     history_component_prefix = ""
 
@@ -198,6 +223,11 @@ class HistoryMixin:
         cls._history_filterset_class = built
         return built
 
+    @classmethod
+    def history_source_serializer(cls):
+        """The serializer whose fields the history shows - by default the one `retrieve` uses."""
+        return cls.serializer_class_action_map.get("retrieve", cls.serializer_class)
+
     @classproperty
     def history_serializer_class(cls):
         cached = cls.__dict__.get("_history_serializer_class")
@@ -205,7 +235,8 @@ class HistoryMixin:
             return cached
         built = generic_history_serializer(
             cls.model,
-            withhold=cls.history_withhold,
+            cls.history_source_serializer(),
+            shows_change_of=cls.history_shows_change_of,
             name=f"{cls.history_component_prefix}{cls.model.__name__}HistorySerializer",
         )
         cls._history_serializer_class = built
@@ -213,7 +244,11 @@ class HistoryMixin:
 
     def _history_base_queryset(self):
         event_model = event_model_for(self.model)
-        queryset = Events.objects.across(event_model)
+        # An update that changed nothing the history shows isn't listed: it would only say when a
+        # hidden column changed.
+        queryset = Events.objects.across(event_model).filter(
+            ~Q(pgh_label="update") | Q(pgh_diff__has_any_keys=list(self.history_serializer_class.history_columns))
+        )
         context_field_names = getattr(event_model, "pgh_context_field_names", frozenset())
         if history_middleware_installed() and "actor_id" not in context_field_names:
             # A SQL-level annotation, not a serializer-side `source="pgh_context.user"` - pgh_context
@@ -233,10 +268,17 @@ class HistoryMixin:
             queryset = queryset.tracks(self.get_queryset())
         return queryset.order_by("-pgh_id")
 
+    def scope_history(self, events):
+        """The events this request may see, from both endpoints - all of them unless overridden."""
+        return events
+
     def _history_response(self, request, queryset):
+        queryset = self.scope_history(queryset)
         queryset = self.history_filterset_class(request.query_params, queryset=queryset).qs
         page = self.paginate_queryset(queryset)
-        serializer = self.history_serializer_class(page if page is not None else queryset, many=True)
+        serializer = self.history_serializer_class(
+            page if page is not None else queryset, many=True, context=self.get_serializer_context()
+        )
         return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
 
     @action(detail=True, methods=["get"])

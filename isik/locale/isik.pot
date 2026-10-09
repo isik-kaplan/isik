@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: isik/django/apps/common/backends/auth.py:44
+#: isik/django/apps/common/backends/auth.py:20
 #, python-format
 msgid "%(backend)s isn't in AUTHENTICATION_BACKENDS, so a session logged in through it is anonymous from its next request."
 msgstr ""
@@ -72,11 +72,6 @@ msgstr ""
 msgid "%(model)s has no CHECK constraint named %(name)r."
 msgstr ""
 
-#: isik/django/drf/serializers/history.py:117
-#, python-format
-msgid "%(model)s has tracked field(s) named %(fields)s, which collide with generic_history_serializer()'s own field names - rename the model field or exclude it from tracking (track_events(exclude=[...]))."
-msgstr ""
-
 #: isik/django/drf/serializers/registry.py:69
 #: isik/django/drf/viewsets/registry.py:73
 #, python-format
@@ -98,14 +93,19 @@ msgstr ""
 msgid "%(name)s can not be instantiated."
 msgstr ""
 
-#: isik/django/apps/templated_fields/engine.py:81
+#: isik/django/apps/templated_fields/engine.py:135
 #, python-format
 msgid "%(node)s is never allowed in a template field"
 msgstr ""
 
-#: isik/django/apps/templated_fields/engine.py:87
+#: isik/django/apps/templated_fields/engine.py:141
 #, python-format
 msgid "%(node)s requires TemplateFeature.%(feature)s, not enabled for this field"
+msgstr ""
+
+#: isik/django/apps/templated_fields/engine.py:66
+#, python-format
+msgid "%(operator)s would build a value over the %(limit)s char limit"
 msgstr ""
 
 #: isik/_internal/reasons.py:40
@@ -131,6 +131,11 @@ msgstr ""
 #: isik/common/utils/exemptions.py:336
 #, python-format
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
+msgstr ""
+
+#: isik/django/drf/serializers/history.py:183
+#, python-format
+msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
 
 #: isik/django/drf/serializers/create_only.py:35
@@ -413,14 +418,14 @@ msgstr ""
 msgid "Entity is too large"
 msgstr ""
 
-#: isik/common/config/builder.py:148
+#: isik/common/config/builder.py:152
 #, python-format
 msgid "Environment variable %(key)s not found. Please set it or provide a `missing_default` to your caster."
 msgstr ""
 
-#: isik/common/config/builder.py:168
+#: isik/common/config/builder.py:174
 #, python-format
-msgid "Error while parsing %(key)s=%(value)r with '%(caster)s'. Please check the value and the caster or provide an `error_default` to your caster."
+msgid "Error while parsing %(key)s with '%(caster)s'. Please check the value and the caster or provide an `error_default` to your caster."
 msgstr ""
 
 #: http.HTTPStatus
@@ -644,7 +649,11 @@ msgstr ""
 msgid "Switching to new protocol; obey Upgrade header"
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:152
+#: isik/django/apps/tags/tags.py:17
+msgid "Tags can only contain letters, numbers, ., - and _."
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:153
 msgid "Tags from this pool."
 msgstr ""
 
@@ -653,7 +662,7 @@ msgstr ""
 msgid "The %(target)s bookmarked."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:127
+#: isik/django/apps/tags/tags.py:128
 #, python-format
 msgid "The %(target)s tagged."
 msgstr ""
@@ -743,11 +752,11 @@ msgstr ""
 msgid "The status the request was answered with."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:120
+#: isik/django/apps/tags/tags.py:121
 msgid "The tag applied."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:102
+#: isik/django/apps/tags/tags.py:103
 msgid "The tag's name, unique in its pool."
 msgstr ""
 
@@ -822,12 +831,12 @@ msgstr ""
 msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
 
-#: isik/common/config/casters.py:54
+#: isik/common/config/casters.py:60
 #, python-format
 msgid "Value %(value)r can not be parsed into a boolean."
 msgstr ""
 
-#: isik/common/config/builder.py:194
+#: isik/common/config/builder.py:200
 #, python-format
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
 msgstr ""
@@ -973,7 +982,7 @@ msgstr ""
 msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""
 
-#: isik/django/apps/templated_fields/engine.py:37
+#: isik/django/apps/templated_fields/engine.py:90
 #, python-format
 msgid "range() would iterate %(count)s times, over the %(limit)s limit"
 msgstr ""
@@ -1006,7 +1015,7 @@ msgstr ""
 msgid "related_name=%(related_name)r on %(key)s is already claimed by %(existing)s - pick a different name for %(owner)s."
 msgstr ""
 
-#: isik/django/apps/templated_fields/engine.py:128
+#: isik/django/apps/templated_fields/engine.py:188
 #, python-format
 msgid "rendered output exceeded the %(limit)s char limit"
 msgstr ""
@@ -1015,9 +1024,19 @@ msgstr ""
 msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
 
-#: isik/django/apps/templated_fields/engine.py:96
+#: isik/django/drf/serializers/history.py:195
+#, python-format
+msgid "shows_change_of names %(field)r, which isn't a tracked field of %(model)s that %(serializer)s hides - list only fields the history would otherwise leave out."
+msgstr ""
+
+#: isik/django/apps/templated_fields/engine.py:150
 #, python-format
 msgid "template source is %(length)s chars, over the %(limit)s limit"
+msgstr ""
+
+#: isik/django/apps/templated_fields/engine.py:80
+#, python-format
+msgid "the loops in this template ran over the %(limit)s iteration limit"
 msgstr ""
 
 #: isik/common/utils/validation.py:69

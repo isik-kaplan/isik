@@ -211,6 +211,129 @@ class TestResourceLimits:
         assert _render("x" * 20_000, policy=policy) == "x" * 20_000
 
 
+LOOPS = [TemplateFeature.FOR_LOOP, TemplateFeature.CONDITIONAL]
+
+
+def _loops(limit, **kwargs):
+    return TemplatePolicy(features=LOOPS, max_loop_iterations=limit, **kwargs)
+
+
+class TestLoopBudget:
+    """max_loop_iterations counts every {% for %} iteration of one render, not each range() alone."""
+
+    def test_nested_loops_count_together_even_with_no_output(self):
+        source = (
+            "{% for a in range(1000) %}{% for b in range(1000) %}{% for c in range(1000) %}"
+            "{% endfor %}{% endfor %}{% endfor %}"
+        )
+        with pytest.raises(
+            TemplateSecurityError, match=r"^the loops in this template ran over the 1000 iteration limit$"
+        ):
+            _render(source)
+
+    def test_an_outer_and_its_inner_iterations_all_count(self):
+        # 2 outer + 2 * 3 inner = 8.
+        source = "{% for a in range(2) %}{% for b in range(3) %}{% endfor %}{% endfor %}done"
+        assert _render(source, policy=_loops(8)) == "done"
+        with pytest.raises(TemplateSecurityError, match="over the 7 iteration limit"):
+            _render(source, policy=_loops(7))
+
+    def test_loops_one_after_another_share_the_budget(self):
+        source = "{% for a in range(3) %}{{ a }}{% endfor %}{% for b in range(3) %}{{ b }}{% endfor %}"
+        assert _render(source, policy=_loops(6)) == "012012"
+        with pytest.raises(TemplateSecurityError):
+            _render(source, policy=_loops(5))
+
+    def test_a_loop_over_a_literal_counts_too(self):
+        source = '{% for a in "abcd" %}{% for b in "abcd" %}{% endfor %}{% endfor %}'
+        with pytest.raises(TemplateSecurityError):
+            _render(source, policy=_loops(19))
+        assert _render(source, policy=_loops(20)) == ""
+
+    def test_a_loop_over_the_context_counts_too(self):
+        with pytest.raises(TemplateSecurityError):
+            _render("{% for a in items %}{% endfor %}", policy=_loops(2), context={"items": [1, 2, 3]})
+
+    def test_iterations_skipped_by_a_loop_filter_still_count(self):
+        source = "{% for a in range(5) if a > 3 %}{{ a }}{% endfor %}"
+        assert _render(source, policy=_loops(5)) == "4"
+        with pytest.raises(TemplateSecurityError):
+            _render(source, policy=_loops(4))
+
+    def test_every_render_starts_a_fresh_count(self):
+        source = "{% for a in range(3) %}{{ a }}{% endfor %}"
+        assert _render(source, policy=_loops(3)) == "012"
+        assert _render(source, policy=_loops(3)) == "012"
+
+    def test_the_count_works_without_a_render_length_limit(self):
+        with pytest.raises(TemplateSecurityError):
+            _render("{% for a in range(3) %}{% endfor %}", policy=_loops(2, max_render_length=None))
+
+    def test_loop_variables_still_work(self):
+        source = (
+            "{% for a in range(3) %}{{ loop.index }}/{{ loop.length }}{% if not loop.last %},{% endif %}{% endfor %}"
+        )
+        assert _render(source, policy=_loops(3)) == "1/3,2/3,3/3"
+
+    def test_no_limit_means_no_count(self):
+        source = '{% for a in "abcdefgh" %}{% for b in "abcdefgh" %}{% endfor %}{% endfor %}ok'
+        assert _render(source, policy=_loops(None)) == "ok"
+
+    def test_a_loop_with_an_else_branch_still_takes_it(self):
+        assert _render("{% for a in [] %}x{% else %}empty{% endfor %}", policy=_loops(1)) == "empty"
+
+
+class TestLargeValues:
+    """max_render_length also refuses a `*` or `**` result past it, before computing the result."""
+
+    @pytest.mark.parametrize(
+        "source", ['{{ "x" * 400000000 }}', '{{ 400000000 * "x" }}', "{{ [1] * 400000000 }}", "{{ (1,) * 400000000 }}"]
+    )
+    def test_a_repeated_sequence_past_the_limit_is_refused(self, source):
+        with pytest.raises(TemplateSecurityError, match=r"^\* would build a value over the 10000 char limit$"):
+            _render(source)
+
+    def test_a_repeated_sequence_at_the_limit_renders(self):
+        policy = TemplatePolicy(max_render_length=6)
+        assert _render('{{ "ab" * 3 }}', policy=policy) == "ababab"
+        with pytest.raises(TemplateSecurityError):
+            _render('{{ "ab" * 4 }}', policy=policy)
+
+    def test_a_huge_power_is_refused(self):
+        with pytest.raises(TemplateSecurityError, match=r"^\*\* would build a value over the 10000 char limit$"):
+            _render("{{ 9 ** (9 ** 9) }}")
+
+    def test_a_power_is_measured_by_its_digits(self):
+        # 8 is 4 bits, at most 2 digits; 3 of those is 6.
+        policy = TemplatePolicy(max_render_length=6, max_source_length=None)
+        assert _render("{{ 8 ** 3 }}", policy=policy) == "512"
+        with pytest.raises(TemplateSecurityError):
+            _render("{{ 8 ** 4 }}", policy=policy)
+
+    def test_a_value_already_over_the_limit_is_refused_to_the_first_power(self):
+        with pytest.raises(TemplateSecurityError):
+            _render("{{ big ** 1 }}", policy=TemplatePolicy(max_render_length=5), context={"big": 10**20})
+
+    def test_a_product_of_ints_is_measured_by_both_sides(self):
+        # 99 is 7 bits, at most 3 digits, so 99 * 99 is at most 6.
+        policy = TemplatePolicy(max_render_length=6)
+        assert _render("{{ 99 * 99 }}", policy=policy) == "9801"
+        with pytest.raises(TemplateSecurityError):
+            _render("{{ 99 * 999 }}", policy=policy)
+
+    def test_other_operands_pass_untouched(self):
+        policy = TemplatePolicy(features=[TemplateFeature.CONDITIONAL], max_render_length=0)
+        assert _render("{% if 1.5 * 2 == 3.0 and 2.0 ** 2 == 4.0 %}{% endif %}", policy=policy) == ""
+
+    def test_no_render_length_limit_means_no_check(self):
+        policy = TemplatePolicy(max_render_length=None)
+        assert _render('{{ "x" * 20000 }}', policy=policy) == "x" * 20000
+
+    @pytest.mark.parametrize(("number", "digits"), [(0, 1), (1, 1), (7, 2), (8, 2), (-8, 2), (999, 4)])
+    def test_digits_is_an_upper_bound_from_the_bit_length(self, number, digits):
+        assert engine._digits(number) == digits
+
+
 class TestDelimiters:
     def test_custom_delimiters_change_the_placeholder_syntax(self):
         custom = TemplateDelimiters(variable_start_string="<<", variable_end_string=">>")

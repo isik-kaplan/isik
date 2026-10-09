@@ -13,4 +13,6 @@ TemplatePolicy(features=[TemplateFeature.FILTERS], allowed_filters=frozenset({"l
 ```
 
 - Two independent security layers: `SandboxedEnvironment` (in `engine.py`) blocks dangerous *attribute access* (e.g. `''.__class__`); `TemplatePolicy` is the separate layer gating which *statements* are legal at all - a bare sandboxed environment happily parses and runs `{% for %}`/`{% macro %}`/`{% include %}`.
+- `max_loop_iterations` (default 1000) is a budget for the whole render: every `{% for %}` iteration counts, nested ones multiply and a loop that writes nothing still counts. Each `range()` call is capped at it too.
+- `max_render_length` (default 10000) caps the output, and also refuses a `*` or `**` whose result would be longer, before computing it - `{{ "x" * 400000000 }}` fails at once instead of allocating 400MB.
 - `allowed_filters=None` (the default) means every Jinja builtin filter minus `FILTER_DENYLIST` (`safe`, `attr`) - turning `FILTERS` on doesn't mean all ~50 builtins are usable without narrowing.

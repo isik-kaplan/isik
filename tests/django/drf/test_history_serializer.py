@@ -1,5 +1,3 @@
-import uuid
-
 import pghistory
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -9,9 +7,8 @@ from django.test.utils import isolate_apps
 from pghistory.models import Events
 from rest_framework import serializers
 
-from isik.django.apps.common.db import track_events
 from isik.django.apps.common.db.history import event_model_for
-from isik.django.drf.serializers.history import _ChangesField, _tracked_fields, generic_history_serializer
+from isik.django.drf.serializers.history import _context_fields, generic_history_serializer
 from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
 
 
@@ -27,36 +24,226 @@ def history_for(model, obj):
     return Events.objects.across(event_model_for(model)).tracks(obj).order_by("pgh_id")
 
 
+class WidgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Widget
+        fields = ["id", "name", "count", "owner", "created_at"]
+
+
+class ContextTrackedWidgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContextTrackedWidget
+        fields = ["id", "name", "updated_at"]
+
+
+def widget_history(serializer=WidgetSerializer, **kwargs):
+    return generic_history_serializer(Widget, serializer, **kwargs)
+
+
+def rendered(Serializer, obj, model=Widget):
+    return Serializer(history_for(model, obj), many=True).data
+
+
 def test_raises_on_an_untracked_model():
     with pytest.raises(ImproperlyConfigured, match="has no @track_events"):
-        generic_history_serializer(Comment)
+        generic_history_serializer(Comment, WidgetSerializer)
+
+
+class TestWhatItShows:
+    """The fields of the resource's own serializer that render one tracked column - nothing else."""
+
+    def test_an_entry_has_the_event_fields_then_the_serializers_fields(self, alice):
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+
+        (insert,) = rendered(widget_history(), widget)
+
+        assert list(insert) == [
+            "event_id",
+            "event_created_at",
+            "action",
+            "changes",
+            "id",
+            "name",
+            "count",
+            "owner",
+            "created_at",
+        ]
+        assert insert["action"] == "insert"
+        assert insert["changes"] is None
+
+    def test_each_value_renders_as_the_resource_renders_it(self, alice):
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+        widget.refresh_from_db()
+
+        (insert,) = rendered(widget_history(), widget)
+
+        resource = WidgetSerializer(widget).data
+        assert {key: insert[key] for key in resource} == resource
+
+    def test_a_null_relation_renders_as_none(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        assert rendered(widget_history(), widget)[0]["owner"] is None
+
+    def test_a_renamed_field_keeps_the_serializers_name(self):
+        class TitleSerializer(serializers.Serializer):
+            title = serializers.CharField(source="name")
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(name="nut")
+
+        update = rendered(widget_history(TitleSerializer), widget)[1]
+        assert update["title"] == "nut"
+        assert update["changes"] == {"title": ["bolt", "nut"]}
+
+    def test_a_relation_by_its_column_renders_its_primary_key(self, alice):
+        class OwnerIdSerializer(serializers.Serializer):
+            owner_id = serializers.IntegerField()
+
+        widget = Widget.objects.create(name="bolt", count=1, owner=alice)
+
+        assert rendered(widget_history(OwnerIdSerializer), widget)[0]["owner_id"] == alice.pk
+
+    def test_fields_that_dont_render_one_column_are_left_out(self):
+        class UserSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = EmailUser
+                fields = ["id", "username"]
+
+        class EverythingSerializer(serializers.Serializer):
+            count = serializers.IntegerField(write_only=True)
+            computed = serializers.SerializerMethodField()
+            name = serializers.CharField()
+            whole = serializers.CharField(source="*")
+            shouted = serializers.CharField(source="name.upper")
+            label = serializers.CharField(source="__str__")
+            owner_name = serializers.CharField(source="owner.username")
+            owner_nested = UserSerializer(source="owner")
+            owner_slug = serializers.SlugRelatedField(source="owner", slug_field="username", read_only=True)
+            owner_text = serializers.CharField(source="owner")
+            owner_id_related = serializers.PrimaryKeyRelatedField(source="owner_id", read_only=True)
+
+        shown = set(widget_history(EverythingSerializer)().fields) - {
+            "event_id",
+            "event_created_at",
+            "action",
+            "changes",
+        }
+
+        assert shown == {"name"}
+
+    def test_a_relation_by_its_column_renders_a_change_from_null(self, alice):
+        class OwnerIdSerializer(serializers.Serializer):
+            owner_id = serializers.IntegerField()
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(owner=alice)
+
+        assert rendered(widget_history(OwnerIdSerializer), widget)[1]["changes"] == {"owner_id": [None, alice.pk]}
+
+    def test_a_field_built_with_positional_arguments_is_rebuilt_with_them(self):
+        class ChoiceSerializer(serializers.Serializer):
+            name = serializers.ChoiceField(["bolt", "nut"])
+
+        widget = Widget.objects.create(name="bolt", count=1)
+
+        assert widget_history(ChoiceSerializer)().fields["name"].choices == {"bolt": "bolt", "nut": "nut"}
+        assert rendered(widget_history(ChoiceSerializer), widget)[0]["name"] == "bolt"
+
+    def test_the_event_and_context_fields_are_read_only(self):
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            widget_fields = widget_history()().fields
+        context_fields = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)().fields
+
+        for name in ["event_id", "event_created_at", "action", "changes", "actor_id"]:
+            assert widget_fields[name].read_only is True
+        for name in ["actor_id", "actor_schema", "tenant_id"]:
+            assert context_fields[name].read_only is True
+            assert context_fields[name].allow_null is True
+
+    def test_a_shown_field_is_the_serializers_own_field_type(self):
+        fields = widget_history()().fields
+
+        assert isinstance(fields["name"], serializers.CharField)
+        assert isinstance(fields["owner"], serializers.PrimaryKeyRelatedField)
+        assert type(fields["owner"]).__name__ == "PrimaryKeyRelatedField"
+
+    def test_history_columns_are_the_shown_and_marked_columns(self):
+        Serializer = widget_history(shows_change_of=["updated_at"])
+
+        assert Serializer.history_columns == {"id", "name", "count", "owner_id", "created_at", "updated_at"}
+
+
+class TestChanges:
+    def test_lists_a_shown_fields_change_rendered_by_its_field(self, alice):
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=5, owner=alice)
+
+        update = rendered(widget_history(), widget)[1]
+
+        assert update["changes"] == {"count": [1, 5], "owner": [None, alice.pk]}
+
+    def test_leaves_out_a_hidden_change(self):
+        class NameSerializer(serializers.Serializer):
+            name = serializers.CharField()
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=5)
+
+        assert rendered(widget_history(NameSerializer), widget)[1]["changes"] is None
+
+    def test_shows_change_of_lists_a_hidden_change_without_either_value(self, alice):
+        class NameSerializer(serializers.Serializer):
+            name = serializers.CharField()
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(owner=alice, name="nut")
+
+        update = rendered(widget_history(NameSerializer, shows_change_of=["owner"]), widget)[1]
+
+        assert update["changes"] == {"name": ["bolt", "nut"], "owner": [None, None]}
+        assert "owner" not in update
+
+    @pytest.mark.parametrize("field_name", ["nope", "pgh_label"])
+    def test_shows_change_of_refuses_a_field_that_isnt_tracked(self, field_name):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=rf"^shows_change_of names '{field_name}', which isn't a tracked field of Widget that "
+            r"WidgetSerializer hides - list only fields the history would otherwise leave out\.$",
+        ):
+            widget_history(shows_change_of=[field_name])
+
+    def test_shows_change_of_refuses_a_context_field(self):
+        with pytest.raises(ImproperlyConfigured, match=r"^shows_change_of names 'actor'"):
+            generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer, shows_change_of=["actor"])
+
+    def test_shows_change_of_refuses_a_field_the_serializer_shows(self):
+        with pytest.raises(ImproperlyConfigured, match=r"^shows_change_of names 'owner'"):
+            widget_history(shows_change_of=["owner"])
+
+
+class TestCollisions:
+    def test_a_field_named_like_an_event_field_raises(self):
+        class ActionSerializer(serializers.Serializer):
+            action = serializers.CharField(source="name")
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^ActionSerializer has field\(s\) named \['action'\], which the history of Widget uses for "
+            r"its own - rename them in the serializer, or give the history a serializer of its own\.$",
+        ):
+            widget_history(ActionSerializer)
+
+    def test_a_field_named_like_a_context_field_raises(self):
+        class SchemaSerializer(serializers.Serializer):
+            actor_schema = serializers.CharField(source="name")
+
+        with pytest.raises(ImproperlyConfigured, match=r"named \['actor_schema'\]"):
+            generic_history_serializer(ContextTrackedWidget, SchemaSerializer)
 
 
 @isolate_apps("tests.testapp")
-def test_raises_on_a_tracked_field_colliding_with_a_meta_field_name():
-    # Both pghistory (stamps the generated Event class onto the real tests.testapp.models module)
-    # and pgtrigger (a process-global trigger registry keyed by db_table) track a tracked model
-    # by name outside isolate_apps' own registry - a fixed class name would collide with itself on
-    # a second in-process run of this test (e.g. a mutation-testing tool re-invoking pytest
-    # without restarting), so the model name has to be unique to this run instead.
-    model_name = f"CollidingWidget{uuid.uuid4().hex[:8]}"
-    attrs = {
-        "action": models.CharField(max_length=10),
-        "__module__": __name__,
-        "Meta": type("Meta", (), {"app_label": "testapp"}),
-    }
-    CollidingWidget = track_events()(type(model_name, (models.Model,), attrs))
-    with pytest.raises(
-        ImproperlyConfigured,
-        match=r"^.+ has tracked field\(s\) named \['action'\], which collide with "
-        r"generic_history_serializer\(\)'s own field names - rename the model field or exclude it "
-        r"from tracking \(track_events\(exclude=\[\.\.\.\]\)\)\.$",
-    ):
-        generic_history_serializer(CollidingWidget)
-
-
-@isolate_apps("tests.testapp")
-def test_tracked_fields_uses_charfield_as_the_fallback_for_an_unmapped_fk_target_type():
+def test_context_fields_use_charfield_as_the_fallback_for_an_unmapped_fk_target_type():
     class Weird(models.Model):
         id = models.PositiveBigIntegerField(primary_key=True)
 
@@ -66,16 +253,32 @@ def test_tracked_fields_uses_charfield_as_the_fallback_for_an_unmapped_fk_target
     class WeirdEvent(models.Model):
         pgh_id = models.IntegerField()
         weird = models.ForeignKey(Weird, on_delete=models.CASCADE)
+        other = models.IntegerField()
 
         class Meta:
             app_label = "testapp"
 
-    fields = _tracked_fields(WeirdEvent)
+    fields = _context_fields(WeirdEvent, {"weird"})
+    assert set(fields) == {"weird_id"}
     assert isinstance(fields["weird_id"], serializers.CharField)
 
 
 @isolate_apps("tests.testapp")
-def test_tracked_fields_uses_charfield_as_the_fallback_for_an_unmapped_non_fk_type():
+def test_context_fields_are_typed_after_their_column():
+    class TypedEvent(models.Model):
+        pgh_id = models.IntegerField()
+        level = models.IntegerField(null=True)
+
+        class Meta:
+            app_label = "testapp"
+
+    field = _context_fields(TypedEvent, {"level"})["level"]
+    assert isinstance(field, serializers.IntegerField)
+    assert field.allow_null is True
+
+
+@isolate_apps("tests.testapp")
+def test_context_fields_use_charfield_as_the_fallback_for_an_unmapped_non_fk_type():
     class WeirdEvent(models.Model):
         pgh_id = models.IntegerField()
         weird_value = models.PositiveBigIntegerField()
@@ -83,101 +286,24 @@ def test_tracked_fields_uses_charfield_as_the_fallback_for_an_unmapped_non_fk_ty
         class Meta:
             app_label = "testapp"
 
-    fields = _tracked_fields(WeirdEvent)
+    fields = _context_fields(WeirdEvent, {"weird_value"})
     assert isinstance(fields["weird_value"], serializers.CharField)
+    assert fields["weird_value"].allow_null is False
 
 
-def test_meta_field_names_are_renamed_and_tracked_fields_are_flattened(alice):
-    widget = Widget.objects.create(name="bolt", count=1, owner=alice)
-    widget.update(count=5)
-
-    WidgetHistorySerializer = generic_history_serializer(Widget)
-    data = WidgetHistorySerializer(history_for(Widget, widget), many=True).data
-
-    insert, update = data
-    assert set(insert) == {
-        "event_id",
-        "event_created_at",
-        "action",
-        "changes",
-        "name",
-        "count",
-        "owner_id",
-        "id",
-        "created_at",
-        "updated_at",
-    }
-    assert insert["action"] == "insert"
-    assert insert["changes"] is None
-    assert insert["name"] == "bolt"
-    assert insert["count"] == 1
-    assert insert["owner_id"] == alice.pk
-    assert insert["id"] == str(widget.pk)
-
-    assert update["action"] == "update"
-    # updated_at moves too - BaseModel's own trigger stamps it on every UPDATE (see
-    # isik/django/apps/common/db/models.py), including the widget.update() above.
-    assert update["changes"]["count"] == [1, 5]
-    assert "updated_at" in update["changes"]
-    assert update["count"] == 5
+def test_actor_id_is_absent_by_default():
+    assert "actor_id" not in widget_history()().fields
 
 
-def test_actor_id_is_absent_by_default(alice):
-    widget = Widget.objects.create(name="bolt", count=1)
-    WidgetHistorySerializer = generic_history_serializer(Widget)
-    data = WidgetHistorySerializer(history_for(Widget, widget), many=True).data
-    assert "actor_id" not in data[0]
-
-
-def test_actor_id_is_present_when_history_middleware_is_installed():
+def test_actor_id_is_present_and_nullable_when_history_middleware_is_installed():
     with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
-        WidgetHistorySerializer = generic_history_serializer(Widget)
-        assert "actor_id" in WidgetHistorySerializer().fields
+        field = widget_history()().fields["actor_id"]
+    assert isinstance(field, serializers.CharField)
+    assert field.allow_null is True
 
 
-def test_every_field_is_read_only():
-    with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
-        fields = generic_history_serializer(Widget)().fields
-        assert all(field.read_only for field in fields.values())
-
-
-def test_changes_and_actor_id_allow_null():
-    with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
-        fields = generic_history_serializer(Widget)().fields
-        assert fields["changes"].allow_null is True
-        assert fields["actor_id"].allow_null is True
-
-
-def test_tracked_field_allow_null_reflects_the_real_model_field_nullability():
-    fields = generic_history_serializer(Widget)().fields
-    assert fields["name"].allow_null is False  # Widget.name has no null=True
-    assert fields["owner_id"].allow_null is True  # Widget.owner has null=True
-
-
-class TestChangesField:
-    def test_drops_keys_named_in_context_field_names(self):
-        field = _ChangesField(context_field_names={"actor_id"}, withhold_names=frozenset())
-        assert field.to_representation({"actor_id": [1, 2], "name": ["a", "b"]}) == {"name": ["a", "b"]}
-
-    def test_returns_none_when_filtering_leaves_nothing(self):
-        field = _ChangesField(context_field_names={"actor_id"}, withhold_names=frozenset())
-        assert field.to_representation({"actor_id": [1, 2]}) is None
-
-    def test_is_a_noop_with_no_context_field_names_or_withhold_names(self):
-        field = _ChangesField(context_field_names=frozenset(), withhold_names=frozenset())
-        assert field.to_representation({"name": ["a", "b"]}) == {"name": ["a", "b"]}
-
-    def test_nulls_out_a_withheld_keys_pair_instead_of_dropping_it(self):
-        field = _ChangesField(context_field_names=frozenset(), withhold_names={"password"})
-        result = field.to_representation({"password": ["old-hash", "new-hash"], "name": ["a", "b"]})
-        assert result == {"password": [None, None], "name": ["a", "b"]}
-
-    def test_a_withheld_key_takes_priority_over_a_context_field_name(self):
-        # Pathological (a field can't really be both), but the precedence should still be
-        # deterministic: context-field dropping runs first, so a name in both sets is dropped, not
-        # nulled - withhold_names is never even consulted for it.
-        field = _ChangesField(context_field_names={"actor_id"}, withhold_names={"actor_id"})
-        assert field.to_representation({"actor_id": [1, 2]}) is None
+def test_changes_allows_null():
+    assert widget_history()().fields["changes"].allow_null is True
 
 
 class TestContextFieldsAndActorIdCompose:
@@ -186,7 +312,7 @@ class TestContextFieldsAndActorIdCompose:
     isik/django/apps/common/db/history.py's pgh_context_field_names."""
 
     def test_builds_without_raising(self):
-        generic_history_serializer(ContextTrackedWidget)
+        generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
 
     def test_actor_id_is_sourced_from_the_real_column_not_the_json_annotation(self):
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
@@ -194,7 +320,7 @@ class TestContextFieldsAndActorIdCompose:
         with pghistory.context(user=alice.pk):
             widget = ContextTrackedWidget.objects.create(name="bolt")
 
-        Serializer = generic_history_serializer(ContextTrackedWidget)
+        Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         # actor_id is typed off the real FK column (an IntegerField), not the CharField the JSON
         # annotation would otherwise use - a plain int, not "<alice.pk>" as a string.
         assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)
@@ -208,7 +334,7 @@ class TestContextFieldsAndActorIdCompose:
         with pghistory.context(user=alice.pk, schema="tenant_1", organization=org.pk):
             widget = ContextTrackedWidget.objects.create(name="bolt")
 
-        Serializer = generic_history_serializer(ContextTrackedWidget)
+        Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
         assert data[0]["actor_schema"] == "tenant_1"
@@ -217,7 +343,7 @@ class TestContextFieldsAndActorIdCompose:
     def test_context_fields_are_null_outside_any_pghistory_context(self):
         widget = ContextTrackedWidget.objects.create(name="bolt")
 
-        Serializer = generic_history_serializer(ContextTrackedWidget)
+        Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
         assert data[0]["actor_id"] is None
@@ -236,7 +362,7 @@ class TestContextFieldsAndActorIdCompose:
         with pghistory.context(user=bob.pk):
             widget.update(name="nut")
 
-        Serializer = generic_history_serializer(ContextTrackedWidget)
+        Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
         insert, update = data
@@ -246,8 +372,7 @@ class TestContextFieldsAndActorIdCompose:
 
     def test_changes_still_reports_updated_at_when_only_the_actor_changed(self):
         # A pure actor handoff (no real field edit) still leaves updated_at in the diff - BaseModel
-        # stamps it on every UPDATE - so this never actually empties out to None in this codebase,
-        # but it confirms filtering removes exactly actor_id and nothing else.
+        # stamps it on every UPDATE - and the serializer shows it, so only actor_id is filtered out.
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
         bob = EmailUser.objects.create(username="bob", email="bob@example.com")
 
@@ -256,52 +381,12 @@ class TestContextFieldsAndActorIdCompose:
         with pghistory.context(user=bob.pk):
             widget.update(name="bolt")
 
-        Serializer = generic_history_serializer(ContextTrackedWidget)
+        Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
-        assert data[1]["changes"].keys() == {"updated_at"}
+        assert data[1]["changes"] == {"updated_at": [data[0]["updated_at"], data[1]["updated_at"]]}
 
-
-class TestWithhold:
-    """generic_history_serializer(model, withhold=[...]) - an explicit, per-field opt-in (never
-    isik guessing at what "looks sensitive") for a value worth knowing changed but never worth
-    serving - see the function's own docstring."""
-
-    def test_a_withheld_field_is_absent_from_the_flattened_output(self):
-        widget = Widget.objects.create(name="bolt", count=1)
-
-        Serializer = generic_history_serializer(Widget, withhold=["count"])
-        data = Serializer(history_for(Widget, widget), many=True).data
-
-        assert "count" not in data[0]
-        assert set(Serializer().fields) - {"count"} == set(generic_history_serializer(Widget)().fields) - {"count"}
-
-    def test_changes_nulls_out_a_withheld_fields_pair_but_keeps_the_key(self):
-        widget = Widget.objects.create(name="bolt", count=1)
-        widget.update(count=5, name="nut")
-
-        Serializer = generic_history_serializer(Widget, withhold=["count"])
-        data = Serializer(history_for(Widget, widget), many=True).data
-
-        update = data[1]
-        assert update["changes"]["count"] == [None, None]
-        assert update["changes"]["name"] == ["bolt", "nut"]
-
-    @isolate_apps("tests.testapp")
-    def test_a_withheld_field_never_reaches_the_collision_check(self):
-        # "action" would collide with generic_history_serializer()'s own reserved name if it were
-        # a real tracked field - withholding it removes it before that check ever runs.
-        model_name = f"WithholdActionWidget{uuid.uuid4().hex[:8]}"
-        attrs = {
-            "action": models.CharField(max_length=10),
-            "__module__": __name__,
-            "Meta": type("Meta", (), {"app_label": "testapp"}),
-        }
-        WithholdActionWidget = track_events()(type(model_name, (models.Model,), attrs))
-        generic_history_serializer(WithholdActionWidget, withhold=["action"])
-
-    def test_withhold_is_empty_by_default(self):
-        widget = Widget.objects.create(name="bolt", count=1)
-        Serializer = generic_history_serializer(Widget)
-        data = Serializer(history_for(Widget, widget), many=True).data
-        assert data[0]["count"] == 1
+    def test_a_context_actor_id_wins_over_the_middlewares_even_with_it_installed(self):
+        with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
+            Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
+        assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)

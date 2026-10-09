@@ -13,8 +13,8 @@ from isik.django.apps.common._model_makers import (
 )
 
 
-TAG_NAME_REGEX = r"^[a-zA-Z0-9_.-]*$"
-TAG_NAME_REGEX_ERROR_MESSAGE = "Tags can only contain letters, numbers, - and _."
+TAG_NAME_REGEX = r"^[a-zA-Z0-9_.-]+$"
+TAG_NAME_REGEX_ERROR_MESSAGE = gettext_lazy("Tags can only contain letters, numbers, ., - and _.")
 
 
 def _default_name_validators():
@@ -28,12 +28,13 @@ class TagQuerySet(models.QuerySet):
 
     def get_tag(self, name):
         """Get-or-create by name, applying the maker's `normalize=` first if configured, then
-        enforcing the `name` field's validators (e.g. `name_validators`) - `create()` bypasses
-        `full_clean()`, so without this an invalid name would otherwise slip through untouched."""
+        cleaning it through the `name` field (its validators, e.g. `name_validators`, and its blank
+        check, which the validators skip) - `create()` bypasses `full_clean()`, so without this an
+        invalid name would otherwise slip through untouched."""
         normalize = self.model._normalize
         if normalize:
             name = normalize(name)
-        self.model._meta.get_field("name").run_validators(name)
+        self.model._meta.get_field("name").clean(name, None)
         return self.create(name=name)
 
     def create(self, **kwargs):
@@ -190,8 +191,8 @@ def tags(
     `target_related_name` is claimed via `claim_related_name`, so two tag dimensions on the same
     host must give at least one of them a non-default `target_related_name`.
 
-    `name_max_length`/`name_validators` control the generated `name` field (default: letters,
-    digits, `-`/`_`, via `RegexValidator`). `normalize` is an optional callable (e.g. `str.lower`)
+    `name_max_length`/`name_validators` control the generated `name` field (default: one or more
+    letters, digits, `.`, `-` or `_`, via `RegexValidator`). `normalize` is an optional callable (e.g. `str.lower`)
     applied to a name before every dedup lookup/create - off by default, so `"Python"` and
     `"python"` are different tags unless you opt in.
 

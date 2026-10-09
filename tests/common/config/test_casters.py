@@ -81,6 +81,21 @@ def test_comma_separated_float_list_casts_each_item():
     assert comma_separated_float_list()("1.5,2.5") == [1.5, 2.5]
 
 
+@pytest.mark.parametrize("make", [comma_separated_list, comma_separated_int_list, comma_separated_float_list])
+def test_an_empty_value_is_the_empty_list(make):
+    assert make()("") == []
+
+
+def test_an_empty_item_between_commas_is_kept():
+    assert comma_separated_list()("a,,b") == ["a", "", "b"]
+
+
+@pytest.mark.parametrize("make", [comma_separated_int_list, comma_separated_float_list])
+def test_an_empty_item_between_commas_is_not_a_number(make):
+    with pytest.raises(ValueError):
+        make()("1,,2")
+
+
 @given(st.lists(st.integers(min_value=-1000, max_value=1000), min_size=1, max_size=10))
 def test_comma_separated_int_list_round_trips(values):
     raw = ",".join(str(v) for v in values)

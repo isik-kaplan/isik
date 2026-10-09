@@ -17,5 +17,5 @@ minor release with no alias, as with every breaking change while isik is at 0.y.
    Machinery whose whole job *is* its mechanism is named for the mechanism, and that's not a
    violation: `TransformExceptions`, `RequiredAttributesMixin`, `NarrowingFilterMixin`.
 5. **A conjunction in capitals is allowed, and it isn't an acronym.** `CookieORHeaderSessionMiddleware`,
-   `UsernameOREmailModelBackend`, `IsAuthenticatedANDSignupCompleted`: the capitals separate two
+   `IsAuthenticatedANDSignupCompleted`: the capitals separate two
    conditions that PascalCase would run together, so they stay.

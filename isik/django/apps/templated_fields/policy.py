@@ -81,12 +81,13 @@ class TemplatePolicy:
     available. `None` (the default) means every builtin minus `FILTER_DENYLIST` (`safe`, `attr`);
     pass an explicit `frozenset` (e.g. `{"lower", "trim", "default"}`) to lock it down further.
 
-    `max_loop_iterations` caps `range(...)` specifically - the one way template *source* can
-    conjure a large iterable without help from `available()`. Iterating a large collection that
-    `available()` itself handed over is a different trust boundary (`available()` is your own
-    code, not attacker-controlled template text) and isn't capped here. `max_render_length` is a
-    blunter backstop against runaway output in general (large loops, deep macro recursion) -
-    rendering aborts once accumulated output crosses it. `max_source_length` caps the template
+    `max_loop_iterations` caps the `{% for %}` iterations of one whole render - nested loops
+    multiply, loops one after another add up, and a loop that writes nothing still counts, so a
+    template can't spin a worker without producing output. It caps each `range(...)` call as well,
+    so a filter can't materialize a huge one either. `max_render_length` is a blunter backstop
+    against runaway output in general (deep macro recursion, say) - rendering aborts once
+    accumulated output crosses it - and it also refuses a `*` or `**` whose result would be longer
+    than it (`"x" * n`, a huge power), before computing it. `max_source_length` caps the template
     text itself, checked before parsing.
     """
 
