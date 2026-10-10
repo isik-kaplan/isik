@@ -133,7 +133,7 @@ msgstr ""
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
 msgstr ""
 
-#: isik/django/drf/serializers/history.py:183
+#: isik/django/drf/serializers/history.py:202
 #, python-format
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
@@ -1024,7 +1024,7 @@ msgstr ""
 msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
 
-#: isik/django/drf/serializers/history.py:195
+#: isik/django/drf/serializers/history.py:214
 #, python-format
 msgid "shows_change_of names %(field)r, which isn't a tracked field of %(model)s that %(serializer)s hides - list only fields the history would otherwise leave out."
 msgstr ""

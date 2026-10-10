@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pghistory
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -390,3 +392,51 @@ class TestContextFieldsAndActorIdCompose:
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)
+
+
+class TestAFeedOverSeveralEventModels:
+    """A serializer is built for one model, and a feed selecting across several hands it rows that
+    were recorded for another. Those rows carry no column of this model's, and the field reads one."""
+
+    def _feed(self):
+        return Events.objects.across(event_model_for(Widget), event_model_for(ContextTrackedWidget)).order_by("pgh_id")
+
+    def test_a_row_recorded_for_another_model_renders_this_models_fields_as_null(self, alice):
+        """Every one of them, not only the columns that happen to be absent. A `ContextTrackedWidget`
+        row carries `id` and `name` under those same names, and they are a different object's - shown
+        here they would read as this widget's own. `count` and `owner` it has not got at all, and
+        reading one used to raise `KeyError` rather than render the absence."""
+        Widget.objects.create(name="bolt", count=1, owner=alice)
+        ContextTrackedWidget.objects.create(name="other")
+
+        entries = widget_history()(self._feed(), many=True).data
+
+        # A set because order across two streams is nobody's guarantee: one row is the widget's own,
+        # the other has nothing of this model on it.
+        assert {(entry["name"], entry["count"], entry["owner"]) for entry in entries} == {
+            ("bolt", 1, alice.pk),
+            (None, None, None),
+        }
+
+    def test_a_row_of_this_model_missing_the_column_is_not_quietly_absent(self):
+        """A snapshot that should carry the column and does not means the two disagree about what is
+        tracked. Rendering null there would hide it for as long as nobody compared the two."""
+        field = widget_history()().fields["count"]
+        recorded_here = SimpleNamespace(pgh_model=event_model_for(Widget)._meta.label, pgh_data={})
+
+        with pytest.raises(KeyError):
+            field.get_attribute(recorded_here)
+
+    def test_a_row_with_no_pgh_model_at_all_is_read_as_this_models(self):
+        """`pgh_model` is a column of the aggregate `Events` only. A queryset of one concrete event
+        model has no such attribute, and every row in it is this field's to read."""
+        field = widget_history()().fields["count"]
+        concrete = SimpleNamespace(pgh_data={"count": 7})
+
+        assert field.get_attribute(concrete) == 7
+
+    def test_the_generated_class_names_its_event_model_for_a_schema_generator(self):
+        """Inert to DRF, which reads no `Meta` off a plain `Serializer`. drf-spectacular types a
+        read-only relation from `field.parent.Meta.model`, and documents it as a bare string without
+        one - so the schema isik itself generates was wrong about every relation in a history."""
+        assert widget_history().Meta.model is event_model_for(Widget)

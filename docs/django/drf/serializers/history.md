@@ -59,6 +59,25 @@ A name that isn't a tracked field, or that the serializer already shows, raises
 `track_events(exclude=[...])`, which drops it from the event table itself: whether a value is in the
 log is retention, whether an API renders it is exposure.
 
+## A feed over several tracked models
+
+The serializer is built for one model, and nothing stops a queryset handing it rows recorded for
+another - a feed selecting from `pghistory.models.Events` across several tracked models is the usual
+way that happens. Such a row renders every one of this model's fields as `null`.
+
+Every one, not only the columns it happens to lack: two tracked models usually share `id`,
+`created_at` and often a `name`, and those belong to a different object. Rendered under a serializer
+that says it describes this model, they would read as this object's own - a worse answer than no
+answer. What a row like that is actually for is `action`, `changes` and whatever the feed adds to say
+which stream it came from.
+
+The row's own `pgh_model` is what says which model recorded it, so a queryset of one concrete event
+model - which has no such column - is unaffected, and every row in it is read as before.
+
+A row recorded for *this* model whose snapshot is missing the column still raises. That is the
+snapshot and the field disagreeing about what is tracked, which is worth hearing about rather than
+rendering as an absent value.
+
 See [`HistoryMixin`](../viewsets/history.md) for exposing this over a viewset action.
 
 `generic_history_serializer(model, serializer, name=...)` overrides the generated class name

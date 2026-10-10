@@ -58,8 +58,27 @@ class _ReadsTheSnapshot:
         # fields read off a PKOnlyObject - the related row as it is today is never fetched.
         return PKOnlyObject(pk=value) if isinstance(self, RelatedField) else value
 
+    def reads_another_event_model(self, event):
+        """Whether this row was recorded by a different event model than this field reads.
+
+        `pgh_model` is a column of `pghistory.models.Events`, which is what a feed over more than one
+        tracked model selects from; a queryset of one concrete event model has no such attribute, and
+        every row in it belongs to this field.
+        """
+        event_model, _name = self.snapshot_of
+        recorded_by = getattr(event, "pgh_model", None)
+        return recorded_by is not None and recorded_by != event_model._meta.label
+
     def get_attribute(self, event):
-        # A null comes back as None (or a PKOnlyObject of None), which DRF renders as null itself.
+        """A null comes back as None (or a PKOnlyObject of None), which DRF renders as null itself.
+
+        A row from another event model renders null rather than raising: this field is about one
+        model's column, and a row recorded for a different one has nothing to say about it. A row of
+        this model whose snapshot is missing the column still raises, because that means the
+        snapshot and the field disagree about what is tracked, which is worth hearing about.
+        """
+        if self.reads_another_event_model(event):
+            return None
         event_model, name = self.snapshot_of
         return self.value_of(event.pgh_data[event_model._meta.get_field(name).column])
 
@@ -226,6 +245,16 @@ def generic_history_serializer(model, serializer, *, shows_change_of=(), name=No
         # Skipped when a ContextField already put a real actor_id column there - that's typed and
         # indexed, this JSON fallback is neither.
         attrs["actor_id"] = serializers.CharField(read_only=True, allow_null=True)
+
+    # Inert to DRF, which reads no `Meta` off a plain `Serializer`, and the only thing a schema
+    # generator has to go on: drf-spectacular types a read-only `PrimaryKeyRelatedField` from
+    # `field.parent.Meta.model`, and without one it documents every relation here as a bare string
+    # and warns while doing it. A class statement rather than `type()`, so the name is not a string
+    # anything could get wrong unobserved.
+    class Meta:
+        model = event_model
+
+    attrs["Meta"] = Meta
 
     return type(name or f"{model.__name__}HistorySerializer", (serializers.Serializer,), attrs)
 

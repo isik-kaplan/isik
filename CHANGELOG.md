@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-10
+
+### Fixed
+
+- **A history serializer over a feed of several tracked models no longer raises.** `generic_history_serializer()`
+  builds for one model, and a queryset selecting from `pghistory.models.Events` across several hands
+  it rows recorded for another. Reading one went straight at `pgh_data[column]`, so the first row
+  from a different event model raised `KeyError` and the endpoint answered 500. Such a row now
+  renders every one of this model's fields as `null` - all of them, not only the columns it happens
+  to lack, because two tracked models usually share `id`, `created_at` and often a `name`, and those
+  belong to a different object. The row's own `pgh_model` is what says which model recorded it, so a
+  queryset of one concrete event model - which has no such column - reads exactly as before. A row
+  recorded for *this* model whose snapshot is missing the column still raises: that is the snapshot
+  and the field disagreeing about what is tracked.
+- **The generated history serializer can be documented.** It is a plain `Serializer` carrying the
+  resource serializer's own fields, and drf-spectacular types a read-only `PrimaryKeyRelatedField`
+  from `field.parent.Meta.model`. With no `Meta` it documented every relation in a history as a bare
+  string and warned while doing it - isik's own `AutoSchema` failing on isik's own serializer, and a
+  project generating with `--fail-on-warn` could not generate at all. The class now carries
+  `Meta.model` (the event model), which DRF itself ignores on a plain `Serializer`.
+
+
 ## [0.21.0] - 2026-10-09
 
 ### Changed
