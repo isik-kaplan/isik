@@ -10,8 +10,8 @@ from pghistory.models import Events
 from rest_framework import serializers
 
 from isik.django.apps.common.db.history import event_model_for
-from isik.django.drf.serializers.history import _context_fields, generic_history_serializer
-from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
+from isik.django.drf.serializers.history import _context_fields, _maintains_itself, generic_history_serializer
+from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, TimestampedNote, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -222,6 +222,72 @@ class TestChanges:
     def test_shows_change_of_refuses_a_field_the_serializer_shows(self):
         with pytest.raises(ImproperlyConfigured, match=r"^shows_change_of names 'owner'"):
             widget_history(shows_change_of=["owner"])
+
+
+class StampShowingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Widget
+        fields = ["id", "name", "count", "updated_at"]
+
+
+class TestIgnoresChangeOf:
+    def test_updated_at_doesnt_decide_whether_an_update_is_listed(self):
+        assert widget_history(StampShowingSerializer).history_columns == {"id", "name", "count"}
+
+    def test_updated_at_is_still_shown_and_in_changes_beside_a_real_change(self):
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=2)
+
+        update = rendered(widget_history(StampShowingSerializer), widget)[1]
+
+        assert set(update["changes"]) == {"count", "updated_at"}
+        assert "updated_at" in update
+
+    def test_a_named_field_is_left_out_too(self):
+        assert widget_history(StampShowingSerializer, ignores_change_of=["count"]).history_columns == {"id", "name"}
+
+    def test_shows_change_of_naming_a_self_maintained_field_asks_for_its_change(self):
+        assert "updated_at" in widget_history(shows_change_of=["updated_at"]).history_columns
+
+    @pytest.mark.parametrize("field_name", ["nope", "pgh_label", "actor"])
+    def test_refuses_a_field_that_isnt_tracked(self, field_name):
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=rf"^ignores_change_of names '{field_name}', which isn't a tracked field of ContextTrackedWidget "
+            r"or is named by shows_change_of too - its change can't both list an update and not\.$",
+        ):
+            generic_history_serializer(
+                ContextTrackedWidget, ContextTrackedWidgetSerializer, ignores_change_of=[field_name]
+            )
+
+    def test_refuses_a_field_shows_change_of_names(self):
+        with pytest.raises(ImproperlyConfigured, match=r"^ignores_change_of names 'updated_at'"):
+            widget_history(shows_change_of=["updated_at"], ignores_change_of=["updated_at"])
+
+
+def test_updated_at_maintains_itself_under_the_timestamps_trigger():
+    assert _maintains_itself(TimestampedNote, "updated_at")
+    assert not _maintains_itself(TimestampedNote, "created_at")
+    assert not _maintains_itself(TimestampedNote, "text")
+
+
+# A plain Model: a DatabaseTimestampsModel registers its triggers process-wide, so defining one here
+# would collide with itself the second time the test ran in one process.
+@isolate_apps("tests.testapp")
+def test_an_auto_now_field_maintains_itself_and_another_updated_at_doesnt():
+    class Plain(models.Model):
+        touched = models.DateTimeField(auto_now=True)
+        day = models.DateField(auto_now=True)
+        clock = models.TimeField(auto_now=True)
+        updated_at = models.DateTimeField()
+
+        class Meta:
+            app_label = "testapp"
+
+    assert _maintains_itself(Plain, "touched")
+    assert _maintains_itself(Plain, "day")
+    assert _maintains_itself(Plain, "clock")
+    assert not _maintains_itself(Plain, "updated_at")
 
 
 class TestCollisions:

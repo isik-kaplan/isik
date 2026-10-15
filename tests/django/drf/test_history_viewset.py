@@ -303,6 +303,38 @@ class TestHistoryMixin:
 
         assert [event["action"] for event in call_history(WidgetViewSet, widget).data] == ["update", "insert"]
 
+    def test_updated_at_restamping_itself_is_not_a_change_worth_listing(self, alice):
+        class StampShowingViewSet(WidgetViewSet):
+            endpoint = "stamp-showing-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+
+            class serializer_class(serializers.ModelSerializer):
+                class Meta:
+                    model = Widget
+                    fields = ["id", "name", "count", "updated_at"]
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(owner=alice)  # a hidden column - think of a sign-in's last_login
+        widget.save()  # nothing at all
+        widget.update(count=2)
+
+        update, insert = call_history(StampShowingViewSet, widget).data
+        assert (update["action"], insert["action"]) == ("update", "insert")
+        assert set(update["changes"]) == {"count", "updated_at"}
+
+    def test_history_ignores_change_of_leaves_out_an_update_to_only_those_fields(self):
+        class CountIgnoringViewSet(WidgetViewSet):
+            endpoint = "count-ignoring-widgets"
+            exempt_from_registry = "a test's own class, defined again on every run"
+            history_ignores_change_of = ["count"]
+
+        widget = Widget.objects.create(name="bolt", count=1)
+        widget.update(count=2)
+        widget.update(name="nut", count=3)
+
+        update, insert = call_history(CountIgnoringViewSet, widget).data
+        assert update["changes"] == {"name": ["bolt", "nut"], "count": [2, 3]}
+
     def test_inserts_and_deletes_are_always_listed(self, superuser):
         widget = Widget.objects.create(name="bolt", count=1)
         widget_id = str(widget.pk)

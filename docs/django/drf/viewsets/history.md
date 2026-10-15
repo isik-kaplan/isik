@@ -74,6 +74,11 @@ GET /widgets/history/?object_id=3&action=update
   listed, as `"changes": {"password": [None, None]}` - the history says the password changed at
   14:02, never either hash. A name that isn't tracked, or that the serializer already shows, raises
   `ImproperlyConfigured`.
+- `updated_at` doesn't list an update on its own: `BaseModel`'s trigger bumps it on every save, so
+  otherwise a sign-in's `last_login` write, or a `save()` that changed nothing, would be listed. Any
+  `auto_now` field is treated the same. They're still shown, and in `changes` beside a real change.
+  `history_ignores_change_of = ["revision"]` adds fields of your own - see
+  [`ignores_change_of=`](../serializers/history.md#changes-that-dont-count---ignores_change_of).
 - Override the `history_source_serializer()` classmethod when the history should follow another
   serializer than the one `retrieve` uses.
 - A serializer that drops fields per request (in `__init__`, from its context) isn't followed: the

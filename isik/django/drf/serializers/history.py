@@ -7,6 +7,7 @@ from rest_framework.relations import PKOnlyObject, RelatedField
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
+from isik.django.apps.common.db.models import DatabaseTimestampsModel
 
 
 _FIELD_TYPES = {
@@ -144,7 +145,16 @@ def _shown_fields(serializer, tracked):
     return shown
 
 
-def generic_history_serializer(model, serializer, *, shows_change_of=(), name=None):
+def _maintains_itself(model, field_name):
+    """Whether the row keeps this column current on its own, so that its changing says nothing:
+    `updated_at` under `DatabaseTimestampsModel`'s trigger, or an `auto_now` field."""
+    if issubclass(model, DatabaseTimestampsModel) and field_name == "updated_at":
+        return True
+    field = model._meta.get_field(field_name)
+    return isinstance(field, models.DateField | models.TimeField) and field.auto_now
+
+
+def generic_history_serializer(model, serializer, *, shows_change_of=(), ignores_change_of=(), name=None):
     """
     Builds a read-only `Serializer` for the history of a model tracked with `@track_events()`,
     showing what `serializer` - the resource's own serializer - shows, and nothing else. History is
@@ -176,14 +186,25 @@ def generic_history_serializer(model, serializer, *, shows_change_of=(), name=No
     `pghistory.middleware.HistoryMiddleware` (or a subclass) is installed and no `ContextField`
     already provides it.
 
-    The class carries `history_columns`, the tracked columns whose change shows in `changes` -
-    `HistoryMixin` leaves out an update that changed none of them.
+    `ignores_change_of` names tracked fields whose change alone doesn't make an update worth
+    listing, on top of the columns the row keeps current itself - `updated_at` on a
+    `DatabaseTimestampsModel`, whose trigger bumps it on every update, and any `auto_now` field, unless
+    `shows_change_of` names it. Such a field is still shown, and still in `changes` when something else
+    changed with it:
+
+        generic_history_serializer(Widget, WidgetSerializer, ignores_change_of=["revision"])
+
+    The class carries `history_columns`, the tracked columns whose change makes an update worth
+    listing - the shown and `shows_change_of` columns, less the ignored ones. `HistoryMixin` leaves
+    out an update that changed none of them, so saving a `BaseModel` without changing anything it
+    shows lists nothing.
 
     `name=` overrides the generated class name (default `<Model>HistorySerializer`).
 
     Raises `ImproperlyConfigured` if a shown field is named `event_id`/`event_created_at`/`action`/
-    `changes`/`actor_id` or after a `ContextField`, and if `shows_change_of` names a field that isn't
-    tracked or that the serializer already shows.
+    `changes`/`actor_id` or after a `ContextField`, if `shows_change_of` names a field that isn't
+    tracked or that the serializer already shows, and if `ignores_change_of` names a field that isn't
+    tracked or that `shows_change_of` names.
     """
     event_model = event_model_for(model)
     context_fields = getattr(event_model, "pgh_context_fields", ())
@@ -219,6 +240,22 @@ def generic_history_serializer(model, serializer, *, shows_change_of=(), name=No
             )
         marked[tracked[field_name].column] = field_name
 
+    for field_name in ignores_change_of:
+        if field_name not in tracked or field_name in shows_change_of:
+            raise ImproperlyConfigured(
+                _(
+                    "ignores_change_of names %(field)r, which isn't a tracked field of %(model)s or is "
+                    "named by shows_change_of too - its change can't both list an update and not."
+                )
+                % {"field": field_name, "model": model.__name__}
+            )
+    # Naming a self-maintained field in shows_change_of asks for its change after all.
+    ignored = {
+        field.column
+        for name, field in tracked.items()
+        if name in ignores_change_of or (_maintains_itself(model, name) and name not in shows_change_of)
+    }
+
     attrs = {
         "event_id": serializers.IntegerField(source="pgh_id", read_only=True),
         "event_created_at": serializers.DateTimeField(source="pgh_created_at", read_only=True),
@@ -235,7 +272,8 @@ def generic_history_serializer(model, serializer, *, shows_change_of=(), name=No
             for output_name, (field, event_field) in shown.items()
         },
         **context,
-        "history_columns": frozenset([*(event_field.column for _field, event_field in shown.values()), *marked]),
+        "history_columns": frozenset([*(event_field.column for _field, event_field in shown.values()), *marked])
+        - ignored,
     }
     if history_middleware_installed() and "actor_id" not in context:
         # A queryset-level annotation (see HistoryMixin._history_base_queryset) rather than sourced

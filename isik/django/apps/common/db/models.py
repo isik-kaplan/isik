@@ -241,11 +241,14 @@ def _timestamp_triggers(model):
         pgtrigger.ReadOnly(name="protect_created_at", fields=["created_at"]),
         # db_default=Now() covers the initial value; this keeps it current on every UPDATE,
         # including QuerySet.update()/bulk_update() and raw SQL, none of which auto_now touches.
+        # clock_timestamp(), not NOW(): NOW() is when the transaction began, so one that began first
+        # and wrote last stamped the row earlier than the write before it. GREATEST holds the column
+        # still if the server's clock ever steps back.
         pgtrigger.Trigger(
             name="stamp_updated_at",
             when=pgtrigger.Before,
             operation=pgtrigger.Update,
-            func=f"NEW.{updated_at} = NOW(); RETURN NEW;",
+            func=f"NEW.{updated_at} = GREATEST(clock_timestamp(), OLD.{updated_at}); RETURN NEW;",
         ),
     ]
 

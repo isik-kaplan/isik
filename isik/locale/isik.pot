@@ -133,7 +133,7 @@ msgstr ""
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
 msgstr ""
 
-#: isik/django/drf/serializers/history.py:202
+#: isik/django/drf/serializers/history.py:223
 #, python-format
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
@@ -959,6 +959,11 @@ msgstr ""
 msgid "guarding.values requires at least one value"
 msgstr ""
 
+#: isik/django/drf/serializers/history.py:246
+#, python-format
+msgid "ignores_change_of names %(field)r, which isn't a tracked field of %(model)s or is named by shows_change_of too - its change can't both list an update and not."
+msgstr ""
+
 #: isik/django/apps/common/db/constraints.py:335
 #, python-format
 msgid "lifted_constraint() drops %(name)r from the table, so it runs inside a transaction that rolls back - a test's own."
@@ -1024,7 +1029,7 @@ msgstr ""
 msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
 
-#: isik/django/drf/serializers/history.py:214
+#: isik/django/drf/serializers/history.py:235
 #, python-format
 msgid "shows_change_of names %(field)r, which isn't a tracked field of %(model)s that %(serializer)s hides - list only fields the history would otherwise leave out."
 msgstr ""

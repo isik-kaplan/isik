@@ -35,6 +35,10 @@ SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever cov
 `ImproperlyConfigured` at import time if it's missing. The trigger stamps the column `updated_at` is
 stored in, so a subclass can give it a `db_column`.
 
+The stamp is the time of the write itself (`clock_timestamp()`), never earlier than the value it
+replaces. It isn't `NOW()`, which is when the transaction began: a transaction that began first and
+wrote last would stamp the row earlier than the write before it, so `updated_at` would go backwards.
+
 Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
 advances `updated_at` even though `"updated_at"` isn't in `update_fields`. Naming it explicitly
 there is harmless leftover habit from `auto_now`, not something this still requires.

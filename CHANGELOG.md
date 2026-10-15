@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-15
+
+### Fixed
+
+- **`updated_at` no longer goes backwards.** The `stamp_updated_at` trigger stamped `NOW()`, which in
+  Postgres is when the transaction began, not when the row was written. A transaction that began
+  first and wrote last - a request under `ATOMIC_REQUESTS`, a long task - stamped the row earlier
+  than the write before it, and the history showed that as an `updated_at` pair reading backwards.
+  The trigger now stamps `GREATEST(clock_timestamp(), OLD.updated_at)`: the time of the write itself,
+  never earlier than the value it replaces. **A migration:** every `DatabaseTimestampsModel` -
+  every `BaseModel` - gets its trigger replaced on the next `makemigrations`.
+
+### Changed
+
+- **A save no longer lists a history update just for restamping `updated_at`.** The trigger bumps it
+  on every update, so a resource showing `updated_at` listed every save as a change - each sign-in's
+  `last_login` write, and a `save()` that changed nothing. A column the row keeps current itself -
+  `updated_at` on a `DatabaseTimestampsModel`, any `auto_now` field - no longer decides whether an
+  update is listed. It's still shown, and still in `changes` beside a real change; naming it in
+  `shows_change_of` makes it count again.
+- **`ignores_change_of=` / `HistoryMixin.history_ignores_change_of`** add fields of your own whose
+  change alone doesn't list an update. A name that isn't tracked, or that `shows_change_of` also
+  names, raises `ImproperlyConfigured`. `history_columns` is now the columns whose change lists an
+  update, without the ignored ones.
+
 ## [0.22.0] - 2026-10-10
 
 ### Fixed

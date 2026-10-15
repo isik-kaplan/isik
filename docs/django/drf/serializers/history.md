@@ -37,8 +37,9 @@ out of the history too.
 - `actor_id` is added too, if `pghistory.middleware.HistoryMiddleware` (or a subclass) is in
   `settings.MIDDLEWARE` - see `history_middleware_installed()` - unless an `actor` `ContextField`
   already provides it as a real, typed column.
-- The class carries `history_columns`, the tracked columns whose change shows in `changes`;
-  [`HistoryMixin`](../viewsets/history.md) leaves out an update that changed none of them.
+- The class carries `history_columns`, the tracked columns whose change makes an update worth
+  listing; [`HistoryMixin`](../viewsets/history.md) leaves out an update that changed none of them.
+  A column the row keeps current itself isn't one of them - see below.
 - Raises `ImproperlyConfigured` if a shown field is named `event_id`/`event_created_at`/`action`/
   `changes`/`actor_id` or after a `ContextField`, rather than one silently clobbering the other -
   rename it in the serializer, or give the history a serializer of its own.
@@ -58,6 +59,23 @@ A name that isn't a tracked field, or that the serializer already shows, raises
 `ImproperlyConfigured`. Leaving a field out of the history altogether is a different question from
 `track_events(exclude=[...])`, which drops it from the event table itself: whether a value is in the
 log is retention, whether an API renders it is exposure.
+
+## Changes that don't count - `ignores_change_of=`
+
+A `BaseModel`'s trigger bumps `updated_at` on every update, so if the serializer shows `updated_at`,
+every save would count as a shown change - a sign-in writing only the hidden `last_login` included,
+and a `save()` that changed nothing. So a column the row keeps current itself doesn't decide whether
+an update is listed: `updated_at` on a `DatabaseTimestampsModel`, and any `auto_now` field. It's
+still shown, and still in `changes` when something else changed with it.
+
+`ignores_change_of` adds fields of your own - one a trigger of yours keeps, say:
+
+```python
+generic_history_serializer(Widget, WidgetSerializer, ignores_change_of=["revision"])
+```
+
+A self-maintained field named in `shows_change_of` counts after all. A name that isn't tracked, or
+that `shows_change_of` names too, raises `ImproperlyConfigured`.
 
 ## A feed over several tracked models
 

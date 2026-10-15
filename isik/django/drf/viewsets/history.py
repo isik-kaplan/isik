@@ -151,6 +151,11 @@ class HistoryMixin:
             ...
             history_shows_change_of = ["password"]
 
+    `history_ignores_change_of` names fields whose change alone doesn't list an update, on top of the
+    ones the row keeps current itself - `updated_at`, which `BaseModel`'s trigger bumps on every
+    update, and any `auto_now` field. Without that, every save would be listed, a sign-in's
+    `last_login` write included. They're still shown, and in `changes` alongside a real change.
+
     Override `history_source_serializer()` when the history should follow a serializer other than
     the one `retrieve` uses.
 
@@ -184,6 +189,7 @@ class HistoryMixin:
     extra_history_filters = {}
     history_list_permission_classes = [IsSuperUser]
     history_shows_change_of = ()
+    history_ignores_change_of = ()
     history_list_scoped_to_queryset = False
     history_component_prefix = ""
 
@@ -237,6 +243,7 @@ class HistoryMixin:
             cls.model,
             cls.history_source_serializer(),
             shows_change_of=cls.history_shows_change_of,
+            ignores_change_of=cls.history_ignores_change_of,
             name=f"{cls.history_component_prefix}{cls.model.__name__}HistorySerializer",
         )
         cls._history_serializer_class = built
@@ -245,7 +252,7 @@ class HistoryMixin:
     def _history_base_queryset(self):
         event_model = event_model_for(self.model)
         # An update that changed nothing the history shows isn't listed: it would only say when a
-        # hidden column changed.
+        # hidden column changed, or that the row restamped its own updated_at.
         queryset = Events.objects.across(event_model).filter(
             ~Q(pgh_label="update") | Q(pgh_diff__has_any_keys=list(self.history_serializer_class.history_columns))
         )
