@@ -21,6 +21,7 @@ from isik.django.apps.common.db.concurrency import (
     concurrency_field_name,
     concurrency_token_problems,
     current_concurrency_etag,
+    has_concurrency_token,
 )
 
 
@@ -182,9 +183,14 @@ class PreconditionMixin:
     precondition_missing_row_status = None
     precondition_not_modified = None
 
-    # Per request: the row whose version the response carries, and the last serializer the view made.
+    # Per request: the row whose version the response carries, the last serializer the view made, and
+    # whether get_object() ran the check for a write.
     precondition_instance = None
     precondition_serializer = None
+    precondition_checked = False
+    # IdempotencyMixin's own, set when it answers with a replay - declared here too, so a view without
+    # that mixin reads it as False.
+    idempotent_replayed = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -218,7 +224,7 @@ class PreconditionMixin:
         request, action = self.request, self.precondition_action
         if request.method in SAFE_METHODS:
             instance = super().get_object()
-            if action in self.precondition_read_actions:
+            if action in self.precondition_read_actions and has_concurrency_token(instance):
                 header, etag = request.META.get("HTTP_IF_NONE_MATCH"), concurrency_etag(instance)
                 if header is not None and self.precondition_option("not_modified") and matches(header, etag):
                     raise NotModified(etag)
@@ -236,6 +242,7 @@ class PreconditionMixin:
             instance = self._compared(instance, header)
         elif asked and self.precondition_option("required"):
             raise PreconditionRequired()
+        self.precondition_checked = True
         # An exempt write, or one let through without If-Match, still answers with the version it left.
         self.precondition_instance = instance
         return instance
@@ -257,7 +264,7 @@ class PreconditionMixin:
         return instance
 
     def _locked(self, instance, header):
-        model = type(instance)
+        model = instance.__class__
         # Through the base manager, which joins nothing - Postgres refuses FOR UPDATE on the nullable
         # side of an outer join, which the view's own queryset may make with select_related(). On the
         # database the model's writes are routed to, as a locking read is.
@@ -311,8 +318,7 @@ class PreconditionMixin:
             return Response(status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": exc.etag})
         if isinstance(exc, PreconditionRequired | PreconditionFailed):
             # Rendered here rather than by DRF's handler, which would leave out the code and render
-            # `current`'s values as error strings. Rolled back as that handler would.
-            set_rollback()
+            # `current`'s values as error strings.
             data = {"detail": exc.detail, "code": exc.detail.code}
             headers = {}
             if isinstance(exc, PreconditionFailed):
@@ -320,15 +326,19 @@ class PreconditionMixin:
                 if exc.instance is not None:
                     data["current"] = self.get_current_representation(exc.instance)
                     headers["ETag"] = concurrency_etag(exc.instance)
+            # Rolled back as DRF's handler would - only now: a transaction marked for rollback refuses
+            # every query after it, and rendering `current` may need some (a many=True relation).
+            set_rollback()
             return Response(data, status=exc.status_code, headers=headers)
         return super().handle_exception(exc)
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
+        self._require_precondition_checked(request, response)
         instance = self.precondition_instance
         if instance is None and request.method == "POST" and self.precondition_action in ("create", None):
             instance = getattr(self.precondition_serializer, "instance", None)
-        if instance is not None and status.is_success(response.status_code):
+        if instance is not None and has_concurrency_token(instance) and status.is_success(response.status_code):
             etag = self._etag_after(request, instance)
             if etag is not None:
                 response["ETag"] = etag
@@ -339,7 +349,28 @@ class PreconditionMixin:
             return concurrency_etag(instance)
         # A write may have changed the row any way it liked - an action's own save(), a delete - and
         # Django doesn't read back what the trigger set, so the token is read again.
-        return current_concurrency_etag(type(instance), instance.pk)
+        return current_concurrency_etag(instance.__class__, instance.pk)
+
+    def _require_precondition_checked(self, request, response):
+        # The check lives in get_object(), and an action needn't call it - a detail=False PATCH on
+        # /users/me/, say - so a write that asks If-Match and succeeded without it is refused after the
+        # fact, as GuardedFieldsMixin refuses one that skipped its guards. Raised from here it reaches
+        # Django's handler, and ATOMIC_REQUESTS - which the lock needs anyway - rolls the write back.
+        # A replay under IdempotencyMixin answers with a write that was checked when it was made.
+        if self.precondition_checked or self.idempotent_replayed:
+            return
+        if not status.is_success(response.status_code):
+            return
+        if not requires_precondition(self, request.method, self.precondition_action, getattr(self, "detail", None)):
+            return
+        raise ImproperlyConfigured(
+            _(
+                "%(view)s answered %(method)s %(action)s without comparing If-Match, so its database writes are "
+                "rolled back. Fetch the row with self.get_object(), which compares it, or exempt the action in "
+                "precondition_exempt_actions."
+            )
+            % {"view": type(self).__name__, "method": request.method, "action": self.precondition_action}
+        )
 
 
 def _declared_serializers(view):
@@ -377,13 +408,24 @@ def _routed_precondition_views(urlconf):
 def precondition_problems(urlconf=None):
     """
     Why the `PreconditionMixin` views `urlconf` routes (every urlconf the project serves by default)
-    can't trust the tokens they compare, one sentence each - `[]` when they can: each view's model is
-    found, its concurrency token passes `concurrency_token_problems()`, and no serializer the view
+    can't trust the tokens they compare, one sentence each - `[]` when they can. A view is held to it
+    when some write it routes asks for `If-Match` - one whose every write is exempt is not - and then
+    its model is found, its concurrency token passes `concurrency_token_problems()`, and no serializer the view
     declares (`serializer_class`, `serializer_class_action_map`) lets a request write it. The
     system check `isik.E002` reports them.
     """
+    from isik.django.drf.coverage import routed_actions
+
+    # Only a view that asks If-Match of some write it routes compares tokens - one whose every write is
+    # exempt uses the mixin to say so, and may write no versioned row at all.
+    comparing = dict.fromkeys(
+        routed.view
+        for routed in routed_actions(urlconf)
+        if issubclass(routed.view, PreconditionMixin)
+        and requires_precondition(routed.view, routed.method, routed.action, routed.callback.initkwargs.get("detail"))
+    )
     problems = []
-    for view in _routed_precondition_views(urlconf):
+    for view in comparing:
         model = view.get_precondition_model()
         if model is None:
             problems.append(

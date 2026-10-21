@@ -55,10 +55,12 @@ It saves `instance`, then twice writes the token back to the value it already ho
 `QuerySet.update()`, back to back. It raises `AssertionError` naming the first write that left a token
 an earlier one had already left.
 
-## concurrency_etag(instance), current_concurrency_etag(model, pk)
+## concurrency_etag(instance), current_concurrency_etag(model, pk), has_concurrency_token(instance)
 
 The token as a strong ETag, quotes included - `'"1792585815123456"'`. A datetime is its whole
 microseconds since the epoch: a timestamptz's full resolution, which a rendered datetime (a project's
 `DATETIME_FORMAT`, a JavaScript `Date`) may not keep. A UUID is its hex, an integer its digits.
 Clients treat it as opaque and send back what they got. `current_concurrency_etag()` reads it from the
-database, and gives `None` when the row is gone.
+database writes are routed to, and gives `None` when the row is gone. `has_concurrency_token()` says
+whether the instance's model has a token at all. Each takes a `SimpleLazyObject` - `request.user` - as
+the object it wraps.

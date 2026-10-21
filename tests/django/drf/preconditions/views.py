@@ -5,6 +5,8 @@ ATOMIC_REQUESTS wraps them exactly as it would in a project.
 
 import threading
 
+from django.utils.functional import SimpleLazyObject
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.generics import GenericAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -15,15 +17,25 @@ from rest_framework.viewsets import ModelViewSet
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.serializers import ConcurrencyTokenField
 from isik.django.drf.viewsets import ActionSerializerClassMixin, PreconditionMixin
-from tests.testapp.models import VersionedWidget, Widget
+from tests.testapp.models import CleanedNote, VersionedWidget, Widget
 
 
 class WidgetSerializer(serializers.ModelSerializer):
     etag = ConcurrencyTokenField()
+    # A field that queries, as a many=True relation does - a 412's `current` must be rendered before
+    # the transaction is marked for rollback, which refuses every query after it.
+    siblings = serializers.SerializerMethodField()
 
     class Meta:
         model = Widget
-        fields = ["id", "name", "count", "updated_at", "etag"]
+        fields = ["id", "name", "count", "updated_at", "etag", "siblings"]
+
+    @extend_schema_field({"type": "array", "items": {"type": "string"}})
+    def get_siblings(self, widget):
+        return [
+            str(pk)
+            for pk in Widget.objects.filter(owner_id=widget.owner_id).order_by("name").values_list("pk", flat=True)
+        ]
 
 
 class WidgetWriteSerializer(serializers.ModelSerializer):
@@ -86,7 +98,10 @@ class WidgetViewSet(PreconditionMixin, ActionSerializerClassMixin, ModelViewSet)
     serializer_class = WidgetWriteSerializer
     serializer_class_action_map = {"retrieve": WidgetSerializer, "list": WidgetSerializer}
     permission_classes = [IsAuthenticated, OwnsTheWidget]
-    precondition_exempt_actions = {"rename_freely": "a rename that may land over any other write, by design"}
+    precondition_exempt_actions = {
+        "rename_freely": "a rename that may land over any other write, by design",
+        "rename_mine_freely": "a rename that may land over any other write, by design",
+    }
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -97,6 +112,12 @@ class WidgetViewSet(PreconditionMixin, ActionSerializerClassMixin, ModelViewSet)
         widget.count += 1
         widget.save()
         return Response(self.get_serializer(widget).data)
+
+    @action(detail=True, methods=["post"])
+    def bump_unchecked(self, request, pk=None):
+        # A write to one object that never fetches it through get_object().
+        Widget.objects.filter(pk=pk).update(count=99)
+        return Response({})
 
     @action(detail=True, methods=["post"])
     def rename_freely(self, request, pk=None):
@@ -119,6 +140,34 @@ class WidgetViewSet(PreconditionMixin, ActionSerializerClassMixin, ModelViewSet)
         widget.count += 1
         widget.save()
         return Response(self.get_serializer(widget).data)
+
+    @action(detail=False, methods=["get"])
+    def mine(self, request):
+        # A lazy object, as request.user is - ConcurrencyTokenField reads its class through it.
+        return Response(self.get_serializer(SimpleLazyObject(lambda: Widget.objects.get(owner=request.user))).data)
+
+    @action(detail=False, methods=["patch"])
+    def rename_mine(self, request):
+        # Writes one row without get_object() - so without comparing If-Match.
+        Widget.objects.filter(owner=request.user).update(name=request.data["name"])
+        return Response({})
+
+    @action(detail=False, methods=["patch"])
+    def rename_mine_checked(self, request):
+        self.kwargs["pk"] = Widget.objects.get(owner=request.user).pk
+        widget = self.get_object()
+        widget.name = request.data["name"]
+        widget.save()
+        return Response(self.get_serializer(widget).data)
+
+    @action(detail=False, methods=["patch"])
+    def rename_mine_freely(self, request):
+        Widget.objects.filter(owner=request.user).update(name=request.data["name"])
+        return Response({})
+
+    @action(detail=False, methods=["patch"])
+    def refuse_mine(self, request):
+        return Response({"detail": "refused"}, status=400)
 
     @action(detail=True, methods=["get"])
     def peek(self, request, pk=None):
@@ -229,3 +278,42 @@ class PingView(PreconditionMixin, GenericAPIView):
 
     def post(self, request):
         return Response({"pong": True})
+
+
+class CleanedNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CleanedNote
+        fields = ["id", "count"]
+
+
+class ExemptNotesViewSet(PreconditionMixin, ModelViewSet):
+    """Over a model with no concurrency token - every write exempt, so nothing compares one."""
+
+    queryset = CleanedNote.objects.all()
+    serializer_class = CleanedNoteSerializer
+    precondition_exempt_actions = {
+        action: "notes are written last-one-wins, and their model keeps no version to compare"
+        for action in ("update", "partial_update", "destroy", "touch")
+    }
+
+    @action(detail=True, methods=["post"])
+    def touch(self, request, pk=None):
+        note = self.get_object()
+        note.save()
+        return Response(self.get_serializer(note).data)
+
+
+class WidgetPeekView(PreconditionMixin, GenericAPIView):
+    """Not a viewset, and its GET makes no serializer - its ETag comes from get_object() alone."""
+
+    queryset = Widget.objects.all()
+    serializer_class = PongSerializer
+
+    def get(self, request, pk):
+        return Response({"name": self.get_object().name})
+
+    def post(self, request, pk):
+        # Not a detail action, so If-Match isn't asked - but the row it fetched is the one it answers for.
+        widget = self.get_object()
+        widget.save()
+        return Response({"name": widget.name})

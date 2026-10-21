@@ -99,6 +99,19 @@ class TestReading:
 
         assert response["ETag"] == etag(widget)
 
+    def test_a_get_that_makes_no_serializer_sends_one_from_its_row(self, client, widget):
+        response = client.get(f"/widget/{widget.pk}/peek/")
+
+        assert response.json() == {"name": "bolt"}
+        assert response["ETag"] == etag(widget)
+
+    def test_a_post_that_makes_no_serializer_answers_for_the_row_it_fetched(self, client, widget):
+        before = etag(widget)
+
+        response = client.post(f"/widget/{widget.pk}/peek/")
+
+        assert response["ETag"] == etag(widget) != before
+
     def test_a_version_is_its_number(self, client):
         versioned = VersionedWidget.objects.create(name="bolt")
 
@@ -272,6 +285,15 @@ class TestWritingAgainstAnOlderVersion:
         assert "ETag" in dict(response.items())
         assert Widget.objects.get().name == "nut"
 
+    def test_current_is_rendered_with_queries_of_its_own(self, client, widget):
+        # Its siblings field queries - in a transaction already marked for rollback, that would raise.
+        Widget.objects.create(name="nut", owner=widget.owner)
+
+        response = write(client, "patch", f"/widgets/{widget.pk}/", {"name": "washer"}, '"stale"')
+
+        assert response.status_code == status.HTTP_412_PRECONDITION_FAILED
+        assert len(response.json()["current"]["siblings"]) == 2
+
     @pytest.mark.parametrize("sent", ['"stale"', 'W/"stale"', '"stale", "older"', "", "W/"])
     def test_any_tag_but_the_current_one_is_refused(self, client, widget, sent):
         response = write(client, "patch", f"/widgets/{widget.pk}/", {"name": "nut"}, sent)
@@ -383,7 +405,7 @@ class TestTheHooksItOverrides:
         class Recorded(PreconditionMixin, RecordingBase):
             pass
 
-        request, response = type("Request", (), {"method": "GET"})(), object()
+        request, response = type("Request", (), {"method": "GET"})(), type("Response", (), {"status_code": 200})()
 
         assert Recorded().finalize_response(request, response, "extra", pk="1") is response
         assert received == [(request, response, ("extra",), {"pk": "1"})]

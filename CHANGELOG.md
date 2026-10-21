@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-21
+
+### Fixed
+
+- **A 412 no longer fails when its `current` needs a query.** `PreconditionMixin` marked the
+  transaction for rollback before rendering `current`, and a transaction marked for rollback refuses
+  every query after it - so a `retrieve` serializer with a many=True relation, or any field that
+  queries, turned every 412 into a `TransactionManagementError` and a 500. `current` and the `ETag`
+  are now rendered first.
+- **`ConcurrencyTokenField` no longer fails on a lazy object.** A serializer showing `request.user` - a
+  `SimpleLazyObject` - looked the model up with `type()`, which is the proxy's own class, and raised
+  `AttributeError`: a 500 on `GET /users/me/`. The token, the lock, the read-back and the test helper
+  now read the class through the proxy.
+
+### Changed
+
+- **Breaking: a write that asks for `If-Match` and succeeds without `get_object()` is refused.** The
+  check runs in `get_object()`, and an action needn't call it - a `detail=False` `PATCH /users/me/`
+  that loads its row itself was listed as covered by `precondition_coverage()`, yet never compared
+  `If-Match`. It now raises `ImproperlyConfigured` after the fact, and `ATOMIC_REQUESTS` rolls its
+  writes back, as `GuardedFieldsMixin` does for a write that skipped its guards. Fetch the row with
+  `self.get_object()`, or exempt the action. A replay under `IdempotencyMixin` is left alone.
+- **`isik.E002` holds only a view that asks `If-Match` of some write to a token.** A view whose every
+  write is exempt - over no versioned row at all - can use `PreconditionMixin` to declare its
+  exemptions for `precondition_coverage()`. Such a view sends no `ETag` and ignores `If-None-Match` when
+  its model has no token, and `AutoSchema` documents none.
+- `has_concurrency_token(instance)` (`isik.django.apps.common.db.concurrency`).
+
 ## [0.24.0] - 2026-10-21
 
 ### Added

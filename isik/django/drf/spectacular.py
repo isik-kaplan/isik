@@ -10,6 +10,7 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse
 from rest_framework import serializers
 
 from isik._internal.translation import lazy_format
+from isik.django.apps.common.db.concurrency import concurrency_field_name
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin
 from isik.django.drf.viewsets.preconditions import (
     PreconditionFailed,
@@ -197,6 +198,10 @@ class AutoSchema(_BaseAutoSchema):
         """What `PreconditionMixin` does on this operation: "write", "read", "create", or None."""
         view = self.view
         if not isinstance(view, PreconditionMixin):
+            return None
+        # A model without a concurrency token sends no ETag and compares none - every write exempt.
+        model = view.get_precondition_model()
+        if model is None or concurrency_field_name(model) is None:
             return None
         action = view.precondition_action
         if requires_precondition(view, self.method, action, getattr(view, "detail", None)):

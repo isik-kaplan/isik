@@ -77,7 +77,7 @@ msgstr ""
 msgid "%(model)s has no concurrency token - make it a VersionedModel or a DatabaseTimestampsModel, or name one with concurrency_field = ConcurrencyToken(field, reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:177
+#: isik/django/apps/common/db/concurrency.py:183
 #, python-format
 msgid "%(model)s has no concurrency token."
 msgstr ""
@@ -118,7 +118,7 @@ msgstr ""
 msgid "%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:187
+#: isik/django/apps/common/db/concurrency.py:193
 #, python-format
 msgid "%(model)s's concurrency token %(field)r was %(token)r again after %(write)s."
 msgstr ""
@@ -178,7 +178,7 @@ msgstr ""
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:353
+#: isik/django/drf/viewsets/preconditions.py:384
 #, python-format
 msgid "%(serializer)s, a serializer of %(view)s, lets a request write %(model)s's concurrency token %(token)r as %(field)r - make it read-only."
 msgstr ""
@@ -283,12 +283,17 @@ msgstr ""
 msgid "%(value)r isn't a registered type, Field subclass, or Field instance"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:267
+#: isik/django/drf/viewsets/preconditions.py:367
+#, python-format
+msgid "%(view)s answered %(method)s %(action)s without comparing If-Match, so its database writes are rolled back. Fetch the row with self.get_object(), which compares it, or exempt the action in precondition_exempt_actions."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:274
 #, python-format
 msgid "%(view)s compares If-Match with the row it locks, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:390
+#: isik/django/drf/viewsets/preconditions.py:432
 #, python-format
 msgid "%(view)s compares concurrency tokens of no model isik can find - set precondition_model."
 msgstr ""
@@ -303,17 +308,17 @@ msgstr ""
 msgid "%(view)s honors idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:436
+#: isik/django/drf/viewsets/preconditions.py:478
 #, python-format
 msgid "%(view)s refuses If-Match: * but lets a write through without If-Match, so a client that would send * leaves the header out instead - refusing * protects nothing unless If-Match is required."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:411
+#: isik/django/drf/viewsets/preconditions.py:453
 #, python-format
 msgid "%(view)s's precondition option %(option)r is %(value)r - PRECONDITION_%(setting)s and precondition_%(option)s take True or False."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:420
+#: isik/django/drf/viewsets/preconditions.py:462
 #, python-format
 msgid "%(view)s's precondition option 'missing_row_status' is %(value)r - PRECONDITION_MISSING_ROW_STATUS and precondition_missing_row_status take 404 or 412."
 msgstr ""
@@ -385,7 +390,7 @@ msgstr ""
 msgid "Actions should not be: %(actions)s"
 msgstr ""
 
-#: isik/django/drf/spectacular.py:124
+#: isik/django/drf/spectacular.py:125
 #, python-format
 msgid "Always %(code)s."
 msgstr ""
@@ -865,7 +870,7 @@ msgstr ""
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:53
+#: isik/django/drf/viewsets/preconditions.py:54
 msgid "This changed since the version the request was made against."
 msgstr ""
 
@@ -889,11 +894,11 @@ msgstr ""
 msgid "This request isn't allowed."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:252
+#: isik/django/drf/viewsets/preconditions.py:259
 msgid "This request must name the version it was made against - If-Match: * isn't accepted."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:42
+#: isik/django/drf/viewsets/preconditions.py:43
 msgid "This request must say which version it was made against, in an If-Match header."
 msgstr ""
 

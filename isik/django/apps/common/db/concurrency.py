@@ -132,6 +132,11 @@ def _token_text(value):
     return str(value)
 
 
+def has_concurrency_token(instance):
+    """Whether `instance`'s model has a concurrency token - see `concurrency_field_name()`."""
+    return concurrency_field_name(instance.__class__) is not None
+
+
 def concurrency_attname(model):
     """The attribute `model`'s concurrency token is held in on an instance - its column's, for a `ForeignKey`."""
     return model._meta.get_field(concurrency_field_name(model)).attname
@@ -146,7 +151,8 @@ def concurrency_etag(instance):
     `instance`'s concurrency token as a strong ETag - `'"1760000000123456"'` - opaque to a client,
     which sends it back as it got it rather than building one.
     """
-    return _etag(getattr(instance, concurrency_attname(type(instance))))
+    # __class__, not type(): a SimpleLazyObject (request.user) proxies the one, not the other.
+    return _etag(getattr(instance, concurrency_attname(instance.__class__)))
 
 
 def current_concurrency_etag(model, pk):
@@ -171,7 +177,7 @@ def assert_concurrency_field_changes(instance):
     `QuerySet.update()`, back to back - so the clock barely moves - and raises
     `AssertionError` naming the first write that left a token an earlier one had left.
     """
-    model = type(instance)
+    model = instance.__class__
     name = concurrency_field_name(model)
     if name is None:
         raise AssertionError(_("%(model)s has no concurrency token.") % {"model": model._meta.label})

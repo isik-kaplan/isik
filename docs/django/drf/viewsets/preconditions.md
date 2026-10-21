@@ -43,6 +43,15 @@ raises `ImproperlyConfigured` without one.
 - **A create** needs nothing, and sends its new row's `ETag` with the 201.
 - **A list, and a POST to no one object**, have no version to name or send.
 
+**The check runs in `get_object()`,** so a write is checked only when its handler fetches the row
+through it - `update`, `partial_update` and `destroy` do, and so must an action. A write that asks for
+`If-Match` and succeeds without `get_object()` having run - a `detail=False` `PATCH /users/me/` that
+loads `request.user` itself, say - raises `ImproperlyConfigured` afterwards. Under `ATOMIC_REQUESTS`,
+which the lock needs anyway, its database writes roll back, as `GuardedFieldsMixin` does for a write
+that skipped its guards. Fetch the row with `self.get_object()` (set `self.kwargs[self.lookup_field]`
+first, for a `detail=False` action), or exempt the action. A replay under `IdempotencyMixin` is left
+alone: it answers with a write that was checked when it was made.
+
 `precondition_exempt_actions = {action: reason}` leaves an action out. Each reason is a `NoPrecondition`
 exemption (rule `isik.precondition`), held to its 40-character floor and listed by `manage.py
 exemptions`. An exempt write still answers with the version it left. `precondition_methods` (PUT,
@@ -142,9 +151,14 @@ The tag is the row's version, so two users shown different fields of one row get
 shared cache must not answer one user's `If-None-Match` with another's page. That's the response's
 `Vary` (`Cookie`, `Authorization`) to say, as for any per-user response.
 
+A view whose every write is exempt compares no token, so its model needs none - the mixin is there to
+declare its exemptions, for `precondition_coverage()` to list. It sends no `ETag` for a model without a
+token, and ignores `If-None-Match`.
+
 ## Checking a project
 
-- The system check **`isik.E002`** holds every routed `PreconditionMixin` view to a token it can trust:
+- The system check **`isik.E002`** holds every routed `PreconditionMixin` view that asks `If-Match` of
+  some write to a token it can trust:
   its model is found (`precondition_model`, else `model`, else the queryset's), the token passes
   [`concurrency_token_problems()`](../../apps/common/db/concurrency.md#concurrency_token_problemsmodel),
   and no serializer the view declares (`serializer_class`, `serializer_class_action_map`) lets a request
