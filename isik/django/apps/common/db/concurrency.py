@@ -100,9 +100,10 @@ def concurrency_token_problems(model):
         return [
             _("%(model)s's concurrency token %(field)r is not one of its fields.") % {"model": label, "field": name}
         ]
-    problems = []
     if not field.concrete:
-        problems.append(_("%(model)s's concurrency token %(field)r is not a column.") % {"model": label, "field": name})
+        # Nothing else about it matters - there's no value in the row to compare.
+        return [_("%(model)s's concurrency token %(field)r is not a column.") % {"model": label, "field": name}]
+    problems = []
     if field.null:
         problems.append(_("%(model)s's concurrency token %(field)r can be null.") % {"model": label, "field": name})
     if not isinstance(field, TOKEN_FIELDS):

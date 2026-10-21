@@ -77,7 +77,7 @@ msgstr ""
 msgid "%(model)s has no concurrency token - make it a VersionedModel or a DatabaseTimestampsModel, or name one with concurrency_field = ConcurrencyToken(field, reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:176
+#: isik/django/apps/common/db/concurrency.py:177
 #, python-format
 msgid "%(model)s has no concurrency token."
 msgstr ""
@@ -93,7 +93,7 @@ msgstr ""
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:107
+#: isik/django/apps/common/db/concurrency.py:108
 #, python-format
 msgid "%(model)s's concurrency token %(field)r can be null."
 msgstr ""
@@ -108,17 +108,17 @@ msgstr ""
 msgid "%(model)s's concurrency token %(field)r is not one of its fields."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:115
+#: isik/django/apps/common/db/concurrency.py:116
 #, python-format
 msgid "%(model)s's concurrency token %(field)r isn't kept by one of isik's triggers - declare it with ConcurrencyToken(%(field)r, reason=...), saying why it changes on every write."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:110
+#: isik/django/apps/common/db/concurrency.py:111
 #, python-format
 msgid "%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:186
+#: isik/django/apps/common/db/concurrency.py:187
 #, python-format
 msgid "%(model)s's concurrency token %(field)r was %(token)r again after %(write)s."
 msgstr ""

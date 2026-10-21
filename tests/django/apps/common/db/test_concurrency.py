@@ -4,6 +4,8 @@ import uuid
 from pathlib import Path
 
 import pytest
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.test.utils import isolate_apps
 
@@ -114,13 +116,14 @@ class TestProblems:
     def test_a_field_that_isnt_a_column(self):
         model = isolated_model(
             models.Model,
-            concurrency_field=ConcurrencyToken("peers", reason=REASON),
-            peers=models.ManyToManyField("self"),
+            concurrency_field=ConcurrencyToken("target", reason=REASON),
+            content_type=models.ForeignKey(ContentType, on_delete=models.CASCADE),
+            object_id=models.PositiveIntegerField(),
+            target=GenericForeignKey(),
         )
 
         assert concurrency_token_problems(model) == [
-            f"testapp.{model.__name__}'s concurrency token 'peers' is not a column.",
-            f"testapp.{model.__name__}'s concurrency token 'peers' must be an integer, a datetime or a UUID.",
+            f"testapp.{model.__name__}'s concurrency token 'target' is not a column."
         ]
 
     @isolate_apps("tests.testapp")
