@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-21
+
+### Added
+
+- **Optimistic concurrency: `PreconditionMixin`** (`isik.django.drf.viewsets`), RFC 9110's `ETag` /
+  `If-Match`. A page loaded before someone else saved could send its write anyway, and the second write
+  silently replaced the first. Now `retrieve` sends the row's version as a strong, opaque `ETag`
+  (`If-None-Match` naming it gives 304), and PUT, PATCH, DELETE and a `detail=True` POST need
+  `If-Match` - 428 without it, and 412 with a stale one:
+  `{"detail", "code": "precondition_failed", "current"}`, `current` the row as `retrieve` shows it,
+  with its current `ETag`. The comparison runs in `get_object()`, after authentication, permissions
+  and the 404, with the row locked (`SELECT ... FOR UPDATE`) and read again, so two writes made
+  against one version land one and refuse the other. It needs `ATOMIC_REQUESTS`. `If-Match: *` matches
+  any current version, a list of tags matches if any does, and a `W/` prefix is ignored: the tag is
+  the row's version, not one response's bytes, and compression weakens it on the way out. A
+  successful write sends the version the database left, read back, and a create sends its new row's.
+  `precondition_exempt_actions = {action: reason}` exempts an action; each reason is a
+  `NoPrecondition` exemption. Under `IdempotencyMixin` a retry replays its first success instead of
+  getting 412, in either order of the two mixins.
+- **Five options for it**, each a setting that a view's own attribute overrides:
+  `PRECONDITION_IGNORES_WEAK_TAGS` / `precondition_ignores_weak_tags` (default on; off is RFC 9110's
+  strong comparison), `PRECONDITION_REQUIRED` (default on; off lets a write without `If-Match` through
+  unchecked), `PRECONDITION_ALLOWS_ANY` (default on; off refuses `If-Match: *` with 428),
+  `PRECONDITION_MISSING_ROW_STATUS` (404 by default, or the RFC's 412 for a write with `If-Match` to a
+  row that isn't there), and `PRECONDITION_NOT_MODIFIED` (default on; off answers `If-None-Match` in
+  full). The system check `isik.E003` refuses a value an option can't take, and `isik.W001` warns about
+  refusing `*` while not requiring `If-Match`, which protects nothing.
+- **Concurrency tokens** (`isik.django.apps.common.db.concurrency`). A model's token is its
+  `concurrency_field`: `version` on a `VersionedModel`, else `updated_at` on a
+  `DatabaseTimestampsModel`. Any other field is declared with
+  `ConcurrencyToken(field, reason=...)`, since a trigger's SQL can't be proven to change it on every
+  write. `assert_concurrency_field_changes(instance)` proves it does, on a real database, for a test.
+- **`VersionedModel`**: a `version` starting at 1, set to `OLD.version + 1` by a BEFORE UPDATE trigger
+  whatever the write set it to. Not editable, and like `updated_at` it doesn't count as a change in
+  history.
+- **`ConcurrencyTokenField`** (`isik.django.drf.serializers`): the same string as the `ETag`, in the
+  body, so each item of a list carries the one to send back.
+- **`precondition_coverage()`** (`isik.django.drf.coverage`): which routed writes to one object ask
+  for `If-Match`, which are exempt and why, and which don't.
+- **System check `isik.E002`**: every routed `PreconditionMixin` view's model has a token that can be
+  trusted - not null, an integer, datetime or UUID, kept by one of isik's triggers or declared - and no
+  serializer the view declares lets a request write it.
+- **`AutoSchema`** documents a `PreconditionMixin` view's `If-Match` / `If-None-Match` headers, its
+  `ETag` response header, and its 304, 412 and 428 responses, so generated clients know them.
+
+### Changed
+
+- **`updated_at` now strictly increases on every update.** The trigger stamps
+  `GREATEST(clock_timestamp(), OLD.updated_at + interval '1 microsecond')` instead of
+  `GREATEST(clock_timestamp(), OLD.updated_at)`. That could leave the value where it was - two writes
+  in the same microsecond, or the server's clock stepping back - and then a write made against the old
+  value would pass for one made against the new one. Every update now moves it on by at least a
+  microsecond, timestamptz's resolution, so `updated_at` is a valid concurrency token on every
+  `BaseModel` with no new column. After a clock step back it runs ahead of the clock, a microsecond
+  per write, until the clock catches up. **A migration:** every `DatabaseTimestampsModel` - every
+  `BaseModel` - gets its trigger replaced on the next `makemigrations`.
+
 ## [0.23.0] - 2026-10-15
 
 ### Fixed

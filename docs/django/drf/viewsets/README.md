@@ -10,5 +10,6 @@ Viewset mixins composed together in `base.py`'s `BaseModelViewSet` - registry, p
 - [guarded_fields.md](guarded_fields.md) - `GuardedFieldsMixin`, runs `guarding(..., fields=/setting=...)` permissions after validation, on every write path, with `@writes_no_guarded_fields("<why>")` as the opt-out
 - [history.md](history.md) - `HistoryMixin`, a paginated/filterable `history/` action for a `@track_events()`-tracked model
 - [ordering.md](ordering.md) - auto `-field` reverse ordering counterparts, and `declared_ordering` for `?ordering=` values that resolve to a different field/expression
+- [preconditions.md](preconditions.md) - `PreconditionMixin`, ETag / If-Match: a write made against an older version of the row is refused with 412 instead of overwriting the newer one
 - [protected_destroy.md](protected_destroy.md) - `ProtectedError` -> clean 400 instead of 500
 - [schema_generation.md](schema_generation.md) - `none_during_schema_generation`, safe `get_queryset()` during schema generation

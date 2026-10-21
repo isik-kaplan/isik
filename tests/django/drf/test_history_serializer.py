@@ -11,7 +11,7 @@ from rest_framework import serializers
 
 from isik.django.apps.common.db.history import event_model_for
 from isik.django.drf.serializers.history import _context_fields, _maintains_itself, generic_history_serializer
-from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, TimestampedNote, Widget
+from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, TimestampedNote, VersionedNote, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -271,6 +271,11 @@ def test_updated_at_maintains_itself_under_the_timestamps_trigger():
     assert not _maintains_itself(TimestampedNote, "text")
 
 
+def test_version_maintains_itself_under_the_version_trigger():
+    assert _maintains_itself(VersionedNote, "version")
+    assert not _maintains_itself(VersionedNote, "text")
+
+
 # A plain Model: a DatabaseTimestampsModel registers its triggers process-wide, so defining one here
 # would collide with itself the second time the test ran in one process.
 @isolate_apps("tests.testapp")
@@ -280,6 +285,7 @@ def test_an_auto_now_field_maintains_itself_and_another_updated_at_doesnt():
         day = models.DateField(auto_now=True)
         clock = models.TimeField(auto_now=True)
         updated_at = models.DateTimeField()
+        version = models.IntegerField()
 
         class Meta:
             app_label = "testapp"
@@ -288,6 +294,7 @@ def test_an_auto_now_field_maintains_itself_and_another_updated_at_doesnt():
     assert _maintains_itself(Plain, "day")
     assert _maintains_itself(Plain, "clock")
     assert not _maintains_itself(Plain, "updated_at")
+    assert not _maintains_itself(Plain, "version")
 
 
 class TestCollisions:

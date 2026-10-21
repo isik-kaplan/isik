@@ -5,6 +5,7 @@ Serializer mixins composed together in `base.py`'s `BaseModelSerializer` - regis
 - [base.md](base.md) - `BaseSerializer` (the model-free half) and `BaseModelSerializer` (it plus everything about a model)
 - [guarded_save.md](guarded_save.md) - `FieldGuardsOnSaveMixin`, the current viewset's field guards run inside `save()`, before the write
 - [registry.md](registry.md) - `ModelSerializerRegistryMixin`, model -> serializer lookup
+- [concurrency_token.md](concurrency_token.md) - `ConcurrencyTokenField`, an object's ETag in the body, for a list's items
 - [conditional_serializer.md](conditional_serializer.md) - `?include=`/`?only=`/`?exclude=` field control
 - [create_only.md](create_only.md) - `Meta.create_only_fields`, settable once then locked
 - [write_only.md](write_only.md) - `Meta.write_only_fields`, settable but never serialized

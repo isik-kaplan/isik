@@ -13,10 +13,12 @@ from rest_framework import serializers, viewsets
 
 from isik._internal.reasons import is_reason, require_exemption, require_reasons
 from isik.common.utils.exemptions import declared_exemptions, exemption_types
+from isik.django.apps.common.db.concurrency import UnprovenConcurrencyToken
 from isik.django.drf.serializers import SerializerRegistryExemption
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
 from isik.django.drf.viewsets import (
     GuardedFieldsMixin,
+    NoPrecondition,
     ViewSetRegistryExemption,
     ViewSetRegistryMixin,
     WritesNoGuardedFields,
@@ -99,6 +101,8 @@ class TestASingleOptOut:
         assert types["isik.viewset-registry"] is ViewSetRegistryExemption
         assert types["isik.serializer-registry"] is SerializerRegistryExemption
         assert types["isik.guarded-fields.writes-none"] is WritesNoGuardedFields
+        assert types["isik.precondition"] is NoPrecondition
+        assert types["isik.concurrency-token.unproven"] is UnprovenConcurrencyToken
 
 
 class WidgetSerializer(serializers.ModelSerializer):

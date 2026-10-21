@@ -65,8 +65,8 @@ log is retention, whether an API renders it is exposure.
 A `BaseModel`'s trigger bumps `updated_at` on every update, so if the serializer shows `updated_at`,
 every save would count as a shown change - a sign-in writing only the hidden `last_login` included,
 and a `save()` that changed nothing. So a column the row keeps current itself doesn't decide whether
-an update is listed: `updated_at` on a `DatabaseTimestampsModel`, and any `auto_now` field. It's
-still shown, and still in `changes` when something else changed with it.
+an update is listed: `updated_at` on a `DatabaseTimestampsModel`, `version` on a `VersionedModel`, and
+any `auto_now` field. It's still shown, and still in `changes` when something else changed with it.
 
 `ignores_change_of` adds fields of your own - one a trigger of yours keeps, say:
 

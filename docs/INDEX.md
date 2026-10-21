@@ -35,6 +35,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 
 - [django/drf/](django/drf/README.md) - Django REST Framework helpers: error translation,
   filters, pagination, permissions, ad hoc schema builders, plus serializer/viewset mixins
+- [django/drf/viewsets/preconditions.md](django/drf/viewsets/preconditions.md) - `PreconditionMixin`:
+  `ETag` / `If-Match`, so a write made against an older version is refused with 412
 
 ## isik.django.celery
 

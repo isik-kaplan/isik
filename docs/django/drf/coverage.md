@@ -7,7 +7,7 @@ isik provides the walk; which rules are mandatory is the project's to decide, in
 check or test.
 
 ```python
-from isik.django.drf.coverage import request_policy_coverage
+from isik.django.drf.coverage import precondition_coverage, request_policy_coverage
 from isik.django.apps.idempotency.coverage import idempotency_coverage
 
 
@@ -82,3 +82,16 @@ The same for idempotency keys, over the routed actions answering one of `methods
 the view honors a key for that method, `exempt` when the action is in `idempotency_exempt_actions`,
 `uncovered` otherwise - a view with `IdempotencyMixin` whose `idempotent_methods` leave the method
 out included.
+
+## precondition_coverage(urlconf=None)
+
+The same for [`If-Match`](viewsets/preconditions.md), over the routed writes to one object - PUT, PATCH,
+DELETE, and a POST to a `detail=True` action. A create, a read, and a POST to no one object have no
+version to name, so they're left out. `covered` when the view asks `If-Match` of it, `exempt` (with its
+`NoPrecondition` reason) when the action is in `precondition_exempt_actions`, `uncovered` otherwise - a
+view with `PreconditionMixin` whose `precondition_methods` leave the method out included.
+
+```python
+def test_every_write_to_one_object_names_its_version():
+    assert [entry for entry in precondition_coverage() if entry.is_uncovered] == []
+```

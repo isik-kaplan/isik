@@ -13,6 +13,7 @@ from isik.django.apps.common.db.models import (
     FullCleanOnSaveModel,
     ReprModel,
     UUIDPrimaryKeyModel,
+    VersionedModel,
 )
 from isik.django.apps.common.db.orm import get_object_or_none, starts_with
 
@@ -24,6 +25,7 @@ __all__ = [
     "FullCleanOnSaveModel",
     "ReprModel",
     "UUIDPrimaryKeyModel",
+    "VersionedModel",
     "event_model_for",
     "get_object_or_none",
     "history_middleware_installed",

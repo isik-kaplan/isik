@@ -1,6 +1,6 @@
 # spectacular
 
-A drf-spectacular `AutoSchema` fixing two gaps that are properties of isik's own mixins, not of
+A drf-spectacular `AutoSchema` fixing the gaps that are properties of isik's own mixins, not of
 any one consumer's viewsets - wire it in once, project-wide:
 
 ```python
@@ -38,6 +38,26 @@ find on its own otherwise. `include=` joins them too, but only when the serializ
 declares `Meta.relational_fields` - its enum comes from there, so it can't drift out of sync with
 what the mixin accepts, and it's omitted entirely (rather than published with no enum - effectively
 free-text, accepting a value that does nothing) when there's nothing to nest.
+
+## `PreconditionMixin`
+
+What [`PreconditionMixin`](viewsets/preconditions.md) adds to a request and a response is read from
+headers, so drf-spectacular finds none of it on its own. Documented here, so generated clients know it:
+
+- A write that checks `If-Match` (PUT, PATCH, DELETE, a `detail=True` POST, unless exempt) has it as a
+  header parameter - required unless the view's `required` option is off. Its responses gain a 412, a
+  `<Name>PreconditionFailed` component of `detail`, `code` and `current`, `current` being the
+  `retrieve` serializer. When `missing_row_status` is 412, it's `<Name>PreconditionFailedOrGone`, with
+  `current` nullable. They also gain a 428 (the `PreconditionRequired` component, `detail` and `code`),
+  unless `If-Match` is optional and `*` accepted, so that nothing answers 428.
+- `retrieve` has `If-None-Match` as an optional header, and a 304 with no body - unless `not_modified`
+  is off.
+- The `ETag` response header is on each of their 200, 201, 304 and 412 responses, and on a create's
+  201. A delete's 204 has none.
+
+`code` is a string described as its one value rather than an enum: drf-spectacular lifts every enum
+into a component named after its field, and the same `code` in every resource's 412 - or a project's
+own `code` field - would collide, a warning that `--fail-on-warn` fails on.
 
 ## Robustness
 

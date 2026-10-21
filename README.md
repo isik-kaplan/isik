@@ -31,6 +31,9 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
   `BaseModel`, history tracking, and the `votes()`/`comments()`/`notes()`/`bookmarks()`/`tags()` makers
 - [Idempotency keys](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/idempotency/README.md) -
   `Idempotency-Key` on DRF views: a retry replays the first response instead of doing the work twice
+- [Preconditions](https://github.com/isik-kaplan/isik/blob/master/docs/django/drf/viewsets/preconditions.md) -
+  `ETag` / `If-Match` on DRF views: a write made against an older version is refused instead of
+  overwriting the newer one
 - [isik.django.drf](https://github.com/isik-kaplan/isik/blob/master/docs/django/drf/README.md) - permissions
   (`guarding`, `django_permission`, ...), request policies on any view, serializer and viewset mixins,
   filters, pagination

@@ -4,6 +4,7 @@ from isik.django.drf.viewsets.filterset import FilterSetMixin
 from isik.django.drf.viewsets.guarded_fields import GuardedFieldsMixin, WritesNoGuardedFields, writes_no_guarded_fields
 from isik.django.drf.viewsets.history import HistoryMixin, context_filter
 from isik.django.drf.viewsets.ordering import DeclaredOrderingFilter, DeclaredOrderingMixin, ReverseOrderingMixin
+from isik.django.drf.viewsets.preconditions import NoPrecondition, PreconditionMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryExemption, ViewSetRegistryMixin
 from isik.django.drf.viewsets.request_policies import RequestPoliciesMixin, RequestPolicy
@@ -19,6 +20,8 @@ __all__ = [
     "FilterSetMixin",
     "GuardedFieldsMixin",
     "HistoryMixin",
+    "NoPrecondition",
+    "PreconditionMixin",
     "ProtectedDestroyMixin",
     "RequestPoliciesMixin",
     "RequestPolicy",

@@ -93,6 +93,27 @@ class DatabaseTimestampsModel(models.Model):
         abstract = True
 
 
+class VersionedModel(models.Model):
+    """
+    A `version` the database keeps: 1 on insert, and `OLD.version + 1` on every UPDATE by a BEFORE
+    UPDATE trigger, whatever the write set it to - `QuerySet.update()`, `bulk_update()` and raw SQL
+    included. A concurrency token that is a plain count rather than a time; see `db/concurrency.py`.
+    Needs `pgtrigger` installed, like `DatabaseTimestampsModel`; the trigger attaches to every
+    concrete subclass.
+    """
+
+    version = models.PositiveBigIntegerField(
+        db_default=1,
+        editable=False,
+        verbose_name=gettext_lazy("Version"),
+        help_text=gettext_lazy("How many times the row has been written, counting the write that created it."),
+        db_comment="How many times the row has been written. A trigger adds one on every update.",
+    )
+
+    class Meta:
+        abstract = True
+
+
 class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
     """
     `save()` runs `full_clean()` and django-lifecycle's hooks, in that model's order: BEFORE_* hooks,
@@ -242,24 +263,51 @@ def _timestamp_triggers(model):
         # db_default=Now() covers the initial value; this keeps it current on every UPDATE,
         # including QuerySet.update()/bulk_update() and raw SQL, none of which auto_now touches.
         # clock_timestamp(), not NOW(): NOW() is when the transaction began, so one that began first
-        # and wrote last stamped the row earlier than the write before it. GREATEST holds the column
-        # still if the server's clock ever steps back.
+        # and wrote last stamped the row earlier than the write before it.
+        # GREATEST(..., OLD + 1 microsecond) makes every UPDATE move it strictly forward, which is
+        # what lets updated_at be a concurrency token (see db/concurrency.py): a write that left it
+        # equal - two in the same microsecond, the server's clock stepping back - would leave a
+        # stale If-Match matching. A microsecond is timestamptz's resolution, the smallest step
+        # there is. After a step back the column runs ahead of the clock, a microsecond per write,
+        # until the clock catches up - it never goes backwards, and nothing reads it as wall time
+        # more precisely than that.
         pgtrigger.Trigger(
             name="stamp_updated_at",
             when=pgtrigger.Before,
             operation=pgtrigger.Update,
-            func=f"NEW.{updated_at} = GREATEST(clock_timestamp(), OLD.{updated_at}); RETURN NEW;",
+            func=(
+                f"NEW.{updated_at} = GREATEST(clock_timestamp(), OLD.{updated_at} + interval '1 microsecond'); "
+                "RETURN NEW;"
+            ),
         ),
     ]
 
 
-def _register_timestamp_triggers(sender, **kwargs):
+def _version_triggers(model):
+    # The column, not the field name - see _timestamp_triggers().
+    version = connection.ops.quote_name(model._meta.get_field("version").column)
+    return [
+        # OLD, not NEW: a write that sets version itself - a stale one sent back, say - still only
+        # moves it on by one from what the row held.
+        pgtrigger.Trigger(
+            name="bump_version",
+            when=pgtrigger.Before,
+            operation=pgtrigger.Update,
+            func=f"NEW.{version} = OLD.{version} + 1; RETURN NEW;",
+        ),
+    ]
+
+
+def _register_triggers(sender, **kwargs):
     # Declaring these on DatabaseTimestampsModel's own Meta.triggers wouldn't reach subclasses - Django only
     # inherits an abstract base's Meta into a subclass that writes `class Meta(BaseModel.Meta)`,
     # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
-    # via pgtrigger.register() on every concrete subclass instead needs no such cooperation.
-    if issubclass(sender, DatabaseTimestampsModel) and not sender._meta.abstract:
+    # via pgtrigger.register() on every concrete subclass instead needs no such cooperation - Django
+    # sends class_prepared for concrete models only.
+    if issubclass(sender, DatabaseTimestampsModel):
         pgtrigger.register(*_timestamp_triggers(sender))(sender)
+    if issubclass(sender, VersionedModel):
+        pgtrigger.register(*_version_triggers(sender))(sender)
 
 
-class_prepared.connect(_register_timestamp_triggers, dispatch_uid="isik_base_model_timestamp_triggers")
+class_prepared.connect(_register_triggers, dispatch_uid="isik_base_model_timestamp_triggers")

@@ -1,3 +1,4 @@
+import datetime
 import time
 import uuid
 from unittest.mock import patch
@@ -7,6 +8,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import connections, models
 from django.test.utils import isolate_apps
+from django.utils import timezone
 from django_lifecycle import AFTER_DELETE, BEFORE_DELETE, bypass_hooks_for
 
 from isik.django.apps.common.db import (
@@ -15,10 +17,19 @@ from isik.django.apps.common.db import (
     FullCleanOnSaveModel,
     ReprModel,
     UUIDPrimaryKeyModel,
+    VersionedModel,
     event_model_for,
 )
 from isik.django.apps.common.db import models as base_models
-from tests.testapp.models import CleanedNote, ModifiedColumnNote, Recorder, TimestampedNote, Widget
+from tests.testapp.models import (
+    CleanedNote,
+    ModifiedColumnNote,
+    Recorder,
+    TimestampedNote,
+    VersionedNote,
+    VersionedWidget,
+    Widget,
+)
 
 
 pytestmark = pytest.mark.django_db
@@ -48,12 +59,43 @@ def test_timestamp_triggers_protects_created_at_and_stamps_updated_at():
     assert stamp_updated_at.name == "stamp_updated_at"
     assert stamp_updated_at.when == pgtrigger.Before
     assert stamp_updated_at.operation == pgtrigger.Update
-    assert stamp_updated_at.func == 'NEW."updated_at" = GREATEST(clock_timestamp(), OLD."updated_at"); RETURN NEW;'
+    assert stamp_updated_at.func == (
+        'NEW."updated_at" = GREATEST(clock_timestamp(), OLD."updated_at" + interval \'1 microsecond\'); RETURN NEW;'
+    )
 
 
 def test_timestamp_triggers_stamp_the_column_updated_at_is_stored_in():
     _, stamp_updated_at = base_models._timestamp_triggers(ModifiedColumnNote)
-    assert stamp_updated_at.func == 'NEW."Modified" = GREATEST(clock_timestamp(), OLD."Modified"); RETURN NEW;'
+    assert stamp_updated_at.func == (
+        'NEW."Modified" = GREATEST(clock_timestamp(), OLD."Modified" + interval \'1 microsecond\'); RETURN NEW;'
+    )
+
+
+def test_updated_at_moves_on_by_a_microsecond_when_the_clock_is_behind_it():
+    """A clock stepping back, or two writes in one microsecond, mustn't leave it where it was - it's a
+    concurrency token."""
+    note = TimestampedNote.objects.create(text="a")
+    ahead = timezone.now() + datetime.timedelta(days=1)
+    with pgtrigger.ignore("testapp.TimestampedNote:stamp_updated_at"):
+        TimestampedNote.objects.filter(pk=note.pk).update(updated_at=ahead)
+
+    TimestampedNote.objects.filter(pk=note.pk).update(text="b")
+    note.refresh_from_db()
+
+    assert note.updated_at == ahead + datetime.timedelta(microseconds=1)
+
+
+def test_updated_at_takes_the_clock_when_the_clock_is_ahead():
+    note = TimestampedNote.objects.create(text="a")
+    behind = timezone.now() - datetime.timedelta(days=1)
+    with pgtrigger.ignore("testapp.TimestampedNote:stamp_updated_at"):
+        TimestampedNote.objects.filter(pk=note.pk).update(updated_at=behind)
+
+    before = timezone.now()
+    TimestampedNote.objects.filter(pk=note.pk).update(text="b")
+    note.refresh_from_db()
+
+    assert note.updated_at >= before
 
 
 @pytest.mark.django_db
@@ -325,6 +367,56 @@ class TestTriggersAttachAsEachModelIsDefined:
         plain = fresh_model("PlainNow", models.Model)
 
         assert not {"protect_created_at", "stamp_updated_at"} & (triggers_of(abstract) | triggers_of(plain))
+
+
+class TestVersionedModel:
+    def test_its_trigger_moves_the_version_on_from_the_old_row(self):
+        (bump_version,) = base_models._version_triggers(VersionedWidget)
+
+        assert bump_version.name == "bump_version"
+        assert bump_version.when == pgtrigger.Before
+        assert bump_version.operation == pgtrigger.Update
+        assert bump_version.func == 'NEW."version" = OLD."version" + 1; RETURN NEW;'
+
+    def test_its_trigger_follows_the_column_the_version_is_stored_in(self):
+        (bump_version,) = base_models._version_triggers(VersionedNote)
+
+        assert bump_version.func == 'NEW."Revision" = OLD."Revision" + 1; RETURN NEW;'
+
+    def test_a_new_row_is_version_one(self):
+        assert VersionedNote.objects.create(text="a").version == 1
+
+    def test_every_kind_of_update_moves_it_on_by_one(self):
+        note = VersionedNote.objects.create(text="a")
+        note.text = "b"
+        note.save()
+        VersionedNote.objects.filter(pk=note.pk).update(text="c")
+        VersionedNote.objects.bulk_update([note], ["text"])
+
+        note.refresh_from_db()
+        assert note.version == 4
+
+    def test_a_write_naming_a_version_of_its_own_still_moves_it_on_by_one(self):
+        note = VersionedNote.objects.create(text="a")
+        VersionedNote.objects.filter(pk=note.pk).update(version=99)
+        note.refresh_from_db()
+        assert note.version == 2
+
+    def test_it_is_read_only_to_a_form_or_serializer(self):
+        assert VersionedWidget._meta.get_field("version").editable is False
+
+    def test_with_the_timestamps_a_model_gets_every_trigger(self):
+        assert {"protect_created_at", "stamp_updated_at", "bump_version"} <= triggers_of(VersionedWidget)
+
+    def test_alone_it_gets_only_its_own(self):
+        assert triggers_of(VersionedNote) == {"bump_version"}
+
+    def test_a_model_without_it_gets_no_version_trigger(self):
+        assert "bump_version" not in triggers_of(Widget)
+
+    @isolate_apps("tests.testapp")
+    def test_an_abstract_one_gets_none(self):
+        assert not triggers_of(fresh_model("AbstractVersioned", VersionedModel, abstract=True))
 
 
 class TestBypassHooksFor:

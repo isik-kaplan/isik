@@ -7,7 +7,7 @@ from rest_framework.relations import PKOnlyObject, RelatedField
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.db.history import event_model_for, history_middleware_installed
-from isik.django.apps.common.db.models import DatabaseTimestampsModel
+from isik.django.apps.common.db.models import DatabaseTimestampsModel, VersionedModel
 
 
 _FIELD_TYPES = {
@@ -147,8 +147,11 @@ def _shown_fields(serializer, tracked):
 
 def _maintains_itself(model, field_name):
     """Whether the row keeps this column current on its own, so that its changing says nothing:
-    `updated_at` under `DatabaseTimestampsModel`'s trigger, or an `auto_now` field."""
+    `updated_at` under `DatabaseTimestampsModel`'s trigger, `version` under `VersionedModel`'s, or an
+    `auto_now` field."""
     if issubclass(model, DatabaseTimestampsModel) and field_name == "updated_at":
+        return True
+    if issubclass(model, VersionedModel) and field_name == "version":
         return True
     field = model._meta.get_field(field_name)
     return isinstance(field, models.DateField | models.TimeField) and field.auto_now
@@ -188,9 +191,9 @@ def generic_history_serializer(model, serializer, *, shows_change_of=(), ignores
 
     `ignores_change_of` names tracked fields whose change alone doesn't make an update worth
     listing, on top of the columns the row keeps current itself - `updated_at` on a
-    `DatabaseTimestampsModel`, whose trigger bumps it on every update, and any `auto_now` field, unless
-    `shows_change_of` names it. Such a field is still shown, and still in `changes` when something else
-    changed with it:
+    `DatabaseTimestampsModel` and `version` on a `VersionedModel`, whose triggers bump them on every
+    update, and any `auto_now` field, unless `shows_change_of` names it. Such a field is still shown,
+    and still in `changes` when something else changed with it:
 
         generic_history_serializer(Widget, WidgetSerializer, ignores_change_of=["revision"])
 

@@ -7,8 +7,8 @@ nothing at all - the half of "every view must do X" that a project enforces in i
         assert uncovered == []
 
 `routed_actions()` is the walk over DRF views and `routed_views()` the walk over every view;
-`request_policy_coverage()` (here) and `idempotency_coverage()` (`isik.django.apps.idempotency.coverage`)
-answer it for one rule.
+`request_policy_coverage()` and `precondition_coverage()` (here) and `idempotency_coverage()`
+(`isik.django.apps.idempotency.coverage`) answer it for one rule.
 """
 
 from dataclasses import dataclass
@@ -19,6 +19,7 @@ from django.urls import URLResolver, get_resolver
 from isik._internal.reasons import is_reason
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.urlconfs import project_urlconfs
+from isik.django.drf.viewsets.preconditions import PreconditionMixin, writes_one_object
 from isik.django.drf.viewsets.request_policies import RequestPoliciesMixin
 
 
@@ -153,6 +154,32 @@ def request_policy_coverage(policy, urlconf=None, *, plain_views=None):
             report.append(Coverage(routed, CoverageStatus.UNCOVERED))
         elif routed.action in (exemptions := view.request_policy_exemptions(policy)):
             report.append(Coverage(routed, CoverageStatus.EXEMPT, exemptions[routed.action]))
+        else:
+            report.append(Coverage(routed, CoverageStatus.COVERED))
+    return report
+
+
+def precondition_coverage(urlconf=None):
+    """
+    `Coverage` of `If-Match` for every routed write to one object - PUT, PATCH, DELETE, and a POST to a
+    `detail=True` action, what `PreconditionMixin` asks it of. Covered when the view requires it,
+    exempt (with its reason) when the action is in `precondition_exempt_actions` or the view's
+    `required` option is off - a write without `If-Match` goes through - and uncovered otherwise,
+    including a view with the mixin whose `precondition_methods` leave that method out.
+    """
+    report = []
+    for routed in routed_actions(urlconf):
+        detail = routed.callback.initkwargs.get("detail")
+        if not writes_one_object(routed.method, detail):
+            continue
+        view = routed.view
+        if not issubclass(view, PreconditionMixin) or routed.method not in view.precondition_methods:
+            report.append(Coverage(routed, CoverageStatus.UNCOVERED))
+        elif routed.action in view.precondition_exempt_actions:
+            report.append(Coverage(routed, CoverageStatus.EXEMPT, view.precondition_exempt_actions[routed.action]))
+        elif not view.precondition_option("required"):
+            reason = _("If-Match is checked when sent, and not required - its precondition_required is off.")
+            report.append(Coverage(routed, CoverageStatus.EXEMPT, reason))
         else:
             report.append(Coverage(routed, CoverageStatus.COVERED))
     return report

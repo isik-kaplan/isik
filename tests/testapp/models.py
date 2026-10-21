@@ -4,6 +4,7 @@ database - a real BaseModel subclass, a real many-to-many through a
 non-auto_created table, and a real AutoGenericForeignKey.
 """
 
+import pgtrigger
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -28,8 +29,10 @@ from isik.django.apps.common.db import (
     DatabaseTimestampsModel,
     FullCleanOnSaveModel,
     ReprModel,
+    VersionedModel,
     track_events,
 )
+from isik.django.apps.common.db.concurrency import ConcurrencyToken
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
@@ -372,6 +375,57 @@ class CleanedNote(FullCleanOnSaveModel, ReprModel):
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.BOLT)
     # A rule no column could hold, so the field carries the validator and no constraint.
     seen_at = models.DateTimeField(null=True, blank=True, validators=[not_in_the_future])
+
+    class Meta:
+        app_label = "testapp"
+
+
+class VersionedWidget(VersionedModel, BaseModel):
+    """Both tokens at once - `version` is the one used, since a `VersionedModel` names it first."""
+
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class VersionedNote(VersionedModel):
+    """Only the version - Django's own integer pk, no timestamps, the version column named otherwise."""
+
+    text = models.CharField(max_length=50, blank=True)
+    version = models.PositiveBigIntegerField(db_default=1, db_column="Revision", editable=False)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class RevisionedNote(models.Model):
+    """A token isik doesn't keep, declared - kept by a trigger of the model's own."""
+
+    text = models.CharField(max_length=50, blank=True)
+    revision = models.BigIntegerField(default=1)
+    concurrency_field = ConcurrencyToken("revision", reason="moved on by one by this model's own bump_revision trigger")
+
+    class Meta:
+        app_label = "testapp"
+        triggers = [
+            pgtrigger.Trigger(
+                name="bump_revision",
+                when=pgtrigger.Before,
+                operation=pgtrigger.Update,
+                func="NEW.revision = OLD.revision + 1; RETURN NEW;",
+            )
+        ]
+
+
+class StuckNote(models.Model):
+    """A token declared but kept by nothing - what assert_concurrency_field_changes() is there to catch."""
+
+    text = models.CharField(max_length=50, blank=True)
+    revision = models.BigIntegerField(default=1)
+    concurrency_field = ConcurrencyToken(
+        "revision", reason="declared wrongly on purpose, so the test helper refuses it"
+    )
 
     class Meta:
         app_label = "testapp"

@@ -9,6 +9,12 @@
 | `FullCleanOnSaveModel` | `full_clean()` and `django-lifecycle` hooks on every `save()`, skippable validators, `update()`, `skip_full_clean()` |
 | `ReprModel` | `STR`/`REPR` format strings for `str()`/`repr()` |
 
+Not part of `BaseModel`, and added beside it when wanted:
+
+| Model | Adds |
+|---|---|
+| `VersionedModel` | a `version` the database counts up on every UPDATE (needs `pgtrigger`) |
+
 ```python
 from isik.django.apps.common.db import DatabaseTimestampsModel, FullCleanOnSaveModel
 
@@ -35,9 +41,14 @@ SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever cov
 `ImproperlyConfigured` at import time if it's missing. The trigger stamps the column `updated_at` is
 stored in, so a subclass can give it a `db_column`.
 
-The stamp is the time of the write itself (`clock_timestamp()`), never earlier than the value it
-replaces. It isn't `NOW()`, which is when the transaction began: a transaction that began first and
-wrote last would stamp the row earlier than the write before it, so `updated_at` would go backwards.
+The stamp is the time of the write itself (`clock_timestamp()`), and always at least a microsecond
+later than the value it replaces: `GREATEST(clock_timestamp(), OLD.updated_at + interval '1
+microsecond')`. It isn't `NOW()`, which is when the transaction began: a transaction that began first
+and wrote last would stamp the row earlier than the write before it, so `updated_at` would go
+backwards. And it never stays where it was - two writes in the same microsecond, or a server clock
+stepping back, still move it on. That makes `updated_at` a [concurrency token](concurrency.md): a
+version a write can name, and be refused for naming once it's stale. After a step back the column runs
+ahead of the clock, a microsecond per write, until the clock catches up.
 
 Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
 advances `updated_at` even though `"updated_at"` isn't in `update_fields`. Naming it explicitly
@@ -72,3 +83,21 @@ with widget.skip_full_clean():
   if that property builds a queryset by instantiating the same model, this recurses infinitely.
   This is a `django_lifecycle` behavior, not something `FullCleanOnSaveModel` can fix - just a trap worth
   knowing about.
+
+## VersionedModel
+
+`version`, a `PositiveBigIntegerField` the database keeps: `db_default=1` on insert, and a `BEFORE
+UPDATE` trigger (`bump_version`) setting it to `OLD.version + 1` on every UPDATE, whatever the write
+set it to - `QuerySet.update(version=99)` still moves it on by one. Not editable, so a `ModelSerializer`
+or a form makes it read-only. A model with it uses `version` as its [concurrency token](concurrency.md),
+over `updated_at`. Like `updated_at`, it doesn't count as a change in [history](../../../drf/serializers/history.md).
+
+```python
+from isik.django.apps.common.db import BaseModel, VersionedModel
+
+class Document(VersionedModel, BaseModel):
+    body = models.TextField()
+```
+
+Django doesn't read back what the trigger set, so `instance.version` after a `save()` is the value
+before it until `refresh_from_db()`. `PreconditionMixin` reads it back for its responses.
