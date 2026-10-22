@@ -17,6 +17,7 @@ from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
 from isik.common.utils.exemptions import Exemption
 from isik.django.apps.common.db.concurrency import (
+    ETAG_ANNOTATION,
     concurrency_etag,
     concurrency_field_name,
     concurrency_token_problems,
@@ -285,6 +286,9 @@ class PreconditionMixin:
             if self._missing_row_fails(header):
                 raise PreconditionFailed(None) from None
             raise Http404 from None
+        # An ETag read with the row (with_concurrency_etags()) was read before the lock: dropped, so a
+        # version covering relations is read again now that a change to one has to wait for it.
+        instance.__dict__.pop(ETAG_ANNOTATION, None)
         return instance
 
     def get_serializer(self, *args, **kwargs):

@@ -429,3 +429,25 @@ class StuckNote(models.Model):
 
     class Meta:
         app_label = "testapp"
+
+
+class Team(BaseModel):
+    """A version covering two relations: one with an auto-created through table, one with its own fields."""
+
+    name = models.CharField(max_length=50)
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="teams")
+    labels = models.ManyToManyField(Tag, through="TeamLabel", related_name="teams")
+    concurrency_relations = ("members", "labels")
+
+    class Meta:
+        app_label = "testapp"
+
+
+class TeamLabel(models.Model):
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    # No default - an add() must say it, through_defaults.
+    weight = models.IntegerField()
+
+    class Meta:
+        app_label = "testapp"

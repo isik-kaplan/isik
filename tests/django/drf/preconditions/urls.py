@@ -8,6 +8,8 @@ router = SimpleRouter()
 router.register("widgets", views.WidgetViewSet, basename="widget")
 router.register("underfoot-widgets", views.UnderfootWidgetViewSet, basename="underfoot-widget")
 router.register("exempt-notes", views.ExemptNotesViewSet, basename="exempt-note")
+router.register("teams", views.TeamViewSet, basename="team")
+router.register("underfoot-teams", views.UnderfootTeamViewSet, basename="underfoot-team")
 router.register("versioned-widgets", views.VersionedWidgetViewSet, basename="versioned-widget")
 router.register("idempotent-first-widgets", views.IdempotentFirstWidgetViewSet, basename="idempotent-first-widget")
 router.register(

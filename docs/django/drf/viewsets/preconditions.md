@@ -24,7 +24,10 @@ PATCH  /widgets/7/                                -> 428  {"detail", "code"}
 ```
 
 The tag is the model's [concurrency token](../../apps/common/db/concurrency.md) - `updated_at` on a
-`BaseModel`, `version` on a `VersionedModel` - as an opaque, strong `ETag`. A client sends back what
+`BaseModel`, `version` on a `VersionedModel` - as an opaque, strong `ETag`. A model naming
+[`concurrency_relations`](../../apps/common/db/concurrency.md#relations-the-version-covers) gets one
+computed from the token and those relations, so a membership change is a change a stale write is
+refused for. A client sends back what
 it got, and never builds one from `updated_at` (a JavaScript `Date` drops the microseconds). Add a
 [`ConcurrencyTokenField`](../serializers/concurrency_token.md) to the serializer for the same string in
 the body, so a list's items carry theirs.

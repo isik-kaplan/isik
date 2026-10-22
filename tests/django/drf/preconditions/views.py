@@ -14,10 +14,11 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from isik.django.apps.common.db.concurrency import with_concurrency_etags
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.serializers import ConcurrencyTokenField
 from isik.django.drf.viewsets import ActionSerializerClassMixin, PreconditionMixin
-from tests.testapp.models import CleanedNote, VersionedWidget, Widget
+from tests.testapp.models import CleanedNote, Team, VersionedWidget, Widget
 
 
 class WidgetSerializer(serializers.ModelSerializer):
@@ -317,3 +318,33 @@ class WidgetPeekView(PreconditionMixin, GenericAPIView):
         widget = self.get_object()
         widget.save()
         return Response({"name": widget.name})
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    etag = ConcurrencyTokenField()
+
+    class Meta:
+        model = Team
+        fields = ["id", "name", "members", "etag"]
+
+
+class AddsAMemberUnderfoot(BasePermission):
+    """Adds a member after get_object() read the team with its ETag, and before the lock."""
+
+    def has_object_permission(self, request, view, obj):
+        if request.method != "GET":
+            obj.members.add(request.user)
+        return True
+
+
+class TeamViewSet(PreconditionMixin, ModelViewSet):
+    serializer_class = TeamSerializer
+    # Its queryset is built in get_queryset(), so the model is named outright.
+    precondition_model = Team
+
+    def get_queryset(self):
+        return with_concurrency_etags(Team.objects.all())
+
+
+class UnderfootTeamViewSet(TeamViewSet):
+    permission_classes = [AddsAMemberUnderfoot]

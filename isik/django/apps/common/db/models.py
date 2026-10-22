@@ -5,6 +5,7 @@ import pgtrigger
 from django.apps import apps as django_apps
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models, transaction
+from django.db.models.fields.related import lazy_related_operation
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
 from django_lifecycle import (
@@ -22,6 +23,7 @@ from django_lifecycle.mixins import _bypass_state
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
+from isik.common.utils.strings import snake_to_pascal
 from isik.django.apps.common.skippable_validators import SkippableValidatorsMixin
 
 
@@ -311,3 +313,65 @@ def _register_triggers(sender, **kwargs):
 
 
 class_prepared.connect(_register_triggers, dispatch_uid="isik_base_model_timestamp_triggers")
+
+
+# [(owner model, relation name, proxy model, trigger)] - one per relation a model's concurrency token
+# covers (`concurrency_relations`, see db/concurrency.py), for isik.W002 to check is installed.
+relation_locks = []
+
+
+def _relation_lock_trigger(owner, relation, through):
+    quote = connection.ops.quote_name
+    owner_key = through._meta.get_field(relation.m2m_field_name())
+    lock = (
+        f"PERFORM 1 FROM {quote(owner._meta.db_table)} "
+        f"WHERE {quote(owner_key.target_field.column)} = %s.{quote(owner_key.column)} FOR KEY SHARE;"
+    )
+    return pgtrigger.Trigger(
+        name=f"lock_{relation.name}_owner",
+        when=pgtrigger.After,
+        operation=pgtrigger.Insert | pgtrigger.Update | pgtrigger.Delete,
+        # Locks the owner row and writes nothing. Adding a row already takes this lock, through its
+        # foreign key's check; removing one doesn't - and either has to wait for a write holding the
+        # owner FOR UPDATE, which compared a version that counts this relation, so the two can't
+        # interleave. An update that moves a row between owners locks both.
+        func=(
+            f"IF TG_OP <> 'INSERT' THEN {lock % 'OLD'} END IF; "
+            f"IF TG_OP <> 'DELETE' THEN {lock % 'NEW'} END IF; "
+            "RETURN NULL;"
+        ),
+    )
+
+
+def _register_relation_lock(owner, relation, through):
+    trigger = _relation_lock_trigger(owner, relation, through)
+
+    # A proxy over the through model, in the owner's app: how pgtrigger triggers an auto-created
+    # many-to-many table and puts the trigger in that app's migrations.
+    class Meta:
+        proxy = True
+        app_label = owner._meta.app_label
+        triggers = [trigger]
+
+    name = f"{owner.__name__}{snake_to_pascal(relation.name)}ConcurrencyLock"
+    proxy = type(name, (through,), {"__module__": owner.__module__, "Meta": Meta})
+    relation_locks.append((owner, relation.name, proxy, trigger))
+
+
+def _register_relation_locks(sender, **kwargs):
+    for name in getattr(sender, "concurrency_relations", ()):
+        relation = next((field for field in sender._meta.local_many_to_many if field.name == name), None)
+        # Anything else is concurrency_token_problems()'s to report, rather than an import that fails.
+        if relation is None:
+            continue
+        # Once the related model and the through model are both loaded - either may be named by a
+        # string, and only then does the relation know which of the through model's keys is the owner's.
+        lazy_related_operation(
+            lambda owner, _related, through, relation=relation: _register_relation_lock(owner, relation, through),
+            sender,
+            relation.remote_field.model,
+            relation.remote_field.through,
+        )
+
+
+class_prepared.connect(_register_relation_locks, dispatch_uid="isik_concurrency_relation_locks")

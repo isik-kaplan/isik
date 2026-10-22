@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-22
+
+### Added
+
+- **A version can cover many-to-many relations.** `concurrency_relations = ("groups", "user_permissions")`
+  on a model makes its ETag an MD5 computed in SQL from its token and each relation's through rows - the
+  related ids, and a custom through model's own fields - so adding a user to a group is a change a stale
+  `If-Match` is refused for, while `updated_at` keeps meaning "this row's own fields changed".
+  `PreconditionMixin` computes it after taking the row lock. Each relation's table gets a generated
+  trigger (`lock_<relation>_owner`, on a proxy model `<Owner><Relation>ConcurrencyLock` in the owner's
+  app, so `makemigrations` writes it) that locks the owner row on every insert, update and delete there,
+  so a membership change can't slip between the compare and the write. The same rows always give the
+  same ETag. A model naming no relations is unchanged, ETag format included.
+- `with_concurrency_etags(queryset)` reads each row's ETag in the list's own query, and
+  `concurrency_etag_expression(model)` is the SQL. `concurrency_etag()` and
+  `current_concurrency_etag()` return the computed ETag for such a model.
+  `assert_concurrency_field_changes(instance, related={name: obj})` adds, removes, re-adds and clears each
+  relation and asserts every step moves the ETag.
+- `isik.E002` refuses a `concurrency_relations` name that isn't a many-to-many field of the model, and the
+  database check `isik.W002` warns while a relation's lock trigger isn't installed.
+
 ## [0.25.0] - 2026-10-21
 
 ### Fixed

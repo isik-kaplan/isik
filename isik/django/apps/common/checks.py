@@ -1,7 +1,7 @@
 """isik's own system checks."""
 
 from django.apps import apps
-from django.core.checks import Error, Warning, register
+from django.core.checks import Error, Tags, Warning, register
 
 from isik._internal.translation import gettext as _
 
@@ -63,3 +63,40 @@ def every_precondition_view_has_options_that_make_sense(app_configs, **kwargs):
     return [Error(problem, hint=hint, id="isik.E003") for problem in precondition_option_problems()] + [
         Warning(warning, hint=hint, id="isik.W001") for warning in precondition_option_warnings()
     ]
+
+
+@register(Tags.database)
+def every_concurrency_relation_is_locked(app_configs, databases=None, **kwargs):
+    """
+    A relation a version covers is safe only while its trigger locks the owner row - see
+    `concurrency_relations`. A warning, not an error: `migrate` runs this before it applies the
+    migration that installs the trigger, and an error would stop it doing so.
+    """
+    from isik.django.apps.common.db.models import relation_locks
+
+    warnings = []
+    for database in databases or ():
+        for owner, relation, proxy, trigger in relation_locks:
+            status, _enabled = trigger.get_installation_status(proxy, database=database)
+            # A database the router keeps the model off holds no such table to lock.
+            if status in ("INSTALLED", "UNALLOWED"):
+                continue
+            warnings.append(
+                Warning(
+                    _(
+                        "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is "
+                        "%(status)s on database %(database)r - a change to it can slip past a write's If-Match."
+                    )
+                    % {
+                        "owner": owner._meta.label,
+                        "relation": relation,
+                        "table": proxy._meta.db_table,
+                        "status": status.lower(),
+                        "database": database,
+                    },
+                    hint=_("Run makemigrations and migrate - the trigger is in the migrations of %(app)s.")
+                    % {"app": owner._meta.app_label},
+                    id="isik.W002",
+                )
+            )
+    return warnings

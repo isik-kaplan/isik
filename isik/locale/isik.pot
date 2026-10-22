@@ -72,12 +72,12 @@ msgstr ""
 msgid "%(model)s has no CHECK constraint named %(name)r."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:91
+#: isik/django/apps/common/db/concurrency.py:106
 #, python-format
 msgid "%(model)s has no concurrency token - make it a VersionedModel or a DatabaseTimestampsModel, or name one with concurrency_field = ConcurrencyToken(field, reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:183
+#: isik/django/apps/common/db/concurrency.py:272
 #, python-format
 msgid "%(model)s has no concurrency token."
 msgstr ""
@@ -93,34 +93,49 @@ msgstr ""
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:108
+#: isik/django/apps/common/db/concurrency.py:316
+#, python-format
+msgid "%(model)s's ETag was %(etag)s still after %(relation)s.%(write)s."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:132
+#, python-format
+msgid "%(model)s's concurrency relation %(relation)r is not one of its many-to-many fields."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:123
 #, python-format
 msgid "%(model)s's concurrency token %(field)r can be null."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:105
+#: isik/django/apps/common/db/concurrency.py:120
 #, python-format
 msgid "%(model)s's concurrency token %(field)r is not a column."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:101
+#: isik/django/apps/common/db/concurrency.py:116
 #, python-format
 msgid "%(model)s's concurrency token %(field)r is not one of its fields."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:116
+#: isik/django/apps/common/db/concurrency.py:137
 #, python-format
 msgid "%(model)s's concurrency token %(field)r isn't kept by one of isik's triggers - declare it with ConcurrencyToken(%(field)r, reason=...), saying why it changes on every write."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:111
+#: isik/django/apps/common/db/concurrency.py:126
 #, python-format
 msgid "%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:193
+#: isik/django/apps/common/db/concurrency.py:282
 #, python-format
 msgid "%(model)s's concurrency token %(field)r was %(token)r again after %(write)s."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:290
+#, python-format
+msgid "%(model)s's version covers %(relation)r - pass related={%(relation)r: <an object to add>}."
 msgstr ""
 
 #: isik/django/drf/schema.py:50
@@ -146,6 +161,11 @@ msgstr ""
 #: isik/django/apps/templated_fields/engine.py:66
 #, python-format
 msgid "%(operator)s would build a value over the %(limit)s char limit"
+msgstr ""
+
+#: isik/django/apps/common/checks.py:86
+#, python-format
+msgid "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is %(status)s on database %(database)r - a change to it can slip past a write's If-Match."
 msgstr ""
 
 #: isik/_internal/reasons.py:40
@@ -178,7 +198,7 @@ msgstr ""
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:384
+#: isik/django/drf/viewsets/preconditions.py:388
 #, python-format
 msgid "%(serializer)s, a serializer of %(view)s, lets a request write %(model)s's concurrency token %(token)r as %(field)r - make it read-only."
 msgstr ""
@@ -283,17 +303,17 @@ msgstr ""
 msgid "%(value)r isn't a registered type, Field subclass, or Field instance"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:367
+#: isik/django/drf/viewsets/preconditions.py:371
 #, python-format
 msgid "%(view)s answered %(method)s %(action)s without comparing If-Match, so its database writes are rolled back. Fetch the row with self.get_object(), which compares it, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:274
+#: isik/django/drf/viewsets/preconditions.py:275
 #, python-format
 msgid "%(view)s compares If-Match with the row it locks, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:432
+#: isik/django/drf/viewsets/preconditions.py:436
 #, python-format
 msgid "%(view)s compares concurrency tokens of no model isik can find - set precondition_model."
 msgstr ""
@@ -308,17 +328,17 @@ msgstr ""
 msgid "%(view)s honors idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:478
+#: isik/django/drf/viewsets/preconditions.py:482
 #, python-format
 msgid "%(view)s refuses If-Match: * but lets a write through without If-Match, so a client that would send * leaves the header out instead - refusing * protects nothing unless If-Match is required."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:453
+#: isik/django/drf/viewsets/preconditions.py:457
 #, python-format
 msgid "%(view)s's precondition option %(option)r is %(value)r - PRECONDITION_%(setting)s and precondition_%(option)s take True or False."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:462
+#: isik/django/drf/viewsets/preconditions.py:466
 #, python-format
 msgid "%(view)s's precondition option 'missing_row_status' is %(value)r - PRECONDITION_MISSING_ROW_STATUS and precondition_missing_row_status take 404 or 412."
 msgstr ""
@@ -372,7 +392,7 @@ msgstr ""
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:55
+#: isik/django/apps/common/db/models.py:57
 msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
@@ -453,7 +473,7 @@ msgstr ""
 msgid "Comment must be at most %(limit)s characters, got %(length)s."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:56
+#: isik/django/apps/common/db/concurrency.py:70
 #, python-format
 msgid "ConcurrencyToken takes the field's name, not %(value)r."
 msgstr ""
@@ -475,11 +495,11 @@ msgstr ""
 msgid "Could not determine a unique serializer for the given data."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:75
+#: isik/django/apps/common/db/models.py:77
 msgid "Created At"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:34
+#: isik/django/apps/common/db/models.py:36
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
@@ -525,11 +545,11 @@ msgstr ""
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:109
+#: isik/django/apps/common/db/models.py:111
 msgid "How many times the row has been written, counting the write that created it."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:54
+#: isik/django/apps/common/db/models.py:56
 msgid "ID"
 msgstr ""
 
@@ -680,6 +700,11 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "Response contains multiple statuses in the body"
+msgstr ""
+
+#: isik/django/apps/common/checks.py:97
+#, python-format
+msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
 
 #: isik/django/apps/common/checks.py:45
@@ -870,7 +895,7 @@ msgstr ""
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:54
+#: isik/django/drf/viewsets/preconditions.py:55
 msgid "This changed since the version the request was made against."
 msgstr ""
 
@@ -894,11 +919,11 @@ msgstr ""
 msgid "This request isn't allowed."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:259
+#: isik/django/drf/viewsets/preconditions.py:260
 msgid "This request must name the version it was made against - If-Match: * isn't accepted."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:43
+#: isik/django/drf/viewsets/preconditions.py:44
 msgid "This request must say which version it was made against, in an If-Match header."
 msgstr ""
 
@@ -926,7 +951,7 @@ msgstr ""
 msgid "URI not available in preferred format"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:87
+#: isik/django/apps/common/db/models.py:89
 msgid "Updated At"
 msgstr ""
 
@@ -954,7 +979,7 @@ msgstr ""
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:108
+#: isik/django/apps/common/db/models.py:110
 msgid "Version"
 msgstr ""
 
@@ -962,7 +987,7 @@ msgstr ""
 msgid "When the key was spent."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:88
+#: isik/django/apps/common/db/models.py:90
 msgid "When the row last changed, by the database's clock."
 msgstr ""
 
@@ -970,7 +995,7 @@ msgstr ""
 msgid "When the row last changed."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:76
+#: isik/django/apps/common/db/models.py:78
 msgid "When the row was created, by the database's clock. Never changes."
 msgstr ""
 
