@@ -24,6 +24,8 @@ and a trigger generated on each relation's table locks the owner row whenever on
 
 import calendar
 import datetime
+import hashlib
+import json
 import uuid
 
 from django.contrib.postgres.expressions import ArraySubquery
@@ -70,6 +72,38 @@ class ConcurrencyToken:
             raise TypeError(_("ConcurrencyToken takes the field's name, not %(value)r.") % {"value": field})
         self.field = field
         self.reason = UnprovenConcurrencyToken(reason=reason)
+
+
+class ConcurrencyParts(
+    Exemption,
+    rule="isik.concurrency-parts.unproven",
+    why=(
+        "A version computed in Python covers only what its concurrency_parts() reads, and nothing proves "
+        "that's everything a write could lose - nor locks what it reads, unless its relations are named."
+    ),
+):
+    """
+    `concurrency_strategy = ConcurrencyParts(reason=...)`: the model's version is its token and what its
+    own `concurrency_parts()` returns - see the module docstring.
+    """
+
+
+# The strategies a version covering relations is kept by - see concurrency_strategy().
+COMPUTED, COLUMN, PARTS = "computed", "column", "parts"
+
+
+def concurrency_strategy(model):
+    """
+    How `model`'s version covers more than its token, or None when it doesn't: `"computed"` (SQL over
+    its `concurrency_relations`, the default once any are named), `"column"` (their changes move the
+    token itself), or `"parts"` (`ConcurrencyParts` - the model's own `concurrency_parts()`).
+    """
+    declared = getattr(model, "concurrency_strategy", None)
+    if isinstance(declared, ConcurrencyParts):
+        return PARTS
+    if declared is not None:
+        return declared
+    return COMPUTED if concurrency_relations(model) else None
 
 
 def concurrency_field_name(model):
@@ -126,6 +160,7 @@ def concurrency_token_problems(model):
             _("%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID.")
             % {"model": label, "field": name}
         )
+    problems += _strategy_problems(model, label)
     for relation in concurrency_relations(model):
         if _relation(model, relation) is None:
             problems.append(
@@ -141,6 +176,29 @@ def concurrency_token_problems(model):
             % {"model": label, "field": name}
         )
     return problems
+
+
+def _strategy_problems(model, label):
+    strategy = concurrency_strategy(model)
+    if strategy not in (None, COMPUTED, COLUMN, PARTS):
+        return [
+            _(
+                "%(model)s's concurrency_strategy is %(value)r - it takes 'computed', 'column' or "
+                "ConcurrencyParts(reason=...)."
+            )
+            % {"model": label, "value": strategy}
+        ]
+    if strategy in (COMPUTED, COLUMN) and not concurrency_relations(model):
+        return [
+            _("%(model)s's concurrency_strategy %(value)r covers relations, and it names no concurrency_relations.")
+            % {"model": label, "value": strategy}
+        ]
+    if strategy == PARTS and not callable(getattr(model, "concurrency_parts", None)):
+        return [
+            _("%(model)s's concurrency_strategy is ConcurrencyParts, and it has no concurrency_parts() method.")
+            % {"model": label}
+        ]
+    return []
 
 
 def _token_text(value):
@@ -213,10 +271,11 @@ def concurrency_etag_expression(model):
 def with_concurrency_etags(queryset):
     """
     `queryset` with each row's ETag read in the same query, for a list whose items show one - a model
-    whose version covers relations needs a query of its own per row otherwise. Its token alone is
-    the ETag of any other model, so `queryset` comes back as it is.
+    whose version is computed over relations needs a query of its own per row otherwise. Any other
+    model's ETag is read from the row itself, or by its own concurrency_parts(), so `queryset` comes
+    back as it is.
     """
-    if not concurrency_relations(queryset.model):
+    if concurrency_strategy(queryset.model) != COMPUTED:
         return queryset
     return queryset.annotate(**{ETAG_ANNOTATION: concurrency_etag_expression(queryset.model)})
 
@@ -224,15 +283,27 @@ def with_concurrency_etags(queryset):
 def concurrency_etag(instance):
     """
     `instance`'s version as a strong ETag - `'"1760000000123456"'` - opaque to a client, which sends it
-    back as it got it rather than building one. For a model whose version covers relations, it's what
-    `with_concurrency_etags()` read with the row, or else what the database holds now.
+    back as it got it rather than building one. Computed over relations, it's what
+    `with_concurrency_etags()` read with the row, or else what the database holds now; with
+    `ConcurrencyParts`, the instance's token and what its `concurrency_parts()` returns now.
     """
     # __class__, not type(): a SimpleLazyObject (request.user) proxies the one, not the other.
     model = instance.__class__
-    if not concurrency_relations(model):
+    strategy = concurrency_strategy(model)
+    if strategy == PARTS:
+        return _parts_etag(instance)
+    if strategy != COMPUTED:
         return _etag(getattr(instance, concurrency_attname(model)))
     annotated = getattr(instance, ETAG_ANNOTATION, None)
     return f'"{annotated}"' if annotated is not None else current_concurrency_etag(model, instance.pk)
+
+
+def _parts_etag(instance):
+    parts = [_token_text(getattr(instance, concurrency_attname(instance.__class__))), instance.concurrency_parts()]
+    # default=str: a datetime, a UUID or a Decimal among the parts reads as its text.
+    text = json.dumps(parts, sort_keys=True, default=str, separators=(",", ":"))
+    # SHA-256, which a FIPS build of Python allows, unlike MD5.
+    return f'"{hashlib.sha256(text.encode()).hexdigest()}"'
 
 
 def current_concurrency_etag(model, pk):
@@ -242,7 +313,10 @@ def current_concurrency_etag(model, pk):
     there, and a replica reads are routed to may lag behind it.
     """
     rows = model._base_manager.db_manager(router.db_for_write(model)).filter(pk=pk)
-    if concurrency_relations(model):
+    strategy = concurrency_strategy(model)
+    if strategy == PARTS:
+        return next((_parts_etag(instance) for instance in rows), None)
+    if strategy == COMPUTED:
         values = with_concurrency_etags(rows).values_list(ETAG_ANNOTATION, flat=True)
         return next((f'"{value}"' for value in values), None)
     values = rows.values_list(concurrency_attname(model), flat=True)

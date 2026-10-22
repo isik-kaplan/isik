@@ -10,6 +10,8 @@ router.register("underfoot-widgets", views.UnderfootWidgetViewSet, basename="und
 router.register("exempt-notes", views.ExemptNotesViewSet, basename="exempt-note")
 router.register("teams", views.TeamViewSet, basename="team")
 router.register("underfoot-teams", views.UnderfootTeamViewSet, basename="underfoot-team")
+router.register("squads", views.SquadViewSet, basename="squad")
+router.register("rosters", views.RosterViewSet, basename="roster")
 router.register("versioned-widgets", views.VersionedWidgetViewSet, basename="versioned-widget")
 router.register("idempotent-first-widgets", views.IdempotentFirstWidgetViewSet, basename="idempotent-first-widget")
 router.register(

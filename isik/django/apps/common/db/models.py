@@ -323,21 +323,28 @@ relation_locks = []
 def _relation_lock_trigger(owner, relation, through):
     quote = connection.ops.quote_name
     owner_key = through._meta.get_field(relation.m2m_field_name())
-    lock = (
-        f"PERFORM 1 FROM {quote(owner._meta.db_table)} "
-        f"WHERE {quote(owner_key.target_field.column)} = %s.{quote(owner_key.column)} FOR KEY SHARE;"
-    )
+    table, key = quote(owner._meta.db_table), quote(owner_key.target_field.column)
+    owner_row = f"{key} = %s.{quote(owner_key.column)}"
+    if getattr(owner, "concurrency_strategy", None) == "column":
+        # The column strategy: an UPDATE of the owner row that changes nothing itself, so the owner's own
+        # BEFORE UPDATE triggers move its token - and updated_at with it. Those only assign NEW and never
+        # touch this table, so it's one UPDATE of the owner per row changed here, never a loop. The
+        # UPDATE locks the owner row as the lock below does.
+        name, statement = f"bump_{relation.name}_owner", f"UPDATE {table} SET {key} = {key} WHERE {owner_row};"
+    else:
+        # The computed strategy: locks the owner row and writes nothing. Adding a row already takes this
+        # lock, through its foreign key's check; removing one doesn't - and either has to wait for a
+        # write holding the owner FOR UPDATE, which compared a version that counts this relation, so
+        # the two can't interleave.
+        name, statement = f"lock_{relation.name}_owner", f"PERFORM 1 FROM {table} WHERE {owner_row} FOR KEY SHARE;"
     return pgtrigger.Trigger(
-        name=f"lock_{relation.name}_owner",
+        name=name,
         when=pgtrigger.After,
         operation=pgtrigger.Insert | pgtrigger.Update | pgtrigger.Delete,
-        # Locks the owner row and writes nothing. Adding a row already takes this lock, through its
-        # foreign key's check; removing one doesn't - and either has to wait for a write holding the
-        # owner FOR UPDATE, which compared a version that counts this relation, so the two can't
-        # interleave. An update that moves a row between owners locks both.
+        # An update that moves a row between owners reaches both.
         func=(
-            f"IF TG_OP <> 'INSERT' THEN {lock % 'OLD'} END IF; "
-            f"IF TG_OP <> 'DELETE' THEN {lock % 'NEW'} END IF; "
+            f"IF TG_OP <> 'INSERT' THEN {statement % 'OLD'} END IF; "
+            f"IF TG_OP <> 'DELETE' THEN {statement % 'NEW'} END IF; "
             "RETURN NULL;"
         ),
     )

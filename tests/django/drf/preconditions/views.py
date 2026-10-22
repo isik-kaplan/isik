@@ -18,7 +18,7 @@ from isik.django.apps.common.db.concurrency import with_concurrency_etags
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.serializers import ConcurrencyTokenField
 from isik.django.drf.viewsets import ActionSerializerClassMixin, PreconditionMixin
-from tests.testapp.models import CleanedNote, Team, VersionedWidget, Widget
+from tests.testapp.models import CleanedNote, Roster, Squad, Team, VersionedWidget, Widget
 
 
 class WidgetSerializer(serializers.ModelSerializer):
@@ -348,3 +348,25 @@ class TeamViewSet(PreconditionMixin, ModelViewSet):
 
 class UnderfootTeamViewSet(TeamViewSet):
     permission_classes = [AddsAMemberUnderfoot]
+
+
+class SquadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Squad
+        fields = ["id", "name", "members", "version"]
+
+
+class SquadViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Squad.objects.all()
+    serializer_class = SquadSerializer
+
+
+class RosterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Roster
+        fields = ["id", "name", "tags"]
+
+
+class RosterViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Roster.objects.all()
+    serializer_class = RosterSerializer

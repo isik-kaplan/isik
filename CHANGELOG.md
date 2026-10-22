@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-22
+
+### Added
+
+- **Two more ways for a version to cover relations, by `concurrency_strategy`.** `"computed"` is
+  0.26.0's, the default once `concurrency_relations` names anything.
+  - `"column"`: each relation's table gets a `bump_<relation>_owner` trigger running a plain `UPDATE` of
+    the owner row. The owner's own triggers then move its token - `version`, and `updated_at` with it -
+    so the ETag stays the plain token, with no subquery to read. One owner `UPDATE` per row changed,
+    never a loop: the owner's triggers only assign `NEW`.
+  - `ConcurrencyParts(reason=...)`: the model's `concurrency_parts()` returns what the version covers,
+    hashed with the token in Python (SHA-256). Its reason is an exemption listed by `manage.py
+    exemptions`. Nothing proves the method covers everything, and what it reads is locked only for the
+    relations named in `concurrency_relations`.
+- `concurrency_strategy(model)`. `isik.E002` refuses an unknown strategy, `"computed"` or `"column"`
+  naming no relations, and `ConcurrencyParts` without a `concurrency_parts()` method.
+
 ## [0.26.0] - 2026-10-22
 
 ### Added

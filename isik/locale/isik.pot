@@ -72,12 +72,12 @@ msgstr ""
 msgid "%(model)s has no CHECK constraint named %(name)r."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:106
+#: isik/django/apps/common/db/concurrency.py:140
 #, python-format
 msgid "%(model)s has no concurrency token - make it a VersionedModel or a DatabaseTimestampsModel, or name one with concurrency_field = ConcurrencyToken(field, reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:272
+#: isik/django/apps/common/db/concurrency.py:346
 #, python-format
 msgid "%(model)s has no concurrency token."
 msgstr ""
@@ -93,47 +93,62 @@ msgstr ""
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:316
+#: isik/django/apps/common/db/concurrency.py:390
 #, python-format
 msgid "%(model)s's ETag was %(etag)s still after %(relation)s.%(write)s."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:132
+#: isik/django/apps/common/db/concurrency.py:167
 #, python-format
 msgid "%(model)s's concurrency relation %(relation)r is not one of its many-to-many fields."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:123
+#: isik/django/apps/common/db/concurrency.py:157
 #, python-format
 msgid "%(model)s's concurrency token %(field)r can be null."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:120
+#: isik/django/apps/common/db/concurrency.py:154
 #, python-format
 msgid "%(model)s's concurrency token %(field)r is not a column."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:116
+#: isik/django/apps/common/db/concurrency.py:150
 #, python-format
 msgid "%(model)s's concurrency token %(field)r is not one of its fields."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:137
+#: isik/django/apps/common/db/concurrency.py:172
 #, python-format
 msgid "%(model)s's concurrency token %(field)r isn't kept by one of isik's triggers - declare it with ConcurrencyToken(%(field)r, reason=...), saying why it changes on every write."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:126
+#: isik/django/apps/common/db/concurrency.py:160
 #, python-format
 msgid "%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:282
+#: isik/django/apps/common/db/concurrency.py:356
 #, python-format
 msgid "%(model)s's concurrency token %(field)r was %(token)r again after %(write)s."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:290
+#: isik/django/apps/common/db/concurrency.py:193
+#, python-format
+msgid "%(model)s's concurrency_strategy %(value)r covers relations, and it names no concurrency_relations."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:185
+#, python-format
+msgid "%(model)s's concurrency_strategy is %(value)r - it takes 'computed', 'column' or ConcurrencyParts(reason=...)."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:198
+#, python-format
+msgid "%(model)s's concurrency_strategy is ConcurrencyParts, and it has no concurrency_parts() method."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:364
 #, python-format
 msgid "%(model)s's version covers %(relation)r - pass related={%(relation)r: <an object to add>}."
 msgstr ""
@@ -473,7 +488,7 @@ msgstr ""
 msgid "Comment must be at most %(limit)s characters, got %(length)s."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:70
+#: isik/django/apps/common/db/concurrency.py:72
 #, python-format
 msgid "ConcurrencyToken takes the field's name, not %(value)r."
 msgstr ""

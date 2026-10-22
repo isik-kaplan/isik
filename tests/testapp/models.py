@@ -32,7 +32,7 @@ from isik.django.apps.common.db import (
     VersionedModel,
     track_events,
 )
-from isik.django.apps.common.db.concurrency import ConcurrencyToken
+from isik.django.apps.common.db.concurrency import ConcurrencyParts, ConcurrencyToken
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
@@ -451,3 +451,31 @@ class TeamLabel(models.Model):
 
     class Meta:
         app_label = "testapp"
+
+
+class Squad(VersionedModel, BaseModel):
+    """The column strategy: a member joining or leaving moves `version` itself - and `updated_at` with it."""
+
+    name = models.CharField(max_length=50)
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="squads")
+    concurrency_relations = ("members",)
+    concurrency_strategy = "column"
+
+    class Meta:
+        app_label = "testapp"
+
+
+class Roster(BaseModel):
+    """ConcurrencyParts: the version is the token and what concurrency_parts() reads - here, its tags."""
+
+    name = models.CharField(max_length=50)
+    tags = models.ManyToManyField(Tag, related_name="rosters")
+    # Named so the tags' table locks the row, as the parts read them.
+    concurrency_relations = ("tags",)
+    concurrency_strategy = ConcurrencyParts(reason="its tags are read by concurrency_parts(), and nothing else counts")
+
+    class Meta:
+        app_label = "testapp"
+
+    def concurrency_parts(self):
+        return sorted(self.tags.values_list("label", flat=True))

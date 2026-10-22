@@ -49,39 +49,110 @@ class User(AbstractUser, BaseModel):
 Each must be a many-to-many field of the model itself (not inherited from a concrete parent). Reverse
 relations and foreign keys pointing at the model aren't covered.
 
-**Computed - what naming relations does.** The ETag is computed in SQL: an MD5 of the row's token and,
-for each relation, its through rows - the related object's id, and a custom through model's own fields -
-in order. `updated_at` keeps meaning "this row's own fields changed": a membership change doesn't move
-it.
+`concurrency_strategy` picks how the version covers them - three strategies, below. All three keep a
+model that names no relations exactly as it was, ETag format included.
 
+| | Computed (default) | Column | Parts |
+|---|---|---|---|
+| Declared | `concurrency_relations` | `+ concurrency_strategy = "column"` | `concurrency_strategy = ConcurrencyParts(reason=...)` |
+| ETag | MD5 computed in SQL | the token, as ever | SHA-256 of the token and `concurrency_parts()` |
+| `updated_at` on a relation change | stays | moves | stays |
+| Covers | every named relation's rows | every named relation's rows | whatever `concurrency_parts()` reads |
+| Read cost | a subquery per relation | none | the method's own queries |
+
+### Computed
+
+The default once `concurrency_relations` names anything. The ETag is computed in SQL: an MD5 of the
+row's token and, for each relation, its through rows - the related object's id, and a custom through
+model's own fields - in order. `updated_at` keeps meaning "this row's own fields changed".
+
+- *When.* A version that must see memberships, with `updated_at` left to the row's own fields - the
+  usual choice.
 - *Guarantees.* `PreconditionMixin` locks the row `FOR UPDATE` and computes the ETag after the lock.
   A change to a covered relation has to lock the owner row too, so it waits for the write, or the write
   waits for it, and it can't slip between the compare and the write. Adding a row already takes that
   lock, through its foreign key's check. Removing or updating one doesn't, so isik generates a trigger
   on each relation's table (`lock_<relation>_owner`, `AFTER INSERT OR UPDATE OR DELETE`) that does
-  `PERFORM 1 FROM <owner> ... FOR KEY SHARE` and writes nothing. The trigger lives on a proxy model over
-  the through model, `<Owner><Relation>ConcurrencyLock`, generated in the owner's app. That is pgtrigger's
-  way to trigger an auto-created table, and why `makemigrations` writes the trigger into that app's
-  migrations, with no operation to call by hand. Each relation locks its owner only: a user's version
-  covering `groups` doesn't make a group's cover its users.
-- *Same rows, same version.* Removing a row and adding it back gives the ETag it had before. That's
-  intended: a write made against it loses nothing.
+  `PERFORM 1 FROM <owner> ... FOR KEY SHARE` and writes nothing. Each relation locks its owner only: a
+  user's version covering `groups` doesn't make a group's cover its users. The same rows always give the
+  same ETag - one removed and added back changes nothing a write made against it could lose.
 - *Costs.* One subquery per relation wherever the ETag is read: `retrieve`, the compare under the lock,
   the read-back after a write. A list showing `ConcurrencyTokenField` would query once per row, so
-  annotate its queryset with `with_concurrency_etags(queryset)`:
+  annotate its queryset with `with_concurrency_etags(queryset)`. Bulk membership changes lock the owners
+  they touch, for as long as their transaction runs.
 
-  ```python
-  def get_queryset(self):
-      return with_concurrency_etags(User.objects.all())
-  ```
+```python
+class User(AbstractUser, BaseModel):
+    concurrency_relations = ("groups", "user_permissions")
 
-  Bulk membership changes lock the owners they touch, for as long as their transaction runs.
-- *Checks.* `concurrency_token_problems()` (`isik.E002`) refuses a name that isn't a many-to-many field
-  of the model. The database check **`isik.W002`** (run by `migrate`, and by `check --database default`)
-  warns while a relation's trigger isn't installed, or is outdated. It's a warning because `migrate`
-  runs it before applying the migration that installs the trigger.
+    # a viewset listing users with their ETags
+    def get_queryset(self):
+        return with_concurrency_etags(User.objects.all())
+```
 
-`concurrency_etag_expression(model)` is the SQL itself, for an annotation of your own.
+### Column
+
+The relations move the token itself. Each relation's table gets a trigger (`bump_<relation>_owner`)
+that runs a plain `UPDATE` of the owner row, setting nothing that changes. The owner's own BEFORE UPDATE
+triggers then move its token, as they do for any write. Those triggers only assign `NEW` and never touch
+the relation's table, so it's one `UPDATE` of the owner per row changed there - never a loop.
+
+- *When.* The cheapest reads: the ETag is the token, in today's format, with no subquery and nothing to
+  annotate.
+- *Guarantees.* The `UPDATE` locks the owner row, so the race is closed as in Computed. Every change is
+  a new version - the same rows removed and added back are two of them.
+- *Costs.* `updated_at` moves on a relation change too, since the owner row is updated: use Computed
+  for `updated_at` to mean the row's own fields only. A bulk change writes one `UPDATE` of the owner per
+  row it changes, and holds the owner's row lock until it commits. Needs a token a trigger moves:
+  `version` on a `VersionedModel`, `updated_at`, or a `ConcurrencyToken` whose trigger fires on any
+  `UPDATE`.
+
+```python
+class Squad(VersionedModel, BaseModel):
+    members = models.ManyToManyField(User)
+    concurrency_relations = ("members",)
+    concurrency_strategy = "column"
+```
+
+### Parts
+
+The model says what its version covers, in Python: `concurrency_parts(self)` returns a list of JSON-able
+values (a datetime, a UUID or a `Decimal` reads as its text), and the ETag is a SHA-256 of the token
+and that list. The reason is a `ConcurrencyParts` exemption (rule `isik.concurrency-parts.unproven`), held
+to its floor and listed by `manage.py exemptions`.
+
+- *When.* A version that depends on something the other two can't read - a reverse relation, a value in
+  another table, a computed rule.
+- *What it can't guarantee.* Nothing proves `concurrency_parts()` returns everything a write could lose:
+  a part it leaves out is a change a stale write gets through. What it reads isn't locked by the row lock
+  either, so a change can land between the compare and the write. Name the many-to-many relations it
+  reads in `concurrency_relations` to give them the lock trigger. Anything else it reads has no such
+  protection unless the project adds a trigger of its own.
+- *Costs.* Whatever queries the method runs, wherever the ETag is read, once per row in a list -
+  `with_concurrency_etags()` can't annotate it.
+
+```python
+class Roster(BaseModel):
+    tags = models.ManyToManyField(Tag)
+    concurrency_relations = ("tags",)  # locked, as the parts read them
+    concurrency_strategy = ConcurrencyParts(reason="its tags are read by concurrency_parts(), and nothing else counts")
+
+    def concurrency_parts(self):
+        return sorted(self.tags.values_list("label", flat=True))
+```
+
+### Shared by all three
+
+- The lock or bump trigger lives on a proxy model over the through model, `<Owner><Relation>ConcurrencyLock`,
+  generated in the owner's app. That is pgtrigger's way to trigger an auto-created table, and why
+  `makemigrations` writes the trigger into that app's migrations, with no operation to call by hand.
+- `concurrency_token_problems()` (`isik.E002`) refuses a name that isn't a many-to-many field of the
+  model, a strategy it doesn't know, Computed or Column naming no relations, and `ConcurrencyParts`
+  without a `concurrency_parts()` method. The database check **`isik.W002`** (run by `migrate`, and by
+  `check --database default`) warns while a relation's trigger isn't installed, or is outdated. It's a
+  warning because `migrate` runs it before applying the migration that installs the trigger.
+- `concurrency_strategy(model)` says which applies: `"computed"`, `"column"`, `"parts"`, or None.
+  `concurrency_etag_expression(model)` is Computed's SQL, for an annotation of your own.
 
 ## concurrency_token_problems(model)
 
