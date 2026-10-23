@@ -405,7 +405,7 @@ class TestTheHooksItOverrides:
         class Recorded(PreconditionMixin, RecordingBase):
             pass
 
-        request, response = type("Request", (), {"method": "GET"})(), type("Response", (), {"status_code": 200})()
+        request, response = type("Request", (), {"method": "GET"})(), type("Response", (), {"status_code": 404})()
 
         assert Recorded().finalize_response(request, response, "extra", pk="1") is response
         assert received == [(request, response, ("extra",), {"pk": "1"})]

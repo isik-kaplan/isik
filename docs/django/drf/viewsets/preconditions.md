@@ -158,6 +158,43 @@ A view whose every write is exempt compares no token, so its model needs none - 
 declare its exemptions, for `precondition_coverage()` to list. It sends no `ETag` for a model without a
 token, and ignores `If-None-Match`.
 
+## Every write has a version to read
+
+A write that asks `If-Match` is only usable if something hands out the version to send: a GET that sends
+its `ETag`. Without one, a client has nothing to name but a guess - `PATCH /users/me/` asking for
+`If-Match` while `GET /users/me/` sends nothing.
+
+The system check **`isik.E004`** pairs every routed write that asks `If-Match` (including one with
+`required` off, which still compares a tag it's sent) with its read, within one urlconf, in this order:
+
+1. **`precondition_read_from = {write action: read action}`** - the read action of the same view,
+   routed with GET, and in `precondition_read_actions`:
+
+   ```python
+   class MeViewSet(PreconditionMixin, BaseModelViewSet):
+       precondition_read_actions = ("retrieve", "me")
+       precondition_read_from = {"set_password": "me"}
+   ```
+
+2. **A GET at the write's own path** whose action is in its view's `precondition_read_actions` (`None`
+   for a view that isn't a viewset). This is how `update`, `partial_update` and `destroy` pair with
+   `retrieve`, and a `detail=False` `PATCH me` with its `GET me`.
+3. **The same view's `retrieve`**, for a `detail=True` write - `POST /widgets/{pk}/approve/` reads its
+   version at `/widgets/{pk}/`.
+
+None of those is an error. So is a read of another model: its ETag is no version of this write's row. A
+list isn't a read for this - it isn't what a client reads again before a write. A write with no read, on
+purpose, is exempted: `precondition_unread_actions = {write action: reason}`, each reason a
+`NoReadableVersion` (rule `isik.precondition.readable-version`), held to its 40-character floor and
+listed by `manage.py exemptions`. `precondition_read_problems(urlconf=None)` gives the same list.
+
+The check can't see whether a read action really fetches its row through `get_object()`, which is
+where the `ETag` comes from. So a GET or HEAD whose action is in `precondition_read_actions` and that
+succeeds without `get_object()` having run raises `ImproperlyConfigured` when it answers, as a write that
+skipped the check does. A view that isn't a viewset is held to it where its URL names one object (its
+`lookup_url_kwarg`); its list isn't. A model without a concurrency token has no version to send, and is
+left alone.
+
 ## Checking a project
 
 - The system check **`isik.E002`** holds every routed `PreconditionMixin` view that asks `If-Match` of
@@ -166,6 +203,7 @@ token, and ignores `If-None-Match`.
   [`concurrency_token_problems()`](../../apps/common/db/concurrency.md#concurrency_token_problemsmodel),
   and no serializer the view declares (`serializer_class`, `serializer_class_action_map`) lets a request
   write it. `precondition_problems(urlconf=None)` gives the same list.
+- **`isik.E004`** pairs every write that asks `If-Match` with a read handing out its version - above.
 - [`precondition_coverage()`](../coverage.md#precondition_coverageurlconfnone) lists which routed writes
   ask for `If-Match`, which are exempt and why, and which don't - for a project's own test or check.
 - [`AutoSchema`](../spectacular.md#preconditionmixin) documents the headers and the 304/412/428

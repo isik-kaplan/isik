@@ -1,6 +1,7 @@
 """PreconditionMixin - see its own docstring."""
 
 import copy
+from collections.abc import Mapping
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -35,6 +36,17 @@ class NoPrecondition(
     ),
 ):
     """Why an action is written without `If-Match` - `precondition_exempt_actions`' type."""
+
+
+class NoReadableVersion(
+    Exemption,
+    rule="isik.precondition.readable-version",
+    why=(
+        "A write that asks If-Match needs a read that hands out the version to send - a GET sending its "
+        "ETag - or a client has nothing to name but a version it guessed."
+    ),
+):
+    """Why a write that asks `If-Match` has no read handing out its version - `precondition_unread_actions`' type."""
 
 
 class PreconditionRequired(APIException):
@@ -174,6 +186,10 @@ class PreconditionMixin:
 
     precondition_methods = ("PUT", "PATCH", "DELETE", "POST")
     precondition_exempt_actions = {}
+    # {write action: the read action, of this view, whose ETag it names} - see precondition_read_problems().
+    precondition_read_from = {}
+    # {write action: reason} - a write that asks If-Match with no read handing out its version.
+    precondition_unread_actions = {}
     # None is a view that isn't a viewset, whose GET is its only read.
     precondition_read_actions = ("retrieve", None)
     precondition_model = None
@@ -201,6 +217,17 @@ class PreconditionMixin:
             action: require_exemption(cls.__name__, "precondition_exempt_actions", reason, NoPrecondition)
             for action, reason in exempt.items()
         }
+        unread = cls.precondition_unread_actions
+        require_reasons(cls.__name__, "precondition_unread_actions", unread)
+        cls.precondition_unread_actions = {
+            action: require_exemption(cls.__name__, "precondition_unread_actions", reason, NoReadableVersion)
+            for action, reason in unread.items()
+        }
+        if not isinstance(cls.precondition_read_from, Mapping):
+            raise ImproperlyConfigured(
+                _("%(owner)s.precondition_read_from takes {write action: read action}, not %(value)r.")
+                % {"owner": cls.__name__, "value": cls.precondition_read_from}
+            )
 
     @classmethod
     def get_precondition_model(cls):
@@ -225,6 +252,7 @@ class PreconditionMixin:
         request, action = self.request, self.precondition_action
         if request.method in SAFE_METHODS:
             instance = super().get_object()
+            self.precondition_checked = True
             if action in self.precondition_read_actions and has_concurrency_token(instance):
                 header, etag = request.META.get("HTTP_IF_NONE_MATCH"), concurrency_etag(instance)
                 if header is not None and self.precondition_option("not_modified") and matches(header, etag):
@@ -339,6 +367,7 @@ class PreconditionMixin:
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         self._require_precondition_checked(request, response)
+        self._require_version_read(request, response)
         instance = self.precondition_instance
         if instance is None and request.method == "POST" and self.precondition_action in ("create", None):
             instance = getattr(self.precondition_serializer, "instance", None)
@@ -374,6 +403,32 @@ class PreconditionMixin:
                 "precondition_exempt_actions."
             )
             % {"view": type(self).__name__, "method": request.method, "action": self.precondition_action}
+        )
+
+    def _require_version_read(self, request, response):
+        # A read the view names as handing out the version sends its ETag from get_object() - one that
+        # answered without it sent none, and a client has nothing to name in If-Match. Refused as a
+        # write that skipped the check is; a read has nothing to roll back, but fails as loudly.
+        if self.precondition_checked or request.method not in ("GET", "HEAD"):
+            return
+        if not status.is_success(response.status_code):
+            return
+        action = self.precondition_action
+        if action not in self.precondition_read_actions:
+            return
+        # A view that isn't a viewset reads one object only where its URL names one - its list doesn't.
+        if action is None and (self.lookup_url_kwarg or self.lookup_field) not in self.kwargs:
+            return
+        model = self.get_precondition_model()
+        if model is None or concurrency_field_name(model) is None:
+            return
+        raise ImproperlyConfigured(
+            _(
+                "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write "
+                "needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of "
+                "precondition_read_actions."
+            )
+            % {"view": type(self).__name__, "method": request.method, "action": action}
         )
 
 
@@ -487,3 +542,101 @@ def precondition_option_warnings(urlconf=None):
         for view in _routed_precondition_views(urlconf)
         if view.precondition_option("allows_any") is False and view.precondition_option("required") is False
     ]
+
+
+def _named(view, action):
+    return f"{view.__name__}.{action}" if action else view.__name__
+
+
+def _gets(routed, urlconf, view, action):
+    return [
+        read
+        for read in routed
+        if read.urlconf == urlconf and read.method == "GET" and read.view is view and read.action == action
+    ]
+
+
+def _version_read(write, routed):
+    """
+    (the routed GET handing out `write`'s version, or None; a problem with the one declared, or None) -
+    `precondition_read_from` first, then a read at the write's own path, then the view's `retrieve` for
+    a write to one object.
+    """
+    view = write.view
+    declared = view.precondition_read_from.get(write.action)
+    if declared is not None:
+        reads = _gets(routed, write.urlconf, view, declared)
+        if not reads:
+            return None, _(
+                "%(write)s reads its version from %(read)r (precondition_read_from), which %(view)s doesn't route "
+                "with GET."
+            ) % {"write": _named(view, write.action), "read": declared, "view": view.__name__}
+        if declared not in view.precondition_read_actions:
+            return None, _(
+                "%(write)s reads its version from %(read)r (precondition_read_from), which isn't in "
+                "precondition_read_actions, so it sends no ETag."
+            ) % {"write": _named(view, write.action), "read": declared}
+        return reads[0], None
+    for read in routed:
+        if (read.urlconf, read.route, read.method) == (write.urlconf, write.route, "GET") and (
+            issubclass(read.view, PreconditionMixin) and read.action in read.view.precondition_read_actions
+        ):
+            return read, None
+    if write.callback.initkwargs.get("detail"):
+        reads = _gets(routed, write.urlconf, view, "retrieve")
+        if reads and "retrieve" in view.precondition_read_actions:
+            return reads[0], None
+    return None, None
+
+
+def precondition_read_problems(urlconf=None):
+    """
+    Every routed write that asks `If-Match` with no read handing out the version to send, one sentence
+    each - `[]` when each has one. The read is, in order: the action `precondition_read_from` names, of
+    the same view; a GET at the write's own path whose action is in its view's
+    `precondition_read_actions`; the same view's `retrieve`, for a `detail=True` write. It must be of
+    the same model. A write in `precondition_unread_actions` is left out. Paired within one urlconf -
+    every urlconf the project serves by default. The system check `isik.E004` reports them.
+    """
+    from isik.django.drf.coverage import routed_actions
+
+    routed = routed_actions(urlconf)
+    problems = []
+    for write in routed:
+        view = write.view
+        if not issubclass(view, PreconditionMixin) or write.action in view.precondition_unread_actions:
+            continue
+        if not requires_precondition(view, write.method, write.action, write.callback.initkwargs.get("detail")):
+            continue
+        read, problem = _version_read(write, routed)
+        if problem is not None:
+            problems.append(problem)
+            continue
+        if read is None:
+            problems.append(
+                _(
+                    "%(write)s (%(method)s %(route)s) asks If-Match, and nothing routed hands out the version to "
+                    "send - no GET of %(route)s sends an ETag, and there's no retrieve to read it from. Route one, "
+                    "name it in precondition_read_from, or exempt the write in precondition_unread_actions."
+                )
+                % {"write": _named(view, write.action), "method": write.method, "route": write.route}
+            )
+            continue
+        model, read_model = view.get_precondition_model(), read.view.get_precondition_model()
+        # A model either can't be found is isik.E002's to report.
+        if None not in (model, read_model) and read_model is not model:
+            problems.append(
+                _(
+                    "%(write)s (%(method)s %(route)s) reads its version from %(read)s, which hands out a version "
+                    "of %(read_model)s, not of %(model)s."
+                )
+                % {
+                    "write": _named(view, write.action),
+                    "method": write.method,
+                    "route": write.route,
+                    "read": _named(read.view, read.action),
+                    "read_model": read_model._meta.label,
+                    "model": model._meta.label,
+                }
+            )
+    return problems

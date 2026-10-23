@@ -100,3 +100,14 @@ def every_concurrency_relation_is_locked(app_configs, databases=None, **kwargs):
                 )
             )
     return warnings
+
+
+@register()
+def every_guarded_write_has_a_version_to_read(app_configs, **kwargs):
+    """A write that asks If-Match, with no read handing out the version, leaves a client nothing to name."""
+    if not apps.is_installed("rest_framework"):
+        return []
+    from isik.django.drf.viewsets.preconditions import precondition_read_problems
+
+    hint = _("See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions).")
+    return [Error(problem, hint=hint, id="isik.E004") for problem in precondition_read_problems()]

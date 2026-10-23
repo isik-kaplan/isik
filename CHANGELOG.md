@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-23
+
+### Added
+
+- **Every write that asks `If-Match` must have a read handing out its version - system check
+  `isik.E004`.** `PATCH /users/me/` could require `If-Match` while `GET /users/me/` sent no `ETag`, and
+  every check was green: a client had nothing to name. A write is now paired with its read within one
+  urlconf, in order:
+  1. the action `precondition_read_from = {write action: read action}` names, of the same view;
+  2. a GET at the write's own path whose action is in `precondition_read_actions`;
+  3. the same view's `retrieve`, for a `detail=True` write.
+
+  The read must be of the same model. Exempt a write on purpose with `precondition_unread_actions =
+  {write action: reason}`, each reason a `NoReadableVersion` exemption listed by `manage.py exemptions`.
+  `precondition_read_problems()` gives the same list.
+
+### Changed
+
+- **Breaking: a read named in `precondition_read_actions` that answers without `get_object()` is
+  refused.** It sent no `ETag`, and the static check can't see that. A GET or HEAD whose action is in
+  `precondition_read_actions` and that succeeds without `get_object()` having run now raises
+  `ImproperlyConfigured`, as a write that skipped the check does. A view that isn't a viewset is held to
+  it only where its URL names one object, and a model without a concurrency token is left alone.
+
 ## [0.27.0] - 2026-10-22
 
 ### Added

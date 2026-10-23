@@ -203,6 +203,11 @@ msgstr ""
 msgid "%(owner)s.%(attribute)s takes {name: reason}, not %(value)r."
 msgstr ""
 
+#: isik/django/drf/viewsets/preconditions.py:228
+#, python-format
+msgid "%(owner)s.precondition_read_from takes {write action: read action}, not %(value)r."
+msgstr ""
+
 #: isik/common/utils/exemptions.py:336
 #, python-format
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
@@ -213,7 +218,7 @@ msgstr ""
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:388
+#: isik/django/drf/viewsets/preconditions.py:443
 #, python-format
 msgid "%(serializer)s, a serializer of %(view)s, lets a request write %(model)s's concurrency token %(token)r as %(field)r - make it read-only."
 msgstr ""
@@ -318,17 +323,22 @@ msgstr ""
 msgid "%(value)r isn't a registered type, Field subclass, or Field instance"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:371
+#: isik/django/drf/viewsets/preconditions.py:400
 #, python-format
 msgid "%(view)s answered %(method)s %(action)s without comparing If-Match, so its database writes are rolled back. Fetch the row with self.get_object(), which compares it, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:275
+#: isik/django/drf/viewsets/preconditions.py:426
+#, python-format
+msgid "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of precondition_read_actions."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:303
 #, python-format
 msgid "%(view)s compares If-Match with the row it locks, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:436
+#: isik/django/drf/viewsets/preconditions.py:491
 #, python-format
 msgid "%(view)s compares concurrency tokens of no model isik can find - set precondition_model."
 msgstr ""
@@ -343,17 +353,17 @@ msgstr ""
 msgid "%(view)s honors idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:482
+#: isik/django/drf/viewsets/preconditions.py:537
 #, python-format
 msgid "%(view)s refuses If-Match: * but lets a write through without If-Match, so a client that would send * leaves the header out instead - refusing * protects nothing unless If-Match is required."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:457
+#: isik/django/drf/viewsets/preconditions.py:512
 #, python-format
 msgid "%(view)s's precondition option %(option)r is %(value)r - PRECONDITION_%(setting)s and precondition_%(option)s take True or False."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:466
+#: isik/django/drf/viewsets/preconditions.py:521
 #, python-format
 msgid "%(view)s's precondition option 'missing_row_status' is %(value)r - PRECONDITION_MISSING_ROW_STATUS and precondition_missing_row_status take 404 or 412."
 msgstr ""
@@ -396,6 +406,26 @@ msgstr ""
 #: isik/django/apps/common/management/commands/exemptions.py:99
 #, python-format
 msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:617
+#, python-format
+msgid "%(write)s (%(method)s %(route)s) asks If-Match, and nothing routed hands out the version to send - no GET of %(route)s sends an ETag, and there's no retrieve to read it from. Route one, name it in precondition_read_from, or exempt the write in precondition_unread_actions."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:629
+#, python-format
+msgid "%(write)s (%(method)s %(route)s) reads its version from %(read)s, which hands out a version of %(read_model)s, not of %(model)s."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:570
+#, python-format
+msgid "%(write)s reads its version from %(read)r (precondition_read_from), which %(view)s doesn't route with GET."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:575
+#, python-format
+msgid "%(write)s reads its version from %(read)r (precondition_read_from), which isn't in precondition_read_actions, so it sends no ETag."
 msgstr ""
 
 #: isik/common/config/builder.py:52
@@ -730,6 +760,10 @@ msgstr ""
 msgid "See PreconditionMixin's options (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
+#: isik/django/apps/common/checks.py:112
+msgid "See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions)."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Server does not support this operation"
 msgstr ""
@@ -910,7 +944,7 @@ msgstr ""
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:55
+#: isik/django/drf/viewsets/preconditions.py:67
 msgid "This changed since the version the request was made against."
 msgstr ""
 
@@ -934,11 +968,11 @@ msgstr ""
 msgid "This request isn't allowed."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:260
+#: isik/django/drf/viewsets/preconditions.py:288
 msgid "This request must name the version it was made against - If-Match: * isn't accepted."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:44
+#: isik/django/drf/viewsets/preconditions.py:56
 msgid "This request must say which version it was made against, in an If-Match header."
 msgstr ""
 
