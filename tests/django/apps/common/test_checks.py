@@ -56,6 +56,7 @@ class TestTheSettings:
             "urlconfs": None,
             "apps": None,
             "exemption_types": None,
+            "inherited_from_libraries": True,
         }
 
     def test_a_checks_entry_overrides_the_defaults(self, settings):
@@ -334,7 +335,9 @@ class TestTheDocumentationCheck:
         monkeypatch.setattr(
             documentation,
             "documentation_problems",
-            lambda configs, exemption_types: seen.append((configs, exemption_types)) or ["one"],
+            lambda configs, exemption_types, inherited_from_libraries: (
+                seen.append((configs, exemption_types)) or ["one"]
+            ),
         )
 
         (error,) = checks.every_field_says_what_it_holds(app_configs=None)
@@ -348,7 +351,9 @@ class TestTheDocumentationCheck:
     def test_takes_exemption_types_and_their_paths(self, settings, monkeypatch):
         seen = []
         monkeypatch.setattr(
-            documentation, "documentation_problems", lambda configs, exemption_types: seen.append(exemption_types) or []
+            documentation,
+            "documentation_problems",
+            lambda configs, exemption_types, inherited_from_libraries: seen.append(exemption_types) or [],
         )
         settings.ISIK_CHECKS = {
             "documentation": {"exemption_types": ["isik.django.apps.common.atomic.NotAtomic", ViewSetRegistryExemption]}
@@ -451,3 +456,19 @@ def test_a_check_reads_the_urlconfs_it_is_told(settings, monkeypatch, check, mod
     getattr(checks, check)(app_configs=None)
 
     assert asked == [(name, [URLS]) for name in names]
+
+
+def test_the_documentation_check_hands_on_inherited_from_libraries(settings, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        documentation,
+        "documentation_problems",
+        lambda configs, exemption_types, inherited_from_libraries: seen.append(inherited_from_libraries) or [],
+    )
+
+    checks.every_field_says_what_it_holds(app_configs=None)
+    settings.ISIK_CHECKS = {"documentation": {"inherited_from_libraries": False}}
+    checks.every_field_says_what_it_holds(app_configs=None)
+
+    assert seen == [True, False]
+    assert checks.isik_checks_are_configured(None) == []

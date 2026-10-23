@@ -13,7 +13,9 @@ check's own). A check over routed views takes `urlconfs` - every urlconf the pro
 default (`project_urlconfs()`), and a warning, `isik.W003`, names each served one it is told to skip.
 A check over models takes `apps`, app labels - the project's own apps by default
 (`project_app_configs()`). `documentation` also takes `exemption_types`, the `Exemption` types (or
-their dotted paths) that answer for a field. Anything else in `ISIK_CHECKS` is an error, `isik.E012`.
+their dotted paths) that answer for a field, and `inherited_from_libraries` - True by default; False
+leaves out the fields a model inherits unchanged from a library's abstract base. Anything else in
+`ISIK_CHECKS` is an error, `isik.E012`.
 
 | name                 | id                     | what it refuses                                              |
 |----------------------|------------------------|--------------------------------------------------------------|
@@ -46,6 +48,7 @@ SEVERITIES = {"error": Error, "warning": Warning}
 URLCONFS = "urlconfs"
 APPS = "apps"
 EXEMPTION_TYPES = "exemption_types"
+INHERITED_FROM_LIBRARIES = "inherited_from_libraries"
 
 # {name: the options it takes beyond enabled and severity}
 CHECKS = {
@@ -59,7 +62,7 @@ CHECKS = {
     "preconditions": (URLCONFS,),
     "history_indexes": (APPS,),
     "exemptions": (URLCONFS,),
-    "documentation": (APPS, EXEMPTION_TYPES),
+    "documentation": (APPS, EXEMPTION_TYPES, INHERITED_FROM_LIBRARIES),
     "not_atomic": (URLCONFS,),
 }
 
@@ -70,7 +73,14 @@ def _configured():
 
 def check_options(name):
     """The options check `name` runs with: its `ISIK_CHECKS` entry over the defaults."""
-    defaults = {"enabled": True, "severity": None, URLCONFS: None, APPS: None, EXEMPTION_TYPES: None}
+    defaults = {
+        "enabled": True,
+        "severity": None,
+        URLCONFS: None,
+        APPS: None,
+        EXEMPTION_TYPES: None,
+        INHERITED_FROM_LIBRARIES: True,
+    }
     given = _configured().get(name)
     return {**defaults, **given} if isinstance(given, dict) else defaults
 
@@ -391,7 +401,11 @@ def every_field_says_what_it_holds(options, **kwargs):
     hint = _("See documentation_problems() (isik.django.apps.common.db.documentation).")
     return [
         Error(problem, hint=hint, id="isik.E010")
-        for problem in documentation_problems(_project_configs(options), exemption_types=types)
+        for problem in documentation_problems(
+            _project_configs(options),
+            exemption_types=types,
+            inherited_from_libraries=options[INHERITED_FROM_LIBRARIES],
+        )
     ]
 
 

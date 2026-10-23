@@ -1,4 +1,7 @@
+from importlib import import_module
+
 from django.conf import settings
+from django.contrib.sessions.backends import signed_cookies
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 
@@ -41,12 +44,28 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
 DEAD_SESSION_HEADER = "Session-Expired"
 
 
+def session_exists(session_key):
+    """
+    Whether the session `session_key` names is still in the configured `SESSION_ENGINE`'s store. A
+    signed-cookie session has no store - it is the cookie - so it exists while the cookie still loads:
+    its signature holds and it hasn't expired.
+    """
+    store = import_module(settings.SESSION_ENGINE).SessionStore(session_key=session_key)
+    if isinstance(store, signed_cookies.SessionStore):
+        return bool(store.load())
+    return store.exists(session_key)
+
+
 class DeadSessionCookieMiddleware:
     """
-    A 401 or 403 to a request that sent a session cookie and still isn't signed in means the cookie is
-    dead - expired, signed out elsewhere, its session rotated away. The response deletes it and says so
-    in a header (`DEAD_SESSION_HEADER`, `Session-Expired` unless set), so a browser stops sending it and
-    a client can tell "sign in again" from "you may not".
+    A 401 or 403 to a request that sent a session cookie, still isn't signed in, and whose session is no
+    longer in the store means the cookie is dead - expired, signed out elsewhere, its session rotated
+    away. The response deletes it and says so in a header (`DEAD_SESSION_HEADER`, `Session-Expired`
+    unless set), so a browser stops sending it and a client can tell "sign in again" from "you may not".
+
+    A session that still exists is left alone, signed in or not: a sign-in halfway through (a second
+    factor, a re-authentication, a provider sign-up) answers 401 while its session holds the step to
+    come back to. See `session_exists()`.
 
     Place it after `AuthenticationMiddleware`, which decides whether the request is signed in. It
     covers every view, DRF's or not - an admin page or an allauth one as well as an API. Whether to
@@ -60,7 +79,9 @@ class DeadSessionCookieMiddleware:
         response = self.get_response(request)
         user = getattr(request, "user", None)
         signed_in = user is not None and user.is_authenticated
-        if response.status_code in (401, 403) and settings.SESSION_COOKIE_NAME in request.COOKIES and not signed_in:
+        cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+        refused = response.status_code in (401, 403) and cookie is not None and not signed_in
+        if refused and not session_exists(cookie):
             # Deleted with the attributes it was set with, or a browser keeps it.
             response.delete_cookie(
                 settings.SESSION_COOKIE_NAME,

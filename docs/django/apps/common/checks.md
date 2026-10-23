@@ -40,6 +40,11 @@ ISIK_CHECKS = {
   not isik's.
 - `exemption_types` - for `documentation`: the `Exemption` types, or their dotted paths, that answer
   for a field. Any `Exemption` by default.
+- `inherited_from_libraries` - for `documentation`: `True` by default, so every field is checked.
+  `False` leaves out the fields a model inherits unchanged from an installed library's abstract base -
+  `AbstractUser`'s `username`, an OAuth application's `client_id`, a tenant mixin's `schema_name` -
+  whose description is the library's to write, not the project's. A field the project declares again,
+  and one from its own abstract base, are still checked.
 
 A name that isn't a check, an option a check doesn't take, or a severity there isn't, is an error:
 `isik.E012`.
@@ -60,6 +65,10 @@ language = models.CharField(
     help_text=NoHelpText(reason="the labels of its choices already say what it holds"),
     db_comment="The language the user reads in.",
 )
+```
+
+```python
+ISIK_CHECKS = {"documentation": {"inherited_from_libraries": False}}
 ```
 
 Left out: fields Django adds itself (an implicit `id`, a parent link), a many-to-many's `db_comment`

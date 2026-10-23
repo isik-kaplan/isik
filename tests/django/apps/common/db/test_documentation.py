@@ -129,3 +129,69 @@ class TestModelsLeftOut:
         made = model({"name": models.CharField(max_length=5), "pgh_tracked_model": model({})}, bases=(Event,))
 
         assert problems(made) == []
+
+
+def library_user(name="Member", extra=None, bases=None):
+    """A user model on django.contrib.auth's AbstractUser - AbstractBaseUser and PermissionsMixin, a mixin."""
+    from django.contrib.auth.models import AbstractUser
+
+    attrs = {
+        "groups": models.ManyToManyField("auth.Group", related_name="+", help_text="Its groups."),
+        "user_permissions": models.ManyToManyField("auth.Permission", related_name="+", help_text="Its permissions."),
+        **(extra or {}),
+    }
+    return model(attrs, bases=bases or (AbstractUser,))
+
+
+def named(problems):
+    return sorted(problem.split(" has ")[0].rsplit(".", 1)[1] for problem in problems)
+
+
+class TestFieldsInheritedFromALibrary:
+    def test_are_checked_by_default(self):
+        flagged = named(problems(library_user()))
+
+        assert {"username", "first_name", "password", "is_superuser", "date_joined"} <= set(flagged)
+
+    def test_left_out_when_asked(self):
+        made = library_user(extra={"nickname": models.CharField(max_length=5)})
+
+        assert named(documentation_problems_of(made, inherited_from_libraries=False)) == ["nickname"]
+
+    def test_one_the_project_declares_again_is_its_own(self):
+        made = library_user(extra={"email": models.EmailField()})
+
+        assert named(documentation_problems_of(made, inherited_from_libraries=False)) == ["email"]
+
+    def test_through_a_projects_own_abstract_base_still_the_librarys(self):
+        from django.contrib.auth.models import AbstractUser
+
+        base = model({}, meta={"abstract": True}, bases=(AbstractUser,))
+
+        assert documentation_problems_of(library_user(bases=(base,)), inherited_from_libraries=False) == []
+
+    def test_one_from_a_projects_own_abstract_base_is_checked(self):
+        base = model({"nickname": models.CharField(max_length=5)}, meta={"abstract": True})
+
+        assert named(documentation_problems_of(model({}, bases=(base,)), inherited_from_libraries=False)) == [
+            "nickname"
+        ]
+
+
+def documentation_problems_of(*models_, inherited_from_libraries):
+    return documentation_problems(
+        [types.SimpleNamespace(get_models=lambda: models_)], (Exemption,), inherited_from_libraries
+    )
+
+
+class TestALibrarysPath:
+    def test_installed_or_isiks(self):
+        from pathlib import Path
+
+        import isik
+        from isik.django.apps.common.project import is_library_path
+
+        assert is_library_path("/venv/lib/python3.12/site-packages/oauth2_provider/models.py")
+        assert is_library_path("/usr/lib/python3/dist-packages/django_tenants/models.py")
+        assert is_library_path(str(Path(isik.__file__).parent / "django" / "models.py"))
+        assert not is_library_path(__file__)

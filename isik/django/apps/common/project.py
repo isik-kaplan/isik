@@ -10,6 +10,11 @@ _LIBRARIES = ("site-packages", "dist-packages")
 _ISIK = str(Path(__file__).resolve().parents[3]) + os.sep
 
 
+def is_library_path(path):
+    """Whether `path` is a library's - installed as one (under `site-packages`/`dist-packages`), or isik's."""
+    return any(part in _LIBRARIES for part in Path(path).parts) or str(Path(path).resolve()).startswith(_ISIK)
+
+
 def project_app_configs(labels=None):
     """
     The app configs of the apps `labels` names, in the order given - or, by default, of every installed
@@ -18,9 +23,4 @@ def project_app_configs(labels=None):
     """
     if labels is not None:
         return [apps.get_app_config(label) for label in labels]
-    return [
-        config
-        for config in apps.get_app_configs()
-        if not any(part in _LIBRARIES for part in Path(config.path).parts)
-        and not str(Path(config.path).resolve()).startswith(_ISIK)
-    ]
+    return [config for config in apps.get_app_configs() if not is_library_path(config.path)]

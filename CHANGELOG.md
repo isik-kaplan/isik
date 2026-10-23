@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-10-24
+
+### Fixed
+
+- **`DeadSessionCookieMiddleware` no longer deletes a live session's cookie.** It deleted the cookie on
+  any 401/403 to a request that wasn't signed in - and a sign-in halfway through (a second factor, a
+  re-authentication, a provider sign-up) answers 401 while its session holds the step to come back to,
+  so the second step could never complete. A cookie is now dead only when its session is no longer in
+  the configured `SESSION_ENGINE`'s store - `session_exists(key)`; a signed-cookie session exists while
+  its cookie still loads.
+
+### Added
+
+- The `documentation` check (`isik.E010`) takes `inherited_from_libraries`: `True` by default, so every
+  field is checked as before; `False` leaves out the fields a model inherits unchanged from an installed
+  library's abstract base - `AbstractUser`'s, an OAuth application's, a tenant mixin's - whose
+  description is the library's to write. A field the project declares again is still checked.
+- `is_library_path(path)` (`isik.django.apps.common.project`).
+
 ## [0.30.0] - 2026-10-23
 
 ### Added

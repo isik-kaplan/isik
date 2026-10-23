@@ -62,8 +62,9 @@ def test_missing_session_header_name_setting_raises_improperly_configured(settin
         CookieORHeaderSessionMiddleware(get_response=lambda request: None)
 
 
+@pytest.mark.django_db
 class TestDeadSessionCookie:
-    def respond(self, status, *, cookie=True, signed_in=False):
+    def respond(self, status, *, cookie=True, signed_in=False, key="dead"):
         from django.contrib.auth.models import AnonymousUser
         from django.http import HttpResponse
 
@@ -71,7 +72,7 @@ class TestDeadSessionCookie:
 
         request = RequestFactory().get("/")
         if cookie:
-            request.COOKIES[settings.SESSION_COOKIE_NAME] = "dead"
+            request.COOKIES[settings.SESSION_COOKIE_NAME] = key
         request.user = type("User", (), {"is_authenticated": True})() if signed_in else AnonymousUser()
         handed = []
 
@@ -131,3 +132,67 @@ class TestDeadSessionCookie:
         response = DeadSessionCookieMiddleware(lambda request: HttpResponse(status=401))(request)
 
         assert response["Session-Expired"] == "true"
+
+
+def live_session(**data):
+    """A session saved in the configured store, holding `data` - a sign-in waiting for its next step, say."""
+    from importlib import import_module
+
+    session = import_module(settings.SESSION_ENGINE).SessionStore()
+    session.update(data or {"pending_login": "mfa"})
+    session.save()
+    return session.session_key
+
+
+@pytest.mark.django_db
+class TestASessionStillInTheStore:
+    """A pending sign-in answers 401 while its session holds the step to come back to - its cookie stays."""
+
+    respond = TestDeadSessionCookie.respond
+
+    @pytest.mark.parametrize(
+        "engine",
+        [
+            "django.contrib.sessions.backends.db",
+            "django.contrib.sessions.backends.cache",
+            "django.contrib.sessions.backends.cached_db",
+            "django.contrib.sessions.backends.signed_cookies",
+        ],
+    )
+    def test_keeps_its_cookie_and_a_missing_one_is_cleared(self, settings, engine):
+        settings.SESSION_ENGINE = engine
+
+        kept = self.respond(401, key=live_session())
+        cleared = self.respond(401, key="no-such-session")
+
+        assert settings.SESSION_COOKIE_NAME not in kept.cookies
+        assert "Session-Expired" not in kept
+        assert cleared.cookies[settings.SESSION_COOKIE_NAME].value == ""
+        assert cleared["Session-Expired"] == "true"
+
+    def test_one_flushed_since_is_dead(self, settings):
+        from importlib import import_module
+
+        settings.SESSION_ENGINE = "django.contrib.sessions.backends.db"
+        key = live_session()
+        import_module(settings.SESSION_ENGINE).SessionStore(session_key=key).delete()
+
+        assert self.respond(403, key=key)["Session-Expired"] == "true"
+
+
+@pytest.mark.django_db
+class TestSessionExists:
+    def test_a_saved_one(self):
+        from isik.django.apps.common.middleware.session import session_exists
+
+        assert session_exists(live_session()) is True
+        assert session_exists("no-such-session") is False
+
+    def test_a_signed_cookie_while_it_loads(self, settings):
+        from isik.django.apps.common.middleware.session import session_exists
+
+        settings.SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+        key = live_session()
+
+        assert session_exists(key) is True
+        assert session_exists(key[:-2] + "xx") is False

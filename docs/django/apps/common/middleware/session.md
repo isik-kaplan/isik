@@ -16,9 +16,9 @@ MIDDLEWARE = ["isik.django.apps.common.middleware.session.CookieORHeaderSessionM
 
 ## DeadSessionCookieMiddleware
 
-A 401 or 403 to a request that sent a session cookie and still isn't signed in means the cookie is
-dead - expired, signed out elsewhere, its session rotated away. `DeadSessionCookieMiddleware` deletes
-it on that response (with the path, domain and `SameSite` it was set with, or a browser keeps it) and
+A 401 or 403 to a request that sent a session cookie, still isn't signed in, and whose session is no
+longer in the store means the cookie is dead - expired, signed out elsewhere, its session rotated away.
+`DeadSessionCookieMiddleware` deletes it on that response (with the path, domain and `SameSite` it was set with, or a browser keeps it) and
 says so in a header, so a browser stops sending it and a client can tell "sign in again" from "you
 may not":
 
@@ -34,3 +34,7 @@ DEAD_SESSION_HEADER = "Session-Expired"   # the default
 - Place it after `AuthenticationMiddleware`, which decides whether the request is signed in.
 - It covers every view, DRF's or not - an admin page or an allauth one as well as an API.
 - A 401/403 to a signed-in request, or one without the cookie, is left as it is.
+- So is one whose session still exists, signed in or not: a sign-in halfway through - a second factor,
+  a re-authentication, a provider sign-up - answers 401 while its session holds the step to come back
+  to. `session_exists(key)` asks the configured `SESSION_ENGINE`'s store; a signed-cookie session,
+  which has no store, exists while its cookie still loads.
