@@ -7,11 +7,30 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import router, transaction
 from rest_framework.exceptions import NotAuthenticated, ValidationError
 
-from isik._internal.reasons import require_reasons
+from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import Exemption
 from isik.django.apps.idempotency.claims import claim_idempotency_key, get_claim_model
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyNotReplayable, IdempotencyKeyReused
 from isik.django.apps.idempotency.fingerprint import request_fingerprint
+
+
+class NoIdempotencyKey(
+    Exemption,
+    rule="isik.idempotency.key",
+    why=(
+        "A request that changes state honors an Idempotency-Key, or a retry after a lost response does the work twice."
+    ),
+):
+    """Why an action is never asked for an idempotency key - `idempotency_exempt_actions`' type."""
+
+
+class NoReplay(
+    Exemption,
+    rule="isik.idempotency.replay",
+    why="A retry with the same key gets the first response back, or it can't tell what the first did.",
+):
+    """Why an action's response mustn't be kept for a replay - `idempotency_no_replay_actions`' type."""
 
 
 class IdempotentReplay(Exception):
@@ -48,9 +67,10 @@ class IdempotencyMixin:
     - `idempotent_methods` - which methods are covered. `("POST",)`.
     - `idempotency_key_required` - a covered request without the header is a 400. True; False honors
       a key only when one is sent.
-    - `idempotency_exempt_actions` - `{action: reason}`, actions the key is never asked of.
-    - `idempotency_no_replay_actions` - `{action: reason}`, actions whose response mustn't be stored
-      (a secret shown once): a repeat is refused with 409, and the claim keeps only its status.
+    - `idempotency_exempt_actions` - `{action: NoIdempotencyKey(reason=...)}`, actions the key is never
+      asked of.
+    - `idempotency_no_replay_actions` - `{action: NoReplay(reason=...)}`, actions whose response mustn't
+      be stored (a secret shown once): a repeat is refused with 409, and the claim keeps only its status.
     - `idempotency_normalize` - what a request's body is compared by, a function of the request (see
       `request_fingerprint()`). Per action too: `@action(..., idempotency_normalize=fn)`.
     - `idempotency_claim_model` - the claim model, else `get_claim_model()` picks it.
@@ -74,8 +94,8 @@ class IdempotencyMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        for attribute in ("idempotency_exempt_actions", "idempotency_no_replay_actions"):
-            require_reasons(cls.__name__, attribute, getattr(cls, attribute))
+        require_exemptions(cls.__name__, "idempotency_exempt_actions", cls.idempotency_exempt_actions, NoIdempotencyKey)
+        require_exemptions(cls.__name__, "idempotency_no_replay_actions", cls.idempotency_no_replay_actions, NoReplay)
 
     @property
     def idempotency_action(self):

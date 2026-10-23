@@ -11,7 +11,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from isik.common.utils.exemptions import declared_exemptions
 from isik.django.drf.serializers import ConcurrencyTokenField
-from isik.django.drf.viewsets import BaseModelViewSet, NoPrecondition, PreconditionMixin
+from isik.django.drf.viewsets import BaseModelViewSet, NoPrecondition, PreconditionMixin, ViewSetRegistryExemption
 from isik.django.drf.viewsets.preconditions import entity_tags, matches, requires_precondition
 from tests.django.drf.preconditions.views import WidgetViewSet
 from tests.testapp.models import VersionedWidget, Widget
@@ -72,44 +72,37 @@ class TestWhatNeedsIfMatch:
 
 
 class TestExemptActions:
-    def test_each_reason_becomes_a_listed_exemption(self):
-        view, line = (
-            type("Exempting", (PreconditionMixin, GenericViewSet), {"precondition_exempt_actions": {"touch": REASON}}),
-            sys._getframe().f_lineno,
-        )
+    def test_each_is_a_listed_exemption_made_where_it_is_written(self):
+        made, line = NoPrecondition(reason=REASON), sys._getframe().f_lineno
 
-        made = view.precondition_exempt_actions["touch"]
-        assert isinstance(made, NoPrecondition)
-        assert made == REASON
-        assert declared_exemptions("isik.precondition")[-1] is made
-        assert made.file == HERE
-        assert made.line in (line - 1, line)
-
-    def test_one_already_made_is_kept(self):
-        made = NoPrecondition(reason=REASON)
-
-        view = type("Made", (PreconditionMixin,), {"precondition_exempt_actions": {"touch": made}})
+        view = type("Exempting", (PreconditionMixin, GenericViewSet), {"precondition_exempt_actions": {"touch": made}})
 
         assert view.precondition_exempt_actions["touch"] is made
+        assert declared_exemptions("isik.precondition")[-1] is made
+        assert (made.file, made.line) == (HERE, line)
+
+    def test_a_bare_string_is_refused_naming_the_type(self):
+        with pytest.raises(ImproperlyConfigured) as raised:
+            type("Bare", (PreconditionMixin,), {"precondition_exempt_actions": {"touch": REASON}})
+
+        assert str(raised.value) == (
+            "Bare.precondition_exempt_actions takes a NoPrecondition(reason=...) for touch, not a bare string."
+        )
 
     def test_a_mapping_is_required(self):
         with pytest.raises(ImproperlyConfigured) as raised:
             type("Listed", (PreconditionMixin,), {"precondition_exempt_actions": ["touch"]})
 
-        assert str(raised.value) == "Listed.precondition_exempt_actions takes {name: reason}, not ['touch']."
+        assert str(raised.value) == (
+            "Listed.precondition_exempt_actions takes {name: NoPrecondition(reason=...)}, not ['touch']."
+        )
 
-    def test_a_missing_reason_is_refused(self):
+    def test_anything_else_is_refused(self):
         with pytest.raises(ImproperlyConfigured) as raised:
             type("Blank", (PreconditionMixin,), {"precondition_exempt_actions": {"touch": None}})
 
-        assert str(raised.value) == "Blank.precondition_exempt_actions needs a reason for touch, not None."
-
-    def test_a_short_reason_is_refused(self):
-        with pytest.raises(ImproperlyConfigured) as raised:
-            type("Short", (PreconditionMixin,), {"precondition_exempt_actions": {"touch": "by design"}})
-
-        assert str(raised.value).startswith(
-            "Short.precondition_exempt_actions - NoPrecondition needs a reason of at least 40 characters."
+        assert str(raised.value) == (
+            "Blank.precondition_exempt_actions takes a NoPrecondition(reason=...) for touch, not None."
         )
 
     def test_none_by_default(self):
@@ -139,7 +132,9 @@ class TestTheModel:
                 "model": VersionedWidget,
                 "endpoint": "x",
                 "serializer_class": serializers.Serializer,
-                "exempt_from_registry": "only here to read its model back, never routed or looked up",
+                "exempt_from_registry": ViewSetRegistryExemption(
+                    reason="only here to read its model back, never routed or looked up"
+                ),
             },
         )
 

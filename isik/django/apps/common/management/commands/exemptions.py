@@ -30,7 +30,10 @@ def _columns(rows):
 
 
 class Command(BaseCommand):
-    help = "Lists every exemption the project declares, by the rule it skips, with where and why."
+    help = (
+        "Lists every exemption the project declares, by the rule it skips, with where and why. Fails when "
+        "loading the project missed an exemption call or type, so the listing is incomplete."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--rule", help="Only this rule's exemptions.")
@@ -83,6 +86,7 @@ class Command(BaseCommand):
                     indent=2,
                 )
             )
+            self._fail_if_incomplete(unseen, unimported)
             return
         rows = [
             (
@@ -109,6 +113,16 @@ class Command(BaseCommand):
                     "listed."
                 )
                 % {"where": _where(file, line), "name": name}
+            )
+        self._fail_if_incomplete(unseen, unimported)
+
+    def _fail_if_incomplete(self, unseen, unimported):
+        # A listing missing some of the project's exemptions fails, so a CI step running it is a gate
+        # and not only a report. Each one is named above.
+        if unseen or unimported:
+            raise CommandError(
+                _("%(count)d exemption call(s) or type(s) weren't loaded, so the listing isn't complete.")
+                % {"count": len(unseen) + len(unimported)}
             )
 
     def _rules(self, found, format):

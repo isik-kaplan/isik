@@ -12,12 +12,16 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.viewsets import ModelViewSet
 
 from isik.django.drf.permissions import IsSuperUser, guarding
+from isik.django.drf.serializers import SerializerRegistryExemption
 from isik.django.drf.serializers.base import BaseModelSerializer
 from isik.django.drf.utils.current_user import CurrentUserField
 from isik.django.drf.utils.lazy_relations import LazyPrimaryKeyRelatedField
-from isik.django.drf.viewsets import GuardedFieldsMixin
+from isik.django.drf.viewsets import GuardedFieldsMixin, UnguardedField
 from isik.django.drf.viewsets.action_serializer_class import ActionSerializerClassMixin
 from tests.testapp.models import EmailUser, Widget, WidgetProfile
+
+
+STAFF_SET_THE_COUNT = UnguardedField(reason="staff may set the count freely, which the tenant viewset guards")
 
 
 pytestmark = pytest.mark.django_db
@@ -28,7 +32,7 @@ REFUSED, ALLOWED = status.HTTP_400_BAD_REQUEST, "allowed"
 class MatrixSerializer(BaseModelSerializer):
     """The full stack - create-only, write-only, flattened one-to-one, conditional fields."""
 
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = SerializerRegistryExemption(reason="a test's own class, defined again on every run")
 
     class Meta:
         model = Widget
@@ -417,13 +421,13 @@ class TestSharedSerializers:
             pass
 
         self.define("StrictWidgets", SharedOnPurpose, "count")
-        self.define("StaffWidgets", SharedOnPurpose, unguarded_fields={"count": "staff may set the count freely"})
+        self.define("StaffWidgets", SharedOnPurpose, unguarded_fields={"count": STAFF_SET_THE_COUNT})
 
         # and in the other order
         class SharedOnPurposeToo(MatrixSerializer):
             pass
 
-        self.define("StaffFirst", SharedOnPurposeToo, unguarded_fields={"count": "staff may set the count freely"})
+        self.define("StaffFirst", SharedOnPurposeToo, unguarded_fields={"count": STAFF_SET_THE_COUNT})
         self.define("StrictSecond", SharedOnPurposeToo, "count")
 
     def test_agreeing_viewsets_are_fine(self):

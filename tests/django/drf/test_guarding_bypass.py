@@ -14,6 +14,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.viewsets import ModelViewSet
 
 from isik.django.drf.permissions import BasePermission, IsSuperUser, guarding
+from isik.django.drf.serializers import SerializerRegistryExemption
 from isik.django.drf.serializers.base import BaseModelSerializer
 from isik.django.drf.serializers.guarded_save import FieldGuardsOnSaveMixin, _active_guarded_view
 from isik.django.drf.viewsets import GuardedFieldsMixin, WritesNoGuardedFields, writes_no_guarded_fields
@@ -46,7 +47,9 @@ def isik_serializer(name):
         name,
         (BaseModelSerializer,),
         {
-            "exempt_from_registry": "a test's own class, defined again on every run",
+            "exempt_from_registry": SerializerRegistryExemption(
+                reason="a test's own class, defined again on every run"
+            ),
             "Meta": type("Meta", (), {"model": Widget, "fields": ["id", "name", "count"]}),
         },
     )
@@ -318,7 +321,10 @@ class TestAfterTheFact:
             plain_serializer("Touched"),
             {
                 "touch": touch,
-                "actions_writing_no_guarded_fields": {"destroy": "writes no fields", "touch": "writes no fields"},
+                "actions_writing_no_guarded_fields": {
+                    "destroy": WritesNoGuardedFields(reason="deleting a row writes none of its fields"),
+                    "touch": WritesNoGuardedFields(reason="touching a row only saves it as it already is"),
+                },
             },
         )
         assert call(viewset, bob, "post", "touch", pk=widget.pk).status_code == 200

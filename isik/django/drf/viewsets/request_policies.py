@@ -1,8 +1,27 @@
 """RequestPolicy + RequestPoliciesMixin - see each one's own docstring."""
 
-from isik._internal.reasons import require_reasons
+from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext_lazy
+from isik.common.utils.exemptions import Exemption
 from isik.common.utils.strings import camel_to_snake
+
+
+class RequestPolicyExemption(
+    Exemption,
+    rule="isik.request-policy",
+    why="A request policy holds for every action of a view that carries it, or the one skipping it is a way around it.",
+):
+    """
+    Why an action skips a request policy - what a policy's exemptions are unless it names a type of its
+    own, `RequestPolicy.exemption_type`, a subclass with a rule of its own:
+
+        class NoReauthentication(RequestPolicyExemption, rule="reauthentication", why="..."):
+            pass
+
+    `manage.py exemptions` lists these under their policy, with the action each exempts.
+    """
+
+    listed_by_policy = True
 
 
 class RequestPolicy:
@@ -25,12 +44,14 @@ class RequestPolicy:
     - `refused(request, view, response)` - called with the refusal's response, to add what DRF can't
       render from a permission: a header telling a client which policy refused it, say.
     - `exemptions_attribute` - the view attribute naming the actions exempt from this policy, as
-      `{action: reason}`. `<policy_name>_exempt_actions` unless set.
+      `{action: exemption_type(reason=...)}`. `<policy_name>_exempt_actions` unless set.
+    - `exemption_type` - what each of those is: `RequestPolicyExemption`, or a subclass of it.
     """
 
     message = gettext_lazy("This request isn't allowed.")
     code = "request_policy"
     exemptions_attribute = None
+    exemption_type = RequestPolicyExemption
 
     def allows(self, request, view):
         raise NotImplementedError
@@ -50,7 +71,9 @@ class RequestPoliciesMixin:
 
         class AccessTokenViewSet(RequestPoliciesMixin, viewsets.ViewSet):
             request_policies = [OrganizationIsSetUp, SecondFactorSatisfied]
-            setup_gate_exempt_actions = {"me": "answers who is asking, which a blocked caller needs"}
+            setup_gate_exempt_actions = {
+                "me": RequestPolicyExemption(reason="answers who is asking, which a blocked caller needs"),
+            }
 
     The first policy that doesn't allow the request refuses it, and its `refused()` hook then sees the
     response. An action exempt from a policy is named in that policy's exemptions attribute with the
@@ -69,11 +92,11 @@ class RequestPoliciesMixin:
         super().__init_subclass__(**kwargs)
         for policy in cls.request_policies:
             name = policy.exemptions_attribute_name()
-            require_reasons(cls.__name__, name, getattr(cls, name, {}))
+            require_exemptions(cls.__name__, name, getattr(cls, name, {}), policy.exemption_type)
 
     @classmethod
     def request_policy_exemptions(cls, policy):
-        """`{action: reason}` for the actions exempt from `policy` on this view."""
+        """`{action: exemption}` for the actions exempt from `policy` on this view."""
         return getattr(cls, policy.exemptions_attribute_name(), {})
 
     def check_permissions(self, request):

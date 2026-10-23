@@ -45,6 +45,15 @@ def run(*args):
     return out.getvalue(), err.getvalue()
 
 
+def run_incomplete(*args):
+    """Runs a listing that misses some of the project's exemptions - which fails, after naming them."""
+    out, err = StringIO(), StringIO()
+    with pytest.raises(CommandError) as raised:
+        call_command("exemptions", "--urlconf", URLCONF, *args, stdout=out, stderr=err)
+    assert str(raised.value) == "1 exemption call(s) or type(s) weren't loaded, so the listing isn't complete."
+    return out.getvalue(), err.getvalue()
+
+
 def help_text_line():
     """The line in testapp's models that makes its NoHelpText, read from the source."""
     return next(n for n, line in enumerate(Path(MODELS).read_text().splitlines(), 1) if "help_text=NoHelpText(" in line)
@@ -70,6 +79,14 @@ class TestTheListing:
                 inspect.getsourcelines(Gated)[1], "retrieve",
             )
         ]  # fmt: skip
+
+    def test_a_policys_exemption_is_listed_under_its_policy_alone(self):
+        entries = project_exemptions(URLCONF)
+
+        assert [e.rule for e in entries if e.reason == "reading one changes nothing the gate protects"] == [
+            "policy.set-up"
+        ]
+        assert "isik.request-policy" not in {rule.rule for rule in project_exemption_rules(URLCONF)}
 
     def test_a_view_routed_twice_is_listed_once(self):
         assert [e.declared_by for e in project_exemptions(URLCONF) if e.rule == "policy.set-up"] == ["Gated"]
@@ -147,8 +164,8 @@ class TestTheCommand:
         source.write_text("def later():\n    return NoHelpText(reason='made only once later() runs')\n")
         monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
 
-        _, err = run("--rule", "testapp.help-text")
-        payload = json.loads(run("--format", "json")[0])
+        _, err = run_incomplete("--rule", "testapp.help-text")
+        payload = json.loads(run_incomplete("--format", "json")[0])
 
         assert err == (
             f"{source.resolve()}:2 makes an exemption through NoHelpText that loading the project didn't - it "
@@ -161,8 +178,8 @@ class TestTheCommand:
         source.write_text("class Unloaded(Exemption, rule='app.unloaded', why='x'):\n    pass\n")
         monkeypatch.setattr(project, "_project_paths", lambda: [str(tmp_path)])
 
-        _, err = run("--rule", "testapp.help-text")
-        payload = json.loads(run("--format", "json")[0])
+        _, err = run_incomplete("--rule", "testapp.help-text")
+        payload = json.loads(run_incomplete("--format", "json")[0])
 
         assert err == (
             f"{source.resolve()}:1 declares Unloaded, which loading the project didn't import - its exemptions "
@@ -330,7 +347,7 @@ class TestAcrossUrlconfs:
         return [
             (e.rule, e.declared_by, e.reason, e.action)
             for e in entries
-            if e.reason in (HOSTED_REASON, "a host's health check reads the list")
+            if e.reason in (HOSTED_REASON, "a host's health check reads the list, before any set-up")
         ]
 
     def test_every_django_hosts_urlconf_is_loaded_by_default(self, settings):
@@ -346,17 +363,17 @@ class TestAcrossUrlconfs:
         ]
         assert self.hosted(project_exemptions()) == [
             ("isik.viewset-registry", "ViewSetRegistryExemption", HOSTED_REASON, None),
-            ("policy.set-up", "HostedGated", "a host's health check reads the list", "list"),
+            ("policy.set-up", "HostedGated", "a host's health check reads the list, before any set-up", "list"),
         ]
 
     def test_urlconf_given_twice_loads_both(self):
         out, _ = run("--urlconf", HOSTED, "--rule", "policy.set-up")
 
-        assert out.splitlines()[-1].endswith("list - a host's health check reads the list")
+        assert out.splitlines()[-1].endswith("list - a host's health check reads the list, before any set-up")
         assert self.hosted(project_exemptions([URLCONF, HOSTED]))[-1] == (
             "policy.set-up",
             "HostedGated",
-            "a host's health check reads the list",
+            "a host's health check reads the list, before any set-up",
             "list",
         )
         assert "HostedGated" not in {e.declared_by for e in project_exemptions(URLCONF)}

@@ -46,8 +46,29 @@ class User(AbstractUser, BaseModel):
     concurrency_relations = ("groups", "user_permissions")
 ```
 
-Each must be a many-to-many field of the model itself (not inherited from a concrete parent). Reverse
-relations and foreign keys pointing at the model aren't covered.
+Each is one of:
+
+- a **many-to-many** field of the model itself (not inherited from a concrete parent) - its rows are the
+  through table's;
+- the accessor of a **foreign key or one-to-one pointing at the model** - `discount_set`, or the
+  `related_name` it gives (`discounts`), `storeprofile` for a one-to-one - its rows are the pointing
+  model's own: every field of each, so editing one moves the version as adding or deleting one does.
+
+```python
+class Store(BaseModel):
+    concurrency_relations = ("discounts", "profile")
+
+
+class Discount(models.Model):
+    store = models.ForeignKey(Store, models.CASCADE, related_name="discounts")
+
+
+class StoreProfile(models.Model):
+    store = models.OneToOneField(Store, models.CASCADE, related_name="profile")
+```
+
+A reverse many-to-many - the other side of someone else's - isn't covered: name it on the model that
+declares it.
 
 `concurrency_strategy` picks how the version covers them - three strategies, below. All three keep a
 model that names no relations exactly as it was, ETag format included.
@@ -63,8 +84,8 @@ model that names no relations exactly as it was, ETag format included.
 ### Computed
 
 The default once `concurrency_relations` names anything. The ETag is computed in SQL: an MD5 of the
-row's token and, for each relation, its through rows - the related object's id, and a custom through
-model's own fields - in order. `updated_at` keeps meaning "this row's own fields changed".
+row's token and, for each relation, its rows - a through row's related object and a custom through
+model's own fields, or every field of a row pointing at the owner - in order. `updated_at` keeps meaning "this row's own fields changed".
 
 - *When.* A version that must see memberships, with `updated_at` left to the row's own fields - the
   usual choice.
@@ -143,11 +164,13 @@ class Roster(BaseModel):
 
 ### Shared by all three
 
-- The lock or bump trigger lives on a proxy model over the through model, `<Owner><Relation>ConcurrencyLock`,
-  generated in the owner's app. That is pgtrigger's way to trigger an auto-created table, and why
-  `makemigrations` writes the trigger into that app's migrations, with no operation to call by hand.
-- `concurrency_token_problems()` (`isik.E002`) refuses a name that isn't a many-to-many field of the
-  model, a strategy it doesn't know, Computed or Column naming no relations, and `ConcurrencyParts`
+- The lock or bump trigger lives on a proxy model over the model whose table holds the relation's rows -
+  the through model, or the model pointing at the owner - `<Owner><Relation>ConcurrencyLock`, generated in
+  the owner's app. That is pgtrigger's way to trigger an auto-created table, or a model of another app,
+  and why `makemigrations` writes the trigger into the owner app's migrations, with no operation to call
+  by hand.
+- `concurrency_token_problems()` (`isik.E002`) refuses a name that is neither a many-to-many field of
+  the model nor a foreign key or one-to-one pointing at it, a strategy it doesn't know, Computed or Column naming no relations, and `ConcurrencyParts`
   without a `concurrency_parts()` method. The database check **`isik.W002`** (run by `migrate`, and by
   `check --database default`) warns while a relation's trigger isn't installed, or is outdated. It's a
   warning because `migrate` runs it before applying the migration that installs the trigger.

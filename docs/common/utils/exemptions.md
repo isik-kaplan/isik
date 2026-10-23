@@ -170,7 +170,7 @@ def carried_by_copies(decorators):
 ## In a Django project
 
 `manage.py exemptions` puts these together. It loads the models and every urlconf the project serves,
-then lists every exemption by rule. Each `RequestPolicy`'s `{action: reason}` exemptions on routed
+then lists every exemption by rule. Each `RequestPolicy`'s `{action: exemption}` exemptions on routed
 views appear under `policy.<policy-name>`:
 
 ```console
@@ -196,23 +196,52 @@ instead.
 
 On stderr, the command reports calls in the project's own apps that never ran, and types they declare
 that were never imported. Test code is skipped. In JSON these appear under `"unseen"` and
-`"unimported_types"`, each entry with a `file`, `line` and `name`.
+`"unimported_types"`, each entry with a `file`, `line` and `name`. Either makes the command fail after
+listing, since the listing isn't complete - so a CI step running it is a gate, not only a report.
 
 ## isik's own opt-outs
 
-Each single opt-out isik offers has its own type, with a rule under `isik.`:
+Every opt-out isik offers has its own type, with a rule under `isik.`:
 
 | Opt-out | Type | Rule |
 |---|---|---|
 | `ViewSetRegistryMixin.exempt_from_registry` | `ViewSetRegistryExemption` | `isik.viewset-registry` |
 | `ModelSerializerRegistryMixin.exempt_from_registry` | `SerializerRegistryExemption` | `isik.serializer-registry` |
-| `@writes_no_guarded_fields(...)` | `WritesNoGuardedFields` | `isik.guarded-fields.writes-none` |
+| `@writes_no_guarded_fields(...)`, `actions_writing_no_guarded_fields` | `WritesNoGuardedFields` | `isik.guarded-fields.writes-none` |
+| `GuardedFieldsMixin.unguarded_fields` | `UnguardedField` | `isik.guarded-fields.unguarded` |
+| `<policy>_exempt_actions` | `RequestPolicyExemption`, or the policy's own `exemption_type` | `isik.request-policy`, or its own |
+| `IdempotencyMixin.idempotency_exempt_actions` | `NoIdempotencyKey` | `isik.idempotency.key` |
+| `IdempotencyMixin.idempotency_no_replay_actions` | `NoReplay` | `isik.idempotency.replay` |
+| `PreconditionMixin.precondition_exempt_actions` | `NoPrecondition` | `isik.precondition` |
+| `PreconditionMixin.precondition_unread_actions` | `NoReadableVersion` | `isik.precondition.readable-version` |
+| `@no_database_form(...)`, `python_only_validator(...)` | `NoDatabaseForm` | `isik.validators.database-form` |
+| `ConcurrencyToken(field, reason=...)` | `UnprovenConcurrencyToken` | `isik.concurrency-token.unproven` |
+| `concurrency_strategy = ConcurrencyParts(reason=...)` | `ConcurrencyParts` | `isik.concurrency-parts.unproven` |
 
-They take the reason as a plain `str` of at least 40 characters, which becomes that type, or as an
-instance of the type. `True`, a short reason and another type's exemption are refused when the class
-is defined.
+An attribute, or each value of a `{name: ...}` map, is written as the type itself - never a bare
+string, which reads at the call site as a value to be used, an exception message say, rather than the
+reason a rule is skipped:
 
-`{name: reason}` maps (`unguarded_fields`, `<policy>_exempt_actions`, `idempotency_exempt_actions`,
-...) have no floor. The policy or field and the name already give the context, so
-`"as above, for one of them"` is a fine reason there. A blank one is still refused, and so is a
-placeholder (`n/a`, `tbd`, `x`, `-`, ...).
+```python
+precondition_exempt_actions = {"rename": NoPrecondition(reason="a rename may land over any other write, by design")}
+exempt_from_registry = ViewSetRegistryExemption(reason="routed only by the api host, beside the main viewset")
+```
+
+A bare string, `True`, or another type's exemption is refused when the class is defined, naming the
+type to write, and a reason under its floor (40 characters by default) is refused by the type itself.
+A function or decorator whose own call names the rule - `@writes_no_guarded_fields("...")`,
+`@no_database_form("...")`, `ConcurrencyToken(field, reason=...)` - takes the reason as text: there's
+nothing to mistake it for.
+
+A request policy's exemptions are listed under the policy, as `policy.<name>` with the action each
+exempts, rather than under their type's rule. A policy names a type of its own with a subclass of
+`RequestPolicyExemption` carrying its own rule:
+
+```python
+class NoReauthentication(RequestPolicyExemption, rule="reauthentication", why="..."):
+    pass
+
+
+class RecentlyAuthenticated(RequestPolicy):
+    exemption_type = NoReauthentication
+```

@@ -2,6 +2,7 @@ import pytest
 from rest_framework import serializers, status
 from rest_framework.test import APIRequestFactory
 
+from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.ordering import DeclaredOrderingFilter
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
@@ -28,7 +29,7 @@ class WidgetViewSet(BaseModelViewSet):
 class WidgetViewSetWithDeclaredOrdering(BaseModelViewSet):
     model = Widget
     endpoint = "declared-ordering-widgets"
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
     serializer_class = WidgetSerializer
     declared_ordering = {"popularity": "count"}
     filter_backends = [DeclaredOrderingFilter]
@@ -97,7 +98,7 @@ class TestBaseModelViewSet:
         class ScopedViewSet(WidgetViewSet):
             model = Widget
             endpoint = "scoped-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             serializer_class_action_map = {"list": ListOnlySerializer}
 
         view = ScopedViewSet()

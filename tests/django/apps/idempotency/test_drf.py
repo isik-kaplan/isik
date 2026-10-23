@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 from rest_framework.viewsets import ModelViewSet
 
 from isik.django.apps.idempotency.by_reference.models import IdempotencyClaim
-from isik.django.apps.idempotency.drf import IdempotencyMixin
+from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
 from isik.django.apps.idempotency.with_body.models import IdempotencyClaimWithBody
 from tests.django.apps.idempotency.support import client_for, make_user, post
 from tests.testapp.models import Widget
@@ -383,22 +383,43 @@ class TestTheHooksItOverrides:
 
 
 class TestDeclaringExemptions:
-    @pytest.mark.parametrize("attribute", ["idempotency_exempt_actions", "idempotency_no_replay_actions"])
-    @pytest.mark.parametrize("reason", ["", "   ", None])
-    def test_an_action_needs_a_reason(self, attribute, reason):
+    @pytest.mark.parametrize(
+        ("attribute", "type_"),
+        [("idempotency_exempt_actions", "NoIdempotencyKey"), ("idempotency_no_replay_actions", "NoReplay")],
+    )
+    def test_a_bare_string_is_refused_naming_the_type(self, attribute, type_):
         with pytest.raises(ImproperlyConfigured) as raised:
-            type("ReasonlessViewSet", (IdempotencyMixin, ModelViewSet), {attribute: {"preview": reason}})
+            type(
+                "BareViewSet",
+                (IdempotencyMixin, ModelViewSet),
+                {attribute: {"preview": "validates and changes nothing at all"}},
+            )
 
-        assert str(raised.value) == f"ReasonlessViewSet.{attribute} needs a reason for preview, not {reason!r}."
+        assert (
+            str(raised.value) == f"BareViewSet.{attribute} takes a {type_}(reason=...) for preview, not a bare string."
+        )
 
-    def test_a_reason_is_all_it_needs(self):
+    @pytest.mark.parametrize("value", [None, True, ("preview",)])
+    def test_anything_else_is_refused(self, value):
+        with pytest.raises(ImproperlyConfigured, match=r"^Odd\.idempotency_exempt_actions takes "):
+            type(
+                "Odd",
+                (IdempotencyMixin, ModelViewSet),
+                {"idempotency_exempt_actions": value if value == ("preview",) else {"preview": value}},
+            )
+
+    def test_each_takes_its_own_type(self):
+        exempt = NoIdempotencyKey(reason="validates a widget and changes nothing at all")
+        kept = NoReplay(reason="the secret is shown once and never stored anywhere")
         declared = type(
             "ReasonedViewSet",
             (IdempotencyMixin, ModelViewSet),
-            {"idempotency_exempt_actions": {"preview": "changes nothing"}, "idempotency_no_replay_actions": {"x": "y"}},
+            {"idempotency_exempt_actions": {"preview": exempt}, "idempotency_no_replay_actions": {"x": kept}},
         )
 
-        assert declared.idempotency_exempt_actions == {"preview": "changes nothing"}
+        assert declared.idempotency_exempt_actions == {"preview": exempt}
+        assert declared.idempotency_no_replay_actions == {"x": kept}
+        assert (NoIdempotencyKey.rule, NoReplay.rule) == ("isik.idempotency.key", "isik.idempotency.replay")
 
     def test_a_subclass_keeps_its_parents_init_subclass(self):
         seen = []

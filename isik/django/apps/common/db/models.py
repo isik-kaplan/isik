@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import partial
 from uuid import uuid4
 
 import pgtrigger
@@ -320,9 +321,12 @@ class_prepared.connect(_register_triggers, dispatch_uid="isik_base_model_timesta
 relation_locks = []
 
 
-def _relation_lock_trigger(owner, relation, through):
+def _relation_lock_trigger(owner, name, owner_key):
+    """
+    The trigger on the table a relation's rows live in - a many-to-many's through table, or the table of
+    a model pointing at `owner` - where `owner_key` is the column naming the owner row.
+    """
     quote = connection.ops.quote_name
-    owner_key = through._meta.get_field(relation.m2m_field_name())
     table, key = quote(owner._meta.db_table), quote(owner_key.target_field.column)
     owner_row = f"{key} = %s.{quote(owner_key.column)}"
     if getattr(owner, "concurrency_strategy", None) == "column":
@@ -330,15 +334,15 @@ def _relation_lock_trigger(owner, relation, through):
         # BEFORE UPDATE triggers move its token - and updated_at with it. Those only assign NEW and never
         # touch this table, so it's one UPDATE of the owner per row changed here, never a loop. The
         # UPDATE locks the owner row as the lock below does.
-        name, statement = f"bump_{relation.name}_owner", f"UPDATE {table} SET {key} = {key} WHERE {owner_row};"
+        trigger_name, statement = f"bump_{name}_owner", f"UPDATE {table} SET {key} = {key} WHERE {owner_row};"
     else:
         # The computed strategy: locks the owner row and writes nothing. Adding a row already takes this
         # lock, through its foreign key's check; removing one doesn't - and either has to wait for a
         # write holding the owner FOR UPDATE, which compared a version that counts this relation, so
         # the two can't interleave.
-        name, statement = f"lock_{relation.name}_owner", f"PERFORM 1 FROM {table} WHERE {owner_row} FOR KEY SHARE;"
+        trigger_name, statement = f"lock_{name}_owner", f"PERFORM 1 FROM {table} WHERE {owner_row} FOR KEY SHARE;"
     return pgtrigger.Trigger(
-        name=name,
+        name=trigger_name,
         when=pgtrigger.After,
         operation=pgtrigger.Insert | pgtrigger.Update | pgtrigger.Delete,
         # An update that moves a row between owners reaches both.
@@ -350,35 +354,53 @@ def _relation_lock_trigger(owner, relation, through):
     )
 
 
-def _register_relation_lock(owner, relation, through):
-    trigger = _relation_lock_trigger(owner, relation, through)
+def _register_relation_lock(owner, name, table, owner_key):
+    trigger = _relation_lock_trigger(owner, name, owner_key)
 
-    # A proxy over the through model, in the owner's app: how pgtrigger triggers an auto-created
-    # many-to-many table and puts the trigger in that app's migrations.
+    # A proxy over the model whose table holds the relation's rows, in the owner's app: how pgtrigger
+    # triggers an auto-created many-to-many table, and a model of another app's, and puts the trigger in
+    # the owner app's migrations.
     class Meta:
         proxy = True
         app_label = owner._meta.app_label
         triggers = [trigger]
 
-    name = f"{owner.__name__}{snake_to_pascal(relation.name)}ConcurrencyLock"
-    proxy = type(name, (through,), {"__module__": owner.__module__, "Meta": Meta})
-    relation_locks.append((owner, relation.name, proxy, trigger))
+    proxy_name = f"{owner.__name__}{snake_to_pascal(name)}ConcurrencyLock"
+    proxy = type(proxy_name, (table,), {"__module__": owner.__module__, "Meta": Meta})
+    relation_locks.append((owner, name, proxy, trigger))
+
+
+def _lock_many_to_many(owner, _related, through, relation):
+    _register_relation_lock(owner, relation.name, through, through._meta.get_field(relation.m2m_field_name()))
+
+
+def _lock_pointing_key(table, owner, key):
+    # Named by the accessor the owner reaches the rows with - `discount_set`, or a related_name.
+    name = key.remote_field.get_accessor_name()
+    if name in getattr(owner, "concurrency_relations", ()):
+        _register_relation_lock(owner, name, table, key)
 
 
 def _register_relation_locks(sender, **kwargs):
     for name in getattr(sender, "concurrency_relations", ()):
         relation = next((field for field in sender._meta.local_many_to_many if field.name == name), None)
-        # Anything else is concurrency_token_problems()'s to report, rather than an import that fails.
+        # A name that isn't one is a reverse relation, registered from its own side below - or
+        # concurrency_token_problems()'s to report, rather than an import that fails.
         if relation is None:
             continue
         # Once the related model and the through model are both loaded - either may be named by a
         # string, and only then does the relation know which of the through model's keys is the owner's.
         lazy_related_operation(
-            lambda owner, _related, through, relation=relation: _register_relation_lock(owner, relation, through),
+            partial(_lock_many_to_many, relation=relation),
             sender,
             relation.remote_field.model,
             relation.remote_field.through,
         )
+    # Each foreign key and one-to-one of this model is a reverse relation of the model it points at,
+    # which may name it - once that model is loaded, too.
+    for key in sender._meta.local_fields:
+        if key.many_to_one or key.one_to_one:
+            lazy_related_operation(partial(_lock_pointing_key, key=key), sender, key.remote_field.model)
 
 
 class_prepared.connect(_register_relation_locks, dispatch_uid="isik_concurrency_relation_locks")

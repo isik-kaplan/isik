@@ -25,7 +25,7 @@ from isik.django.apps.common.db.concurrency import (
     current_concurrency_etag,
     with_concurrency_etags,
 )
-from tests.testapp.models import EmailUser, Roster, Squad, Tag, Team, Widget
+from tests.testapp.models import EmailUser, Roster, Squad, SquadPost, Tag, Team, TeamNote, Widget
 
 
 # Where this module's code says it is - see tests/test_reasons.py.
@@ -118,6 +118,14 @@ class TestColumn:
 
         assert squad.updated_at > stamped
 
+    def test_a_row_pointing_at_it_moves_the_version_too(self):
+        squad = Squad.objects.create(name="a")
+        post = SquadPost.objects.create(squad=squad, text="hi")
+        post.delete()
+
+        squad.refresh_from_db()
+        assert squad.version == 3
+
     def test_the_etag_is_the_version_as_ever(self, alice):
         squad = Squad.objects.create(name="a")
         squad.members.add(alice)
@@ -138,7 +146,7 @@ class TestColumn:
         assert with_concurrency_etags(queryset) is queryset
 
     def test_its_trigger_updates_the_owner_row_and_changes_nothing_itself(self):
-        trigger = base_models._relation_lock_trigger(Squad, Squad._meta.get_field("members"), Squad.members.through)
+        trigger = base_models._relation_lock_trigger(Squad, "members", Squad.members.through._meta.get_field("squad"))
 
         assert trigger.name == "bump_members_owner"
         assert trigger.func == (
@@ -148,7 +156,10 @@ class TestColumn:
         )
 
     def test_the_helper_proves_it(self, alice):
-        assert_concurrency_field_changes(Squad.objects.create(name="a"), related={"members": alice})
+        assert_concurrency_field_changes(
+            Squad.objects.create(name="a"),
+            related={"members": alice, "posts": lambda squad: SquadPost.objects.create(squad=squad, text="hi")},
+        )
 
 
 @pytest.mark.django_db
@@ -208,21 +219,30 @@ class TestParts:
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("model", [Team, Squad, Roster])
-def test_removing_a_related_row_waits_for_a_write_holding_the_owner(model):
+@pytest.mark.parametrize(
+    ("model", "relation"), [(Team, "members"), (Squad, "members"), (Roster, "tags"), (Team, "notes"), (Squad, "posts")]
+)
+def test_removing_a_related_row_waits_for_a_write_holding_the_owner(model, relation):
     owner = model.objects.create(name="core")
-    relation = "members" if model is not Roster else "tags"
-    related = (
-        EmailUser.objects.create(username="alice", email="a@example.com")
-        if model is not Roster
-        else Tag.objects.create(label="x")
-    )
-    getattr(owner, relation).add(related)
+    # A row pointing at the owner, by the model and its key - else a many-to-many's related object.
+    pointing, key = {"notes": (TeamNote, "team"), "posts": (SquadPost, "squad")}.get(relation, (None, None))
+    if pointing is not None:
+        related = pointing.objects.create(text="hello", **{key: owner})
+    else:
+        related = (
+            EmailUser.objects.create(username="alice", email="a@example.com")
+            if model is not Roster
+            else Tag.objects.create(label="x")
+        )
+        getattr(owner, relation).add(related)
     done = threading.Event()
 
     def remove():
         try:
-            getattr(model.objects.get(pk=owner.pk), relation).remove(related)
+            if pointing is not None:
+                pointing.objects.filter(pk=related.pk).delete()
+            else:
+                getattr(model.objects.get(pk=owner.pk), relation).remove(related)
         finally:
             connections.close_all()
             done.set()

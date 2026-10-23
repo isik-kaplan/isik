@@ -13,7 +13,7 @@ from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import set_rollback
 
-from isik._internal.reasons import require_exemption, require_reasons
+from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
 from isik.common.utils.exemptions import Exemption
@@ -211,18 +211,10 @@ class PreconditionMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        exempt = cls.precondition_exempt_actions
-        require_reasons(cls.__name__, "precondition_exempt_actions", exempt)
-        cls.precondition_exempt_actions = {
-            action: require_exemption(cls.__name__, "precondition_exempt_actions", reason, NoPrecondition)
-            for action, reason in exempt.items()
-        }
-        unread = cls.precondition_unread_actions
-        require_reasons(cls.__name__, "precondition_unread_actions", unread)
-        cls.precondition_unread_actions = {
-            action: require_exemption(cls.__name__, "precondition_unread_actions", reason, NoReadableVersion)
-            for action, reason in unread.items()
-        }
+        require_exemptions(cls.__name__, "precondition_exempt_actions", cls.precondition_exempt_actions, NoPrecondition)
+        require_exemptions(
+            cls.__name__, "precondition_unread_actions", cls.precondition_unread_actions, NoReadableVersion
+        )
         if not isinstance(cls.precondition_read_from, Mapping):
             raise ImproperlyConfigured(
                 _("%(owner)s.precondition_read_from takes {write action: read action}, not %(value)r.")

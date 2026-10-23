@@ -106,6 +106,8 @@ def project_exemptions(urlconf=None, *, include_library=False):
             library=exemption.library,
         )
         for exemption in declared_exemptions(include_library=include_library)
+        # A request policy's are listed under the policy, with the action each exempts - below.
+        if not exemption.listed_by_policy
     ]
     policies, _ = _policy_entries(urlconf)
     return sorted([*typed, *policies], key=attrgetter("rule"))
@@ -117,7 +119,7 @@ def project_exemption_rules(urlconf=None, *, include_library=False):
     the libraries' own counted only when `include_library`.
     """
     counts = Counter(entry.rule for entry in project_exemptions(urlconf, include_library=include_library))
-    whys = {rule: cls.why for rule, cls in exemption_types().items()}
+    whys = {rule: cls.why for rule, cls in exemption_types().items() if not cls.listed_by_policy}
     for rule, policy in _policy_entries(urlconf)[1].items():
         whys[rule] = _policy_why(policy)
     return [ExemptionRule(rule, why, counts[rule]) for rule, why in sorted(whys.items())]

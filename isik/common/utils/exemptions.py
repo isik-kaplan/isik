@@ -104,6 +104,9 @@ class Exemption(str):
     why = None
     min_length = DEFAULT_MIN_LENGTH
     shows_as = None
+    # Listed under the request policy it exempts from, with the action, rather than under its own rule -
+    # see isik.django.drf.viewsets.request_policies.RequestPolicyExemption.
+    listed_by_policy = False
 
     def __init_subclass__(cls, *, rule=None, why=None, min_length=None, shows_as=NOT_GIVEN, **kwargs):
         super().__init_subclass__(**kwargs)

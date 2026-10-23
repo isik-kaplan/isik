@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from isik.django.apps.idempotency.coverage import idempotency_coverage
-from isik.django.apps.idempotency.drf import IdempotencyMixin
+from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey
 from isik.django.drf.coverage import (
     Coverage,
     CoverageStatus,
@@ -25,7 +25,7 @@ from isik.django.drf.coverage import (
     routed_actions,
     routed_views,
 )
-from isik.django.drf.viewsets import RequestPoliciesMixin, RequestPolicy
+from isik.django.drf.viewsets import RequestPoliciesMixin, RequestPolicy, RequestPolicyExemption
 
 
 URLCONF = "tests.django.drf.test_coverage"
@@ -43,8 +43,8 @@ class Unused(RequestPolicy):
 
 class Gated(RequestPoliciesMixin, IdempotencyMixin, ViewSet):
     request_policies = [SetUp]
-    set_up_exempt_actions = {"retrieve": "reading one changes nothing the gate protects"}
-    idempotency_exempt_actions = {"preview": "validates without writing anything"}
+    set_up_exempt_actions = {"retrieve": RequestPolicyExemption(reason="reading one changes nothing the gate protects")}
+    idempotency_exempt_actions = {"preview": NoIdempotencyKey(reason="validates without writing anything to any table")}
 
     def list(self, request):
         return Response()
@@ -153,7 +153,7 @@ def test_idempotency_coverage_looks_at_the_methods_a_key_is_for():
     assert table(idempotency_coverage(URLCONF)) == [
         ("^gated/$", "POST", "create", "covered", None),
         ("^ungated/$", "POST", "create", "uncovered", None),
-        ("gated/preview/", "POST", "preview", "exempt", "validates without writing anything"),
+        ("gated/preview/", "POST", "preview", "exempt", "validates without writing anything to any table"),
         ("api/plain/", "POST", None, "uncovered", None),
         # The mixin is there, but this view honors keys on PUT alone.
         ("api/gated-plain/", "POST", None, "uncovered", None),
@@ -248,7 +248,7 @@ def test_by_default_every_django_hosts_urlconf_is_walked(settings):
         "GET",
         "list",
         "exempt",
-        "a host's health check reads the list",
+        "a host's health check reads the list, before any set-up",
     )
 
 

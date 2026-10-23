@@ -1,6 +1,7 @@
 import pytest
 from rest_framework import serializers
 
+from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
 from tests.testapp.models import Widget
@@ -22,7 +23,7 @@ def user_scoped_viewset():
         model = Widget
         endpoint = "widgets"
         serializer_class = WidgetSerializer
-        exempt_from_registry = "a test's own class, defined again on every run"
+        exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
 
         @none_during_schema_generation
         def get_queryset(self):

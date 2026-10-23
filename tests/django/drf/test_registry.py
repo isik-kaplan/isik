@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
+from isik.django.drf.serializers import SerializerRegistryExemption
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin
 
 
@@ -30,7 +31,7 @@ class WidgetSerializer(ModelSerializerRegistryMixin):
 
 
 class ExemptTagSerializer(ModelSerializerRegistryMixin):
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = SerializerRegistryExemption(reason="a test's own class, defined again on every run")
 
     class Meta:
         model = DummyTagModel

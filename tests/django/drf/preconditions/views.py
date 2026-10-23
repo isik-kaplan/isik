@@ -17,7 +17,7 @@ from rest_framework.viewsets import ModelViewSet
 from isik.django.apps.common.db.concurrency import with_concurrency_etags
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.serializers import ConcurrencyTokenField
-from isik.django.drf.viewsets import ActionSerializerClassMixin, PreconditionMixin
+from isik.django.drf.viewsets import ActionSerializerClassMixin, NoPrecondition, PreconditionMixin
 from tests.testapp.models import CleanedNote, Roster, Squad, Team, VersionedWidget, Widget
 
 
@@ -100,8 +100,8 @@ class WidgetViewSet(PreconditionMixin, ActionSerializerClassMixin, ModelViewSet)
     serializer_class_action_map = {"retrieve": WidgetSerializer, "list": WidgetSerializer}
     permission_classes = [IsAuthenticated, OwnsTheWidget]
     precondition_exempt_actions = {
-        "rename_freely": "a rename that may land over any other write, by design",
-        "rename_mine_freely": "a rename that may land over any other write, by design",
+        "rename_freely": NoPrecondition(reason="a rename that may land over any other write, by design"),
+        "rename_mine_freely": NoPrecondition(reason="a rename that may land over any other write, by design"),
     }
 
     def perform_create(self, serializer):
@@ -293,7 +293,7 @@ class ExemptNotesViewSet(PreconditionMixin, ModelViewSet):
     queryset = CleanedNote.objects.all()
     serializer_class = CleanedNoteSerializer
     precondition_exempt_actions = {
-        action: "notes are written last-one-wins, and their model keeps no version to compare"
+        action: NoPrecondition(reason="notes are written last-one-wins, and their model keeps no version to compare")
         for action in ("update", "partial_update", "destroy", "touch")
     }
 

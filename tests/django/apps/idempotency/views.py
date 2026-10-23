@@ -14,9 +14,12 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from isik.django.apps.idempotency.drf import IdempotencyMixin
+from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
 from isik.django.apps.idempotency.fingerprint import canonical_body
 from tests.testapp.models import Widget
+
+
+SHOWN_ONCE = NoReplay(reason="the secret is shown once and never stored anywhere")
 
 
 class WidgetSerializer(serializers.ModelSerializer):
@@ -64,8 +67,8 @@ class WidgetViewSet(IdempotencyMixin, ModelViewSet):
     serializer_class = WidgetSerializer
     permission_classes = [IsAuthenticated, OwnsTheWidget]
     idempotency_claim_model = "idempotency_by_reference.IdempotencyClaim"
-    idempotency_exempt_actions = {"preview": "validates a widget and changes nothing"}
-    idempotency_no_replay_actions = {"issue_secret": "the secret is shown once and never stored"}
+    idempotency_exempt_actions = {"preview": NoIdempotencyKey(reason="validates a widget and changes nothing at all")}
+    idempotency_no_replay_actions = {"issue_secret": SHOWN_ONCE}
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -137,7 +140,7 @@ class WidgetBodyViewSet(IdempotencyMixin, ModelViewSet):
     queryset = Widget.objects.all()
     serializer_class = WidgetSerializer
     idempotency_claim_model = "idempotency_with_body.IdempotencyClaimWithBody"
-    idempotency_no_replay_actions = {"issue_secret": "the secret is shown once and never stored"}
+    idempotency_no_replay_actions = {"issue_secret": SHOWN_ONCE}
 
     @action(detail=False, methods=["post"])
     def issue_secret(self, request):

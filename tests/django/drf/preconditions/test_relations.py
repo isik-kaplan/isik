@@ -4,7 +4,7 @@ import pytest
 from rest_framework import status
 
 from isik.django.apps.common.db.concurrency import current_concurrency_etag
-from tests.testapp.models import EmailUser, Roster, Squad, Tag, Team
+from tests.testapp.models import EmailUser, Roster, Squad, Tag, Team, TeamNote
 
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("urls", "atomic_requests")]
@@ -81,3 +81,12 @@ def test_every_strategy_refuses_a_write_made_before_a_relation_changed(client, p
 
     assert (stale.status_code, current.status_code) == (412, 200)
     assert current["ETag"] == current_concurrency_etag(model, owner.pk)
+
+
+def test_a_write_made_before_a_row_pointing_at_it_changed_is_refused(client, team):
+    read = etag(team)
+    TeamNote.objects.create(team=team, text="hello")
+
+    response = patch(client, f"/teams/{team.pk}/", read)
+
+    assert response.status_code == status.HTTP_412_PRECONDITION_FAILED

@@ -437,7 +437,27 @@ class Team(BaseModel):
     name = models.CharField(max_length=50)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="teams")
     labels = models.ManyToManyField(Tag, through="TeamLabel", related_name="teams")
-    concurrency_relations = ("members", "labels")
+    concurrency_relations = ("members", "labels", "notes", "charter")
+
+    class Meta:
+        app_label = "testapp"
+
+
+class TeamNote(models.Model):
+    """Rows pointing at a team - a reverse foreign key its version covers."""
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="notes")
+    text = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class TeamCharter(models.Model):
+    """At most one per team - a reverse one-to-one its version covers."""
+
+    team = models.OneToOneField(Team, on_delete=models.CASCADE, related_name="charter")
+    text = models.CharField(max_length=50)
 
     class Meta:
         app_label = "testapp"
@@ -458,8 +478,16 @@ class Squad(VersionedModel, BaseModel):
 
     name = models.CharField(max_length=50)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="squads")
-    concurrency_relations = ("members",)
+    concurrency_relations = ("members", "posts")
     concurrency_strategy = "column"
+
+    class Meta:
+        app_label = "testapp"
+
+
+class SquadPost(models.Model):
+    squad = models.ForeignKey(Squad, on_delete=models.CASCADE, related_name="posts")
+    text = models.CharField(max_length=50)
 
     class Meta:
         app_label = "testapp"

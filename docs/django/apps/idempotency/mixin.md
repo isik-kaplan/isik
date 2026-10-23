@@ -8,8 +8,8 @@ class InstallationViewSet(IdempotencyMixin, BaseModelViewSet):
     model = Installation
     endpoint = "installations"
     serializer_class = InstallationSerializer
-    idempotency_exempt_actions = {"preview": "validates a configuration and changes nothing"}
-    idempotency_no_replay_actions = {"rotate_secret": "returns a client secret that is shown once"}
+    idempotency_exempt_actions = {"preview": NoIdempotencyKey(reason="validates a configuration and changes nothing")}
+    idempotency_no_replay_actions = {"rotate_secret": NoReplay(reason="returns a client secret that is shown once")}
 ```
 
 ```
@@ -23,15 +23,15 @@ POST /installations/  Idempotency-Key: 0192f5a4-...   -> 201 {"id": 7, ...}   Id
 |----------------------------------|--------------------|---------|
 | `idempotent_methods`             | `("POST",)`        | Which methods are covered. `PUT`/`PATCH`/`DELETE` on a detail route are idempotent already. |
 | `idempotency_key_required`       | `True`             | A covered request without the header is a 400. `False` honors a key only when one is sent. |
-| `idempotency_exempt_actions`     | `{}`               | `{action: reason}` - actions the key is never asked of, e.g. a POST that changes nothing. |
-| `idempotency_no_replay_actions`  | `{}`               | `{action: reason}` - actions whose response must never be stored. |
+| `idempotency_exempt_actions`     | `{}`               | `{action: NoIdempotencyKey(reason=...)}` - actions the key is never asked of, e.g. a POST that changes nothing. |
+| `idempotency_no_replay_actions`  | `{}`               | `{action: NoReplay(reason=...)}` - actions whose response must never be stored. |
 | `idempotency_normalize`          | `None`             | A function of the request that decides what its body is compared by. See [fingerprint.md](fingerprint.md). |
 | `idempotency_claim_model`        | `None`             | The claim model for this view, or `"app_label.Model"`. See [claims.md](claims.md). |
 | `idempotency_header`             | `"Idempotency-Key"` | The request header holding the key. |
-| `idempotency_replayed_header`    | `"Idempotent-Replayed"` | The response header marking a replay. |
-
-Both `{action: reason}` dicts need a non-blank reason for every action, or the class raises
-`ImproperlyConfigured` when it's defined. An exemption should say what it exempts.
+| `idempotency_replayed_header`    | `"Idempotent-Replayed"` | The rBoth dicts take their type for every action - `NoIdempotencyKey` (rule `isik.idempotency.key`) and
+`NoReplay` (rule `isik.idempotency.replay`), each held to a 40-character floor and listed by
+`manage.py exemptions`. A bare string, or anything else, raises `ImproperlyConfigured` naming the type
+to write.xemption should say what it exempts.
 
 `idempotency_normalize` can also be set per action, because DRF hands an `@action`'s extra keyword
 arguments to the view:

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-23
+
+### Added
+
+- **`concurrency_relations` covers a foreign key or one-to-one pointing at the model.** Name it by its
+  accessor - `discount_set`, or its `related_name`. Its rows are the pointing model's own, every field of
+  each, so adding, editing or deleting one moves the version, under every strategy. Rows pointing at a
+  model never moved its `updated_at`, so `If-Match` on a write to them compared a version that couldn't
+  change. Each gets the lock (or, for `"column"`, bump) trigger on its own table, from a proxy in the
+  owner's app, registered whichever of the two models loads first. `assert_concurrency_field_changes()`
+  takes a function making one such row for the instance it's given, creates it and deletes it. A reverse
+  many-to-many isn't one: name it on the model that declares it.
+- `UnguardedField`, `NoIdempotencyKey`, `NoReplay` and `RequestPolicyExemption` exemption types, and
+  `RequestPolicy.exemption_type` for a policy to name a type of its own.
+
+### Changed
+
+- **Breaking: a reason is written as its exemption type, never a bare string.** At a call site a bare
+  string reads as a value to be used - an exception message, say - rather than the reason a rule is
+  skipped. Every opt-out isik takes now refuses one, naming the type to write:
+  - `exempt_from_registry = ViewSetRegistryExemption(reason=...)` (or `SerializerRegistryExemption`);
+  - `precondition_exempt_actions = {action: NoPrecondition(reason=...)}`, and
+    `precondition_unread_actions` with `NoReadableVersion`;
+  - `unguarded_fields = {field: UnguardedField(reason=...)}`, and `actions_writing_no_guarded_fields`
+    with `WritesNoGuardedFields`;
+  - `idempotency_exempt_actions` with `NoIdempotencyKey`, and `idempotency_no_replay_actions` with
+    `NoReplay`;
+  - each policy's `<policy>_exempt_actions` with `RequestPolicyExemption`, or the policy's own
+    `exemption_type`.
+
+  Each value of a map is now an exemption like any other: held to its type's 40-character floor (a map's
+  reasons had none), listed by `manage.py exemptions`, and counted by budgets. A request policy's are
+  listed under the policy, as before. A function or decorator whose call names the rule still takes its
+  reason as text - `@writes_no_guarded_fields("...")`, `@no_database_form("...")`,
+  `ConcurrencyToken(field, reason=...)`. A project overriding `actions_writing_no_guarded_fields` names
+  `destroy` again, as its own `WritesNoGuardedFields`.
+- **Breaking: `manage.py exemptions` fails when its listing is incomplete.** A call in the project's own
+  apps that loading the project didn't run, or a type it didn't import, made only a line on stderr. The
+  command now exits non-zero after listing, so a CI step running it is a gate.
+
 ## [0.28.0] - 2026-10-23
 
 ### Added

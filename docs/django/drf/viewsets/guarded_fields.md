@@ -22,7 +22,7 @@ class PublicInvitationViewSet(BaseModelViewSet):  # the mixin is already part of
   ```python
   class PlatformInvitationViewSet(BaseModelViewSet):
       serializer_class = PublicInvitationSerializer  # the tenant viewset guards names_issuer
-      unguarded_fields = {"names_issuer": "platform staff may change who an invitation names"}
+      unguarded_fields = {"names_issuer": UnguardedField(reason="platform staff may change who an invitation names")}
   ```
 
   Only viewsets with this mixin are compared, through their `permission_classes`, not a `get_permissions()` override. Redefining a class under the same module and name replaces its entry rather than conflicting.
@@ -47,7 +47,7 @@ def rotate_secret(self, request, pk=None):
     ...
 ```
 
-- Either decorator order works. `destroy` writes no fields and is already exempt; `actions_writing_no_guarded_fields = {"destroy": "...", "archive": "..."}` exempts inherited actions without overriding them. Every one of these opt-outs takes a reason - a bare `True`, a list of names or a bare `@writes_no_guarded_fields` raises `ImproperlyConfigured`. The decorator's reason is a `WritesNoGuardedFields` (rule `isik.guarded-fields.writes-none`, see [exemptions.md](../../../common/utils/exemptions.md)) of at least 40 characters; a map's reasons have no floor, but a blank one or a placeholder (`n/a`, `tbd`) is refused.
+- Either decorator order works. `destroy` writes no fields and is already exempt; `actions_writing_no_guarded_fields = {"archive": WritesNoGuardedFields(reason="...")}` exempts inherited actions without overriding them (name `destroy` too, since the map replaces isik's). Every one of these opt-outs takes a reason - a bare `True`, a list of names, a bare string in a map, or a bare `@writes_no_guarded_fields` raises `ImproperlyConfigured`. Each is a `WritesNoGuardedFields` (rule `isik.guarded-fields.writes-none`, see [exemptions.md](../../../common/utils/exemptions.md)) of at least 40 characters - the decorator takes its reason as text, a map takes the type. `unguarded_fields` takes `UnguardedField(reason=...)` (rule `isik.guarded-fields.unguarded`).
 - Calling `self.check_guarded_fields(serializer)` yourself also counts as having run the guards.
 - A failed request (status 400 or above) isn't checked afterwards.
 - **A refused request keeps nothing.** When DRF answers from an exception (a refused guard, a failed validation, any `APIException`), the transaction rolls back whatever the handler wrote before it, and `on_commit` callbacks registered along the way never run. An error response the handler returns on purpose (a 429 after counting an attempt) keeps its writes, as it does under `ATOMIC_REQUESTS`.

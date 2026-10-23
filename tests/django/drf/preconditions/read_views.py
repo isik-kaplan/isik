@@ -7,12 +7,16 @@ from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from isik.django.drf.viewsets import PreconditionMixin
+from isik.django.drf.viewsets import NoReadableVersion, PreconditionMixin
 from tests.django.drf.preconditions.views import WidgetSerializer
 from tests.testapp.models import CleanedNote, VersionedWidget, Widget
 
 
 UNREAD = "renamed by a script that holds the version it read from the database"
+
+
+def unread():
+    return NoReadableVersion(reason=UNREAD)
 
 
 class MeViewSet(PreconditionMixin, ModelViewSet):
@@ -71,7 +75,7 @@ class SilentReadViewSet(PreconditionMixin, GenericViewSet):
 class UnreadViewSet(PreconditionMixin, GenericViewSet):
     queryset = Widget.objects.all()
     serializer_class = WidgetSerializer
-    precondition_unread_actions = {"rename_me": UNREAD}
+    precondition_unread_actions = {"rename_me": unread()}
 
     @action(detail=False, methods=["patch"])
     def rename_me(self, request):

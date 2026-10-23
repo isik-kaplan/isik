@@ -25,7 +25,7 @@ from isik.django.apps.common.db.concurrency import (
     current_concurrency_etag,
     with_concurrency_etags,
 )
-from tests.testapp.models import EmailUser, Tag, Team, TeamLabel, VersionedNote, Widget
+from tests.testapp.models import EmailUser, Tag, Team, TeamCharter, TeamLabel, TeamNote, VersionedNote, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -46,13 +46,23 @@ def tag():
     return Tag.objects.create(label="red")
 
 
+def everything(alice, tag):
+    """One of each relation a team's version covers, for the helper."""
+    return {
+        "members": alice,
+        "labels": (tag, {"weight": 3}),
+        "notes": lambda team: TeamNote.objects.create(team=team, text="hello"),
+        "charter": lambda team: TeamCharter.objects.create(team=team, text="ours"),
+    }
+
+
 def etag(team):
     return current_concurrency_etag(Team, team.pk)
 
 
 class TestWhichRelations:
     def test_the_ones_named(self):
-        assert concurrency_relations(Team) == ("members", "labels")
+        assert concurrency_relations(Team) == ("members", "labels", "notes", "charter")
 
     def test_none_by_default(self):
         assert concurrency_relations(Widget) == ()
@@ -73,8 +83,10 @@ class TestWhichRelations:
             return [problem for problem in concurrency_token_problems(Odd) if "relation" in problem]
 
         assert problems() == [
-            "testapp.Odd's concurrency relation 'count' is not one of its many-to-many fields.",
-            "testapp.Odd's concurrency relation 'missing' is not one of its many-to-many fields.",
+            "testapp.Odd's concurrency relation 'count' is neither one of its many-to-many fields nor a foreign key or "
+            "one-to-one pointing at it.",
+            "testapp.Odd's concurrency relation 'missing' is neither one of its many-to-many fields nor a foreign key "
+            "or one-to-one pointing at it.",
         ]
 
     def test_ones_that_are_are_no_problem(self):
@@ -190,7 +202,7 @@ class TestTheExpression:
 
 class TestTheHelper:
     def test_passes_for_relations_that_move_it(self, team, alice, tag):
-        assert_concurrency_field_changes(team, related={"members": alice, "labels": (tag, {"weight": 3})})
+        assert_concurrency_field_changes(team, related=everything(alice, tag))
 
     def test_wants_an_object_for_every_relation(self, team, alice):
         with pytest.raises(AssertionError) as raised:
@@ -236,7 +248,7 @@ class TestTheLockTriggers:
         assert locks[Team, "labels"][0]._meta.db_table == TeamLabel._meta.db_table
 
     def test_lock_the_owner_and_write_nothing(self):
-        trigger = base_models._relation_lock_trigger(Team, Team._meta.get_field("labels"), TeamLabel)
+        trigger = base_models._relation_lock_trigger(Team, "labels", TeamLabel._meta.get_field("team"))
 
         assert trigger.when == base_models.pgtrigger.After
         assert str(trigger.operation) == "INSERT OR UPDATE OR DELETE"
@@ -408,3 +420,125 @@ def test_removing_a_member_waits_for_a_write_holding_the_owner():
 
     assert done.is_set()
     assert not team.members.exists()
+
+
+class TestPointingRelations:
+    """Rows of another model pointing at the owner - a reverse foreign key or one-to-one."""
+
+    def test_are_found_by_their_accessor(self):
+        assert _relation(Team, "notes").related_model is TeamNote
+        assert _relation(Team, "charter").related_model is TeamCharter
+
+    def test_a_reverse_many_to_many_isnt_one(self):
+        assert _relation(Tag, "teams") is None
+
+    def test_a_rows_every_change_moves_the_etag(self, team):
+        empty = etag(team)
+        note = TeamNote.objects.create(team=team, text="hello")
+        written = etag(team)
+        TeamNote.objects.filter(pk=note.pk).update(text="changed")
+        changed = etag(team)
+        note.delete()
+
+        assert len({empty, written, changed}) == 3
+        assert etag(team) == empty
+
+    def test_a_one_to_one_moves_it_too(self, team):
+        before = etag(team)
+        TeamCharter.objects.create(team=team, text="ours")
+
+        assert etag(team) != before
+
+    def test_another_owners_rows_dont(self, team):
+        other = Team.objects.create(name="other")
+        before = etag(other)
+        TeamNote.objects.create(team=team, text="hello")
+
+        assert etag(other) == before
+
+    def test_updated_at_stays(self, team):
+        team.refresh_from_db()
+        stamped = team.updated_at
+        TeamNote.objects.create(team=team, text="hello")
+        team.refresh_from_db()
+
+        assert team.updated_at == stamped
+
+    def test_get_a_lock_trigger_on_their_own_table(self):
+        locks = {(owner, relation): (proxy, trigger) for owner, relation, proxy, trigger in base_models.relation_locks}
+
+        proxy, trigger = locks[Team, "notes"]
+        assert proxy.__name__ == "TeamNotesConcurrencyLock"
+        assert proxy._meta.concrete_model is TeamNote
+        assert trigger.name == "lock_notes_owner"
+        assert 'WHERE "id" = NEW."team_id" FOR KEY SHARE' in trigger.func
+        assert locks[Team, "charter"][0]._meta.concrete_model is TeamCharter
+
+    def test_a_pointing_model_loaded_before_its_owner_is_locked_once_the_owner_is(self, monkeypatch):
+        monkeypatch.setattr(base_models, "relation_locks", [])
+        suffix = uuid.uuid4().hex[:8]
+
+        @isolate_apps("tests.testapp")
+        def define():
+            from django.db import models
+
+            def meta():
+                return type("Meta", (), {"app_label": "testapp"})
+
+            pointing = {"owner": models.ForeignKey(f"Owner{suffix}", models.CASCADE, related_name="rows")}
+            type(f"Row{suffix}", (models.Model,), {"__module__": __name__, "Meta": meta(), **pointing})
+            hidden = {"owner": models.ForeignKey(f"Owner{suffix}", models.CASCADE, related_name="+")}
+            type(f"Hidden{suffix}", (models.Model,), {"__module__": __name__, "Meta": meta(), **hidden})
+            waiting = list(base_models.relation_locks)
+            owner = {"concurrency_relations": ("rows",)}
+            type(f"Owner{suffix}", (models.Model,), {"__module__": __name__, "Meta": meta(), **owner})
+            return waiting
+
+        assert define() == []
+        ((owner, relation, proxy, trigger),) = base_models.relation_locks
+        assert (owner.__name__, relation, proxy.__name__) == (
+            f"Owner{suffix}",
+            "rows",
+            f"Owner{suffix}RowsConcurrencyLock",
+        )
+        assert proxy._meta.concrete_model.__name__ == f"Row{suffix}"
+        assert 'NEW."owner_id"' in trigger.func
+
+    def test_the_helper_takes_a_function_making_one(self, team, alice, tag):
+        made = []
+
+        def note(owner):
+            made.append(TeamNote.objects.create(team=owner, text="hello"))
+            return made[-1]
+
+        assert_concurrency_field_changes(team, related={**everything(alice, tag), "notes": note})
+
+        assert len(made) == 1
+        assert not TeamNote.objects.exists()
+
+    def test_the_helper_refuses_an_object_for_one(self, team, alice, tag):
+        with pytest.raises(AssertionError) as raised:
+            assert_concurrency_field_changes(team, related={**everything(alice, tag), "notes": object()})
+
+        assert str(raised.value) == (
+            "testapp.Team's version covers 'notes', rows pointing at it - pass related={'notes': <a function making "
+            "one for the instance it's given>}."
+        )
+
+    @pytest.mark.parametrize(("frozen", "write"), [(11, "notes.create"), (12, "notes.delete()")])
+    def test_the_helper_names_the_write_that_left_it_still(self, team, alice, tag, monkeypatch, frozen, write):
+        from isik.django.apps.common.db import concurrency
+
+        reads = []
+        real = concurrency.current_concurrency_etag
+
+        def read(model, pk):
+            reads.append(real(model, pk))
+            return reads[-2] if len(reads) == frozen + 1 else reads[-1]
+
+        monkeypatch.setattr(concurrency, "current_concurrency_etag", read)
+
+        with pytest.raises(AssertionError) as raised:
+            assert_concurrency_field_changes(team, related=everything(alice, tag))
+
+        assert str(raised.value) == f"testapp.Team's ETag was {reads[-2]} still after {write}."

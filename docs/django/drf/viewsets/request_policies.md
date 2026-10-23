@@ -44,15 +44,19 @@ class SecondFactorSatisfied(RequestPolicy):
 ```python
 class AccessTokenViewSet(RequestPoliciesMixin, viewsets.ViewSet):
     request_policies = [OrganizationIsSetUp, SecondFactorSatisfied]
-    setup_gate_exempt_actions = {"me": "answers who is asking, which a blocked caller needs to learn why"}
+    setup_gate_exempt_actions = {
+        "me": RequestPolicyExemption(reason="answers who is asking, which a blocked caller needs to learn why")
+    }
 ```
 
 - Runs in `check_permissions()`, after the view's own permissions - so `get_permissions()`
   overrides can't drop a policy by accident, and a policy refuses before anything later in the
   request runs (an idempotency key isn't claimed by a refused request).
 - The first policy that doesn't allow the request refuses it.
-- An exemption is `{action: reason}` under the policy's exemptions attribute, refused at
-  class-definition time without a reason for every action.
+- An exemption is `{action: RequestPolicyExemption(reason=...)}` under the policy's exemptions
+  attribute - or the policy's own `exemption_type`, a subclass with a rule of its own. A bare string
+  or anything else is refused at class-definition time, naming the type to write. See
+  [exemptions.md](../../../common/utils/exemptions.md).
 - `BaseViewSet` and so `BaseModelViewSet` carry it - set `request_policies` on your project's base.
 
 Which views carry a policy, which are exempt and why, and which don't carry it at all:

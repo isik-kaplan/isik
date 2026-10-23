@@ -55,9 +55,9 @@ that skipped its guards. Fetch the row with `self.get_object()` (set `self.kwarg
 first, for a `detail=False` action), or exempt the action. A replay under `IdempotencyMixin` is left
 alone: it answers with a write that was checked when it was made.
 
-`precondition_exempt_actions = {action: reason}` leaves an action out. Each reason is a `NoPrecondition`
-exemption (rule `isik.precondition`), held to its 40-character floor and listed by `manage.py
-exemptions`. An exempt write still answers with the version it left. `precondition_methods` (PUT,
+`precondition_exempt_actions = {action: NoPrecondition(reason=...)}` leaves an action out - a
+`NoPrecondition` exemption (rule `isik.precondition`), held to its 40-character floor and listed by
+`manage.py exemptions`, and never a bare string. An exempt write still answers with the version it left. `precondition_methods` (PUT,
 PATCH, DELETE, POST) narrows which methods ask.
 
 ## The comparison
@@ -184,7 +184,7 @@ The system check **`isik.E004`** pairs every routed write that asks `If-Match` (
 
 None of those is an error. So is a read of another model: its ETag is no version of this write's row. A
 list isn't a read for this - it isn't what a client reads again before a write. A write with no read, on
-purpose, is exempted: `precondition_unread_actions = {write action: reason}`, each reason a
+purpose, is exempted: `precondition_unread_actions = {write action: NoReadableVersion(reason=...)}`, a
 `NoReadableVersion` (rule `isik.precondition.readable-version`), held to its 40-character floor and
 listed by `manage.py exemptions`. `precondition_read_problems(urlconf=None)` gives the same list.
 

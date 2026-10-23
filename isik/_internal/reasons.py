@@ -1,10 +1,13 @@
 """
 How isik's own opt-outs insist on saying why - the few whose default isn't obvious to turn off.
 
-A single opt-out (`exempt_from_registry`, `@writes_no_guarded_fields`) is an exemption type's
-(`isik.common.utils.exemptions`), so it is held to that type's floor and listed by its rule. A
-`{name: reason}` map needs no floor - the policy or field and the name already give the context - but
-a reason there is still more than blank, or a placeholder standing in for one.
+Every opt-out is an exemption type's (`isik.common.utils.exemptions`), so it is held to that type's
+floor and listed by its rule - a single one (`exempt_from_registry`) and each value of a
+`{name: reason}` map (`precondition_exempt_actions`) alike. Where a value is written, it's written as
+the type - `NoPrecondition(reason="...")`, never a bare string: at a call site a bare string reads as a
+value to be used, an exception message say, rather than the reason a rule is skipped. A factory whose
+own call names the rule (`@writes_no_guarded_fields("...")`) takes the reason as text - there's nothing
+to mistake it for there.
 """
 
 from collections.abc import Mapping
@@ -23,38 +26,59 @@ def is_reason(value):
     return isinstance(value, str) and bool(value.strip()) and value.strip().lower() not in PLACEHOLDERS
 
 
+def _refusal(owner, attribute, value, exemption_type, name=None):
+    where = {"owner": owner, "attribute": attribute, "type": exemption_type.__name__, "name": name, "value": value}
+    if isinstance(value, str) and not isinstance(value, Exemption):
+        message = (
+            _("%(owner)s.%(attribute)s takes a %(type)s(reason=...) for %(name)s, not a bare string.")
+            if name is not None
+            else _("%(owner)s.%(attribute)s takes a %(type)s(reason=...), not a bare string.")
+        )
+    else:
+        message = (
+            _("%(owner)s.%(attribute)s takes a %(type)s(reason=...) for %(name)s, not %(value)r.")
+            if name is not None
+            else _("%(owner)s.%(attribute)s takes a %(type)s(reason=...), not %(value)r.")
+        )
+    return ImproperlyConfigured(message % where)
+
+
 def require_exemption(owner, attribute, value, exemption_type):
     """
-    The exemption `value` declares, as an `exemption_type` - its reason as a `str`, or one already made -
-    or None for `False`/`None`, which don't opt out. `True` says to opt out, but not why.
+    The exemption `value` declares - an `exemption_type` - or None for `False`/`None`, which don't opt
+    out. Anything else is refused: `True` says to opt out but not why, and a bare string says why
+    without saying it's a reason.
     """
     if value is None or value is False:
         return None
     if isinstance(value, exemption_type):
         return value
-    if isinstance(value, str) and not isinstance(value, Exemption):
-        try:
-            return exemption_type(reason=value)
-        except ValueError as error:
-            raise ImproperlyConfigured(
-                _("%(owner)s.%(attribute)s - %(error)s") % {"owner": owner, "attribute": attribute, "error": error}
-            ) from error
-    raise ImproperlyConfigured(
-        _("%(owner)s.%(attribute)s takes a %(type)s, or its reason as a str, not %(value)r.")
-        % {"owner": owner, "attribute": attribute, "type": exemption_type.__name__, "value": value}
-    )
+    raise _refusal(owner, attribute, value, exemption_type)
 
 
-def require_reasons(owner, attribute, reasons):
-    """Refuses `reasons` unless it's a `{name: reason}` mapping with a reason for every name."""
-    if not isinstance(reasons, Mapping):
+def require_exemptions(owner, attribute, exemptions, exemption_type):
+    """Refuses `exemptions` unless it's a `{name: exemption_type(reason=...)}` mapping, and returns it."""
+    if not isinstance(exemptions, Mapping):
         raise ImproperlyConfigured(
-            _("%(owner)s.%(attribute)s takes {name: reason}, not %(value)r.")
-            % {"owner": owner, "attribute": attribute, "value": reasons}
+            _("%(owner)s.%(attribute)s takes {name: %(type)s(reason=...)}, not %(value)r.")
+            % {"owner": owner, "attribute": attribute, "type": exemption_type.__name__, "value": exemptions}
         )
-    for name, reason in reasons.items():
-        if not is_reason(reason):
-            raise ImproperlyConfigured(
-                _("%(owner)s.%(attribute)s needs a reason for %(name)s, not %(reason)r.")
-                % {"owner": owner, "attribute": attribute, "name": name, "reason": reason}
-            )
+    for name, value in exemptions.items():
+        if not isinstance(value, exemption_type):
+            raise _refusal(owner, attribute, value, exemption_type, name)
+    return exemptions
+
+
+def made_exemption(owner, attribute, reason, exemption_type):
+    """
+    `reason` as an `exemption_type`, for a factory whose own call names the rule - `reason` is text, or
+    one already made. A reason under the type's floor is refused naming where it was given.
+    """
+    if isinstance(reason, exemption_type):
+        return reason
+    try:
+        return exemption_type(reason=reason)
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            _("%(owner)s.%(attribute)s - %(error)s") % {"owner": owner, "attribute": attribute, "error": error}
+        ) from error

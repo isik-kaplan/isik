@@ -25,6 +25,8 @@ from isik.django.drf.viewsets import (
     GuardedFieldsMixin,
     RequestPoliciesMixin,
     RequestPolicy,
+    RequestPolicyExemption,
+    ViewSetRegistryExemption,
 )
 from tests.django.drf.test_base_viewset import WidgetSerializer
 from tests.testapp.models import EmailUser, Widget
@@ -73,7 +75,9 @@ class TokenViewSet(RequestPoliciesMixin, ViewSet):
     """Over no model of ours - what sat outside every gate when the gates lived on the model base."""
 
     request_policies = [OrganizationIsSetUp, SecondFactorSatisfied]
-    setup_gate_exempt_actions = {"me": "answers who is asking, which a blocked caller needs to learn why"}
+    setup_gate_exempt_actions = {
+        "me": RequestPolicyExemption(reason="answers who is asking, which a blocked caller needs to learn why")
+    }
 
     def list(self, request):
         return Response(["token"])
@@ -241,13 +245,50 @@ class TestDeclaringOne:
     def test_its_exemptions_attribute_can_be_named(self):
         assert OrganizationIsSetUp.exemptions_attribute_name() == "setup_gate_exempt_actions"
 
+    def test_its_exemptions_are_request_policy_exemptions_by_default(self):
+        assert RequestPolicy.exemption_type is RequestPolicyExemption
+        assert RequestPolicyExemption.rule == "isik.request-policy"
+        assert RequestPolicyExemption.listed_by_policy is True
+
+    def test_it_can_name_a_type_of_its_own_which_its_exemptions_must_be(self):
+        class NoReauthentication(RequestPolicyExemption, rule="tests.reauthentication", why="Reauthenticate first."):
+            pass
+
+        class Reauthenticated(RequestPolicy):
+            exemption_type = NoReauthentication
+
+        own = NoReauthentication(reason="answers who is asking, which needs no fresh sign-in")
+        view = type(
+            "Own",
+            (RequestPoliciesMixin, ViewSet),
+            {"request_policies": [Reauthenticated], "reauthenticated_exempt_actions": {"me": own}},
+        )
+        assert view.request_policy_exemptions(Reauthenticated) == {"me": own}
+
+        with pytest.raises(ImproperlyConfigured) as raised:
+            type(
+                "Generic",
+                (RequestPoliciesMixin, ViewSet),
+                {
+                    "request_policies": [Reauthenticated],
+                    "reauthenticated_exempt_actions": {
+                        "me": RequestPolicyExemption(reason="answers who is asking, which needs no fresh sign-in")
+                    },
+                },
+            )
+        assert str(raised.value).startswith(
+            "Generic.reauthenticated_exempt_actions takes a NoReauthentication(reason=...) for me, not "
+        )
+
     def test_a_view_lists_its_exemptions_per_policy(self):
         assert TokenViewSet.request_policy_exemptions(OrganizationIsSetUp) == TokenViewSet.setup_gate_exempt_actions
         assert TokenViewSet.request_policy_exemptions(SecondFactorSatisfied) == {}
 
-    @pytest.mark.parametrize("exemptions", [{"me": ""}, {"me": True}, ("me",)])
-    def test_an_exemption_needs_a_reason(self, exemptions):
-        with pytest.raises(ImproperlyConfigured, match=r"^Unreasoned\.setup_gate_exempt_actions "):
+    @pytest.mark.parametrize(
+        "exemptions", [{"me": "answers who is asking, which a blocked caller needs"}, {"me": True}, ("me",)]
+    )
+    def test_an_exemption_is_its_policys_type(self, exemptions):
+        with pytest.raises(ImproperlyConfigured, match=r"^Unreasoned\.setup_gate_exempt_actions takes "):
             type(
                 "Unreasoned",
                 (RequestPoliciesMixin, ViewSet),
@@ -255,7 +296,9 @@ class TestDeclaringOne:
             )
 
     def test_every_policy_has_its_exemptions_checked(self):
-        with pytest.raises(ImproperlyConfigured, match=r"second_factor_satisfied_exempt_actions needs a reason"):
+        with pytest.raises(
+            ImproperlyConfigured, match=r"second_factor_satisfied_exempt_actions takes a RequestPolicyExemption"
+        ):
             type(
                 "Unreasoned",
                 (RequestPoliciesMixin, ViewSet),
@@ -340,7 +383,7 @@ class TestBaseViewSet:
             model = Widget
             endpoint = "widgets"
             serializer_class = WidgetSerializer
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             request_policies = [OrganizationIsSetUp]
 
         switch.set_up = False

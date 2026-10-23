@@ -21,7 +21,7 @@ from isik.django.apps.common.db.concurrency import (
 )
 from isik.django.drf.coverage import CoverageStatus, precondition_coverage
 from isik.django.drf.serializers import ConcurrencyTokenField
-from isik.django.drf.viewsets import PreconditionMixin
+from isik.django.drf.viewsets import NoPrecondition, PreconditionMixin
 from isik.django.drf.viewsets.preconditions import precondition_problems
 from tests.django.drf.preconditions import urls
 from tests.testapp.models import CleanedNote, VersionedNote, Widget
@@ -165,7 +165,9 @@ class PokeSerializer(serializers.Serializer):
 
 class ModellessViewSet(PreconditionMixin, GenericViewSet):
     serializer_class = PokeSerializer
-    precondition_exempt_actions = {"poke": "answers a device code, writing no versioned row at all"}
+    precondition_exempt_actions = {
+        "poke": NoPrecondition(reason="answers a device code, writing no versioned row at all")
+    }
 
     @action(detail=True, methods=["post"])
     def poke(self, request, pk=None):

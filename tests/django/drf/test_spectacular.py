@@ -25,6 +25,7 @@ from isik.django.drf.spectacular import (
     _history_filter_parameters,
     _openapi_type_for_filter,
 )
+from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.history import HistoryMixin
 from tests.testapp.models import Widget
@@ -76,7 +77,7 @@ class WidgetViewSet(HistoryMixin, BaseModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
 
 
 @pytest.fixture(autouse=True)
@@ -98,7 +99,7 @@ class TestHistoryComponentPrefix:
     def test_two_viewsets_over_one_model_get_one_component_each_once_one_is_prefixed(self):
         class StaffWidgetViewSet(WidgetViewSet):
             endpoint = "staff-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             history_component_prefix = "Staff"
 
         reset_generator_stats()
@@ -109,7 +110,7 @@ class TestHistoryComponentPrefix:
     def test_without_a_prefix_the_two_collide(self):
         class OtherWidgetViewSet(WidgetViewSet):
             endpoint = "other-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
 
         reset_generator_stats()
         generate_schema((WidgetViewSet, "widget"), (OtherWidgetViewSet, "other-widget"))
@@ -164,7 +165,7 @@ class TestHistoryMixinSchema:
     def test_a_plain_number_filter_is_typed_as_a_number(self):
         class NumberFilterWidgetViewSet(WidgetViewSet):
             endpoint = "number-filter-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             extra_history_filters = {"count": NumberFilter()}
 
         schema = generate_schema((NumberFilterWidgetViewSet, "number-filter-widget"))
@@ -198,7 +199,7 @@ class TestHistoryMixinSchema:
     def test_the_viewsets_own_filter_backends_do_not_leak_onto_history_routes(self):
         class FilteredWidgetViewSet(WidgetViewSet):
             endpoint = "filtered-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             filterset_fields = ["name", "count"]
 
         schema = generate_schema(
@@ -212,7 +213,7 @@ class TestHistoryMixinSchema:
     def test_the_viewsets_own_filter_backends_still_appear_on_non_history_actions(self):
         class FilteredWidgetViewSet(WidgetViewSet):
             endpoint = "filtered-widgets"
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
             filterset_fields = ["name", "count"]
 
         schema = generate_schema(
@@ -270,7 +271,7 @@ class TestConditionalSerializerMixinSchema:
             model = Widget
             endpoint = "plain-widgets"
             serializer_class = PlainWidgetSerializer
-            exempt_from_registry = "a test's own class, defined again on every run"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
 
         schema = generate_schema((PlainWidgetViewSet, "plain-widget"))
         params = schema["paths"]["/plain-widgets/"]["get"]["parameters"]

@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from isik.django.drf.serializers import SerializerRegistryExemption
 from isik.django.drf.serializers.base import BaseModelSerializer, BaseSerializer
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin, relational_serializer
 from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
@@ -33,7 +34,7 @@ class WidgetSerializerWithOwnerInclude(BaseModelSerializer):
     # Widget is already registered to WidgetSerializer above - this is an intentional second
     # serializer for it, just to exercise the composed mixin stack's ?include=/?only=/?exclude=
     # handling end-to-end.
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = SerializerRegistryExemption(reason="a test's own class, defined again on every run")
 
     class Meta:
         model = Widget
@@ -42,7 +43,7 @@ class WidgetSerializerWithOwnerInclude(BaseModelSerializer):
 
 
 class WidgetSerializerWithWriteOnlyCount(BaseModelSerializer):
-    exempt_from_registry = "a test's own class, defined again on every run"
+    exempt_from_registry = SerializerRegistryExemption(reason="a test's own class, defined again on every run")
 
     class Meta:
         model = Widget
@@ -74,7 +75,9 @@ class TestBaseModelSerializer:
         with pytest.raises(ImproperlyConfigured, match="count"):
 
             class ConflictingSerializer(BaseModelSerializer):
-                exempt_from_registry = "a test's own class, defined again on every run"
+                exempt_from_registry = SerializerRegistryExemption(
+                    reason="a test's own class, defined again on every run"
+                )
 
                 class Meta:
                     model = Widget

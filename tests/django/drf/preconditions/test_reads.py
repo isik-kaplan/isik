@@ -89,33 +89,29 @@ class TestTheStartupCheck:
 
 class TestDeclaring:
     def test_an_unread_write_says_why_and_is_listed(self):
-        view, line = (
-            type(
-                "Unread", (PreconditionMixin, GenericViewSet), {"precondition_unread_actions": {"x": read_views.UNREAD}}
-            ),
-            sys._getframe().f_lineno,
-        )
+        made, line = NoReadableVersion(reason=read_views.UNREAD), sys._getframe().f_lineno
 
-        made = view.precondition_unread_actions["x"]
-        assert isinstance(made, NoReadableVersion)
+        view = type("Unread", (PreconditionMixin, GenericViewSet), {"precondition_unread_actions": {"x": made}})
+
+        assert view.precondition_unread_actions["x"] is made
         assert declared_exemptions("isik.precondition.readable-version")[-1] is made
-        assert made.file == HERE
-        # The statement's first line - where it begins, however it's wrapped.
-        assert line - 3 <= made.line <= line
+        assert (made.file, made.line) == (HERE, line)
 
-    def test_an_unread_write_needs_a_reason_of_some_length(self):
+    def test_an_unread_write_takes_the_type_not_a_bare_string(self):
         with pytest.raises(ImproperlyConfigured) as raised:
-            type("Short", (PreconditionMixin,), {"precondition_unread_actions": {"x": "a script"}})
+            type("Bare", (PreconditionMixin,), {"precondition_unread_actions": {"x": read_views.UNREAD}})
 
-        assert str(raised.value).startswith(
-            "Short.precondition_unread_actions - NoReadableVersion needs a reason of at least 40 characters."
+        assert str(raised.value) == (
+            "Bare.precondition_unread_actions takes a NoReadableVersion(reason=...) for x, not a bare string."
         )
 
     def test_unread_writes_are_a_mapping(self):
         with pytest.raises(ImproperlyConfigured) as raised:
             type("Listed", (PreconditionMixin,), {"precondition_unread_actions": ["x"]})
 
-        assert str(raised.value) == "Listed.precondition_unread_actions takes {name: reason}, not ['x']."
+        assert str(raised.value) == (
+            "Listed.precondition_unread_actions takes {name: NoReadableVersion(reason=...)}, not ['x']."
+        )
 
     def test_read_from_is_a_mapping(self):
         with pytest.raises(ImproperlyConfigured) as raised:

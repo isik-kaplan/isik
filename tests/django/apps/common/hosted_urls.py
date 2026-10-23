@@ -4,16 +4,25 @@ from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
 from rest_framework.viewsets import ViewSet
 
-from isik.django.drf.viewsets import RequestPoliciesMixin, ViewSetRegistryMixin
+from isik.django.drf.viewsets import (
+    RequestPoliciesMixin,
+    RequestPolicyExemption,
+    ViewSetRegistryExemption,
+    ViewSetRegistryMixin,
+)
 from tests.django.drf.test_coverage import SetUp
 from tests.testapp.models import Widget
 
 
 class HostedGated(RequestPoliciesMixin, ViewSetRegistryMixin, ViewSet):
     model = Widget
-    exempt_from_registry = "routed only by the api host, beside the main widget viewset"
+    exempt_from_registry = ViewSetRegistryExemption(
+        reason="routed only by the api host, beside the main widget viewset"
+    )
     request_policies = [SetUp]
-    set_up_exempt_actions = {"list": "a host's health check reads the list"}
+    set_up_exempt_actions = {
+        "list": RequestPolicyExemption(reason="a host's health check reads the list, before any set-up")
+    }
 
     def list(self, request):
         return Response()

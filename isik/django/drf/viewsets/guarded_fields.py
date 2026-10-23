@@ -7,9 +7,9 @@ from rest_framework.permissions import SAFE_METHODS, OperandHolder, SingleOperan
 from rest_framework.response import Response
 from rest_framework.serializers import ListSerializer
 
-from isik._internal.reasons import require_exemption, require_reasons
+from isik._internal.reasons import made_exemption, require_exemptions
 from isik._internal.translation import gettext as _
-from isik.common.utils.exemptions import Exemption
+from isik.common.utils.exemptions import Exemption, makes_own_exemptions
 from isik.django.drf._changes import MISSING as _MISSING
 from isik.django.drf._changes import changed as _changed
 from isik.django.drf._changes import dig as _dig
@@ -63,13 +63,30 @@ def writes_no_guarded_fields(reason):
             )
             % {"value": reason}
         )
-    reason = require_exemption("writes_no_guarded_fields", "reason", reason, WritesNoGuardedFields)
+    reason = made_exemption("writes_no_guarded_fields", "reason", reason, WritesNoGuardedFields)
 
     def mark(handler):
         handler.writes_no_guarded_fields = reason
         return handler
 
     return mark
+
+
+class UnguardedField(
+    Exemption,
+    rule="isik.guarded-fields.unguarded",
+    why=(
+        "A field one viewset guards is guarded wherever its serializer writes it, or the other viewset is a "
+        "way around the guard."
+    ),
+):
+    """Why a field another viewset guards is open here - `unguarded_fields`' type."""
+
+
+@makes_own_exemptions
+def _destroy_writes_no_guarded_field():
+    # isik's own, recorded at this line and left out of a project's listing and budgets.
+    return {"destroy": WritesNoGuardedFields(reason="deleting a row writes none of its fields")}
 
 
 class GuardedFieldsMixin:
@@ -96,7 +113,7 @@ class GuardedFieldsMixin:
       `ImproperlyConfigured`, inside a transaction on every database (`field_guard_databases` narrows
       it), so its database writes roll back. Call `self.check_guarded_fields(serializer)` yourself,
       or mark an action that writes no guarded field `@writes_no_guarded_fields("<why>")`. `destroy`
-      writes no fields and is exempt (`actions_writing_no_guarded_fields`, `{action: reason}`). Side
+      writes no fields and is exempt (`actions_writing_no_guarded_fields`, `{action: WritesNoGuardedFields}`). Side
       effects outside the database aren't rolled back - which is what the loud failure is for: a test
       hitting the endpoint finds it.
 
@@ -112,7 +129,9 @@ class GuardedFieldsMixin:
 
         class PlatformInvitationViewSet(BaseModelViewSet):
             serializer_class = PublicInvitationSerializer  # also used by the tenant viewset
-            unguarded_fields = {"names_issuer": "platform staff may change who an invitation names"}
+            unguarded_fields = {
+                "names_issuer": UnguardedField(reason="platform staff may change who an invitation names"),
+            }
 
     Only viewsets with this mixin (so every `BaseModelViewSet`) are compared, and only through their
     `permission_classes` - not a `get_permissions()` override.
@@ -121,17 +140,23 @@ class GuardedFieldsMixin:
     runs_field_guards = True
     # A view instance serves one request, so the class default is the reset `dispatch` would do.
     _field_guards_checked = False
-    # {field name: reason} - a field another viewset over the same serializer guards, left open here.
+    # {field name: UnguardedField} - a field another viewset over the same serializer guards, left open here.
     unguarded_fields = {}
-    actions_writing_no_guarded_fields = {"destroy": "deleting a row writes none of its fields"}
+    # {action: WritesNoGuardedFields}
+    actions_writing_no_guarded_fields = _destroy_writes_no_guarded_field()
     field_guard_databases = None  # every configured database
     # serializer class -> {(module, qualname): (viewset, guarded field names)}
     _serializer_guards = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        require_reasons(cls.__name__, "unguarded_fields", cls.unguarded_fields)
-        require_reasons(cls.__name__, "actions_writing_no_guarded_fields", cls.actions_writing_no_guarded_fields)
+        require_exemptions(cls.__name__, "unguarded_fields", cls.unguarded_fields, UnguardedField)
+        require_exemptions(
+            cls.__name__,
+            "actions_writing_no_guarded_fields",
+            cls.actions_writing_no_guarded_fields,
+            WritesNoGuardedFields,
+        )
         nested = [guard for entry in getattr(cls, "permission_classes", []) for guard in _nested_guards(entry)]
         if nested:
             raise ImproperlyConfigured(

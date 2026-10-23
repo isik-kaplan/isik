@@ -164,7 +164,10 @@ def concurrency_token_problems(model):
     for relation in concurrency_relations(model):
         if _relation(model, relation) is None:
             problems.append(
-                _("%(model)s's concurrency relation %(relation)r is not one of its many-to-many fields.")
+                _(
+                    "%(model)s's concurrency relation %(relation)r is neither one of its many-to-many fields nor a "
+                    "foreign key or one-to-one pointing at it."
+                )
                 % {"model": label, "relation": relation}
             )
     if not _kept_by_isik(model, name) and not isinstance(getattr(model, "concurrency_field", None), ConcurrencyToken):
@@ -231,7 +234,29 @@ def concurrency_relations(model):
 
 
 def _relation(model, name):
-    return next((field for field in model._meta.local_many_to_many if field.name == name), None)
+    """
+    The relation `name` names: a many-to-many field of `model`'s own, or the accessor of a foreign key or
+    one-to-one pointing at it (`discount_set`, a related_name) - None for anything else.
+    """
+    many = next((field for field in model._meta.local_many_to_many if field.name == name), None)
+    if many is not None:
+        return many
+    return next(
+        (
+            relation
+            for relation in model._meta.related_objects
+            if not relation.many_to_many and relation.get_accessor_name() == name
+        ),
+        None,
+    )
+
+
+def _relation_table(relation):
+    """(the model whose table holds the relation's rows, its key naming the owner row)."""
+    if relation.many_to_many:
+        through = relation.remote_field.through
+        return through, through._meta.get_field(relation.m2m_field_name())
+    return relation.related_model, relation.field
 
 
 def _token_expression(model):
@@ -244,12 +269,12 @@ def _token_expression(model):
 
 
 def _relation_rows(relation):
-    through = relation.remote_field.through
-    owner_key = through._meta.get_field(relation.m2m_field_name())
-    # Every column of the through row but its own key and the owner's: the related object's, and a
-    # custom through model's own fields. In their order, so the same rows always read the same.
-    columns = [field.attname for field in through._meta.concrete_fields if field not in (owner_key, through._meta.pk)]
-    rows = through._base_manager.filter(**{owner_key.attname: OuterRef(owner_key.target_field.attname)})
+    table, owner_key = _relation_table(relation)
+    # Every column of the row but its own key and the owner's: a through row's related object and a
+    # custom through model's own fields, or every field of a row pointing at the owner. In their order,
+    # so the same rows always read the same.
+    columns = [field.attname for field in table._meta.concrete_fields if field not in (owner_key, table._meta.pk)]
+    rows = table._base_manager.filter(**{owner_key.attname: OuterRef(owner_key.target_field.attname)})
     return ArraySubquery(rows.order_by(*columns).values(row=JSONObject(**{column: F(column) for column in columns})))
 
 
@@ -334,9 +359,11 @@ def assert_concurrency_field_changes(instance, related=None):
     `QuerySet.update()`, back to back - so the clock barely moves - and raises
     `AssertionError` naming the first write that left a token an earlier one had left.
 
-    A model whose version covers relations takes one object per relation, `related={name: obj}` - or
-    `(obj, through_defaults)` for a through model with fields of its own - and each is added, removed,
-    added again and cleared: every one must move the ETag from the one before it.
+    A model whose version covers relations takes one per relation in `related`. For a many-to-many it's
+    an object - or `(obj, through_defaults)` for a through model with fields of its own - added, removed,
+    added again and cleared. For a foreign key or one-to-one pointing at the model it's a function making
+    one such row for the instance it's given, then deleted. Every write must move the ETag from the one
+    before it.
 
         assert_concurrency_field_changes(user, related={"groups": group, "user_permissions": permission})
     """
@@ -367,16 +394,36 @@ def assert_concurrency_field_changes(instance, related=None):
         _assert_relation_moves_the_etag(instance, relation, related[relation])
 
 
-def _assert_relation_moves_the_etag(instance, relation, related):
+def _many_to_many_writes(instance, relation, related):
     obj, through_defaults = related if isinstance(related, tuple) else (related, None)
     manager = getattr(instance, relation)
-    writes = [
+    return [
         ("add()", lambda: manager.add(obj, through_defaults=through_defaults)),
         ("remove()", lambda: manager.remove(obj)),
         ("add()", lambda: manager.add(obj, through_defaults=through_defaults)),
         ("clear()", manager.clear),
     ]
+
+
+def _pointing_writes(instance, relation, make):
+    if not callable(make):
+        raise AssertionError(
+            _(
+                "%(model)s's version covers %(relation)r, rows pointing at it - pass related={%(relation)r: "
+                "<a function making one for the instance it's given>}."
+            )
+            % {"model": instance.__class__._meta.label, "relation": relation}
+        )
+    made = []
+    return [("create", lambda: made.append(make(instance))), ("delete()", lambda: made[0].delete())]
+
+
+def _assert_relation_moves_the_etag(instance, relation, related):
     model = instance.__class__
+    if _relation(model, relation).many_to_many:
+        writes = _many_to_many_writes(instance, relation, related)
+    else:
+        writes = _pointing_writes(instance, relation, related)
 
     def read():
         return current_concurrency_etag(model, instance.pk)

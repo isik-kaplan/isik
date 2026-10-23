@@ -6,6 +6,7 @@ from rest_framework.test import APIRequestFactory
 from isik.django.apps.feedback.comments import comments
 from isik.django.apps.feedback.comments.drf import generic_comment_serializer
 from isik.django.drf.permissions import is_owner
+from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from tests.testapp.models import Post
 
@@ -50,7 +51,7 @@ def test_composes_with_is_owner_for_a_private_comment_viewset(alice, bob, post):
         endpoint = "comments"
         serializer_class = CommentSerializer
         permission_classes = [is_owner("user")]
-        exempt_from_registry = "a test's own class, defined again on every run"
+        exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
 
         def get_queryset(self):
             return self.model.objects.filter(target=post)
