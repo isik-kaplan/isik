@@ -35,7 +35,11 @@ class SecondFactorSatisfied(RequestPolicy):
 - `allows(request, view)` - whether the request may go on.
 - `message`/`code` - the refusal: a 403, or a 401 for an unauthenticated request, as DRF decides for
   any permission.
-- `refused(request, view, response)` - adds to the refusal's response. Nothing by default.
+- `refused(request, view, response)` - adds to the refusal's response. Nothing by default. The
+  refusal's body is `{"detail": message, "code": code}`, so a client can tell which policy refused it.
+- `succeeded(request, view, response)` - runs on a 2xx response to a request the policy allowed (an
+  exempt action isn't one): spend what the policy let through - a rate's allowance, a one-time
+  grant - only once the request did what it asked. Nothing by default.
 - `exemptions_attribute` - the view attribute naming this policy's exempt actions.
   `<policy_name>_exempt_actions` (`second_factor_satisfied_exempt_actions`) unless set.
 

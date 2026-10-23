@@ -298,6 +298,7 @@ class TestTheLockTriggers:
         assert proxy._meta.triggers == [trigger]
         assert trigger.name == "lock_tags_owner"
         assert f'= NEW."from_{name.lower()}_id"' in trigger.func
+        assert proxy.isik_generated == "lock"
 
     def test_a_relation_to_a_model_loaded_later_waits_for_it(self, monkeypatch):
         monkeypatch.setattr(base_models, "relation_locks", [])

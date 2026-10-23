@@ -127,7 +127,7 @@ class TestTheModel:
     def test_a_model_viewsets_own(self):
         view = type(
             "Modeled",
-            (PreconditionMixin, BaseModelViewSet),
+            (BaseModelViewSet,),
             {
                 "model": VersionedWidget,
                 "endpoint": "x",

@@ -46,6 +46,24 @@ def make_widget_for_tenant(name):
     return Widget.objects.create(name=name).pk
 
 
+class OnCommitTask(HistoryContextTask):
+    dispatch_on_commit = True
+
+
+class AtOnceTask(HistoryContextTask):
+    dispatch_on_commit = False
+
+
+@app.task(base=OnCommitTask, name="widgets.echo_on_commit")
+def echo_on_commit(*args, **kwargs):
+    return list(args), kwargs
+
+
+@app.task(base=AtOnceTask, name="widgets.echo_at_once")
+def echo_at_once(*args, **kwargs):
+    return list(args), kwargs
+
+
 @pytest.fixture
 def sent(monkeypatch):
     """The options each dispatch hands Celery, instead of sending anything."""
@@ -253,3 +271,70 @@ class ShoutingEncoder(DjangoJSONEncoder):
         if isinstance(o, uuid.UUID):
             return f"UUID:{o}"
         return super().default(o)
+
+
+class TestDispatchOnCommit:
+    @pytest.fixture
+    def committed(self, monkeypatch):
+        """The callbacks the dispatch handed transaction.on_commit, to run when the test says."""
+        from django.db import transaction
+
+        held = []
+        monkeypatch.setattr(transaction, "on_commit", lambda callback: held.append(callback))
+        return held
+
+    def test_off_by_default_sends_at_once(self, sent, committed):
+        assert echo.delay(1) == "sent"
+        assert len(sent) == 1
+        assert committed == []
+
+    def test_on_sends_once_the_transaction_commits(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+
+        result = echo.delay(1)
+
+        assert sent == []
+        committed[0]()
+        assert [message["args"] for message in sent] == [(1,)]
+        assert sent[0]["task_id"] == result.id
+
+    def test_off_unless_set(self, settings):
+        if hasattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT"):
+            del settings.HISTORY_TASK_DISPATCH_ON_COMMIT
+
+        assert echo.dispatches_on_commit() is False
+
+    def test_sent_with_its_keyword_arguments(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+
+        echo.apply_async((1,), {"extra": 2})
+        committed[0]()
+
+        assert [(message["args"], message["kwargs"]) for message in sent] == [((1,), {"extra": 2})]
+
+    def test_the_task_can_say_so_itself(self, sent, committed):
+        echo_on_commit.delay(1)
+
+        assert sent == [] and len(committed) == 1
+
+    def test_the_task_can_say_no_over_the_setting(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+
+        assert echo_at_once.delay(1) == "sent"
+
+    def test_a_task_id_the_caller_chose_is_kept(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+
+        result = echo.apply_async((1,), task_id="chosen")
+        committed[0]()
+
+        assert result.id == sent[0]["task_id"] == "chosen"
+
+    def test_the_cause_is_read_while_the_request_is_served(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+        user = EmailUser(pk=7)
+
+        while_serving(lambda: echo.delay(1) and None, {"user": user.pk})
+        committed[0]()
+
+        assert sent[0]["headers"]["isik_history_context"]["caused_by"] == "request"

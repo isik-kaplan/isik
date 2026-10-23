@@ -231,7 +231,7 @@ def test_context_field_is_null_outside_any_pghistory_context():
 
 
 def test_context_fields_attrs_and_trigger_returns_empty_for_no_fields():
-    assert history_module._context_fields_attrs_and_trigger([]) == ({}, None)
+    assert history_module.context_fields_trigger([]) == ({}, None)
 
 
 def test_context_fields_attrs_and_trigger_builds_attrs_and_one_combined_trigger():
@@ -240,7 +240,7 @@ def test_context_fields_attrs_and_trigger_builds_attrs_and_one_combined_trigger(
     cf_actor = ContextField("actor", context_key="user", cast="bigint", field=actor_field)
     cf_org = ContextField("org_id", cast="integer", field=org_field)
 
-    attrs, trigger = history_module._context_fields_attrs_and_trigger([cf_actor, cf_org])
+    attrs, trigger = history_module.context_fields_trigger([cf_actor, cf_org])
 
     assert attrs == {
         "actor": actor_field,
@@ -266,7 +266,7 @@ def test_context_fields_attrs_and_trigger_names_a_foreign_key_field_with_its_id_
     fk_field = models.ForeignKey("testapp.EmailUser", null=True, on_delete=models.DO_NOTHING, db_constraint=False)
     cf_actor = ContextField("actor", context_key="user", cast="bigint", field=fk_field)
 
-    attrs, _ = history_module._context_fields_attrs_and_trigger([cf_actor])
+    attrs, _ = history_module.context_fields_trigger([cf_actor])
 
     assert attrs["pgh_context_field_names"] == frozenset({"actor_id"})
 
@@ -374,3 +374,181 @@ class TestObjectStreamIndex:
             cursor.execute("SELECT indexdef FROM pg_indexes WHERE tablename = %s", [table])
             definitions = [row[0] for row in cursor.fetchall()]
         assert any('("pgh_obj_id", "pgh_id" DESC)' in d or "(pgh_obj_id, pgh_id DESC)" in d for d in definitions)
+
+
+def _triggers_of_event_model(tracked):
+    return {trigger.name: trigger for trigger in tracked.pgh_event_model._meta.triggers}
+
+
+class TestTrackEventsOptions:
+    @isolate_apps("tests.testapp")
+    def test_trackers_replace_the_default_three(self):
+        tracked = track_events(trackers=[pghistory.InsertEvent()])(_fresh_model("OnlyInserts"))
+
+        assert {trigger.name for trigger in tracked._meta.triggers} == {"insert_insert"}
+
+    @isolate_apps("tests.testapp")
+    def test_a_condition_goes_on_the_update_alone(self):
+        condition = pghistory.AnyChange("name")
+        tracked = track_events(condition=condition)(_fresh_model("OnNameChange"))
+
+        update = next(trigger for trigger in tracked._meta.triggers if trigger.name == "update_update")
+        assert {trigger.name for trigger in tracked._meta.triggers} == {
+            "insert_insert",
+            "update_update",
+            "delete_delete",
+        }
+        assert update.condition is condition
+
+    @isolate_apps("tests.testapp")
+    def test_without_a_condition_the_update_keeps_pghistorys_own(self):
+        tracked = track_events()(_fresh_model("DefaultCondition"))
+
+        update = next(trigger for trigger in tracked._meta.triggers if trigger.name == "update_update")
+        assert update.condition is not None
+
+    def test_trackers_and_a_condition_together_are_refused(self):
+        with pytest.raises(TypeError) as raised:
+            track_events(trackers=[pghistory.InsertEvent()], condition=pghistory.AnyChange("name"))
+
+        assert (
+            str(raised.value)
+            == "track_events takes trackers= or condition=, not both - a tracker carries its own condition."
+        )
+
+    @isolate_apps("tests.testapp")
+    def test_append_only_is_handed_on(self):
+        tracked = track_events(append_only=True)(_fresh_model("AppendOnly"))
+
+        assert "append_only" in {trigger.name for trigger in tracked.pgh_event_model._meta.triggers}
+
+    @isolate_apps("tests.testapp")
+    def test_append_only_left_out_is_pghistorys_to_decide(self, monkeypatch):
+        handed = {}
+        real = pghistory.track
+
+        def track(*trackers, **options):
+            handed.update(options)
+            return real(*trackers, **options)
+
+        monkeypatch.setattr(pghistory, "track", track)
+        track_events()(_fresh_model("Undecided"))
+
+        assert "append_only" not in handed
+
+    @isolate_apps("tests.testapp")
+    def test_its_event_model_is_marked_as_isiks(self):
+        from isik.django.apps.common.generated import generated_models
+
+        tracked = track_events()(_fresh_model("Marked"))
+
+        assert tracked.pgh_event_model.isik_generated == "event"
+        assert tracked.pgh_event_model in generated_models("event")
+        assert tracked not in generated_models()
+
+
+class TestContextFieldsCollidingWithTrackedFields:
+    def model(self, prefix, **fields):
+        attrs = {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"}), **fields}
+        return type(f"{prefix}{uuid.uuid4().hex[:8]}", (models.Model,), attrs)
+
+    @isolate_apps("tests.testapp")
+    def test_a_name_taken_by_a_tracked_field_is_refused(self):
+        model = self.model("Named", name=models.CharField(max_length=10), actor=models.CharField(max_length=10))
+
+        with pytest.raises(ImproperlyConfigured) as raised:
+            track_events(context_fields=[ContextField("actor", field=models.TextField(null=True))])(model)
+
+        assert str(raised.value) == (
+            f"{model.__name__}'s history has ContextFields named like its own tracked fields: actor - name them "
+            "otherwise, or leave those fields out of the history."
+        )
+
+    @isolate_apps("tests.testapp")
+    def test_every_name_taken_is_named(self):
+        model = self.model("Both", actor=models.CharField(max_length=10), tenant=models.CharField(max_length=10))
+        context = [
+            ContextField("actor", field=models.TextField(null=True)),
+            ContextField("tenant", field=models.TextField(null=True)),
+        ]
+
+        with pytest.raises(ImproperlyConfigured, match=r"tracked fields: actor, tenant - "):
+            track_events(context_fields=context)(model)
+
+    @isolate_apps("tests.testapp")
+    def test_a_foreign_keys_column_taken_is_refused(self):
+        model = self.model("Column", actor_id=models.IntegerField())
+        actor = ContextField(
+            "actor",
+            cast="integer",
+            field=models.ForeignKey(
+                EmailUser, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+            ),
+        )
+
+        with pytest.raises(ImproperlyConfigured, match=r"tracked fields: actor_id - "):
+            track_events(context_fields=[actor])(model)
+
+    @isolate_apps("tests.testapp")
+    def test_a_field_the_history_leaves_out_is_free(self):
+        fields = {"name": models.CharField(max_length=10), "actor": models.CharField(max_length=10)}
+        context = [ContextField("actor", field=models.TextField(null=True))]
+
+        track_events(fields=["name"], context_fields=context)(self.model("Fielded", **fields))
+        track_events(exclude=["actor"], context_fields=context)(self.model("Excluded", **fields))
+
+
+class TestHistoryIndexProblems:
+    @pytest.fixture(autouse=True)
+    def isolated(self):
+        with isolate_apps("tests.testapp"):
+            yield
+
+    def model(self, attrs, meta=None, bases=(models.Model,)):
+        meta_class = type("Meta", (), {"app_label": "testapp", **(meta or {})})
+        return type(f"Indexed{uuid.uuid4().hex[:8]}", bases, {"__module__": __name__, "Meta": meta_class, **attrs})
+
+    def event_model(self, indexes=(), obj=True, meta=None):
+        tracked = self.model({})
+        attrs = {"pgh_tracked_model": tracked}
+        if obj:
+            attrs["pgh_obj"] = models.ForeignKey(tracked, models.DO_NOTHING, db_constraint=False, related_name="+")
+        return self.model(attrs, meta={"indexes": list(indexes), **(meta or {})}, bases=(pghistory.models.Event,))
+
+    def problems(self, *made):
+        import types
+
+        return history_module.history_index_problems([types.SimpleNamespace(get_models=lambda: made)])
+
+    def test_without_the_index_it_is_named(self):
+        made = self.event_model()
+
+        assert self.problems(made) == [
+            f"testapp.{made.__name__} has no (pgh_obj, -pgh_id) index - a page of one object's history costs the "
+            "square of its length. Track it with track_events(), or add object_stream_index() to its meta's indexes."
+        ]
+
+    @pytest.mark.parametrize("fields", [["pgh_obj", "-pgh_id"], ["pgh_obj_id", "-pgh_id"]])
+    def test_with_it_it_is_fine(self, fields):
+        assert self.problems(self.event_model([models.Index(fields=fields, name="stream")])) == []
+
+    @pytest.mark.parametrize("fields", [["pgh_obj"], ["pgh_obj", "pgh_id"], ["-pgh_id", "pgh_obj"]])
+    def test_another_index_isnt_it(self, fields):
+        assert len(self.problems(self.event_model([models.Index(fields=fields, name="other")]))) == 1
+
+    def test_one_without_a_stream_needs_none(self):
+        assert self.problems(self.event_model(obj=False)) == []
+
+    def test_a_model_that_isnt_an_event_needs_none(self):
+        assert self.problems(self.model({"pgh_obj": models.IntegerField()})) == []
+
+    def test_a_model_left_out_doesnt_end_the_list(self):
+        made = self.event_model()
+
+        assert len(self.problems(self.model({}), made)) == 1
+
+    def test_a_proxy_needs_none_of_its_own(self):
+        base = self.event_model([models.Index(fields=["pgh_obj", "-pgh_id"], name="stream")])
+        proxy = self.model({}, meta={"proxy": True}, bases=(base,))
+
+        assert self.problems(proxy) == []

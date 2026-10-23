@@ -220,10 +220,10 @@ class PreconditionFirstWidgetViewSet(PreconditionMixin, IdempotencyMixin, ModelV
     idempotency_claim_model = "idempotency_by_reference.IdempotencyClaim"
 
 
-class StrictWidgetViewSet(PreconditionMixin, ModelViewSet):
+class LenientWidgetViewSet(PreconditionMixin, ModelViewSet):
     queryset = Widget.objects.all()
     serializer_class = WidgetSerializer
-    precondition_ignores_weak_tags = False
+    precondition_ignores_weak_tags = True
 
 
 class OptionalWidgetViewSet(PreconditionMixin, ModelViewSet):
@@ -370,3 +370,75 @@ class RosterSerializer(serializers.ModelSerializer):
 class RosterViewSet(PreconditionMixin, ModelViewSet):
     queryset = Roster.objects.all()
     serializer_class = RosterSerializer
+
+
+class RefusesReads(BasePermission):
+    """Lets a caller write, never retrieve - its gate differs per action."""
+
+    def has_permission(self, request, view):
+        return view.action != "retrieve"
+
+
+class RefusesReadingTheObject(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return view.action != "retrieve"
+
+
+class RefusesTheObject(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return False
+
+
+class HidesCountFromNonStaff(serializers.ModelSerializer):
+    class Meta:
+        model = Widget
+        fields = ["id", "name", "count"]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        if not self.context["request"].user.is_staff:
+            fields.pop("count")
+        return fields
+
+
+class WriteNotReadViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Widget.objects.all()
+    serializer_class = WidgetSerializer
+    permission_classes = [RefusesReads]
+
+
+class ReadsANarrowerQuerysetViewSet(PreconditionMixin, ModelViewSet):
+    serializer_class = WidgetSerializer
+    precondition_model = Widget
+
+    def get_queryset(self):
+        # Writes reach every widget; reads only those named "visible".
+        widgets = Widget.objects.all()
+        return widgets.filter(name="visible") if self.action == "retrieve" else widgets
+
+
+class ObjectReadRefusedViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Widget.objects.all()
+    serializer_class = WidgetSerializer
+    permission_classes = [RefusesReadingTheObject]
+
+
+class ObjectRefusedViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Widget.objects.all()
+    serializer_class = WidgetSerializer
+    permission_classes = [RefusesTheObject]
+
+
+class FieldHidingViewSet(PreconditionMixin, ModelViewSet):
+    queryset = Widget.objects.all()
+    serializer_class = HidesCountFromNonStaff
+
+
+class OwnRowsOnlyViewSet(PreconditionMixin, ModelViewSet):
+    """Every action sees only the caller's own widgets - another's is outside the queryset entirely."""
+
+    serializer_class = WidgetSerializer
+    precondition_model = Widget
+
+    def get_queryset(self):
+        return Widget.objects.filter(owner=self.request.user)

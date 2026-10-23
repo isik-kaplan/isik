@@ -1,10 +1,12 @@
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from isik.common.utils.required_attributes import REQUIRED, RequiredAttributesMixin
+from isik.django.apps.idempotency.drf import IdempotencyMixin
 from isik.django.drf.viewsets.action_serializer_class import ActionSerializerClassMixin
 from isik.django.drf.viewsets.filterset import FilterSetMixin
 from isik.django.drf.viewsets.guarded_fields import GuardedFieldsMixin
 from isik.django.drf.viewsets.ordering import DeclaredOrderingMixin, ReverseOrderingMixin
+from isik.django.drf.viewsets.preconditions import PreconditionMixin
 from isik.django.drf.viewsets.protected_destroy import ProtectedDestroyMixin
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
 from isik.django.drf.viewsets.request_policies import RequestPoliciesMixin
@@ -24,6 +26,8 @@ class BaseViewSet(RequestPoliciesMixin, ActionSerializerClassMixin, GuardedField
 
 class BaseModelViewSet(
     RequiredAttributesMixin,
+    IdempotencyMixin,
+    PreconditionMixin,
     ViewSetRegistryMixin,
     ProtectedDestroyMixin,
     ReverseOrderingMixin,
@@ -34,8 +38,10 @@ class BaseModelViewSet(
 ):
     """
     `BaseViewSet` plus everything that is about a model - see each mixin's own docstring for what it
-    adds: RequiredAttributesMixin (`model`/`endpoint`/`serializer_class` must be set explicitly, fails
-    fast at class-definition time otherwise), ViewSetRegistryMixin (model -> viewset lookup),
+    adds: IdempotencyMixin (an `Idempotency-Key` on every write - POST, PUT, PATCH, DELETE),
+    PreconditionMixin (`ETag` / `If-Match` on every write to one object), RequiredAttributesMixin
+    (`model`/`endpoint`/`serializer_class` must be set explicitly, fails fast at class-definition
+    time otherwise), ViewSetRegistryMixin (model -> viewset lookup),
     ProtectedDestroyMixin (a clean 400 instead of a 500 on ProtectedError), ReverseOrderingMixin
     (`-field` ordering for free), DeclaredOrderingMixin (`?ordering=` values that map to a real field
     or expression other than their own name, via `declared_ordering`), FilterSetMixin
@@ -45,6 +51,13 @@ class BaseModelViewSet(
     has to be set even though the serializer already implies it, matching the "required
     explicit" choice made for `endpoint` too. `model`/`endpoint`/`serializer_class` buy the model
     surface and nothing else: a request-level rule belongs in `BaseViewSet`'s `request_policies`.
+
+    The two write guards need the request in a transaction (`ATOMIC_REQUESTS`), an idempotency claims
+    app installed (`isik.django.apps.idempotency.by_reference` or `.with_body`), and an authenticated
+    caller for a write. A view opts out of one with `idempotent_methods = ()` or
+    `precondition_methods = ()`, or exempts single actions with `idempotency_exempt_actions` /
+    `precondition_exempt_actions` - which the coverage checks list with their reasons, where an opted-out
+    view is listed as uncovered.
 
     Pick and compose the individual mixins directly instead, if a project doesn't want all of this.
     """

@@ -303,10 +303,34 @@ class TestWhatIsCovered:
     def test_a_method_that_isnt_covered_needs_no_key(self, client, alice):
         widget = Widget.objects.create(name="bolt", owner=alice)
 
-        response = client.patch(f"/widgets/{widget.pk}/", {"name": "nut"}, format="json")
+        response = client.get(f"/widgets/{widget.pk}/")
 
         assert response.status_code == status.HTTP_200_OK
         assert not IdempotencyClaim.objects.exists()
+
+    def test_every_write_method_is_covered_by_default(self):
+        assert IdempotencyMixin.idempotent_methods == ("POST", "PUT", "PATCH", "DELETE")
+
+    @pytest.mark.parametrize("method", ["put", "patch", "delete"])
+    def test_an_update_or_delete_needs_a_key(self, client, alice, method):
+        widget = Widget.objects.create(name="bolt", owner=alice)
+
+        response = getattr(client, method)(f"/widgets/{widget.pk}/", {"name": "nut"}, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {"Idempotency-Key": ["This header is required."]}
+
+    def test_a_retried_update_replays_its_first_answer(self, client, alice, key):
+        widget = Widget.objects.create(name="bolt", owner=alice)
+        headers = {"Idempotency-Key": str(key)}
+
+        first = client.patch(f"/widgets/{widget.pk}/", {"count": 1}, format="json", headers=headers)
+        Widget.objects.filter(pk=widget.pk).update(count=7)
+        retry = client.patch(f"/widgets/{widget.pk}/", {"count": 1}, format="json", headers=headers)
+
+        assert first.status_code == retry.status_code == status.HTTP_200_OK
+        assert retry[REPLAYED] == "true"
+        assert Widget.objects.get().count == 7
 
     def test_an_optional_key_left_out_is_an_ordinary_request(self, client):
         assert post(client, "/optional-widgets/", {"name": "bolt"}).status_code == status.HTTP_201_CREATED
@@ -432,3 +456,34 @@ class TestDeclaringExemptions:
         type("Recorded", (IdempotencyMixin, Recording), {})
 
         assert seen == ["Recorded"]
+
+
+class TestTheLockTimeout:
+    @pytest.fixture
+    def asked(self, monkeypatch):
+        from isik.django.apps.idempotency import drf
+
+        asked = []
+        real = drf.claim_idempotency_key
+
+        def claim(*args, lock_timeout):
+            asked.append(lock_timeout)
+            return real(*args, lock_timeout=lock_timeout)
+
+        monkeypatch.setattr(drf, "claim_idempotency_key", claim)
+        return asked
+
+    def test_is_ten_seconds_unless_set(self, client, key, asked, settings):
+        del settings.IDEMPOTENCY_LOCK_TIMEOUT
+
+        post(client, "/widgets/", {"name": "bolt"}, key)
+
+        assert asked == [10_000]
+
+    @pytest.mark.parametrize("value", [None, 250])
+    def test_is_the_setting_when_set(self, client, key, asked, settings, value):
+        settings.IDEMPOTENCY_LOCK_TIMEOUT = value
+
+        post(client, "/widgets/", {"name": "bolt"}, key)
+
+        assert asked == [value]

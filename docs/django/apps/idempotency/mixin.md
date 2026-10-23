@@ -1,10 +1,10 @@
 # IdempotencyMixin
 
-`isik.django.apps.idempotency.drf.IdempotencyMixin` - mix into any DRF `GenericAPIView`, viewset or
-not.
+`isik.django.apps.idempotency.drf.IdempotencyMixin` - carried by `BaseModelViewSet`, and mixed into
+any other DRF `GenericAPIView`, viewset or not, by hand.
 
 ```python
-class InstallationViewSet(IdempotencyMixin, BaseModelViewSet):
+class InstallationViewSet(BaseModelViewSet):
     model = Installation
     endpoint = "installations"
     serializer_class = InstallationSerializer
@@ -21,7 +21,7 @@ POST /installations/  Idempotency-Key: 0192f5a4-...   -> 201 {"id": 7, ...}   Id
 
 | Attribute                        | Default            | Meaning |
 |----------------------------------|--------------------|---------|
-| `idempotent_methods`             | `("POST",)`        | Which methods are covered. `PUT`/`PATCH`/`DELETE` on a detail route are idempotent already. |
+| `idempotent_methods`             | `("POST", "PUT", "PATCH", "DELETE")` | Which methods are covered: every write, so a retried update or delete replays its first answer. |
 | `idempotency_key_required`       | `True`             | A covered request without the header is a 400. `False` honors a key only when one is sent. |
 | `idempotency_exempt_actions`     | `{}`               | `{action: NoIdempotencyKey(reason=...)}` - actions the key is never asked of, e.g. a POST that changes nothing. |
 | `idempotency_no_replay_actions`  | `{}`               | `{action: NoReplay(reason=...)}` - actions whose response must never be stored. |

@@ -13,6 +13,7 @@ from pghistory.middleware import HistoryMiddleware
 
 from isik._internal.translation import gettext as _
 from isik.common.utils.sentinel import Sentinel
+from isik.django.apps.common.generated import mark_generated
 
 
 _NOT_GIVEN = Sentinel("TRACK_EVENTS_NOT_GIVEN")
@@ -106,18 +107,20 @@ class ContextField:
     def column(self):
         # A copy - set_attributes_from_name() is also what Field.contribute_to_class() calls
         # when this same field instance is actually attached to the event model (in
-        # _context_fields_attrs_and_trigger() below), and doing it here first, just to read the
+        # context_fields_trigger() below), and doing it here first, just to read the
         # resulting column name for the trigger SQL, must not disturb that later, real attach.
         probe = copy.copy(self.field)
         probe.set_attributes_from_name(self.name)
         return probe.column
 
 
-def _context_fields_attrs_and_trigger(context_fields):
+def context_fields_trigger(context_fields):
     """
     `context_fields` -> (the event model's `attrs` for those fields, the one trigger that stamps
-    all of them). Combined into a single `BEFORE INSERT` trigger rather than one per field - one
-    trigger firing is cheaper than several, and there's no ordering to get wrong between them.
+    all of them) - what `track_events()` adds to its `pghistory.track()` call, for a project calling
+    `pghistory.track()` itself to add the same. Combined into a single `BEFORE INSERT` trigger rather
+    than one per field - one trigger firing is cheaper than several, and there's no ordering to get
+    wrong between them.
 
     `current_setting('pghistory.context_metadata', true)` is the Postgres session variable
     `pghistory.context()`/`HistoryMiddleware` already populate before every statement (also what
@@ -162,15 +165,64 @@ def object_stream_index():
     return models.Index(fields=["pgh_obj", "-pgh_id"])
 
 
-def track_events(*, context_fields=(), **kwargs):
+def _context_field_names(context_field):
+    """The names a ContextField takes on its event model: its own, and its column's for a foreign key."""
+    names = {context_field.name}
+    if isinstance(context_field.field, models.ForeignKey):
+        names.add(f"{context_field.name}_id")
+    return names
+
+
+def _refuse_colliding_context_fields(cls, context_fields, fields, exclude):
+    tracked = [
+        field
+        for field in cls._meta.concrete_fields
+        if (fields is None or field.name in fields) and field.name not in (exclude or ())
+    ]
+    taken = {name for field in tracked for name in (field.name, field.attname)}
+    colliding = sorted(name for context_field in context_fields for name in _context_field_names(context_field) & taken)
+    if colliding:
+        # The event model would get the context field in place of the tracked column, and every event
+        # would record the context's value where the row's was - the row's own value lost.
+        raise ImproperlyConfigured(
+            _(
+                "%(model)s's history has ContextFields named like its own tracked fields: %(names)s - name them "
+                "otherwise, or leave those fields out of the history."
+            )
+            % {"model": cls.__name__, "names": ", ".join(colliding)}
+        )
+
+
+def track_events(*, trackers=None, condition=None, context_fields=(), append_only=None, **kwargs):
+    """
+    `pghistory.track()` with isik's own base: an event on every insert, update and delete, the
+    `(pgh_obj, -pgh_id)` stream index (`object_stream_index()`), and `context_fields` - each a real,
+    indexed column of the event table (`ContextField`). The event model is marked as isik's
+    (`generated_models("event")`).
+
+    - `trackers` - the events to record, in place of insert/update/delete: pghistory's own trackers,
+      with conditions of their own (`UpdateEvent(condition=pghistory.AnyChange("name"))`).
+    - `condition` - the condition of the default update event alone, keeping the other two. Not with
+      `trackers`, which carry their own.
+    - `append_only` - True makes the event table refuse updates and deletes (pghistory's own option).
+      pghistory's setting decides when it's left out - off unless a project turns it on.
+
+    A ContextField named like a field the history tracks is refused: the event model would hold the
+    context's value where the row's was.
+    """
+    if trackers is not None and condition is not None:
+        raise TypeError(
+            _("track_events takes trackers= or condition=, not both - a tracker carries its own condition.")
+        )
+    if trackers is None:
+        update = UpdateEvent() if condition is None else UpdateEvent(condition=condition)
+        trackers = [InsertEvent(), update, DeleteEvent()]
+
     def track_model_history(cls):
-        """
-        Instead of using pghistory.track() directly, if we need base configuration we will do it here.
-        """
-        trackers = [InsertEvent(), UpdateEvent(), DeleteEvent()]
+        _refuse_colliding_context_fields(cls, context_fields, kwargs.get("fields"), kwargs.get("exclude"))
         options = dict(kwargs)
         meta = dict(options.get("meta", {}))
-        attrs, trigger = _context_fields_attrs_and_trigger(context_fields)
+        attrs, trigger = context_fields_trigger(context_fields)
         if attrs:
             options["attrs"] = {**attrs, **options.get("attrs", {})}
         if trigger:
@@ -179,7 +231,12 @@ def track_events(*, context_fields=(), **kwargs):
         if options.get("obj_field", _NOT_GIVEN) is not None:
             meta["indexes"] = [*meta.get("indexes", []), object_stream_index()]
         options["meta"] = meta
-        return pghistory.track(*trackers, **options)(cls)
+        if append_only is not None:
+            options["append_only"] = append_only
+        tracked = pghistory.track(*trackers, **options)(cls)
+        for event_model in tracked.pgh_event_models.values():
+            mark_generated(event_model, "event")
+        return tracked
 
     return track_model_history
 
@@ -227,3 +284,34 @@ def open_history_context():
     """
     metadata = _open_history_context.get()
     return None if metadata is None else dict(metadata)
+
+
+def _has_stream_index(event_model):
+    wanted = (["pgh_obj", "-pgh_id"], ["pgh_obj_id", "-pgh_id"])
+    return any(list(index.fields) in wanted for index in event_model._meta.indexes)
+
+
+def history_index_problems(app_configs):
+    """
+    Each event model in `app_configs` with an object stream (`pgh_obj`) but no `(pgh_obj, -pgh_id)`
+    index, one sentence each - without it a page of one object's history costs the square of its
+    length, see `object_stream_index()`. `track_events()` adds it; an event model `pghistory.track()`
+    made directly needs it in its `meta`. The system check `isik.E008` reports them.
+    """
+    from pghistory.models import Event
+
+    problems = []
+    for config in app_configs:
+        for model in config.get_models():
+            if not issubclass(model, Event) or model._meta.proxy:
+                continue
+            if "pgh_obj" in {field.name for field in model._meta.fields} and not _has_stream_index(model):
+                problems.append(
+                    _(
+                        "%(model)s has no (pgh_obj, -pgh_id) index - a page of one object's history costs the "
+                        "square of its length. Track it with track_events(), or add object_stream_index() to "
+                        "its meta's indexes."
+                    )
+                    % {"model": model._meta.label}
+                )
+    return problems

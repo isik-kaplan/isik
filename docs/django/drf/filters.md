@@ -29,3 +29,28 @@ class PublishedAfterFilter(NarrowingFilterMixin, DateFilter):
     def narrow(self, qs, value):
         return qs.filter(published_at__date__gt=value)
 ```
+
+## MatchModeFilter
+
+A comma-separated list of values over a to-many relation, matched by any or all of them - a second
+query parameter, `mode_param`, says which:
+
+```python
+from django_filters import FilterSet
+from isik.django.drf.filters import MatchModeFilter
+
+
+class RosterFilterSet(FilterSet):
+    tags = MatchModeFilter(field_name="tags__label", mode_param="tags_match")
+```
+
+```
+?tags=red,blue                  -> rosters with a red or a blue tag
+?tags=red,blue&tags_match=all   -> rosters with both
+```
+
+- `any` (the default) and `all` each narrow with one join: `all` counts the distinct values a row
+  matches and keeps those matching every one, rather than joining the relation once per value.
+- A value given twice counts once.
+- Another mode is a 400 naming the parameter: `{"tags_match": ["Must be one of: any, all."]}`.
+- `mode_param` is required, and keyword-only. `MATCH_MODES` holds the modes.

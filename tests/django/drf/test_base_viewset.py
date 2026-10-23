@@ -6,6 +6,7 @@ from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.ordering import DeclaredOrderingFilter
 from isik.django.drf.viewsets.registry import ViewSetRegistryMixin
+from tests.django.drf.support import UnguardedModelViewSet
 from tests.testapp.models import Comment, Tag, Widget
 
 
@@ -18,7 +19,7 @@ class WidgetSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "count"]
 
 
-class WidgetViewSet(BaseModelViewSet):
+class WidgetViewSet(UnguardedModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
@@ -44,7 +45,8 @@ class TestBaseModelViewSet:
                 serializer_class = WidgetSerializer
 
     def test_registers_itself_in_the_viewset_registry(self):
-        assert ViewSetRegistryMixin.get_for_model(Widget) is WidgetViewSet
+        # In the registry of the base it subclasses - a test-only one, see UnguardedModelViewSet.
+        assert UnguardedModelViewSet.get_for_model(Widget) is WidgetViewSet
 
     def test_missing_attribute_check_runs_before_registration_not_after(self):
         # Regression: RequiredAttributesMixin used to run last in the __init_subclass__ cascade
@@ -106,3 +108,14 @@ class TestBaseModelViewSet:
         assert view.get_serializer_class() is ListOnlySerializer
         view.action = "retrieve"
         assert view.get_serializer_class() is WidgetSerializer
+
+
+class TestTheWriteGuardsItCarries:
+    def test_are_idempotency_keys_and_preconditions(self):
+        from isik.django.apps.idempotency.drf import IdempotencyMixin
+        from isik.django.drf.viewsets import PreconditionMixin
+
+        assert issubclass(BaseModelViewSet, IdempotencyMixin)
+        assert issubclass(BaseModelViewSet, PreconditionMixin)
+        # A key's replay runs in initial(), a precondition in get_object() - either order would work.
+        assert BaseModelViewSet.__mro__.index(IdempotencyMixin) < BaseModelViewSet.__mro__.index(PreconditionMixin)

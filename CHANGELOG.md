@@ -7,6 +7,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-23
+
+### Added
+
+- **isik's system checks are tuned or turned off by name in `ISIK_CHECKS`.** Each check has a name
+  (`idempotency`, `documentation`, ...) and takes `enabled`, `severity` (`"error"` or `"warning"`), and,
+  by what it reads, `urlconfs` (every urlconf the project serves by default) or `apps` (the project's
+  own apps by default). A `urlconfs` leaving a served urlconf out is a warning, `isik.W003`, naming it;
+  a name or option that doesn't exist is an error, `isik.E012`. See `docs/django/apps/common/checks.md`.
+- **New system checks, on by default:**
+  - `isik.E005` (`idempotency`): a routed write that honors no `Idempotency-Key`.
+  - `isik.E006` (`singletons`): a `FlattenedSingletonRelatedMixin` declaration no unique constraint
+    proves.
+  - `isik.E007` (`preconditions`): a routed write to one object that asks no `If-Match`.
+  - `isik.E008` (`history_indexes`): an event model with a `pgh_obj` but no `(pgh_obj, -pgh_id)` index.
+  - `isik.E009` (`exemptions`): an exemption call or type loading the project didn't see - what
+    `manage.py exemptions` fails on, now at `manage.py check` too.
+  - `isik.E010` (`documentation`): a field of the project's own models without `help_text`, or without
+    `db_comment` where it has a column. An `Exemption` given as either answers for it; `exemption_types`
+    narrows which.
+  - `isik.E011` (`not_atomic`): a routed view served outside `ATOMIC_REQUESTS` (`non_atomic_requests`)
+    without saying why.
+- **`not_atomic(reason, using=None)`** (`isik.django.apps.common.atomic`) - `non_atomic_requests` with
+  its reason, a `NotAtomic` exemption (rule `isik.not-atomic`), on a function view or a class-based
+  view's class.
+- **`FlattenedSingletonRelatedMixin`** and `SingletonRelated(accessor, match, attribute,
+  on_empty="delete")` - one row among a parent's many related ones (the primary domain), read as a field
+  of the parent and written through to it: the matching row is locked and saved narrowly, created from
+  `match` when missing (a lost race is a 400), and deleted, cleared or refused on an empty value.
+- **A history built from several streams.** `HistoryMixin.history_also = {key: HistoryStream(model,
+  path=..., serializer=...)}` takes other models' events into an object's history, each row shown
+  through its own stream's serializer and carrying `part`, `subject_id`, `subject_label` and `detail`
+  (`history_detail = {key: (foreign key, attribute)}`). Scoped to the declared paths, ordered by time,
+  filtered by `part` and `object_id`, refused when first routed if a declaration can't be served
+  (`history_part_problems(view)`), and documented without a drf-spectacular warning.
+- `HistoryMixin.history_page_context(rows)` - what a page's rows need resolved once, handed to the
+  serializer as `context["history_page"]`; `history_serializer_cache_key()` - a serializer per key.
+- `track_events(trackers=..., condition=..., append_only=...)`; `context_fields_trigger()`, public;
+  `history_index_problems()`.
+- `uuid7()` and `new_primary_key()`: `UUIDPrimaryKeyModel.id` defaults to the function
+  `ISIK_PRIMARY_KEY_DEFAULT` names (`"uuid.uuid4"` unless set).
+- `generated_models(kind=None)` and `mark_generated()`: the models isik generates (`"event"`, `"maker"`,
+  `"lock"`), each marked `isik_generated`.
+- `enum_name_overrides(own=None)` (`isik.django.drf.spectacular`) - a lazy `ENUM_NAME_OVERRIDES` naming
+  the generated models' enums, so their `value` and a project's don't collide; the project's own win.
+- `SpectacularAPIView` (`isik.django.drf.schema_views`) - the schema in `ISIK_SCHEMA_LANGUAGE`, whatever
+  the request's language.
+- `AutoSchema` documents `Idempotency-Key`, and an idempotent operation's 409 and 422.
+- `DeadSessionCookieMiddleware` - a 401/403 to a request with a dead session cookie deletes it and says
+  so in `Session-Expired` (`DEAD_SESSION_HEADER`).
+- `HistoryContextMiddleware` offers `version` and `request_id`, named in `HISTORY_CONTEXT_KEYS`.
+- `HistoryContextTask.dispatch_on_commit` (or `HISTORY_TASK_DISPATCH_ON_COMMIT`) - sent once the
+  dispatching transaction commits.
+- `RequestPolicy.succeeded(request, view, response)` - runs on a 2xx to a request the policy allowed.
+- `MatchModeFilter` - a list of values over a to-many relation, matched by any or all of them.
+- `reading(request)`, `ReadOnly`'s predicate.
+- `with_python_defaults(instance)` - an unsaved instance's `db_default` fields given their values in
+  Python.
+- `project_app_configs(labels=None)` - the installed apps that are the project's own.
+
+### Changed
+
+- **Breaking: `BaseModelViewSet` carries `IdempotencyMixin` and `PreconditionMixin`.** Every model
+  viewset's writes ask an `Idempotency-Key` (POST, PUT, PATCH, DELETE), and its writes to one object an
+  `If-Match`. A project must:
+  - turn on `ATOMIC_REQUESTS` and install an idempotency claims app
+    (`isik.django.apps.idempotency.by_reference` or `.with_body`);
+  - take `IdempotencyMixin`/`PreconditionMixin` out of the bases of its `BaseModelViewSet` subclasses -
+    naming either again is an MRO error;
+  - give a view that mustn't ask them `idempotent_methods = ()` / `precondition_methods = ()`, or exempt
+    its actions in `idempotency_exempt_actions` / `precondition_exempt_actions`;
+  - send both from its clients. A write without a key is now a 400 before an object permission's 403.
+- **Breaking: `IdempotencyMixin.idempotent_methods` is POST, PUT, PATCH and DELETE** (was POST): a retried
+  update or delete replays its first answer rather than running again. `idempotency_coverage()`'s default
+  follows.
+- **Breaking: `IDEMPOTENCY_LOCK_TIMEOUT` defaults to 10 seconds** (was unbounded): a retry waiting on a
+  first request that holds its claim longer gets a 409 (`idempotency_key_in_flight`).
+- **Breaking: `PRECONDITION_IGNORES_WEAK_TAGS` defaults to False** - RFC 9110's strong comparison, where
+  `If-Match: W/"..."` never matches. Turn it on where something between server and client weakens the
+  tag (`GZipMiddleware`, nginx's gzip).
+- **Breaking: a 412 shows `current` and the `ETag` only to a caller who may read the row** - the view's
+  `retrieve` permissions, `get_queryset()` and filters, and object permissions. Otherwise `current` is
+  null and there's no `ETag`.
+- **Breaking: a request policy's refusal body is `{"detail": ..., "code": ...}`** (was `{"detail"}`).
+- **Breaking: the common app's label is `isik_common`** (was `common`), freeing `common` for a project's
+  own app. A project naming it by label (`apps.get_app_config("common")`) names `isik_common`. It has no
+  models or migrations.
+- **Breaking: `UUIDPrimaryKeyModel.id`'s default is `new_primary_key`** (was `uuid.uuid4`). Run
+  `makemigrations`: one `AlterField` per model, changing nothing in the database.
+- **Breaking: a `ContextField` named like a field the history tracks is refused** (`ImproperlyConfigured`)
+  - the event model held the context's value where the row's own was.
+- **Breaking: isik's system checks run the new checks, as errors, on every project.** Fix what they
+  report, or turn a check off in `ISIK_CHECKS`. The `documentation` check (`isik.E010`) is the one most
+  projects will meet first.
+- **Breaking: `PreconditionMixin` no longer overrides `get_serializer()`** - which made drf-spectacular
+  read every view's serializer through it - and `precondition_serializer` is gone. A create's row is read
+  from the response's serializer.
+- **Breaking: `_context_fields_attrs_and_trigger()` is `context_fields_trigger()`**, and a view's
+  history serializers are cached in `_history_serializer_classes` (was `_history_serializer_class`), one
+  per `history_serializer_cache_key()`.
+- `routed_actions()` leaves out a router's action whose method the viewset's `http_method_names`
+  refuse - a 405 before it runs - so no coverage reports it.
+
+### Fixed
+
+- `HistoryMixin`'s `actor` filter follows the user model's pk: a UUID pk was compared as a number and
+  every value refused.
+
 ## [0.29.1] - 2026-10-23
 
 ### Fixed

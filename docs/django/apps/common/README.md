@@ -7,6 +7,9 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 `first_of`, `not_none`, `with_attrs`, `returns`, `Exemption`: see
 [common/utils](../../../common/utils/README.md).
 
+- [checks](checks.md) — isik's system checks, and `ISIK_CHECKS` to tune or turn each off
+- [atomic](atomic.md) — `not_atomic(reason)`, a view served outside `ATOMIC_REQUESTS` saying why
+- [generated](generated.md) — `generated_models()`, the models isik generates, marked by kind
 - [model_makers](model_makers.md) — shared plumbing behind feedback/tags' model-generating "makers"
 - [admin/](admin/README.md) — `BaseAdmin` and the `action` decorator
 - [backends/](backends/auth.md) — `login_through()`, `listed_backend_path()`
@@ -17,7 +20,9 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 - [skippable_validators/](skippable_validators/README.md) — selectively bypass model field validators
 - `urlconfs.py` — `project_urlconfs(urlconf=None)`: `ROOT_URLCONF` plus each django-hosts host's urlconf
   when django-hosts is installed, or the urlconfs given; what the coverage walk and `manage.py exemptions` load
+- `project.py` — `project_app_configs(labels=None)`: the installed apps that are the project's own -
+  not installed as a library, and not isik's; what the model checks and `manage.py exemptions` read
 - `manage.py exemptions` — every exemption by rule; see [exemptions.md](../../../common/utils/exemptions.md)
 
-`apps.py` is Django `AppConfig` boilerplate — `CommonConfig.ready()` imports `db.lookups` so the
-`length` lookup registers on startup.
+`apps.py` is Django `AppConfig` boilerplate — its label is `isik_common`, and `CommonConfig.ready()`
+imports `db.lookups` so the `length` lookup registers on startup.

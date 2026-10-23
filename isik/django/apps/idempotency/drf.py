@@ -15,6 +15,11 @@ from isik.django.apps.idempotency.exceptions import IdempotencyKeyNotReplayable,
 from isik.django.apps.idempotency.fingerprint import request_fingerprint
 
 
+# How long a retry waits, in milliseconds, for the first request with its key to finish before it's
+# answered 409 to retry shortly - IDEMPOTENCY_LOCK_TIMEOUT unless set; None there waits indefinitely.
+LOCK_TIMEOUT = 10_000
+
+
 class NoIdempotencyKey(
     Exemption,
     rule="isik.idempotency.key",
@@ -45,7 +50,7 @@ class IdempotencyMixin:
     Honors an `Idempotency-Key: <uuid>` header on a DRF view: the same key with the same request
     answers with the first request's response, status and all, rather than doing the work twice.
 
-        class WidgetViewSet(IdempotencyMixin, BaseModelViewSet):
+        class WidgetViewSet(BaseModelViewSet):  # carries it; or IdempotencyMixin on any GenericAPIView
             model = Widget
             endpoint = "widgets"
             serializer_class = WidgetSerializer
@@ -64,7 +69,9 @@ class IdempotencyMixin:
     response of 400 or above that a handler returns instead releases it. Either way, a retry is a real
     attempt rather than a replayed refusal.
 
-    - `idempotent_methods` - which methods are covered. `("POST",)`.
+    - `idempotent_methods` - which methods are covered. `("POST", "PUT", "PATCH", "DELETE")`: every
+      write, so a retried update or delete replays its first answer rather than running again against
+      a row the first one already changed.
     - `idempotency_key_required` - a covered request without the header is a 400. True; False honors
       a key only when one is sent.
     - `idempotency_exempt_actions` - `{action: NoIdempotencyKey(reason=...)}`, actions the key is never
@@ -81,7 +88,7 @@ class IdempotencyMixin:
 
     idempotency_header = "Idempotency-Key"
     idempotency_replayed_header = "Idempotent-Replayed"
-    idempotent_methods = ("POST",)
+    idempotent_methods = ("POST", "PUT", "PATCH", "DELETE")
     idempotency_key_required = True
     idempotency_exempt_actions = {}
     idempotency_no_replay_actions = {}
@@ -149,7 +156,7 @@ class IdempotencyMixin:
             )
         fingerprint = request_fingerprint(request, self.get_idempotency_normalize())
         claim, created = claim_idempotency_key(
-            model, owner, key, fingerprint, lock_timeout=getattr(settings, "IDEMPOTENCY_LOCK_TIMEOUT", None)
+            model, owner, key, fingerprint, lock_timeout=getattr(settings, "IDEMPOTENCY_LOCK_TIMEOUT", LOCK_TIMEOUT)
         )
         if created:
             self.idempotency_claim = claim

@@ -1,5 +1,8 @@
 """RequestPolicy + RequestPoliciesMixin - see each one's own docstring."""
 
+from rest_framework import status
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied
+
 from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext_lazy
 from isik.common.utils.exemptions import Exemption
@@ -42,7 +45,10 @@ class RequestPolicy:
     - `message`/`code` - what the refusal says (a 403, or a 401 for an unauthenticated request, as DRF
       decides for any permission).
     - `refused(request, view, response)` - called with the refusal's response, to add what DRF can't
-      render from a permission: a header telling a client which policy refused it, say.
+      render from a permission: a header telling a client which policy refused it, say. The refusal's
+      body is `{"detail": message, "code": code}`.
+    - `succeeded(request, view, response)` - called, for each policy that let the request through,
+      once it succeeded: a single-use proof is spent here, so a request that failed doesn't spend it.
     - `exemptions_attribute` - the view attribute naming the actions exempt from this policy, as
       `{action: exemption_type(reason=...)}`. `<policy_name>_exempt_actions` unless set.
     - `exemption_type` - what each of those is: `RequestPolicyExemption`, or a subclass of it.
@@ -58,6 +64,13 @@ class RequestPolicy:
 
     def refused(self, request, view, response):
         """Adds to the refusal's `response` - nothing by default."""
+
+    def succeeded(self, request, view, response):
+        """
+        Called with the response of a request this policy let through, once it succeeded (2xx) -
+        nothing by default. What a policy spends on success is its own: a single-use proof, say,
+        consumed only when the request it allowed went through.
+        """
 
     @classmethod
     def exemptions_attribute_name(cls):
@@ -85,8 +98,9 @@ class RequestPoliciesMixin:
 
     request_policies = ()
 
-    # Per request: the policy that refused it, if one did.
+    # Per request: the policy that refused it, if one did, and the ones that let it through.
     refused_by = None
+    allowed_by = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -109,9 +123,21 @@ class RequestPoliciesMixin:
             if not policy.allows(request, self):
                 self.refused_by = policy
                 self.permission_denied(request, message=policy.message, code=policy.code)
+            self.allowed_by = (*self.allowed_by, policy)
+
+    def handle_exception(self, exc):
+        response = super().handle_exception(exc)
+        if self.refused_by is not None and isinstance(exc, PermissionDenied | NotAuthenticated):
+            # DRF renders a refusal as `{"detail"}` alone, dropping the code a policy set - and the code is
+            # what a client tells two policies' refusals apart by.
+            response.data = {"detail": exc.detail, "code": exc.detail.code}
+        return response
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         if self.refused_by is not None:
             self.refused_by.refused(request, self, response)
+        elif status.is_success(response.status_code):
+            for policy in self.allowed_by:
+                policy.succeeded(request, self, response)
         return response

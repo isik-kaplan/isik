@@ -14,6 +14,7 @@ from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.generated import mark_generated
 
 
 class DefaultMakerBase(models.Model):
@@ -146,4 +147,4 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     # Django reads only a Meta's attributes, so a namespace holding them is all it needs.
     meta = SimpleNamespace(app_label=host_cls._meta.app_label, **(meta_attrs or {}))
     attrs = {**fields, **(extra_attrs or {}), "Meta": meta, "__module__": host_cls.__module__}
-    return type(model_name, (base_model,), attrs)
+    return mark_generated(type(model_name, (base_model,), attrs), "maker")

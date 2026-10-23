@@ -50,7 +50,7 @@ def patch(client, path, if_match=None):
 class TestReadingAnOption:
     def test_the_defaults_are_the_agreed_ones(self):
         assert PRECONDITION_DEFAULTS == {
-            "ignores_weak_tags": True,
+            "ignores_weak_tags": False,
             "required": True,
             "allows_any": True,
             "missing_row_status": 404,
@@ -78,16 +78,23 @@ class TestReadingAnOption:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("option_urls_served", "atomic_requests")
 class TestWeakTags:
-    def test_a_strict_view_refuses_a_weak_tag(self, client, widget):
-        response = patch(client, f"/strict/{widget.pk}/", f"W/{etag(widget)}")
+    def test_a_lenient_view_takes_a_weak_tag(self, client, widget):
+        response = patch(client, f"/lenient/{widget.pk}/", f"W/{etag(widget)}")
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_by_default_a_weak_tag_is_refused(self, client, widget, settings):
+        settings.ROOT_URLCONF = FINE
+
+        response = patch(client, f"/widgets/{widget.pk}/", f"W/{etag(widget)}")
 
         assert response.status_code == status.HTTP_412_PRECONDITION_FAILED
 
-    def test_a_strict_view_takes_the_strong_one(self, client, widget):
-        assert patch(client, f"/strict/{widget.pk}/", etag(widget)).status_code == status.HTTP_200_OK
+    def test_a_lenient_view_takes_the_strong_one(self, client, widget):
+        assert patch(client, f"/lenient/{widget.pk}/", etag(widget)).status_code == status.HTTP_200_OK
 
     def test_its_if_none_match_stays_weak_as_rfc_9110_has_it(self, client, widget):
-        response = client.get(f"/strict/{widget.pk}/", headers={"If-None-Match": f"W/{etag(widget)}"})
+        response = client.get(f"/lenient/{widget.pk}/", headers={"If-None-Match": f"W/{etag(widget)}"})
 
         assert response.status_code == status.HTTP_304_NOT_MODIFIED
 
@@ -120,7 +127,7 @@ class TestRequired:
         entry = report["^optional/(?P<pk>[^/.]+)/$", "PATCH"]
         assert entry.status is CoverageStatus.EXEMPT
         assert entry.reason == "If-Match is checked when sent, and not required - its precondition_required is off."
-        assert report["^strict/(?P<pk>[^/.]+)/$", "PATCH"].status is CoverageStatus.COVERED
+        assert report["^lenient/(?P<pk>[^/.]+)/$", "PATCH"].status is CoverageStatus.COVERED
 
 
 @pytest.mark.django_db
@@ -266,7 +273,7 @@ class TestTheCheck:
         # Every view but the one whose own precondition_not_modified overrides the setting.
         assert [(m.id, m.level) for m in messages] == [("isik.E003", 40)] * 6 + [("isik.W001", 30)]
         assert messages[0].msg == (
-            "StrictWidgetViewSet's precondition option 'not_modified' is 'no' - PRECONDITION_NOT_MODIFIED and "
+            "LenientWidgetViewSet's precondition option 'not_modified' is 'no' - PRECONDITION_NOT_MODIFIED and "
             "precondition_not_modified take True or False."
         )
         assert messages[-1].msg.startswith("OptionalNamedOnlyWidgetViewSet refuses If-Match: *")
@@ -319,7 +326,7 @@ class TestTheSchema:
         }
 
     def test_the_default_412_documents_current_as_always_there(self, schema):
-        ref = schema["paths"]["/strict/{id}/"]["patch"]["responses"]["412"]["content"]["application/json"]["schema"]
+        ref = schema["paths"]["/lenient/{id}/"]["patch"]["responses"]["412"]["content"]["application/json"]["schema"]
 
         assert ref == {"$ref": "#/components/schemas/WidgetPreconditionFailed"}
 

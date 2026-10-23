@@ -86,7 +86,7 @@ def _reset_widget_viewset_history_caches():
     # this has to run before every test rather than letting history_filterset_class's classproperty
     # caching silently reuse whatever the first test in this file happened to build it with (here,
     # whether HistoryMiddleware was installed at the time).
-    for attr in ("_history_filterset_class", "_history_serializer_class"):
+    for attr in ("_history_filterset_class", "_history_serializer_classes"):
         if attr in WidgetViewSet.__dict__:
             delattr(WidgetViewSet, attr)
 

@@ -12,6 +12,7 @@ from django.core.management import CommandError, call_command
 
 from isik.common.utils.exemptions import declared_exemptions, exemption_class
 from isik.django.apps.common import exemptions as project
+from isik.django.apps.common import project as project_apps
 from isik.django.apps.common.db import constraints
 from isik.django.apps.common.db.constraints import DJANGO_VALIDATORS_WITHOUT_ONE
 from isik.django.apps.common.exemptions import (
@@ -282,7 +283,7 @@ class TestCountsAndOrder:
             types.SimpleNamespace(path="/project/apps/users"),
             types.SimpleNamespace(path="/project/apps/users"),
         ]
-        monkeypatch.setattr(project.apps, "get_app_configs", lambda: configs)
+        monkeypatch.setattr(project_apps.apps, "get_app_configs", lambda: configs)
 
         assert project._project_paths() == ["/project/apps/users"]
 

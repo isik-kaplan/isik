@@ -17,7 +17,7 @@ msgstr ""
 msgid "%(backend)s isn't in AUTHENTICATION_BACKENDS, so a session logged in through it is anonymous from its next request."
 msgstr ""
 
-#: isik/django/drf/permissions.py:215
+#: isik/django/drf/permissions.py:226
 #, python-format
 msgid "%(caller)s requires exactly one of property_ or attribute"
 msgstr ""
@@ -37,12 +37,27 @@ msgstr ""
 msgid "%(field)r is not a template field on this model."
 msgstr ""
 
+#: isik/django/apps/common/db/orm.py:36
+#, python-format
+msgid "%(field)s's db_default %(default)r has no value in Python - give the field one before encoding."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:375
+#, python-format
+msgid "%(file)s:%(line)s declares %(name)s, which loading the project didn't import."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:370
+#, python-format
+msgid "%(file)s:%(line)s makes an exemption through %(name)s that loading the project didn't."
+msgstr ""
+
 #: isik/common/utils/validation.py:97
 #, python-format
 msgid "%(func)s() got an invalid value for %(name)r: %(value)r"
 msgstr ""
 
-#: isik/django/drf/permissions.py:456
+#: isik/django/drf/permissions.py:467
 #, python-format
 msgid "%(guard)s can't be combined with &, | or ~ - compose the predicate inside guarding() instead."
 msgstr ""
@@ -52,7 +67,7 @@ msgstr ""
 msgid "%(guard)s guards %(field)r, which no serializer of %(viewset)s has a field named."
 msgstr ""
 
-#: isik/django/drf/permissions.py:483
+#: isik/django/drf/permissions.py:494
 #, python-format
 msgid "%(guard)s needs a viewset - %(view)s has no action."
 msgstr ""
@@ -62,12 +77,17 @@ msgstr ""
 msgid "%(middleware)s requires settings.SESSION_HEADER_NAME to be set."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:134
+#: isik/django/apps/common/_model_makers.py:135
 #, python-format
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:197
+#: isik/django/apps/common/db/history.py:310
+#, python-format
+msgid "%(model)s has no (pgh_obj, -pgh_id) index - a page of one object's history costs the square of its length. Track it with track_events(), or add object_stream_index() to its meta's indexes."
+msgstr ""
+
+#: isik/django/apps/common/db/history.py:254
 #, python-format
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
@@ -93,7 +113,7 @@ msgstr ""
 msgid "%(model)s is already registered to %(existing)s"
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:129
+#: isik/django/apps/common/_model_makers.py:130
 #, python-format
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
 msgstr ""
@@ -153,6 +173,11 @@ msgstr ""
 msgid "%(model)s's concurrency_strategy is ConcurrencyParts, and it has no concurrency_parts() method."
 msgstr ""
 
+#: isik/django/apps/common/db/history.py:188
+#, python-format
+msgid "%(model)s's history has ContextFields named like its own tracked fields: %(names)s - name them otherwise, or leave those fields out of the history."
+msgstr ""
+
 #: isik/django/apps/common/db/concurrency.py:391
 #, python-format
 msgid "%(model)s's version covers %(relation)r - pass related={%(relation)r: <an object to add>}."
@@ -161,6 +186,11 @@ msgstr ""
 #: isik/django/apps/common/db/concurrency.py:411
 #, python-format
 msgid "%(model)s's version covers %(relation)r, rows pointing at it - pass related={%(relation)r: <a function making one for the instance it's given>}."
+msgstr ""
+
+#: isik/django/apps/common/db/documentation.py:51
+#, python-format
+msgid "%(model)s.%(field)s has no %(missing)s - say what it holds, or give an exemption why not."
 msgstr ""
 
 #: isik/django/drf/schema.py:50
@@ -188,7 +218,7 @@ msgstr ""
 msgid "%(operator)s would build a value over the %(limit)s char limit"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:86
+#: isik/django/apps/common/checks.py:260
 #, python-format
 msgid "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is %(status)s on database %(database)r - a change to it can slip past a write's If-Match."
 msgstr ""
@@ -223,7 +253,7 @@ msgstr ""
 msgid "%(owner)s.%(attribute)s takes {name: %(type)s(reason=...)}, not %(value)r."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:220
+#: isik/django/drf/viewsets/preconditions.py:218
 #, python-format
 msgid "%(owner)s.precondition_read_from takes {write action: read action}, not %(value)r."
 msgstr ""
@@ -238,9 +268,29 @@ msgstr ""
 msgid "%(serializer)s has field(s) named %(fields)s, which the history of %(model)s uses for its own - rename them in the serializer, or give the history a serializer of its own."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:435
+#: isik/django/drf/viewsets/preconditions.py:447
 #, python-format
 msgid "%(serializer)s, a serializer of %(view)s, lets a request write %(model)s's concurrency token %(token)r as %(field)r - make it read-only."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:233
+#, python-format
+msgid "%(serializer)s.%(name)s: %(accessor)r isn't a reverse foreign key of %(model)s."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:242
+#, python-format
+msgid "%(serializer)s.%(name)s: %(field)r isn't a concrete field of %(related)s other than its key back to %(model)s."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:256
+#, python-format
+msgid "%(serializer)s.%(name)s: nothing proves %(related)s has one row per %(model)s matching %(match)r - add UniqueConstraint(fields=[%(key)r], condition=Q(**%(match)r))."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:251
+#, python-format
+msgid "%(serializer)s.%(name)s: on_empty='clear' needs %(field)r to be nullable."
 msgstr ""
 
 #: isik/django/drf/serializers/create_only.py:35
@@ -333,7 +383,7 @@ msgstr ""
 msgid "%(type)s's shows_as must be a str, not %(value)r."
 msgstr ""
 
-#: isik/django/drf/permissions.py:90
+#: isik/django/drf/permissions.py:101
 #, python-format
 msgid "%(user_model)s must define SIGNUP_COMPLETED_FIELD to use %(permission)s."
 msgstr ""
@@ -343,47 +393,62 @@ msgstr ""
 msgid "%(value)r isn't a registered type, Field subclass, or Field instance"
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:392
+#: isik/django/apps/common/atomic.py:70
+#, python-format
+msgid "%(view)s (%(route)s) is served outside a transaction without saying why - decorate it with not_atomic(reason) instead of transaction.non_atomic_requests."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:404
 #, python-format
 msgid "%(view)s answered %(method)s %(action)s without comparing If-Match, so its database writes are rolled back. Fetch the row with self.get_object(), which compares it, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:418
+#: isik/django/drf/viewsets/preconditions.py:430
 #, python-format
 msgid "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of precondition_read_actions."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:295
+#: isik/django/apps/common/checks.py:340
+#, python-format
+msgid "%(view)s answers %(method)s without asking If-Match."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:309
+#, python-format
+msgid "%(view)s answers %(method)s without honoring an Idempotency-Key."
+msgstr ""
+
+#: isik/django/drf/viewsets/preconditions.py:293
 #, python-format
 msgid "%(view)s compares If-Match with the row it locks, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:483
+#: isik/django/drf/viewsets/preconditions.py:495
 #, python-format
 msgid "%(view)s compares concurrency tokens of no model isik can find - set precondition_model."
 msgstr ""
 
-#: isik/django/drf/permissions.py:493
+#: isik/django/drf/permissions.py:504
 #, python-format
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:144
+#: isik/django/apps/idempotency/drf.py:151
 #, python-format
 msgid "%(view)s honors idempotency keys, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:529
+#: isik/django/drf/viewsets/preconditions.py:541
 #, python-format
 msgid "%(view)s refuses If-Match: * but lets a write through without If-Match, so a client that would send * leaves the header out instead - refusing * protects nothing unless If-Match is required."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:504
+#: isik/django/drf/viewsets/preconditions.py:516
 #, python-format
 msgid "%(view)s's precondition option %(option)r is %(value)r - PRECONDITION_%(setting)s and precondition_%(option)s take True or False."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:513
+#: isik/django/drf/viewsets/preconditions.py:525
 #, python-format
 msgid "%(view)s's precondition option 'missing_row_status' is %(value)r - PRECONDITION_MISSING_ROW_STATUS and precondition_missing_row_status take 404 or 412."
 msgstr ""
@@ -391,6 +456,51 @@ msgstr ""
 #: isik/django/apps/idempotency/claims.py:112
 #, python-format
 msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:657
+#, python-format
+msgid "%(view)s.history_also[%(key)r] is %(value)r, not a HistoryStream."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:717
+#, python-format
+msgid "%(view)s.history_also[%(key)r] takes the key of %(model)s's own stream - name it otherwise."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:673
+#, python-format
+msgid "%(view)s.history_also[%(key)r]: %(events)s doesn't record %(path)r - track it in the history."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:660
+#, python-format
+msgid "%(view)s.history_also[%(key)r]: %(model)s isn't tracked - give it @track_events()."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:667
+#, python-format
+msgid "%(view)s.history_also[%(key)r]: %(path)r isn't a foreign key or one-to-one of %(model)s to %(owner)s."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:686
+#, python-format
+msgid "%(view)s.history_detail[%(key)r] is %(value)r, not (foreign key, attribute)."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:683
+#, python-format
+msgid "%(view)s.history_detail[%(key)r] names no stream of history_also."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:694
+#, python-format
+msgid "%(view)s.history_detail[%(key)r]: %(field)r isn't a foreign key of %(model)s."
+msgstr ""
+
+#: isik/django/drf/viewsets/history.py:699
+#, python-format
+msgid "%(view)s.history_detail[%(key)r]: %(model)s has no %(attribute)r."
 msgstr ""
 
 #: isik/django/drf/viewsets/guarded_fields.py:163
@@ -428,22 +538,22 @@ msgstr ""
 msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:609
+#: isik/django/drf/viewsets/preconditions.py:621
 #, python-format
 msgid "%(write)s (%(method)s %(route)s) asks If-Match, and nothing routed hands out the version to send - no GET of %(route)s sends an ETag, and there's no retrieve to read it from. Route one, name it in precondition_read_from, or exempt the write in precondition_unread_actions."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:621
+#: isik/django/drf/viewsets/preconditions.py:633
 #, python-format
 msgid "%(write)s (%(method)s %(route)s) reads its version from %(read)s, which hands out a version of %(read_model)s, not of %(model)s."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:562
+#: isik/django/drf/viewsets/preconditions.py:574
 #, python-format
 msgid "%(write)s reads its version from %(read)r (precondition_read_from), which %(view)s doesn't route with GET."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:567
+#: isik/django/drf/viewsets/preconditions.py:579
 #, python-format
 msgid "%(write)s reads its version from %(read)r (precondition_read_from), which isn't in precondition_read_actions, so it sends no ETag."
 msgstr ""
@@ -457,7 +567,7 @@ msgstr ""
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:58
+#: isik/django/apps/common/db/models.py:98
 msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
@@ -465,17 +575,25 @@ msgstr ""
 msgid "A request with this idempotency key is still being served. Retry it shortly."
 msgstr ""
 
-#: isik/django/drf/permissions.py:237
+#: isik/django/drf/permissions.py:248
 #, python-format
 msgid "Actions should be one of: %(actions)s"
 msgstr ""
 
-#: isik/django/drf/permissions.py:173
+#: isik/django/drf/permissions.py:184
 #, python-format
 msgid "Actions should not be: %(actions)s"
 msgstr ""
 
-#: isik/django/drf/spectacular.py:125
+#: isik/django/apps/common/checks.py:310
+msgid "Add IdempotencyMixin (BaseModelViewSet has it) with the method in idempotent_methods, or exempt the action in idempotency_exempt_actions."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:341
+msgid "Add PreconditionMixin (BaseModelViewSet has it) with the method in precondition_methods, or exempt the action in precondition_exempt_actions."
+msgstr ""
+
+#: isik/django/drf/spectacular.py:141
 #, python-format
 msgid "Always %(code)s."
 msgstr ""
@@ -502,7 +620,7 @@ msgstr ""
 msgid "Can't fingerprint a value of type %(type)s. Pass a normalizer that turns the body into JSON - idempotency_normalize on the view, or IDEMPOTENCY_NORMALIZE."
 msgstr ""
 
-#: isik/django/drf/permissions.py:205
+#: isik/django/drf/permissions.py:216
 #, python-format
 msgid "Can't tell which attribute %(descriptor)r reads - pass its name as a string instead. (A plain class attribute is its value, not a descriptor, so it has no name to find.)"
 msgstr ""
@@ -547,7 +665,7 @@ msgstr ""
 msgid "Content is too large"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:98
+#: isik/django/apps/common/db/history.py:99
 #, python-format
 msgid "ContextField(%(name)r) needs cast= - can't infer a Postgres type for %(field)r (only %(inferred)s are inferred; ForeignKey always needs an explicit cast)."
 msgstr ""
@@ -560,11 +678,11 @@ msgstr ""
 msgid "Could not determine a unique serializer for the given data."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:78
+#: isik/django/apps/common/db/models.py:118
 msgid "Created At"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:37
+#: isik/django/apps/common/db/models.py:43
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
@@ -602,20 +720,59 @@ msgstr ""
 msgid "Expect condition could not be satisfied"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:26
+#: isik/django/apps/common/checks.py:199
 msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
+msgstr ""
+
+#: isik/django/apps/common/middleware/history.py:42
+#, python-format
+msgid "HISTORY_CONTEXT_KEYS names %(unknown)s - it takes %(known)s."
+msgstr ""
+
+#: isik/django/apps/common/middleware/history.py:46
+msgid "HISTORY_CONTEXT_KEYS names version, and HISTORY_CONTEXT_VERSION isn't set."
 msgstr ""
 
 #: http.HTTPStatus
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:112
+#: isik/django/apps/common/db/models.py:152
 msgid "How many times the row has been written, counting the write that created it."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:57
+#: isik/django/apps/common/db/models.py:97
 msgid "ID"
+msgstr ""
+
+#: isik/django/apps/common/checks.py:124
+#, python-format
+msgid "ISIK_CHECKS is %(value)r, not a dict."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:131
+#, python-format
+msgid "ISIK_CHECKS names %(name)r, which isn't one of isik's checks: %(names)s."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:152
+#, python-format
+msgid "ISIK_CHECKS[%(name)r] has %(unknown)s - it takes %(takes)s."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:141
+#, python-format
+msgid "ISIK_CHECKS[%(name)r] is %(value)r, not a dict."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:173
+#, python-format
+msgid "ISIK_CHECKS[%(name)r] leaves served urlconfs unchecked: %(urlconfs)s."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:161
+#, python-format
+msgid "ISIK_CHECKS[%(name)r]'s severity is %(value)r - it takes %(choices)s."
 msgstr ""
 
 #: isik/django/apps/idempotency/by_reference/apps.py:9
@@ -626,7 +783,7 @@ msgstr ""
 msgid "Idempotency claims with bodies"
 msgstr ""
 
-#: isik/django/drf/coverage.py:181
+#: isik/django/drf/coverage.py:184
 msgid "If-Match is checked when sent, and not required - its precondition_required is off."
 msgstr ""
 
@@ -648,12 +805,25 @@ msgstr ""
 msgid "Invalid responses from another server/proxy"
 msgstr ""
 
+#: isik/django/apps/common/checks.py:175
+msgid "Leave out urlconfs to check every urlconf the project serves."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:367
+msgid "Make it where loading the project runs it - see manage.py exemptions."
+msgstr ""
+
 #: isik/django/apps/common/admin/base.py:51
 msgid "Meta"
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:120
+#: isik/django/apps/idempotency/drf.py:127
 msgid "Must be a UUID."
+msgstr ""
+
+#: isik/django/drf/filters.py:76
+#, python-format
+msgid "Must be one of: %(modes)s."
 msgstr ""
 
 #: isik/django/http_exceptions/exceptions.py:109
@@ -682,6 +852,10 @@ msgstr ""
 msgid "No permission -- see authorization schemes"
 msgstr ""
 
+#: isik/django/drf/viewsets/history.py:158
+msgid "Not a valid key."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Nothing matches the given URI"
 msgstr ""
@@ -702,9 +876,14 @@ msgstr ""
 msgid "Object moved temporarily -- see URI list"
 msgstr ""
 
-#: isik/django/drf/permissions.py:406
+#: isik/django/drf/permissions.py:417
 #, python-format
 msgid "Object property %(property)s is False"
+msgstr ""
+
+#: isik/django/drf/spectacular.py:142
+#, python-format
+msgid "One of %(codes)s."
 msgstr ""
 
 #: http.HTTPStatus
@@ -767,21 +946,41 @@ msgstr ""
 msgid "Response contains multiple statuses in the body"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:97
+#: isik/django/apps/common/checks.py:271
 #, python-format
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:45
+#: isik/django/apps/common/checks.py:327
+msgid "See FlattenedSingletonRelatedMixin (isik.django.drf.serializers)."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:218
 msgid "See PreconditionMixin (isik.django.drf.viewsets.preconditions) and concurrency tokens (isik.django.apps.common.db.concurrency)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:62
+#: isik/django/apps/common/checks.py:235
 msgid "See PreconditionMixin's options (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:112
+#: isik/django/apps/common/checks.py:286
 msgid "See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions)."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:391
+msgid "See documentation_problems() (isik.django.apps.common.db.documentation)."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:126
+msgid "See isik.django.apps.common.checks."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:405
+msgid "See not_atomic() (isik.django.apps.common.atomic)."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:358
+msgid "See object_stream_index() (isik.django.apps.common.db.history)."
 msgstr ""
 
 #: http.HTTPStatus
@@ -834,6 +1033,21 @@ msgstr ""
 
 #: isik/django/apps/common/middleware/session.py:36
 msgid "Session key mismatch"
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:57
+#, python-format
+msgid "SingletonRelated(%(accessor)r)'s match computes %(names)s - it takes plain values."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:46
+#, python-format
+msgid "SingletonRelated(%(accessor)r)'s match names %(names)s - it takes equality on the related model's own fields, which is also what a missing row is created with."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:62
+#, python-format
+msgid "SingletonRelated(%(accessor)r)'s on_empty is %(value)r - it takes %(choices)s."
 msgstr ""
 
 #: http.HTTPStatus
@@ -972,7 +1186,11 @@ msgstr ""
 msgid "This field can't be changed once it's set."
 msgstr ""
 
-#: isik/django/apps/idempotency/drf.py:115
+#: isik/django/drf/serializers/flattened_singleton_related.py:97
+msgid "This field may not be empty."
+msgstr ""
+
+#: isik/django/apps/idempotency/drf.py:122
 msgid "This header is required."
 msgstr ""
 
@@ -984,16 +1202,20 @@ msgstr ""
 msgid "This idempotency key was already used, and its response can't be sent again."
 msgstr ""
 
-#: isik/django/drf/viewsets/request_policies.py:51
+#: isik/django/drf/viewsets/request_policies.py:57
 msgid "This request isn't allowed."
 msgstr ""
 
-#: isik/django/drf/viewsets/preconditions.py:280
+#: isik/django/drf/viewsets/preconditions.py:278
 msgid "This request must name the version it was made against - If-Match: * isn't accepted."
 msgstr ""
 
 #: isik/django/drf/viewsets/preconditions.py:56
 msgid "This request must say which version it was made against, in an If-Match header."
+msgstr ""
+
+#: isik/django/drf/serializers/flattened_singleton_related.py:196
+msgid "This was set by another request at the same time - try again."
 msgstr ""
 
 #: isik/django/apps/feedback/comments/tiptap.py:60
@@ -1020,20 +1242,20 @@ msgstr ""
 msgid "URI not available in preferred format"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:90
+#: isik/django/apps/common/db/models.py:130
 msgid "Updated At"
 msgstr ""
 
-#: isik/django/drf/permissions.py:153
+#: isik/django/drf/permissions.py:164
 msgid "User is not the owner of the object"
 msgstr ""
 
-#: isik/django/drf/permissions.py:375
+#: isik/django/drf/permissions.py:386
 #, python-format
 msgid "User property %(property)s is False"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:24
+#: isik/django/apps/common/checks.py:197
 #, python-format
 msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
@@ -1048,7 +1270,7 @@ msgstr ""
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:111
+#: isik/django/apps/common/db/models.py:151
 msgid "Version"
 msgstr ""
 
@@ -1056,19 +1278,19 @@ msgstr ""
 msgid "When the key was spent."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:91
+#: isik/django/apps/common/db/models.py:131
 msgid "When the row last changed, by the database's clock."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:26
+#: isik/django/apps/common/_model_makers.py:27
 msgid "When the row last changed."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:79
+#: isik/django/apps/common/db/models.py:119
 msgid "When the row was created, by the database's clock. Never changes."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:23
+#: isik/django/apps/common/_model_makers.py:24
 msgid "When the row was created."
 msgstr ""
 
@@ -1092,12 +1314,12 @@ msgstr ""
 msgid "Who wrote this note."
 msgstr ""
 
-#: isik/django/drf/permissions.py:681
-#: isik/django/drf/permissions.py:685
+#: isik/django/drf/permissions.py:692
+#: isik/django/drf/permissions.py:696
 msgid "You may not change this field."
 msgstr ""
 
-#: isik/django/drf/permissions.py:689
+#: isik/django/drf/permissions.py:700
 msgid "You may not perform this action."
 msgstr ""
 
@@ -1109,26 +1331,26 @@ msgstr ""
 msgid "You must use proxy specified in Location to access this resource"
 msgstr ""
 
-#: isik/django/drf/permissions.py:243
+#: isik/django/drf/permissions.py:254
 #, python-format
 msgid "You need the %(permission)s permission to do this."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:45
+#: isik/django/apps/common/_model_makers.py:46
 #, python-format
 msgid "base_model must be an abstract Model subclass, got %(base)r"
 msgstr ""
 
-#: isik/django/drf/permissions.py:255
+#: isik/django/drf/permissions.py:266
 msgid "django_permission needs a permission name, not an empty string"
 msgstr ""
 
-#: isik/django/drf/permissions.py:251
+#: isik/django/drf/permissions.py:262
 #, python-format
 msgid "django_permission takes a permission name, or an Enum member whose value is one - not %(permission)r"
 msgstr ""
 
-#: isik/django/drf/permissions.py:309
+#: isik/django/drf/permissions.py:320
 #, python-format
 msgid "django_permission's message= takes a template, a message or a callable - not %(message)r"
 msgstr ""
@@ -1138,35 +1360,35 @@ msgstr ""
 msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
 msgstr ""
 
-#: isik/django/drf/permissions.py:671
+#: isik/django/drf/permissions.py:682
 msgid "guarding requires at least one field or action"
 msgstr ""
 
-#: isik/django/drf/permissions.py:669
+#: isik/django/drf/permissions.py:680
 msgid "guarding requires exactly one of fields, setting or actions"
 msgstr ""
 
-#: isik/django/drf/permissions.py:673
+#: isik/django/drf/permissions.py:684
 msgid "guarding takes a list of fields or actions, not a single string"
 msgstr ""
 
-#: isik/django/drf/permissions.py:675
+#: isik/django/drf/permissions.py:686
 msgid "guarding's fields= takes field names - for target values use setting="
 msgstr ""
 
-#: isik/django/drf/permissions.py:677
+#: isik/django/drf/permissions.py:688
 msgid "guarding's setting= takes a dict of field names to target values"
 msgstr ""
 
-#: isik/django/drf/permissions.py:612
+#: isik/django/drf/permissions.py:623
 msgid "guarding.matching requires a callable"
 msgstr ""
 
-#: isik/django/drf/permissions.py:600
+#: isik/django/drf/permissions.py:611
 msgid "guarding.other_than requires at least one value"
 msgstr ""
 
-#: isik/django/drf/permissions.py:588
+#: isik/django/drf/permissions.py:599
 msgid "guarding.values requires at least one value"
 msgstr ""
 
@@ -1189,11 +1411,11 @@ msgstr ""
 msgid "meta_fields_to_combine only supports list or dict attributes"
 msgstr ""
 
-#: isik/django/drf/permissions.py:229
+#: isik/django/drf/permissions.py:240
 msgid "only_actions requires at least one action - with none it would refuse everything"
 msgstr ""
 
-#: isik/django/drf/coverage.py:133
+#: isik/django/drf/coverage.py:136
 #, python-format
 msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""
@@ -1226,7 +1448,7 @@ msgstr ""
 msgid "ref(dot=%(dot)r) is not a valid dotted path."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:69
+#: isik/django/apps/common/_model_makers.py:70
 #, python-format
 msgid "related_name=%(related_name)r on %(key)s is already claimed by %(existing)s - pick a different name for %(owner)s."
 msgstr ""
@@ -1253,6 +1475,10 @@ msgstr ""
 #: isik/django/apps/templated_fields/engine.py:80
 #, python-format
 msgid "the loops in this template ran over the %(limit)s iteration limit"
+msgstr ""
+
+#: isik/django/apps/common/db/history.py:215
+msgid "track_events takes trackers= or condition=, not both - a tracker carries its own condition."
 msgstr ""
 
 #: isik/common/utils/validation.py:69

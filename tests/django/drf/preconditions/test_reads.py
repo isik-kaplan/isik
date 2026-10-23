@@ -76,7 +76,7 @@ class TestTheStartupCheck:
 
     def test_says_nothing_without_drf(self, monkeypatch):
         monkeypatch.setattr(apps, "is_installed", lambda name: name != "rest_framework")
-        monkeypatch.setattr(preconditions, "precondition_read_problems", lambda: ["one"])
+        monkeypatch.setattr(preconditions, "precondition_read_problems", lambda urlconf: ["one"])
 
         assert every_guarded_write_has_a_version_to_read(app_configs=None) == []
 

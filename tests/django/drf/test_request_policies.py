@@ -117,7 +117,10 @@ class TestARequestPolicy:
         response = list_tokens(alice)
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.data["detail"] == "This organization is still being set up."
+        assert response.data == {
+            "detail": "This organization is still being set up.",
+            "code": "organization_not_set_up",
+        }
         assert response.data["detail"].code == "organization_not_set_up"
 
     def test_an_unauthenticated_request_it_refuses_is_asked_to_authenticate(self, switch):
@@ -126,6 +129,7 @@ class TestARequestPolicy:
         response = list_tokens(None)
 
         assert response.data["detail"].code == "not_authenticated"
+        assert response.data["code"] == "not_authenticated"
 
     def test_the_first_policy_refusing_is_the_one_heard(self, alice, switch):
         switch.set_up = switch.second_factor = False
@@ -343,7 +347,7 @@ class TestDeclaringOne:
         class Recorded(RequestPoliciesMixin, RecordingBase):
             pass
 
-        request, response = object(), object()
+        request, response = object(), type("Response", (), {"status_code": 500})()
         view = Recorded()
         view.check_permissions(request)
         assert view.finalize_response(request, response, "extra", pk="1") is response
@@ -389,3 +393,88 @@ class TestBaseViewSet:
         switch.set_up = False
 
         assert call(Widgets.as_view({"get": "list"}), alice).data["detail"].code == "organization_not_set_up"
+
+
+class Spent(RequestPolicy):
+    """Records each request it let through that succeeded - a single-use proof's shape."""
+
+    message = "No proof."
+    code = "no_proof"
+    spent = []
+
+    def allows(self, request, view):
+        return True
+
+    def succeeded(self, request, view, response):
+        Spent.spent.append((request.method, response.status_code, type(view).__name__))
+
+
+class SpendingViewSet(RequestPoliciesMixin, ViewSet):
+    request_policies = [Spent, OrganizationIsSetUp]
+    spent_exempt_actions = {"free": RequestPolicyExemption(reason="answers without any proof, and spends none of it")}
+
+    def list(self, request):
+        return Response(["ok"])
+
+    @action(detail=False)
+    def broken(self, request):
+        return Response({"detail": "no"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False)
+    def free(self, request):
+        return Response(["ok"])
+
+
+class TestSucceeded:
+    @pytest.fixture(autouse=True)
+    def fresh(self, monkeypatch):
+        monkeypatch.setattr(Spent, "spent", [])
+
+    def test_each_policy_that_let_it_through_hears_of_a_success(self, alice):
+        call(SpendingViewSet.as_view({"get": "list"}), alice)
+
+        assert Spent.spent == [("GET", 200, "SpendingViewSet")]
+
+    def test_a_failed_request_spends_nothing(self, alice):
+        call(SpendingViewSet.as_view({"get": "broken"}), alice)
+
+        assert Spent.spent == []
+
+    def test_a_refused_request_spends_nothing(self, alice, switch):
+        switch.set_up = False
+
+        response = call(SpendingViewSet.as_view({"get": "list"}), alice)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert Spent.spent == []
+
+    def test_an_exempt_action_isnt_the_policys_to_spend(self, alice):
+        call(SpendingViewSet.as_view({"get": "free"}), alice)
+
+        assert Spent.spent == []
+
+    def test_does_nothing_by_default(self):
+        assert RequestPolicy().succeeded(object(), object(), object()) is None
+
+
+class TestARefusalOfTheViewsOwn:
+    def test_keeps_drfs_body(self, alice):
+        from rest_framework.permissions import BasePermission
+
+        class Never(BasePermission):
+            message = "Never."
+
+            def has_permission(self, request, view):
+                return False
+
+        class Refusing(RequestPoliciesMixin, ViewSet):
+            permission_classes = [Never]
+            request_policies = [Spent]
+
+            def list(self, request):
+                return Response(["ok"])
+
+        response = call(Refusing.as_view({"get": "list"}), alice)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data == {"detail": "Never."}

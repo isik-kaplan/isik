@@ -60,3 +60,71 @@ class TestNarrowingFilterMixin:
 
         with pytest.raises(NotImplementedError):
             Unfinished().filter(None, "x")
+
+
+class TestMatchModeFilter:
+    @pytest.fixture
+    def rosters(self, db):
+        from tests.testapp.models import Roster, Tag
+
+        red, blue, green = (Tag.objects.create(label=label) for label in ("red", "blue", "green"))
+        both = Roster.objects.create(name="both")
+        both.tags.add(red, blue)
+        red_only = Roster.objects.create(name="red")
+        red_only.tags.add(red, green)
+        # Two tags of one label: two rows of the join, one value matched.
+        twice_red = Roster.objects.create(name="twice red")
+        twice_red.tags.add(red, Tag.objects.create(label="red"))
+        Roster.objects.create(name="none")
+        return Roster
+
+    def names(self, rosters, query):
+        from django.http import QueryDict
+        from django_filters import FilterSet
+
+        from isik.django.drf import MatchModeFilter
+
+        class RosterFilterSet(FilterSet):
+            tags = MatchModeFilter("tags__label", mode_param="tags_match")
+
+            class Meta:
+                model = rosters
+                fields = []
+
+        return sorted(
+            RosterFilterSet(QueryDict(query), queryset=rosters.objects.all()).qs.values_list("name", flat=True)
+        )
+
+    def test_takes_a_filters_own_options(self):
+        from isik.django.drf import MatchModeFilter
+
+        assert MatchModeFilter("tags__label", mode_param="tags_match", label="Tags").label == "Tags"
+
+    def test_any_by_default(self, rosters):
+        assert self.names(rosters, "tags=red,blue") == ["both", "red", "twice red"]
+
+    def test_any_named(self, rosters):
+        assert self.names(rosters, "tags=blue,green&tags_match=any") == ["both", "red"]
+
+    def test_all(self, rosters):
+        assert self.names(rosters, "tags=red,blue&tags_match=all") == ["both"]
+
+    def test_all_counts_a_value_given_twice_once(self, rosters):
+        assert self.names(rosters, "tags=red,red,blue&tags_match=all") == ["both"]
+
+    def test_all_of_one_is_any_of_one(self, rosters):
+        assert self.names(rosters, "tags=red&tags_match=all") == ["both", "red", "twice red"]
+
+    def test_no_value_leaves_every_row(self, rosters):
+        assert self.names(rosters, "tags_match=all") == ["both", "none", "red", "twice red"]
+
+    def test_a_row_is_listed_once(self, rosters):
+        assert self.names(rosters, "tags=red,blue") == ["both", "red", "twice red"]
+
+    def test_another_mode_is_refused_naming_its_parameter(self, rosters):
+        from rest_framework.exceptions import ValidationError
+
+        with pytest.raises(ValidationError) as raised:
+            self.names(rosters, "tags=red&tags_match=most")
+
+        assert raised.value.detail == {"tags_match": ["Must be one of: any, all."]}

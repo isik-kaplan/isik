@@ -13,6 +13,16 @@ class WidgetViewSet(ModelViewSet):
     permission_classes = [IsSuperUser | ReadOnly]  # write access limited to superusers
 ```
 
+`reading(request)` is `ReadOnly`'s predicate on its own - whether the request's method is one of
+DRF's `SAFE_METHODS` - for a permission or a guard's condition of a project's own:
+
+```python
+from isik.django.drf import reading
+
+def has_object_permission(self, request, view, obj):
+    return reading(request) or obj.owner_id == request.user.pk
+```
+
 ## SignedInPermission
 
 A permission base that refuses anyone not signed in, then asks `allows(user, request, view)` - so a

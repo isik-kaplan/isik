@@ -92,7 +92,7 @@ IDEMPOTENCY_BODY_CODEC = "myproject.codecs.EncryptedBodyCodec"
 it for you, and you'd call it directly only to claim keys outside DRF.
 
 `lock_timeout` comes from the `IDEMPOTENCY_LOCK_TIMEOUT` setting (milliseconds) when the mixin calls
-it. By default a retry waits as long as the first request takes. That's always correct, and the only
-cost is a blocked worker while it waits. Set a timeout if your transactions can be slow: a retry
-that runs out gets 409 `idempotency_key_in_flight`. The timeout applies to the claim's insert only.
+it - 10 000 (ten seconds) unless set. A retry that runs out gets 409 `idempotency_key_in_flight`,
+telling the client to retry shortly, rather than holding a worker for as long as the first request
+takes. `None` waits indefinitely, which is always correct and costs a blocked worker while it waits. The timeout applies to the claim's insert only.
 `lock_timeout` is put back as soon as the insert is done, so the handler's own locks don't inherit it.

@@ -3,8 +3,9 @@
 `isik.django.drf.coverage` - which routed DRF views carry a request-level rule, which are exempt from
 it and why, and which say nothing at all. The same shape as a field that either has a comment or says
 `NoComment("why")`: the opt-out is explicit, and something walks everything to find what is neither.
-isik provides the walk; which rules are mandatory is the project's to decide, in its own system
-check or test.
+isik provides the walk. Idempotency keys and `If-Match` are held to it by isik's own system checks,
+`isik.E005` and `isik.E007`, on by default (see [checks](../apps/common/checks.md)); any other rule
+is the project's to make mandatory, in its own system check or test.
 
 ```python
 from isik.django.drf.coverage import precondition_coverage, request_policy_coverage
@@ -16,7 +17,7 @@ def test_every_routed_action_is_behind_the_setup_gate():
     assert uncovered == []
 
 
-def test_every_post_honors_an_idempotency_key():
+def test_every_write_honors_an_idempotency_key():
     assert [entry for entry in idempotency_coverage() if entry.is_uncovered] == []
 ```
 
@@ -27,7 +28,8 @@ Every method of every DRF view a urlconf routes, in route order, as
 routes to - `as_view()`'s function, carrying whatever a decorator around it in the urlconf set on it
 (`csrf_exempt(...)`, `transaction.non_atomic_requests(...)`), so a check reading those marks needs no
 walk of its own. A viewset contributes one per method its router maps,
-with `action` set; a plain `APIView` one per method it implements, with `action=None`. Plain Django
+with `action` set - leaving out one whose method its `http_method_names` refuse with a 405 before it
+runs; a plain `APIView` one per method it implements, with `action=None`. Plain Django
 views aren't DRF's and are left out, as is OPTIONS, which DRF answers for every view.
 
 ## routed_views(urlconf=None)
@@ -76,7 +78,7 @@ def test_every_routed_write_is_behind_the_reauthentication_gate():
     assert [entry for entry in report if entry.is_uncovered] == []
 ```
 
-## idempotency_coverage(urlconf=None, methods=("POST",))
+## idempotency_coverage(urlconf=None, methods=("POST", "PUT", "PATCH", "DELETE"))
 
 The same for idempotency keys, over the routed actions answering one of `methods`: `covered` when
 the view honors a key for that method, `exempt` when the action is in `idempotency_exempt_actions`,

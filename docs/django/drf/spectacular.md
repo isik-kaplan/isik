@@ -59,6 +59,57 @@ headers, so drf-spectacular finds none of it on its own. Documented here, so gen
 into a component named after its field, and the same `code` in every resource's 412 - or a project's
 own `code` field - would collide, a warning that `--fail-on-warn` fails on.
 
+## `IdempotencyMixin`
+
+A covered operation of an [`IdempotencyMixin`](../apps/idempotency/mixin.md) view - its method in
+`idempotent_methods`, its action not in `idempotency_exempt_actions` - documents:
+
+- `Idempotency-Key` as a UUID header parameter, required unless `idempotency_key_required` is off.
+- A 422, the `IdempotencyKeyReused` component (`detail` and `code`): the key was spent on another
+  request.
+- A 409, the `IdempotencyKeyInFlight` component: the first request with the key is still being
+  served. For an action in `idempotency_no_replay_actions` it's `IdempotencyKeyConflict`, whose
+  `code` may also be `idempotency_key_not_replayable`.
+
+An exempt action, and a read, documents none of it.
+
+## Enum names - `enum_name_overrides()`
+
+A choice field of a model isik generates - every vote model's `value`, say - shares its name with
+a project's own field of other choices, and drf-spectacular warns that it can't name them apart: a
+warning `--fail-on-warn` fails on. `enum_name_overrides()` is a lazy `ENUM_NAME_OVERRIDES` naming
+them:
+
+```python
+from isik.django.drf.spectacular import enum_name_overrides
+
+SPECTACULAR_SETTINGS = {
+    "ENUM_NAME_OVERRIDES": enum_name_overrides({"CurrencyEnum": "billing.choices.Currency"}),
+}
+```
+
+- Each distinct choice set of the [generated models](../apps/common/generated.md) gets one name,
+  after the words its models' names end with in common and its field - `VoteValueEnum` - or after
+  its one model (`<Model><Field>Enum`).
+- The project's own overrides, given as the argument, win: a choice set one of them already names,
+  or a name one of them takes, is left to it.
+- It's read when a schema is generated - after every model is loaded - not when the settings are.
+
+## One language - `SpectacularAPIView`
+
+`isik.django.drf.schema_views.SpectacularAPIView` is drf-spectacular's schema view, generating the
+document in `ISIK_SCHEMA_LANGUAGE` whatever the request's own language - so every client gets, and
+every cache keeps, one document:
+
+```python
+ISIK_SCHEMA_LANGUAGE = "en"
+
+path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+```
+
+A `?lang=` still picks another. Without the setting it's drf-spectacular's own. `manage.py
+spectacular` generates in the active language, and takes `--lang`.
+
 ## Robustness
 
 Resolving a view's serializer class to check for `ConditionalSerializerMixin` can legitimately

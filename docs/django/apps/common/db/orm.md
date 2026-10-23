@@ -24,3 +24,21 @@ from isik.django.apps.common.db.orm import get_object_or_none
 
 widget = get_object_or_none(Widget, pk=maybe_invalid_id)
 ```
+
+## with_python_defaults
+
+An unsaved instance holds a placeholder (`DatabaseDefault`) in each field the database defaults
+(`db_default`) until the row is written - which code encoding the unsaved instance can't encode: a
+library serializing a user it hasn't saved yet, say, or `BaseModel`'s `created_at`.
+`with_python_defaults(instance)` gives each such field its value in Python instead, and returns the
+instance: `Now()` becomes `timezone.now()`, a literal its value. Any other expression raises
+`ValueError` naming the field.
+
+```python
+from isik.django.apps.common.db import with_python_defaults
+
+user = with_python_defaults(User(email=email))
+json.dumps(model_to_dict(user), cls=DjangoJSONEncoder)
+```
+
+The row, once saved, holds the database's own values - `refresh_from_db()` reads them.

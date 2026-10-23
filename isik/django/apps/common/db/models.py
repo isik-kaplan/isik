@@ -1,14 +1,19 @@
+import functools
+import os
+import time
 from contextlib import contextmanager
 from functools import partial
-from uuid import uuid4
+from uuid import UUID
 
 import pgtrigger
 from django.apps import apps as django_apps
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models, transaction
 from django.db.models.fields.related import lazy_related_operation
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
+from django.utils.module_loading import import_string
 from django_lifecycle import (
     AFTER_CREATE,
     AFTER_DELETE,
@@ -25,6 +30,7 @@ from django_lifecycle.mixins import _bypass_state
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
 from isik.common.utils.strings import snake_to_pascal
+from isik.django.apps.common.generated import mark_generated
 from isik.django.apps.common.skippable_validators import SkippableValidatorsMixin
 
 
@@ -46,14 +52,48 @@ def _check_pgtrigger_installed():
 _check_pgtrigger_installed()
 
 
+def uuid7():
+    """
+    A version 7 UUID (RFC 9562): the time it was made, in milliseconds since the epoch, in its first 48
+    bits, then 74 random ones - so keys made later sort later, which an index's pages fill in order. The
+    standard library has one only from Python 3.14.
+    """
+    milliseconds = time.time_ns() // 1_000_000
+    random = int.from_bytes(os.urandom(10))
+    value = (milliseconds & (1 << 48) - 1) << 80  # unix_ts_ms
+    value |= 7 << 76  # version
+    value |= (random >> 62 & 0xFFF) << 64  # rand_a
+    value |= 0b10 << 62  # variant
+    value |= random & (1 << 62) - 1  # rand_b
+    return UUID(int=value)
+
+
+@functools.cache
+def _primary_key_function(path):
+    return import_string(path)
+
+
+def new_primary_key():
+    """
+    A new primary key for a `UUIDPrimaryKeyModel` - `ISIK_PRIMARY_KEY_DEFAULT`'s, a dotted path to a
+    function returning a UUID (`"isik.django.apps.common.db.models.uuid7"`, say), `uuid.uuid4` unless
+    set. Read when a key is made rather than written into each model's migration, so switching from one
+    to the other is a setting, not a migration of every model.
+    """
+    return _primary_key_function(getattr(settings, "ISIK_PRIMARY_KEY_DEFAULT", "uuid.uuid4"))()
+
+
 class UUIDPrimaryKeyModel(models.Model):
-    """A random UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share."""
+    """
+    A UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share. Random by
+    default; `ISIK_PRIMARY_KEY_DEFAULT` picks another kind, see `new_primary_key()`.
+    """
 
     id = models.UUIDField(
         primary_key=True,
         db_index=True,
         editable=False,
-        default=uuid4,
+        default=new_primary_key,
         verbose_name=gettext_lazy("ID"),
         help_text=gettext_lazy("A random identifier, assigned when the row is created."),
         db_comment="A random identifier, assigned when the row is created.",
@@ -369,7 +409,7 @@ def _register_relation_lock(owner, name, table, owner_key):
         triggers = [trigger]
 
     proxy_name = f"{owner.__name__}{snake_to_pascal(name)}ConcurrencyLock"
-    proxy = type(proxy_name, (table,), {"__module__": owner.__module__, "Meta": Meta})
+    proxy = mark_generated(type(proxy_name, (table,), {"__module__": owner.__module__, "Meta": Meta}), "lock")
     relation_locks.append((owner, name, proxy, trigger))
 
 

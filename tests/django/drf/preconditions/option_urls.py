@@ -6,7 +6,7 @@ from tests.django.drf.preconditions import views
 
 
 router = SimpleRouter()
-router.register("strict", views.StrictWidgetViewSet, basename="strict")
+router.register("lenient", views.LenientWidgetViewSet, basename="lenient")
 router.register("optional", views.OptionalWidgetViewSet, basename="optional")
 router.register("named-only", views.NamedOnlyWidgetViewSet, basename="named-only")
 router.register("optional-named-only", views.OptionalNamedOnlyWidgetViewSet, basename="optional-named-only")

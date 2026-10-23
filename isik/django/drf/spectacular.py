@@ -1,16 +1,31 @@
-"""AutoSchema - see its own docstring."""
+"""AutoSchema and enum_name_overrides() - see each one's own docstring."""
 
+import inspect
+import re
 import weakref
+from collections.abc import Mapping
+from enum import Enum
+from itertools import zip_longest
 
 from django import forms
+from django.db.models import Choices
 from django_filters import ChoiceFilter
 from drf_spectacular.openapi import AutoSchema as _BaseAutoSchema
+from drf_spectacular.plumbing import deep_import_string, list_hash
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse
 from rest_framework import serializers
 
 from isik._internal.translation import lazy_format
+from isik.common.utils.strings import snake_to_pascal
 from isik.django.apps.common.db.concurrency import concurrency_field_name
+from isik.django.apps.common.generated import generated_models
+from isik.django.apps.idempotency.drf import IdempotencyMixin
+from isik.django.apps.idempotency.exceptions import (
+    IdempotencyKeyInFlight,
+    IdempotencyKeyNotReplayable,
+    IdempotencyKeyReused,
+)
 from isik.django.drf.serializers.conditional_serializer import ConditionalSerializerMixin
 from isik.django.drf.viewsets.preconditions import (
     PreconditionFailed,
@@ -118,17 +133,32 @@ _IF_NONE_MATCH = OpenApiParameter(
 )
 
 
-def _code_field(code):
-    # A string naming its one value rather than an enum: drf-spectacular lifts every enum into a
+def _code_field(*codes):
+    # A string naming its values rather than an enum: drf-spectacular lifts every enum into a
     # component named after its field, and the same `code` in every resource's 412 - or a project's
     # own `code` field - collides with it, a warning that --fail-on-warn fails on.
-    return serializers.CharField(help_text=lazy_format("Always %(code)s.", code=code))
+    if len(codes) == 1:
+        return serializers.CharField(help_text=lazy_format("Always %(code)s.", code=codes[0]))
+    return serializers.CharField(help_text=lazy_format("One of %(codes)s.", codes=", ".join(codes)))
 
 
-# {schema generation's component registry: {component name: serializer}} - the 412 and 428 bodies,
+def _idempotency_key(view):
+    return OpenApiParameter(
+        name=view.idempotency_header,
+        type=OpenApiTypes.UUID,
+        location=OpenApiParameter.HEADER,
+        required=view.idempotency_key_required,
+        description=(
+            "A UUID the client makes for this request and sends again on each retry of it - a retry answers "
+            "with the first request's response rather than doing the work twice."
+        ),
+    )
+
+
+# {schema generation's component registry: {component name: serializer}} - the error bodies,
 # built once per generation, since two classes of one name are a collision. Keyed by the registry
 # rather than kept for the process, so nothing one generation built leaks into the next.
-_precondition_serializers = weakref.WeakKeyDictionary()
+_error_serializers = weakref.WeakKeyDictionary()
 
 
 class AutoSchema(_BaseAutoSchema):
@@ -160,6 +190,11 @@ class AutoSchema(_BaseAutoSchema):
     A `PreconditionMixin` view's writes document the `If-Match` header they require and their 412
     (with `current`) and 428 responses, its `retrieve` documents `If-None-Match` and the 304, and
     both, with its create, the `ETag` response header - so generated clients know all of them.
+
+    An `IdempotencyMixin` view's covered operations document the `Idempotency-Key` header (required
+    when `idempotency_key_required`), its 422 (the key spent on another request) and its 409 (the
+    first request still being served, or - for an action in `idempotency_no_replay_actions` - its
+    response not to be sent again). An exempt action documents none of it.
     """
 
     def _is_list_view(self, serializer=None):
@@ -192,7 +227,33 @@ class AutoSchema(_BaseAutoSchema):
         serializer_class = self._resolve_serializer_class()
         if serializer_class is not None and issubclass(serializer_class, ConditionalSerializerMixin):
             parameters = [*parameters, *_conditional_serializer_parameters(serializer_class)]
-        return [*parameters, *self._precondition_parameters()]
+        return [*parameters, *self._precondition_parameters(), *self._idempotency_parameters()]
+
+    def _is_idempotent(self):
+        view = self.view
+        if not isinstance(view, IdempotencyMixin) or self.method not in view.idempotent_methods:
+            return False
+        return view.idempotency_action not in view.idempotency_exempt_actions
+
+    def _idempotency_parameters(self):
+        return [_idempotency_key(self.view)] if self._is_idempotent() else []
+
+    def _idempotency_responses(self):
+        if not self._is_idempotent():
+            return {}
+        conflicts = [IdempotencyKeyInFlight.default_code]
+        name = "IdempotencyKeyInFlight"
+        if self.view.idempotency_action in self.view.idempotency_no_replay_actions:
+            conflicts.append(IdempotencyKeyNotReplayable.default_code)
+            name = "IdempotencyKeyConflict"
+        bodies = {
+            "409": self._error_serializer(name, {"detail": serializers.CharField(), "code": _code_field(*conflicts)}),
+            "422": self._error_serializer(
+                "IdempotencyKeyReused",
+                {"detail": serializers.CharField(), "code": _code_field(IdempotencyKeyReused.default_code)},
+            ),
+        }
+        return {code: self._get_response_for_code(body, code) for code, body in bodies.items()}
 
     def _precondition(self):
         """What `PreconditionMixin` does on this operation: "write", "read", "create", or None."""
@@ -227,6 +288,7 @@ class AutoSchema(_BaseAutoSchema):
         # None for an operation left out of the schema (extend_schema(exclude=True)).
         if operation is not None:
             operation["responses"].update(self._precondition_responses())
+            operation["responses"].update(self._idempotency_responses())
         return operation
 
     def _precondition_responses(self):
@@ -243,8 +305,8 @@ class AutoSchema(_BaseAutoSchema):
             return {"304": self._get_response_for_code(not_modified, "304")}
         return {}
 
-    def _precondition_serializer(self, name, fields):
-        built = _precondition_serializers.setdefault(self.registry, {})
+    def _error_serializer(self, name, fields):
+        built = _error_serializers.setdefault(self.registry, {})
         if name not in built:
             built[name] = type(name, (serializers.Serializer,), fields)
         return built[name]
@@ -259,12 +321,12 @@ class AutoSchema(_BaseAutoSchema):
             "current": retrieve(allow_null=nullable),
             "__doc__": "A 412's body: the object as it is now, in `current`.",
         }
-        return self._precondition_serializer(name, fields)
+        return self._error_serializer(name, fields)
 
     def _precondition_required(self):
         """A 428's body."""
         fields = {"detail": serializers.CharField(), "code": _code_field(PreconditionRequired.default_code)}
-        return self._precondition_serializer("PreconditionRequired", fields)
+        return self._error_serializer("PreconditionRequired", fields)
 
     def _resolve_serializer_class(self):
         get_serializer_class = getattr(self.view, "get_serializer_class", None)
@@ -279,3 +341,103 @@ class AutoSchema(_BaseAutoSchema):
             return get_serializer_class()
         except Exception:
             return None
+
+
+def _words(name):
+    return re.findall(r"[A-Z][a-z0-9]*|[a-z0-9]+", name)
+
+
+def _common_name(models):
+    """The CamelCase words the names of `models` end with in common - `Vote` of `PostVotesVote` and
+    `CommentVotesVote` - else the first one's name."""
+    common = []
+    # zip_longest, so a shorter name runs out into a None no word equals.
+    for words in zip_longest(*(reversed(_words(model.__name__)) for model in models)):
+        if len(set(words)) != 1:
+            break
+        common.insert(0, words[0])
+    return "".join(common) or models[0].__name__
+
+
+def _choices_key(choices):
+    """
+    The hash drf-spectacular files an override's choices under - read the way it reads them: an
+    import string, a `Choices` or `Enum` class, a callable, or the choices themselves, nested groups
+    flattened, plain values paired with themselves, and the blank and null values left out.
+    """
+    if isinstance(choices, str):
+        choices = deep_import_string(choices)
+    if inspect.isclass(choices) and issubclass(choices, Choices):
+        choices = choices.choices
+    if inspect.isclass(choices) and issubclass(choices, Enum):
+        choices = [(member.value, member.name) for member in choices]
+    if callable(choices):
+        choices = choices()
+    flat = []
+    for choice in choices:
+        if isinstance(choice, str) or choice is None:
+            flat.append((choice, choice))
+        elif isinstance(choice[1], list | tuple):
+            flat.extend(choice[1])
+        else:
+            flat.append(choice)
+    return list_hash([(value, label) for value, label in flat if value not in ("", None)])
+
+
+class _EnumNameOverrides(Mapping):
+    """`enum_name_overrides()`'s mapping - worked out each time it's read, never when it's made."""
+
+    def __init__(self, own):
+        self.own = dict(own)
+
+    def _generated(self):
+        """{choices hash: (name, choices)} - one entry per distinct choice set of isik's generated models."""
+        groups = {}
+        for model in generated_models():
+            for field in model._meta.fields:
+                if field.choices:
+                    group = groups.setdefault(_choices_key(field.choices), (field.name, field.choices, []))
+                    group[2].append(model)
+        return {
+            key: (f"{_common_name(models)}{snake_to_pascal(field_name)}Enum", choices)
+            for key, (field_name, choices, models) in groups.items()
+        }
+
+    def _resolved(self):
+        taken = {_choices_key(choices) for choices in self.own.values()}
+        ours = {
+            name: choices
+            for key, (name, choices) in self._generated().items()
+            if key not in taken and name not in self.own
+        }
+        return {**ours, **self.own}
+
+    def __getitem__(self, name):
+        return self._resolved()[name]
+
+    def __iter__(self):
+        return iter(self._resolved())
+
+    def __len__(self):
+        return len(self._resolved())
+
+
+def enum_name_overrides(own=None):
+    """
+    drf-spectacular's `ENUM_NAME_OVERRIDES`, naming the enums of the models isik generates too:
+
+        SPECTACULAR_SETTINGS = {
+            "ENUM_NAME_OVERRIDES": enum_name_overrides({"CurrencyEnum": "billing.choices.Currency"}),
+        }
+
+    Without it, a generated model's choice field shares its name with a project's own (every vote
+    model's `value` and a project's `value`, say), and drf-spectacular warns that it can't name them
+    apart - a warning `--fail-on-warn` fails on. Each distinct choice set of the generated models
+    (`generated_models()`) gets a name after the words its models' names end with in common and its
+    field - `VoteValueEnum` - or after its one model.
+
+    `own` is the project's own overrides, which win: a generated choice set one of them already names,
+    or a name one of them takes, is left to it. The mapping is lazy - read when a schema is
+    generated, after every model is loaded, not when the settings are.
+    """
+    return _EnumNameOverrides(own or {})

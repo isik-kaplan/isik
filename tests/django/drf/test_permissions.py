@@ -451,3 +451,21 @@ class TestEvaluatePermission:
         request.user = django_user_model.objects.create_user(username="alice", password="password")
 
         assert evaluate_permission((~is_owner("owner"))(), request, FakeView("create")) is None
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [
+        ("GET", True),
+        ("HEAD", True),
+        ("OPTIONS", True),
+        ("POST", False),
+        ("PATCH", False),
+        ("PUT", False),
+        ("DELETE", False),
+    ],
+)
+def test_reading_is_a_safe_method(method, expected):
+    from isik.django.drf import reading
+
+    assert reading(type("Request", (), {"method": method})()) is expected

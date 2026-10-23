@@ -498,3 +498,64 @@ class TestBypassHooksFor:
         with bypass_hooks_for([Widget]), widget.skip_full_clean():
             widget.update(count=-9)
         assert Widget.objects.get(pk=widget.pk).count == -9
+
+
+class TestPrimaryKeys:
+    def test_a_version_7_uuid_is_laid_out_as_rfc_9562_has_it(self, monkeypatch):
+        monkeypatch.setattr(base_models.time, "time_ns", lambda: 0x0123456789AB * 1_000_000 + 999_999)
+        monkeypatch.setattr(base_models.os, "urandom", lambda size: bytes(range(1, size + 1)))
+        random = int.from_bytes(bytes(range(1, 11)), "big")
+
+        made = base_models.uuid7()
+
+        assert made.int >> 80 == 0x0123456789AB
+        assert made.version == 7
+        assert made.variant == uuid.RFC_4122
+        assert made.int >> 64 & 0xFFF == random >> 62 & 0xFFF
+        assert made.int & (1 << 62) - 1 == random & (1 << 62) - 1
+
+    def test_every_random_bit_is_used(self, monkeypatch):
+        monkeypatch.setattr(base_models.time, "time_ns", lambda: 0)
+        monkeypatch.setattr(base_models.os, "urandom", lambda size: b"\xff" * size)
+
+        assert base_models.uuid7().int == 7 << 76 | 0xFFF << 64 | 0b10 << 62 | (1 << 62) - 1
+
+    def test_its_time_is_only_48_bits(self, monkeypatch):
+        monkeypatch.setattr(base_models.time, "time_ns", lambda: ((1 << 48) + 5) * 1_000_000)
+
+        assert base_models.uuid7().int >> 80 == 5
+
+    def test_later_ones_sort_later(self):
+        first = base_models.uuid7()
+        time.sleep(0.002)
+
+        assert base_models.uuid7() > first
+
+    def test_two_made_at_once_differ(self):
+        assert base_models.uuid7() != base_models.uuid7()
+
+    def test_the_default_is_random(self, settings):
+        if hasattr(settings, "ISIK_PRIMARY_KEY_DEFAULT"):
+            del settings.ISIK_PRIMARY_KEY_DEFAULT
+
+        assert base_models.new_primary_key().version == 4
+
+    def test_the_setting_picks_another(self, settings):
+        settings.ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+
+        assert base_models.new_primary_key().version == 7
+
+    @pytest.mark.django_db
+    def test_is_what_a_new_row_gets(self, settings):
+        settings.ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+
+        assert Widget.objects.create(name="bolt").pk.version == 7
+
+    def test_the_field_names_the_function_not_a_kind_of_key(self):
+        assert UUIDPrimaryKeyModel._meta.get_field("id").default is base_models.new_primary_key
+
+
+def test_the_app_is_labelled_so_a_projects_common_can_be_common():
+    from django.apps import apps
+
+    assert apps.get_app_config("isik_common").name == "isik.django.apps.common"

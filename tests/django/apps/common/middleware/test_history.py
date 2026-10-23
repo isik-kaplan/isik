@@ -1,6 +1,7 @@
 import pghistory
 import pytest
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse
 from django.test import RequestFactory
 
@@ -119,3 +120,54 @@ def test_rows_written_while_serving_still_carry_the_context(rf):
 
     event = WidgetEvent.objects.get(pgh_obj_id=widget.pk)
     assert event.pgh_context.metadata == {"user": None, "url": "/widgets/"}
+
+
+class TestOptionalKeys:
+    def seen(self, rf, **headers):
+        request = rf.post("/", headers=headers)
+        request.user = AnonymousUser()
+        return serve(request, lambda request: open_history_context())
+
+    def test_none_by_default(self, rf, settings):
+        assert set(self.seen(rf)) == {"url", "user"}
+
+    def test_the_version_named(self, rf, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["version"]
+        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
+
+        assert self.seen(rf)["version"] == "1.2.3"
+
+    def test_the_request_id_a_proxy_sent(self, rf, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
+
+        assert self.seen(rf, **{"X-Request-ID": "abc"})["request_id"] == "abc"
+
+    def test_the_request_id_header_is_a_setting(self, rf, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
+        settings.HISTORY_REQUEST_ID_HEADER = "X-Trace"
+
+        assert self.seen(rf, **{"X-Trace": "abc"})["request_id"] == "abc"
+
+    def test_a_request_id_is_made_when_none_was_sent(self, rf, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
+
+        first, second = self.seen(rf)["request_id"], self.seen(rf)["request_id"]
+
+        assert len(first) == 32 and first != second
+
+    def test_an_unknown_key_is_refused(self, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["version", "build", "commit"]
+        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
+
+        with pytest.raises(ImproperlyConfigured) as raised:
+            HistoryContextMiddleware(get_response=lambda request: None)
+
+        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names build, commit - it takes version, request_id."
+
+    def test_the_version_needs_its_setting(self, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["version"]
+
+        with pytest.raises(ImproperlyConfigured) as raised:
+            HistoryContextMiddleware(get_response=lambda request: None)
+
+        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names version, and HISTORY_CONTEXT_VERSION isn't set."

@@ -86,7 +86,10 @@ def _answers(view):
     """[(METHOD, action)] a routed DRF view answers - a viewset's from its router, an APIView's from its handlers."""
     actions = getattr(view, "actions", None)
     if actions is not None:
-        return [(method.upper(), action) for method, action in actions.items()]
+        # A router maps every action the viewset has; one whose method http_method_names leaves out
+        # is refused with a 405 before it runs.
+        allowed = view.cls.http_method_names
+        return [(method.upper(), action) for method, action in actions.items() if method in allowed]
     return [(method, None) for method in _handlers(view.cls)]
 
 

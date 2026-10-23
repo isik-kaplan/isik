@@ -7,7 +7,7 @@ from isik.django.apps.feedback.bookmarks import bookmarks
 from isik.django.apps.feedback.bookmarks.drf import generic_bookmark_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets import ViewSetRegistryExemption
-from isik.django.drf.viewsets.base import BaseModelViewSet
+from tests.django.drf.support import UnguardedModelViewSet
 from tests.testapp.models import Post
 
 
@@ -47,7 +47,7 @@ def test_composes_with_is_owner_for_a_private_bookmark_viewset(alice, bob, post)
     alice.bookmark(post)
     alice_bookmark = Post.bookmarks.model.objects.get(target=post, user=alice)
 
-    class BookmarkViewSet(BaseModelViewSet):
+    class BookmarkViewSet(UnguardedModelViewSet):
         # exempt_from_registry - this class body re-executes every time the test runs, and the
         # registry is process-global; without this, a second in-process run of this test (e.g. a
         # mutation-testing tool re-invoking pytest without restarting the process) would collide

@@ -5,11 +5,14 @@ requests. A write names the version of the row it was made against, and is refus
 moved on since. A page loaded before someone else saved can't silently overwrite what they saved (a
 lost update).
 
+`BaseModelViewSet` carries it, so every model viewset has it unless it opts out
+(`precondition_methods = ()`, or exempt actions). Mix it into any other `GenericAPIView` yourself:
+
 ```python
-from isik.django.drf.viewsets import BaseModelViewSet, PreconditionMixin
+from isik.django.drf.viewsets import BaseModelViewSet
 
 
-class WidgetViewSet(PreconditionMixin, BaseModelViewSet):
+class WidgetViewSet(BaseModelViewSet):
     model = Widget
     endpoint = "widgets"
     serializer_class = WidgetSerializer
@@ -71,7 +74,7 @@ outer join, which a `select_related()` in the view's queryset makes.
 
 - **A list of tags** (`If-Match: "a", "b"`) matches if any one does.
 - **`If-Match: *`** matches any current version, unless `allows_any` is off (below).
-- **A `W/` prefix is ignored**, unless `ignores_weak_tags` is off (below).
+- **A weak tag (`W/...`) never matches** - RFC 9110's strong comparison - unless `ignores_weak_tags` is on (below).
 
 A stale tag is refused with the row as it is now, as `retrieve` shows it, and its current `ETag`:
 
@@ -83,6 +86,11 @@ A stale tag is refused with the row as it is now, as `retrieve` shows it, and it
   "current": {"id": "…", "name": "nut", "etag": "\"1792585815654321\""}
 }
 ```
+
+`current` and the `ETag` are shown only to a caller who may read the row: the view's `retrieve` -
+its permissions, its `get_queryset()` and filters, and its object permissions - must let them see
+it. A caller who may write but not read gets the 412 with `current` null and no `ETag`, so a refusal
+never shows more than a read would.
 
 Both refusals are rendered by the mixin rather than by DRF's exception handler, which would leave out
 `code` and render `current`'s values as error strings. They roll the request's transaction back as that
@@ -99,13 +107,13 @@ below. `PreconditionMixin.precondition_option(name)` reads one as a view sees it
 PRECONDITION_MISSING_ROW_STATUS = 412
 
 
-class LegacyImportViewSet(PreconditionMixin, BaseModelViewSet):
+class LegacyImportViewSet(BaseModelViewSet):
     precondition_required = False  # this view only
 ```
 
 | Option | Default | What it does |
 |---|---|---|
-| `ignores_weak_tags` | `True` | A `W/` prefix is ignored when comparing `If-Match`. Off: RFC 9110's strong comparison, where a weak tag never matches. |
+| `ignores_weak_tags` | `False` | RFC 9110's strong comparison: a weak tag never matches. On: a `W/` prefix is ignored when comparing `If-Match`. |
 | `required` | `True` | A write without `If-Match` is a 428. Off: it goes through unchecked. A write that sends `If-Match` is still checked. |
 | `allows_any` | `True` | `If-Match: *` matches any current version. Off: it's refused with a 428 - the write must name the version it was made against. |
 | `missing_row_status` | `404` | What a write with `If-Match` gets when the row isn't there. `412` is RFC 9110's answer: the condition failed, with `current` null and no `ETag`. |
@@ -113,10 +121,11 @@ class LegacyImportViewSet(PreconditionMixin, BaseModelViewSet):
 
 Why the defaults:
 
-- **`ignores_weak_tags`**: the tag names the row's version, not the bytes of one response, so encoding
-  can't make it stale. Compression weakens it on the way out - Django's `GZipMiddleware`, nginx's gzip -
-  and a client sending back what it got would then be refused on every write. Turn it off only when
-  nothing between the server and the client rewrites `ETag`.
+- **`ignores_weak_tags`**: `If-Match` is RFC 9110's strong comparison, and a weak tag says only that two
+  responses are equivalent, not that they're the same version. Turn it on when something between the
+  server and the client weakens the tag - Django's `GZipMiddleware`, nginx's gzip - since a client
+  sending back what it got would otherwise be refused on every write. The tag names the row's version,
+  not the bytes of one response, so encoding can't make it stale.
 - **`required`**: an optional `If-Match` protects only the clients that remember to send it. The lost
   update the mixin exists for comes from the ones that don't. Turn it off while clients are adopting it.
 - **`allows_any`**: `*` is RFC 9110's "whatever is current". It's how a client that means to overwrite
@@ -171,7 +180,7 @@ The system check **`isik.E004`** pairs every routed write that asks `If-Match` (
    routed with GET, and in `precondition_read_actions`:
 
    ```python
-   class MeViewSet(PreconditionMixin, BaseModelViewSet):
+   class MeViewSet(BaseModelViewSet):
        precondition_read_actions = ("retrieve", "me")
        precondition_read_from = {"set_password": "me"}
    ```

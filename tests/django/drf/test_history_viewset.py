@@ -67,7 +67,7 @@ def _reset_widget_viewset_history_caches():
     # and different tests against the same module-level viewset would silently share one build.
     # Reset before every test.
     for viewset_cls in (WidgetViewSet, ContextTrackedWidgetViewSet):
-        for attr in ("_history_filterset_class", "_history_serializer_class"):
+        for attr in ("_history_filterset_class", "_history_serializer_classes"):
             if attr in viewset_cls.__dict__:
                 delattr(viewset_cls, attr)
 

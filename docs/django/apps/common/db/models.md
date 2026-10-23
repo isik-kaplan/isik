@@ -4,7 +4,7 @@
 
 | Model | Adds |
 |---|---|
-| `UUIDPrimaryKeyModel` | a random `uuid4` primary key |
+| `UUIDPrimaryKeyModel` | a UUID primary key - `uuid4` by default, see [primary keys](#primary-keys) |
 | `DatabaseTimestampsModel` | `created_at`/`updated_at` kept by the database (needs `pgtrigger`) |
 | `FullCleanOnSaveModel` | `full_clean()` and `django-lifecycle` hooks on every `save()`, skippable validators, `update()`, `skip_full_clean()` |
 | `ReprModel` | `STR`/`REPR` format strings for `str()`/`repr()` |
@@ -83,6 +83,21 @@ with widget.skip_full_clean():
   if that property builds a queryset by instantiating the same model, this recurses infinitely.
   This is a `django_lifecycle` behavior, not something `FullCleanOnSaveModel` can fix - just a trap worth
   knowing about.
+
+## Primary keys
+
+`UUIDPrimaryKeyModel.id` defaults to `new_primary_key()`, which calls the function the
+`ISIK_PRIMARY_KEY_DEFAULT` setting names - `"uuid.uuid4"` when it's unset. isik ships `uuid7()`, a
+time-ordered UUID (RFC 9562: 48 bits of Unix milliseconds, then random bits), whose new rows land at
+the end of the primary key's index rather than all over it:
+
+```python
+ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+```
+
+The setting is read once per process. A model's migration names `new_primary_key`, not the setting,
+so changing it needs no migration - a project upgrading from 0.29 gets one `AlterField` per model,
+from `uuid.uuid4` to `new_primary_key`.
 
 ## VersionedModel
 

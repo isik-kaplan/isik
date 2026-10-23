@@ -1,6 +1,7 @@
 from isik.django.apps.common.db import lookups  # noqa: F401
 from isik.django.apps.common.db.history import (
     ContextField,
+    context_fields_trigger,
     event_model_for,
     history_middleware_installed,
     object_stream_index,
@@ -15,12 +16,13 @@ from isik.django.apps.common.db.models import (
     UUIDPrimaryKeyModel,
     VersionedModel,
 )
-from isik.django.apps.common.db.orm import get_object_or_none, starts_with
+from isik.django.apps.common.db.orm import get_object_or_none, starts_with, with_python_defaults
 
 
 __all__ = [
     "BaseModel",
     "ContextField",
+    "context_fields_trigger",
     "DatabaseTimestampsModel",
     "FullCleanOnSaveModel",
     "ReprModel",
@@ -33,4 +35,5 @@ __all__ = [
     "open_history_context",
     "starts_with",
     "track_events",
+    "with_python_defaults",
 ]

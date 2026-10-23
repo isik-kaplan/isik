@@ -7,7 +7,7 @@ from isik.django.apps.feedback.notes import notes
 from isik.django.apps.feedback.notes.drf import generic_note_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets import ViewSetRegistryExemption
-from isik.django.drf.viewsets.base import BaseModelViewSet
+from tests.django.drf.support import UnguardedModelViewSet
 from tests.testapp.models import EmailUser, Post
 
 
@@ -48,7 +48,7 @@ def test_composes_with_is_owner_for_a_private_notes_viewset(alice, bob, post):
     permissions at all."""
     alice_note = alice.add_note(post, "alice's private note")
 
-    class NoteViewSet(BaseModelViewSet):
+    class NoteViewSet(UnguardedModelViewSet):
         # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.notes.model
         endpoint = "notes"

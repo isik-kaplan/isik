@@ -26,10 +26,13 @@ DATABASES = {"default": {..., "ATOMIC_REQUESTS": True}}
 
 Then mix `IdempotencyMixin` into your viewsets:
 
+`BaseModelViewSet` carries `IdempotencyMixin`, so every model viewset honors a key on every write
+unless it opts out (`idempotent_methods = ()`, or exempt actions). Mix it into any other view yourself:
+
 ```python
 from isik.django.apps.idempotency.drf import IdempotencyMixin
 
-class WidgetViewSet(IdempotencyMixin, BaseModelViewSet):
+class WebhookView(IdempotencyMixin, GenericAPIView):
     ...
 ```
 

@@ -10,6 +10,7 @@ Serializer mixins composed together in `base.py`'s `BaseModelSerializer` - regis
 - [create_only.md](create_only.md) - `Meta.create_only_fields`, settable once then locked
 - [write_only.md](write_only.md) - `Meta.write_only_fields`, settable but never serialized
 - [flattened_one_to_one.md](flattened_one_to_one.md) - `Meta.flattened_one_to_one_fields`, a reverse O2O's fields exposed and written through as if they were the parent's own
+- [flattened_singleton_related.md](flattened_singleton_related.md) - `Meta.flattened_singleton_related_fields`, one row among a reverse foreign key's many (the primary domain) exposed and written through as a field
 - [history.md](history.md) - `generic_history_serializer`, a read-only serializer over a `@track_events()`-tracked model's history, showing what the resource's serializer shows
 - [meta_combining.md](meta_combining.md) - merges `Meta` list/dict attributes with a base `_Meta`
 - [request_context.md](request_context.md) - `current_request()`/`current_user()` helpers

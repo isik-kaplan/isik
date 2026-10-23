@@ -7,7 +7,7 @@ from isik.django.apps.feedback.comments import comments
 from isik.django.apps.feedback.comments.drf import generic_comment_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets import ViewSetRegistryExemption
-from isik.django.drf.viewsets.base import BaseModelViewSet
+from tests.django.drf.support import UnguardedModelViewSet
 from tests.testapp.models import Post
 
 
@@ -45,7 +45,7 @@ def test_body_is_writable_user_is_read_only(alice, post):
 def test_composes_with_is_owner_for_a_private_comment_viewset(alice, bob, post):
     alice_comment = alice.comment(post, "alice's comment")
 
-    class CommentViewSet(BaseModelViewSet):
+    class CommentViewSet(UnguardedModelViewSet):
         # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.comments.model
         endpoint = "comments"

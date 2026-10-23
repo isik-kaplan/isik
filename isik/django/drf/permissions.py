@@ -30,6 +30,17 @@ from isik.common.utils.functional import with_attrs
 from isik.common.utils.strings import words_to_pascal
 
 
+def reading(request):
+    """
+    Whether `request` only reads - its method is one of DRF's `SAFE_METHODS` (GET, HEAD, OPTIONS). The
+    predicate itself, for a permission or a guard's condition of a project's own:
+
+        def has_object_permission(self, request, view, obj):
+            return reading(request) or obj.owner_id == request.user.pk
+    """
+    return request.method in SAFE_METHODS
+
+
 class ReadOnly(BasePermission):
     """
     Meant to be combined with DRF's `&`/`|` permission operators rather than used alone - e.g.
@@ -38,7 +49,7 @@ class ReadOnly(BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.method in SAFE_METHODS
+        return reading(request)
 
 
 class IsAnonymous(BasePermission):

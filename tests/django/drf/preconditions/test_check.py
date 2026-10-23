@@ -32,7 +32,7 @@ class TestPreconditionProblems:
 
 class TestTheCheck:
     def test_reports_each_problem_as_an_error(self, monkeypatch):
-        monkeypatch.setattr(preconditions, "precondition_problems", lambda: ["one", "two"])
+        monkeypatch.setattr(preconditions, "precondition_problems", lambda urlconf: ["one", "two"])
 
         errors = every_precondition_view_compares_a_token_it_can_trust(app_configs=None)
 
@@ -49,7 +49,7 @@ class TestTheCheck:
 
     def test_says_nothing_without_drf(self, monkeypatch):
         monkeypatch.setattr(apps, "is_installed", lambda name: name != "rest_framework")
-        monkeypatch.setattr(preconditions, "precondition_problems", lambda: ["one"])
+        monkeypatch.setattr(preconditions, "precondition_problems", lambda urlconf: ["one"])
 
         assert every_precondition_view_compares_a_token_it_can_trust(app_configs=None) == []
 

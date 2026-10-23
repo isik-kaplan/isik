@@ -7,7 +7,7 @@ from isik.django.apps.feedback.votes import votes
 from isik.django.apps.feedback.votes.drf import generic_vote_serializer
 from isik.django.drf.permissions import is_owner
 from isik.django.drf.viewsets import ViewSetRegistryExemption
-from isik.django.drf.viewsets.base import BaseModelViewSet
+from tests.django.drf.support import UnguardedModelViewSet
 from tests.testapp.models import Post
 
 
@@ -57,7 +57,7 @@ def test_composes_with_is_owner_for_a_private_vote_viewset(alice, bob, post):
     alice.upvote(post)
     alice_vote = Post.votes.model.objects.get(target=post, user=alice)
 
-    class VoteViewSet(BaseModelViewSet):
+    class VoteViewSet(UnguardedModelViewSet):
         # exempt_from_registry - see bookmarks/test_drf.py's BookmarkViewSet for why.
         model = Post.votes.model
         endpoint = "votes"

@@ -21,8 +21,10 @@ class AccessTokenViewSet(BaseViewSet):
 ## BaseModelViewSet
 
 `BaseViewSet` plus everything that is about a model, on `ModelViewSet`: `RequiredAttributesMixin`
-(`model`/`endpoint`/`serializer_class` required), `ViewSetRegistryMixin`, `ProtectedDestroyMixin`,
-`ReverseOrderingMixin`, `DeclaredOrderingMixin`, `FilterSetMixin`.
+(`model`/`endpoint`/`serializer_class` required), the two write guards
+[`IdempotencyMixin`](../../apps/idempotency/mixin.md) and [`PreconditionMixin`](preconditions.md),
+`ViewSetRegistryMixin`, `ProtectedDestroyMixin`, `ReverseOrderingMixin`, `DeclaredOrderingMixin`,
+`FilterSetMixin`.
 
 ```python
 class WidgetViewSet(BaseModelViewSet):
@@ -36,6 +38,11 @@ class WidgetViewSet(BaseModelViewSet):
 # would otherwise register the (broken) class
 ```
 
+- Every write asks an `Idempotency-Key`, and every write to one object an `If-Match`. That needs
+  `ATOMIC_REQUESTS`, an idempotency claims app installed, and an authenticated writer. A view opts
+  out with `idempotent_methods = ()` / `precondition_methods = ()`, or exempts an action in
+  `idempotency_exempt_actions` / `precondition_exempt_actions`. Don't add either mixin to a
+  `BaseModelViewSet`'s bases yourself - it's already there, and naming it again is an MRO error.
 - `model` is required explicitly and is the source of truth for `get_queryset()` - not `serializer_class.Meta.model` - matching the "required explicit" choice made for `endpoint` too.
 - `model`/`endpoint`/`serializer_class` buy the model surface and nothing else. A request-level rule goes in `request_policies`, which `BaseViewSet` carries too - never give a viewset a `model` to get one.
 - Pick and compose the individual mixins directly instead (see their own docs) if a project doesn't want the whole stack.

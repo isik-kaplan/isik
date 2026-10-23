@@ -23,3 +23,19 @@ class TenantHistoryContextMiddleware(HistoryContextMiddleware):
   returns `None` there.
 - Nothing is left behind: once the response is returned or the view raises, the reader returns
   `None`.
+
+## Optional keys - `HISTORY_CONTEXT_KEYS`
+
+It also offers keys a project names in `HISTORY_CONTEXT_KEYS` - none by default, so the context is
+pghistory's own:
+
+```python
+HISTORY_CONTEXT_KEYS = ["version", "request_id"]
+HISTORY_CONTEXT_VERSION = os.environ["GIT_SHA"]
+```
+
+- `"version"` - `HISTORY_CONTEXT_VERSION`, the build serving the request, so a row says which code
+  wrote it. Naming the key without setting it raises `ImproperlyConfigured` when the middleware loads.
+- `"request_id"` - the request's `HISTORY_REQUEST_ID_HEADER` (`X-Request-ID` unless set), as a proxy
+  or a client sent it, else one made here - so a row can be found again from a log line.
+- Any other name raises `ImproperlyConfigured`, naming it.

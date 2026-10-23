@@ -61,3 +61,21 @@ class TenantTask(HistoryContextTask):
 The cause is read when `apply_async` runs. A base that defers dispatch to
 `transaction.on_commit` still gets the request's cause, as long as the commit happens while the
 request is being served. That's true of `ATOMIC_REQUESTS`.
+
+## Sent once the transaction commits - `dispatch_on_commit`
+
+`dispatch_on_commit = True` on a task (or `HISTORY_TASK_DISPATCH_ON_COMMIT = True` for every one
+that leaves it as `None`) sends the message only once the dispatching transaction commits - so a
+worker never reads a row its request hasn't committed yet, or one it rolled back:
+
+```python
+@app.task(base=HistoryContextTask, dispatch_on_commit=True)
+def send_welcome(user_id): ...
+
+send_welcome.delay(user.pk)   # inside the request's transaction: sent on commit, never on rollback
+```
+
+- The call still returns an `AsyncResult`: its id is chosen up front, so the caller can follow it.
+- The cause is read when the task is dispatched, not when the message is sent.
+- Outside any transaction it's sent at once, as `transaction.on_commit` runs its callback at once.
+- Off by default.

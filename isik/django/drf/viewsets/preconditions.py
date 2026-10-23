@@ -8,7 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.http import Http404
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotAuthenticated, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import set_rollback
@@ -82,7 +82,7 @@ class NotModified(Exception):
 # {option: its default}. Each is the setting PRECONDITION_<OPTION>, and a view's precondition_<option>
 # overrides it - see PreconditionMixin.
 PRECONDITION_DEFAULTS = {
-    "ignores_weak_tags": True,
+    "ignores_weak_tags": False,
     "required": True,
     "allows_any": True,
     "missing_row_status": status.HTTP_404_NOT_FOUND,
@@ -132,7 +132,7 @@ class PreconditionMixin:
     names the version of the row it was made against, and is refused if the row has moved on - so a
     page loaded before someone else saved can't silently overwrite what they saved.
 
-        class WidgetViewSet(PreconditionMixin, BaseModelViewSet):
+        class WidgetViewSet(BaseModelViewSet):  # carries it; or PreconditionMixin on any GenericAPIView
             ...
 
         GET    /widgets/7/                                -> 200  ETag: "1760000000123456"
@@ -157,11 +157,11 @@ class PreconditionMixin:
     Five options, each a setting `PRECONDITION_<OPTION>` that a view's `precondition_<option>`
     overrides (None, the default, defers to the setting) - read with `precondition_option(name)`:
 
-    - `ignores_weak_tags` (True) - a `W/` prefix is ignored, so the comparison isn't RFC 9110's
-      strong one. The tag names the row's version, not the bytes of one response, and compression
-      weakens it on the way out - Django's GZipMiddleware, nginx's gzip - so a client sending back
-      what it got would be refused on every write otherwise. False compares strongly: a weak tag
-      never matches.
+    - `ignores_weak_tags` (False) - RFC 9110's strong comparison: a weak tag never matches. True
+      ignores a `W/` prefix: the tag names the row's version, not the bytes of one response, and
+      compression weakens it on the way out - Django's GZipMiddleware, nginx's gzip - so a client
+      echoing the header it got through one would be refused on every write. Reading the version
+      from `ConcurrencyTokenField`, which compression never touches, avoids that under the default.
     - `required` (True) - a write without `If-Match` is a 428. False lets it through unchecked; one
       that sends it is still checked.
     - `allows_any` (True) - `If-Match: *` matches any current version. False refuses it with 428:
@@ -200,10 +200,8 @@ class PreconditionMixin:
     precondition_missing_row_status = None
     precondition_not_modified = None
 
-    # Per request: the row whose version the response carries, the last serializer the view made, and
-    # whether get_object() ran the check for a write.
+    # Per request: the row whose version the response carries, and whether get_object() ran the check.
     precondition_instance = None
-    precondition_serializer = None
     precondition_checked = False
     # IdempotencyMixin's own, set when it answers with a replay - declared here too, so a view without
     # that mixin reads it as False.
@@ -311,13 +309,6 @@ class PreconditionMixin:
         instance.__dict__.pop(ETAG_ANNOTATION, None)
         return instance
 
-    def get_serializer(self, *args, **kwargs):
-        # Kept for a create's ETag: its row is the serializer's, and a project's own perform_create()
-        # rarely calls super(), so there's no hook there to rely on.
-        serializer = super().get_serializer(*args, **kwargs)
-        self.precondition_serializer = serializer
-        return serializer
-
     def perform_update(self, serializer):
         super().perform_update(serializer)
         # The body shows what the triggers just set - the token, and updated_at beside a version - not
@@ -337,6 +328,22 @@ class PreconditionMixin:
         """The row as `retrieve` shows it - a 412's `current`."""
         return self._as_retrieve().get_serializer(instance).data
 
+    def caller_may_read(self, instance):
+        """
+        Whether this request's caller may `retrieve` `instance` - a 412 shows `current`, and its ETag, only
+        then. The write already passed the gates of the write's own action; the read's may differ (a
+        permission per action, a `get_queryset()` narrower for reads), so they're run again here.
+        """
+        view = self._as_retrieve()
+        try:
+            view.check_permissions(self.request)
+            if not view.filter_queryset(view.get_queryset()).filter(pk=instance.pk).exists():
+                return False
+            view.check_object_permissions(self.request, instance)
+        except (PermissionDenied, NotAuthenticated):
+            return False
+        return True
+
     def handle_exception(self, exc):
         if isinstance(exc, NotModified):
             return Response(status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": exc.etag})
@@ -347,7 +354,8 @@ class PreconditionMixin:
             headers = {}
             if isinstance(exc, PreconditionFailed):
                 data["current"] = None
-                if exc.instance is not None:
+                # A caller who may write the row but not read it gets no more than a row that's gone.
+                if exc.instance is not None and self.caller_may_read(exc.instance):
                     data["current"] = self.get_current_representation(exc.instance)
                     headers["ETag"] = concurrency_etag(exc.instance)
             # Rolled back as DRF's handler would - only now: a transaction marked for rollback refuses
@@ -362,7 +370,11 @@ class PreconditionMixin:
         self._require_version_read(request, response)
         instance = self.precondition_instance
         if instance is None and request.method == "POST" and self.precondition_action in ("create", None):
-            instance = getattr(self.precondition_serializer, "instance", None)
+            # A create's row is its serializer's, which DRF's `serializer.data` - the response's data -
+            # still carries. Read there rather than remembered from get_serializer(): overriding that
+            # flips drf-spectacular onto calling it for every view, with no request to give it.
+            serializer = getattr(response.data, "serializer", None)
+            instance = getattr(serializer, "instance", None)
         if instance is not None and has_concurrency_token(instance) and status.is_success(response.status_code):
             etag = self._etag_after(request, instance)
             if etag is not None:

@@ -4,13 +4,10 @@ Every exemption a Django project declares, by rule - what `manage.py exemptions`
 """
 
 import inspect
-import os
 from collections import Counter
 from dataclasses import dataclass
 from operator import attrgetter
-from pathlib import Path
 
-from django.apps import apps
 from django.urls import get_resolver
 
 from isik.common.utils.exemptions import (
@@ -21,6 +18,7 @@ from isik.common.utils.exemptions import (
     unseen_exemption_calls,
 )
 from isik.common.utils.strings import camel_to_snake
+from isik.django.apps.common.project import project_app_configs
 from isik.django.apps.common.urlconfs import project_urlconfs
 
 
@@ -132,16 +130,7 @@ def _policy_why(policy):
 
 
 def _project_paths():
-    libraries = ("site-packages", "dist-packages")
-    isik_root = str(Path(__file__).resolve().parents[3]) + os.sep
-    return sorted(
-        {
-            config.path
-            for config in apps.get_app_configs()
-            if not any(part in libraries for part in Path(config.path).parts)
-            and not str(Path(config.path).resolve()).startswith(isik_root)
-        }
-    )
+    return sorted({config.path for config in project_app_configs()})
 
 
 def unseen_project_exemptions(urlconf=None, exclude=TEST_CODE):

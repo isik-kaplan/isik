@@ -5,6 +5,8 @@ from django.apps import AppConfig
 
 class CommonConfig(AppConfig):
     name = "isik.django.apps.common"
+    # Not "common", the label Django would derive: a project's own `common` app wants that one.
+    label = "isik_common"
 
     modules_to_initialize = [
         "isik.django.apps.common.db.lookups",

@@ -5,6 +5,15 @@ insert/update/delete event trackers so a model's history table always records al
 repeating that setup at each call site. Extra `kwargs` pass straight through to
 `pghistory.track()`.
 
+- `trackers=[...]` records pghistory's own trackers instead of the three - each with a condition of
+  its own (`UpdateEvent(condition=pghistory.AnyChange("name"))`).
+- `condition=` is the condition of the default update event alone, keeping insert and delete. Not
+  with `trackers`, which carry their own - both is a `TypeError`.
+- `append_only=True` makes the event table refuse updates and deletes (pghistory's own option). Left
+  out, pghistory's setting decides - off unless a project turns it on.
+- The event model is marked as isik's: `generated_models("event")` lists it (see
+  [generated models](../generated.md)).
+
 ```python
 from isik.django.apps.common.db import track_events
 
@@ -22,6 +31,10 @@ class Widget(BaseModel):
   predecessor with `pgh_obj_id = X AND pgh_id < N`, and on pghistory's own single-column `pgh_obj`
   index a page of history costs the square of the object's event count. Indexes passed in
   `meta={"indexes": [...]}` are kept next to it.
+
+`history_index_problems(app_configs)` names each event model of those apps with a `pgh_obj` but no
+`(pgh_obj, -pgh_id)` index - one `pghistory.track()` made directly, say. The system check `isik.E008`
+reports them for the project's own apps (see [checks](../checks.md)).
 
 `event_model_for(model)` returns that generated Event model - `event_model_for(Widget) is
 WidgetEvent` - raising `ImproperlyConfigured` if `model` was never tracked. `isik.django.drf`'s
@@ -82,3 +95,11 @@ its `actor_id` column as the real thing rather than a name collision with their 
 `ImproperlyConfigured`. `HistoryMixin`'s built-in `actor` *filter* follows the same precedent, and
 any other `ContextField` is filterable the same way via
 [`context_field_filter()`](../../../drf/viewsets/history.md).
+
+A `ContextField` named like a field the history tracks (`name`, or `name_id` for a foreign key) is
+refused with `ImproperlyConfigured` naming each one: the event model would hold the context's value
+where the row's own was, and every event would lose it.
+
+`context_fields_trigger(context_fields)` returns `(attrs, trigger)` - the event model's columns for
+those context fields and the trigger stamping them - for a project building an event model with
+`pghistory.track()` itself rather than through `track_events()`.

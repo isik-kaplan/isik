@@ -48,10 +48,10 @@ GET /widgets/history/?object_id=3&action=update
   stamped by `pghistory.context()` directly), else on `pgh_context` JSON via `context_filter()` if
   `HistoryMiddleware` (or a subclass) is installed, else it's omitted entirely. A value that fails
   a filter's own validation (e.g. `?created_after=not-a-date`) raises a 400 naming it rather than
-  silently filtering on whatever else was valid - both `context_filter()`/`context_field_filter()`
-  default to an integer-typed filter, so a project whose actor pks aren't integers (e.g. UUID)
-  needs its own `filter_cls` (see either function's own docstring) or that filter alone raises on
-  every value.
+  silently filtering on whatever else was valid. The JSON `actor` filter follows the user model's
+  pk: a number for an integer pk, a UUID (compared as the text pghistory stores) otherwise.
+  `context_filter()`/`context_field_filter()` themselves default to an integer-typed filter - pass
+  `filter_cls` for a key holding something else.
 - `extra_history_filters` is your own extension point, merged on top of the built-ins - a matching
   key overrides one, a new key just adds one. `context_filter(key)` builds a filter over a key in
   pghistory's context JSON, without needing to know the `pgh_context__<key>` field-name
@@ -111,7 +111,13 @@ GET /widgets/history/?object_id=3&action=update
   `history_list_permission_classes` alone - without it, the cross-object endpoint answers for
   objects the per-object one would 404 on.
 - `history_filterset_class`/`history_serializer_class` are `classproperty`s cached on the class
-  (same pattern as `FilterSetMixin.filterset_class`), not rebuilt on every request.
+  (same pattern as `FilterSetMixin.filterset_class`), not rebuilt on every request. Override the
+  `history_serializer_cache_key()` classmethod when the history differs by something the class alone
+  doesn't say - a schema per surface, a language - and each key gets its own serializer.
+- `history_page_context(rows)` is what a page's rows need resolved once rather than once each,
+  handed to the serializer as `context["history_page"]` (`rows` is the page, read into a list).
+  Override it with `super()` to add your own - the actors' names, say. Over one stream it's `{}`;
+  over several, see below.
 - Wired through `get_serializer_class()` (the hook drf-spectacular's `AutoSchema` already reads),
   so schema generation picks up both actions' real field types with no extra `@extend_schema`
   needed - the remaining gaps (list-vs-single response typing, a unique operation id per action,
@@ -127,3 +133,57 @@ GET /widgets/history/?object_id=3&action=update
   - deliberately, so a subclass overriding `get_permissions()` wholesale for unrelated reasons
   (a far more commonly overridden hook) can't silently drop this enforcement the way it would if
   it lived there.
+
+## A history built from several streams - `history_also`
+
+An object's history can take in other models' events, declared as parts of it - a site's
+domains, a shelf's items. Each part is a tracked model and the field pointing at the owner:
+
+```python
+class ShelfViewSet(HistoryMixin, BaseModelViewSet):
+    model = Shelf
+    endpoint = "shelves"
+    serializer_class = ShelfSerializer
+    history_also = {
+        "items": HistoryStream(ShelfItem, path="shelf", serializer=ShelfItemSerializer),
+        "labels": HistoryStream(ShelfLabel, path="shelf"),
+    }
+    history_detail = {"labels": ("tag", "label")}
+```
+
+```
+GET /shelves/3/history/
+
+[
+  {"event_id": 41, "action": "insert", "part": "labels", "subject_id": "3", "subject_label": "shelf kitchen",
+   "detail": "fragile", "changes": null, "id": null, "name": null, ...},
+  {"event_id": 40, "action": "update", "part": "items", "subject_id": "3", "subject_label": "shelf kitchen",
+   "detail": null, "changes": {"title": ["Cup", "Mug"]}, "id": null, "name": null, ...},
+  {"event_id": 39, "action": "update", "part": "shelf", ..., "changes": {"name": ["pantry", "kitchen"]}, ...}
+]
+```
+
+- **Declared, never derived.** A model's history is its own stream (under its model name) plus
+  exactly what `history_also` names - `history_parts()` returns them all.
+- **Each row is shown through its own stream's serializer.** `HistoryStream(serializer=...)` is
+  what of a part's columns its rows show, in `changes`, under that serializer's names; a part
+  without one shows none of them, and an update changing only what it hides isn't listed. The
+  owner's own fields are null on a part's row - never a part's column passed off as the owner's.
+- **Every row says what it's about:** `part` (the stream's key), `subject_id` (the owner's id)
+  and `subject_label` (its `str()`, read through `get_queryset()`, so a subject the caller can't see
+  - or one that's gone - stays unnamed), and `detail`: for a part `history_detail` names, the
+  attribute of the row its foreign key points at (`("tag", "label")` - the label's tag's `label`).
+- **Scoped to the declared paths.** pghistory's `references()` matches every column pointing at the
+  owner's model; when a stream has more than one (a self foreign key on the owner, a part pointing
+  at it twice), each row is also narrowed to its declared path, so a child shelf's events aren't its
+  parent's.
+- **Ordered by time** across streams (`-pgh_created_at`, then `-pgh_id`); one stream keeps `-pgh_id`.
+- **Filters:** `part` narrows to one stream; `object_id` is the object a row is about - on the
+  cross-object endpoint, every stream's rows for that owner. A value that isn't a key is a 400.
+- **Refused when the view is first routed** (`ImproperlyConfigured`, naming each problem): a stream
+  that isn't a `HistoryStream`, a model that isn't tracked, a `path` that isn't a foreign key or
+  one-to-one to the view's model, one its history doesn't record, a key taking the owner's own
+  stream's name; a `history_detail` naming no stream, not a `(foreign key, attribute)` pair, or an
+  attribute the pointed-at model doesn't have. `history_part_problems(view)` lists them.
+- The schema documents `part`, `subject_id`, `subject_label` and `detail` as strings, `changes` as
+  an object, and the owner's fields as nullable - without a drf-spectacular warning.

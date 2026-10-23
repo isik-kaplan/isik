@@ -208,7 +208,7 @@ class TestWritingWithoutIfMatch:
 
 
 class TestWritingAgainstTheCurrentVersion:
-    @pytest.mark.parametrize("sent", ["{}", "W/{}", '"stale", {}', '"stale",W/{}', " {} ", "*"])
+    @pytest.mark.parametrize("sent", ["{}", '"stale", {}', " {} ", "*"])
     def test_succeeds(self, client, widget, sent):
         response = write(client, "patch", f"/widgets/{widget.pk}/", {"name": "nut"}, sent.format(etag(widget)))
 
@@ -294,9 +294,10 @@ class TestWritingAgainstAnOlderVersion:
         assert response.status_code == status.HTTP_412_PRECONDITION_FAILED
         assert len(response.json()["current"]["siblings"]) == 2
 
-    @pytest.mark.parametrize("sent", ['"stale"', 'W/"stale"', '"stale", "older"', "", "W/"])
+    @pytest.mark.parametrize("sent", ['"stale"', 'W/"stale"', '"stale", "older"', "", "W/", "W/{current}"])
     def test_any_tag_but_the_current_one_is_refused(self, client, widget, sent):
-        response = write(client, "patch", f"/widgets/{widget.pk}/", {"name": "nut"}, sent)
+        # The current one weakened is refused too: the comparison is RFC 9110's strong one by default.
+        response = write(client, "patch", f"/widgets/{widget.pk}/", {"name": "nut"}, sent.format(current=etag(widget)))
 
         assert response.status_code == status.HTTP_412_PRECONDITION_FAILED
 

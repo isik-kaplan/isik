@@ -525,3 +525,82 @@ class Roster(BaseModel):
 
     def concurrency_parts(self):
         return sorted(self.tags.values_list("label", flat=True))
+
+
+@track_events()
+class Shelf(BaseModel):
+    """A history built from several streams - its own, its items', its labels'."""
+
+    name = models.CharField(max_length=50)
+    # Pointing at another shelf: references() alone would take in the child shelves' events too.
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children")
+
+    class Meta:
+        app_label = "testapp"
+
+    def __str__(self):
+        return f"shelf {self.name}"
+
+
+@track_events()
+class ShelfItem(models.Model):
+    shelf = models.ForeignKey(Shelf, on_delete=models.CASCADE, related_name="items")
+    # Named like the shelf's own column, and a secret its shelf's readers mustn't see.
+    name = models.CharField(max_length=50)
+    title = models.CharField(max_length=50, blank=True)
+    secret = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "testapp"
+
+
+@track_events()
+class ShelfLabel(models.Model):
+    shelf = models.ForeignKey(Shelf, on_delete=models.CASCADE, related_name="labels")
+    # A second key to the same model - references() would match it as well as the declared path.
+    moved_from = models.ForeignKey(Shelf, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        app_label = "testapp"
+
+
+@track_events()
+class Box(BaseModel):
+    """A history of two streams that each point at the owner once - references() alone is exact."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+@track_events()
+class BoxItem(models.Model):
+    box = models.ForeignKey(Box, on_delete=models.CASCADE, related_name="items")
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class Site(BaseModel):
+    """Many domains, exactly one of them primary - a singleton among a to-many relation."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class SiteDomain(BaseModel):
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="domains")
+    domain = models.CharField(max_length=100)
+    is_primary = models.BooleanField(default=False)
+    note = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        app_label = "testapp"
+        constraints = [
+            models.UniqueConstraint(fields=["site"], condition=models.Q(is_primary=True), name="one_primary_domain"),
+        ]

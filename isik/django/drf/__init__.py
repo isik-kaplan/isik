@@ -4,7 +4,7 @@ from isik._internal import check_extra
 check_extra("drf", "rest_framework")
 
 from isik.django.drf.error_handling import django_to_drf_validation_error  # noqa: E402
-from isik.django.drf.filters import make_filters  # noqa: E402
+from isik.django.drf.filters import MatchModeFilter, make_filters  # noqa: E402
 from isik.django.drf.pagination import PageNumberPagination  # noqa: E402
 from isik.django.drf.permissions import (  # noqa: E402
     ANY_VALUE,
@@ -32,6 +32,7 @@ from isik.django.drf.permissions import (  # noqa: E402
     only_actions,
     permission_name,
     prevent_actions,
+    reading,
     user_property,
 )
 from isik.django.drf.schema import FakeErrorSerializer, FakeSerializer  # noqa: E402
@@ -49,6 +50,7 @@ __all__ = [
     "IsAuthenticatedANDSignupCompleted",
     "SignedInPermission",
     "IsSuperUser",
+    "MatchModeFilter",
     "MatchingTarget",
     "NotOneOfTarget",
     "OneOfTarget",
@@ -68,5 +70,6 @@ __all__ = [
     "only_actions",
     "permission_name",
     "prevent_actions",
+    "reading",
     "user_property",
 ]
