@@ -437,7 +437,7 @@ class Team(BaseModel):
     name = models.CharField(max_length=50)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="teams")
     labels = models.ManyToManyField(Tag, through="TeamLabel", related_name="teams")
-    concurrency_relations = ("members", "labels", "notes", "charter")
+    concurrency_relations = ("members", "labels", "notes", "charter", "badges")
 
     class Meta:
         app_label = "testapp"
@@ -450,6 +450,24 @@ class TeamNote(models.Model):
     text = models.CharField(max_length=50)
 
     class Meta:
+        app_label = "testapp"
+
+
+class TeamBadge(BaseModel):
+    """Rows pointing at a team that carry triggers of their own - a BaseModel's - which its lock mustn't copy."""
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="badges")
+    title = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class WidgetProxy(Widget):
+    """A proxy of a BaseModel - its table's triggers are its concrete model's, registered once."""
+
+    class Meta:
+        proxy = True
         app_label = "testapp"
 
 

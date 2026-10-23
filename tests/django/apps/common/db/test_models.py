@@ -29,6 +29,7 @@ from tests.testapp.models import (
     VersionedNote,
     VersionedWidget,
     Widget,
+    WidgetProxy,
 )
 
 
@@ -417,6 +418,31 @@ class TestVersionedModel:
     @isolate_apps("tests.testapp")
     def test_an_abstract_one_gets_none(self):
         assert not triggers_of(fresh_model("AbstractVersioned", VersionedModel, abstract=True))
+
+
+class TestAProxy:
+    """A proxy shares its concrete model's table, whose triggers it doesn't register a second time."""
+
+    def test_of_a_base_model_registers_no_triggers_of_its_own(self):
+        assert triggers_of(WidgetProxy) == set()
+        assert {"protect_created_at", "stamp_updated_at"} <= triggers_of(Widget)
+
+    @isolate_apps("tests.testapp")
+    def test_defined_now_is_left_alone(self):
+        for base in (TimestampedNote, VersionedNote):
+            proxy = fresh_model("ProxyNow", base, proxy=True)
+
+            assert triggers_of(proxy) == set()
+
+    @pytest.mark.django_db
+    def test_writes_through_it_are_stamped_by_its_tables_triggers(self):
+        widget = WidgetProxy.objects.create(name="bolt")
+        widget.refresh_from_db()
+        stamped = widget.updated_at
+        WidgetProxy.objects.filter(pk=widget.pk).update(name="nut")
+        widget.refresh_from_db()
+
+        assert widget.updated_at > stamped
 
 
 class TestBypassHooksFor:

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-10-23
+
+### Fixed
+
+- **A proxy of a `DatabaseTimestampsModel` or a `VersionedModel` no longer fails to load.** isik
+  registered the timestamp and version triggers on every concrete subclass, and a proxy is one - so it
+  registered them a second time on the table the proxy shares with its concrete model, and pgtrigger
+  refused the duplicate names (`Trigger name "protect_created_at" already used`). That broke any
+  project proxy of a `BaseModel`, and every reverse relation in `concurrency_relations` to a `BaseModel`
+  pointing at its owner, whose lock lives on a proxy of that model. A proxy now registers none: its
+  table's triggers are its concrete model's.
+
 ## [0.29.0] - 2026-10-23
 
 ### Added

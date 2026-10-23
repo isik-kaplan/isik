@@ -306,7 +306,10 @@ def _register_triggers(sender, **kwargs):
     # inherits an abstract base's Meta into a subclass that writes `class Meta(BaseModel.Meta)`,
     # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
     # via pgtrigger.register() on every concrete subclass instead needs no such cooperation - Django
-    # sends class_prepared for concrete models only.
+    # sends class_prepared for concrete models only. Not a proxy, though: it shares its concrete model's
+    # table, whose triggers are already there - registering them again under the same names is refused.
+    if sender._meta.proxy:
+        return
     if issubclass(sender, DatabaseTimestampsModel):
         pgtrigger.register(*_timestamp_triggers(sender))(sender)
     if issubclass(sender, VersionedModel):

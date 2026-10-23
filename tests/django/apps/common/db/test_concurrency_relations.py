@@ -25,7 +25,17 @@ from isik.django.apps.common.db.concurrency import (
     current_concurrency_etag,
     with_concurrency_etags,
 )
-from tests.testapp.models import EmailUser, Tag, Team, TeamCharter, TeamLabel, TeamNote, VersionedNote, Widget
+from tests.testapp.models import (
+    EmailUser,
+    Tag,
+    Team,
+    TeamBadge,
+    TeamCharter,
+    TeamLabel,
+    TeamNote,
+    VersionedNote,
+    Widget,
+)
 
 
 pytestmark = pytest.mark.django_db
@@ -53,6 +63,7 @@ def everything(alice, tag):
         "labels": (tag, {"weight": 3}),
         "notes": lambda team: TeamNote.objects.create(team=team, text="hello"),
         "charter": lambda team: TeamCharter.objects.create(team=team, text="ours"),
+        "badges": lambda team: TeamBadge.objects.create(team=team, title="first"),
     }
 
 
@@ -62,7 +73,7 @@ def etag(team):
 
 class TestWhichRelations:
     def test_the_ones_named(self):
-        assert concurrency_relations(Team) == ("members", "labels", "notes", "charter")
+        assert concurrency_relations(Team) == ("members", "labels", "notes", "charter", "badges")
 
     def test_none_by_default(self):
         assert concurrency_relations(Widget) == ()
@@ -542,3 +553,29 @@ class TestPointingRelations:
             assert_concurrency_field_changes(team, related=everything(alice, tag))
 
         assert str(raised.value) == f"testapp.Team's ETag was {reads[-2]} still after {write}."
+
+
+class TestRowsWithTriggersOfTheirOwn:
+    """A BaseModel pointing at the owner: its lock proxy carries the lock alone, not its timestamps' triggers."""
+
+    def test_its_lock_proxy_has_only_the_lock(self):
+        (proxy,) = [proxy for owner, relation, proxy, _ in base_models.relation_locks if relation == "badges"]
+
+        assert proxy._meta.concrete_model is TeamBadge
+        assert [trigger.name for trigger in proxy._meta.triggers] == ["lock_badges_owner"]
+
+    def test_its_own_triggers_stay_its_own(self, team):
+        badge = TeamBadge.objects.create(team=team, title="first")
+        badge.refresh_from_db()
+        stamped = badge.updated_at
+        TeamBadge.objects.filter(pk=badge.pk).update(title="second")
+        badge.refresh_from_db()
+
+        assert badge.updated_at > stamped
+
+    def test_an_edit_to_one_moves_the_owners_etag(self, team):
+        badge = TeamBadge.objects.create(team=team, title="first")
+        before = etag(team)
+        TeamBadge.objects.filter(pk=badge.pk).update(title="second")
+
+        assert etag(team) != before
