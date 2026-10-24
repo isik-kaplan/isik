@@ -1,11 +1,26 @@
 import os
+from typing import NamedTuple
 
 from isik._internal.translation import gettext as _
+from isik.common.config.environment import FILE_SUFFIX, read_variable
 from isik.common.config.exceptions import ConfigError
 from isik.common.utils.functional import with_attrs
 
 
 _MISSING = object()
+
+
+class _Reading(NamedTuple):
+    """How a schema's values are read: the key's prefix and separator, where from, and whether `KEY_FILE` counts."""
+
+    prefix: object
+    sep: str
+    environ: object
+    files: bool
+
+    def variables(self):
+        # Read when the value is: refresh() sees what os.environ holds then, not at config() time.
+        return os.environ if self.environ is None else self.environ
 
 
 class Config(dict):
@@ -53,7 +68,7 @@ class Config(dict):
         if isinstance(value, dict):
             self[key].refresh()
         else:
-            self[key] = _read_leaf(value, [*self._path, key], self._root_schema, self._prefix, self._sep)
+            self[key] = _read_leaf(value, [*self._path, key], self._root_schema, self._reading)
 
 
 class Ref:
@@ -115,7 +130,7 @@ def _resolve_ref_caster(root_schema, path):
     return node
 
 
-def _fallback(caster, attr_name, root_schema, prefix, sep, seen, on_missing):
+def _fallback(caster, attr_name, root_schema, reading, seen, on_missing):
     default = getattr(caster, attr_name, _MISSING)
     if default is _MISSING:
         raise on_missing() from None
@@ -125,7 +140,7 @@ def _fallback(caster, attr_name, root_schema, prefix, sep, seen, on_missing):
             chain = " -> ".join(".".join(p) for p in [*seen, default.path])
             raise ConfigError(_("Circular ref() chain: %(chain)s.") % {"chain": chain})
         ref_caster = _resolve_ref_caster(root_schema, default.path)
-        return _read_leaf(ref_caster, list(default.path), root_schema, prefix, sep, seen)
+        return _read_leaf(ref_caster, list(default.path), root_schema, reading, seen)
 
     return default
 
@@ -134,19 +149,17 @@ def _caster_name(caster):
     return getattr(caster, "__qualname__", None) or repr(caster)
 
 
-def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
+def _read_leaf(caster, path, root_schema, reading, seen=frozenset()):
     seen = seen | {tuple(path)}
-    environment_key = _environment_key(prefix, path, sep)
+    environment_key = _environment_key(reading.prefix, path, reading.sep)
 
-    try:
-        raw_value = os.environ[environment_key]
-    except KeyError:
+    found = read_variable(reading.variables(), environment_key, files=reading.files)
+    if found is None:
         return _fallback(
             caster,
             "missing_default",
             root_schema,
-            prefix,
-            sep,
+            reading,
             seen,
             on_missing=lambda: ConfigError(
                 _(
@@ -157,6 +170,7 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
             ),
         )
 
+    raw_value, _from_file = found
     try:
         return caster(raw_value)
     except Exception as exception:
@@ -165,8 +179,7 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
                 caster,
                 "error_default",
                 root_schema,
-                prefix,
-                sep,
+                reading,
                 seen,
                 on_missing=lambda: ConfigError(
                     # The value stays out: a caster over a secret would put it in logs and Sentry
@@ -182,19 +195,18 @@ def _read_leaf(caster, path, root_schema, prefix, sep, seen=frozenset()):
             raise config_error from exception
 
 
-def _build(data, path, prefix, sep, root_schema):
+def _build(data, path, reading, root_schema):
     result = Config()
     object.__setattr__(result, "_schema", data)
     object.__setattr__(result, "_path", path)
-    object.__setattr__(result, "_prefix", prefix)
-    object.__setattr__(result, "_sep", sep)
+    object.__setattr__(result, "_reading", reading)
     object.__setattr__(result, "_root_schema", root_schema)
     for key, value in data.items():
         key_path = [*path, key]
         if isinstance(value, dict):
-            result[key] = _build(value, key_path, prefix, sep, root_schema)
+            result[key] = _build(value, key_path, reading, root_schema)
         elif callable(value):
-            result[key] = _read_leaf(value, key_path, root_schema, prefix, sep)
+            result[key] = _read_leaf(value, key_path, root_schema, reading)
         else:
             raise ConfigError(
                 _("Values either must be callables or other mappings, not %(type)s. Key=%(key)s.")
@@ -203,6 +215,30 @@ def _build(data, path, prefix, sep, root_schema):
     return result
 
 
+def _file_clashes(data, path, reading):
+    # With files on, a KEY_FILE setting would also be read as KEY's file - two meanings for one variable.
+    for key, value in data.items():
+        if isinstance(value, dict):
+            yield from _file_clashes(value, [*path, key], reading)
+        elif key.endswith(FILE_SUFFIX) and key.removesuffix(FILE_SUFFIX) in data:
+            yield _environment_key(reading.prefix, [*path, key], reading.sep)
+
+
 @with_attrs(ref=ref)
-def config(data, *, prefix=None, sep="__"):
-    return _build(data, [], prefix, sep, data)
+def config(data, *, prefix=None, sep="__", environ=None, files=False):
+    """
+    Builds a `Config` from `data`, reading each leaf from the environment - see the module docs.
+
+    `environ` reads from that mapping instead of `os.environ`. `files=True` also reads `KEY_FILE`: the
+    path of a file holding KEY's value. It's off by default, since a schema may already have a setting
+    of that name.
+    """
+    reading = _Reading(prefix, sep, environ, files)
+    if files:
+        clashes = sorted(_file_clashes(data, [], reading))
+        if clashes:
+            raise ConfigError(
+                _("With files=True, %(keys)s would be read as another setting's file - rename it.")
+                % {"keys": ", ".join(clashes)}
+            )
+    return _build(data, [], reading, data)

@@ -60,5 +60,20 @@ def boolean(value):
         raise ValueError(_("Value %(value)r can not be parsed into a boolean.") % {"value": value})
 
 
+# What people type for yes and no - in a terminal, a compose file, a systemd unit - in any case.
+NATURAL_TRUE = frozenset({"1", "true", "yes", "on"})
+NATURAL_FALSE = frozenset({"0", "false", "no", "off"})
+
+
+@caster
+def natural_boolean(value):
+    word = value.strip().lower()
+    if word in NATURAL_TRUE:
+        return True
+    if word in NATURAL_FALSE:
+        return False
+    raise ValueError(_("Value %(value)r is not one of yes/no, true/false, on/off or 1/0.") % {"value": value})
+
+
 string = caster(str)
 integer = caster(int)

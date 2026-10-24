@@ -491,3 +491,50 @@ class TestArbitraryNestingDepth:
         for key in path:
             node = getattr(node, key)
         assert node == value
+
+
+def test_environ_reads_that_mapping_instead_of_os_environ(monkeypatch):
+    monkeypatch.setenv("PORT", "1")
+
+    assert config({"PORT": integer()}, environ={"PORT": "2"}).PORT == 2
+
+
+def test_refresh_rereads_the_given_mapping():
+    environ = {"PORT": "2"}
+    result = config({"PORT": integer()}, environ=environ)
+    environ["PORT"] = "3"
+
+    assert result.refresh().PORT == 3
+
+
+def test_files_reads_a_value_from_the_file_variable(tmp_path):
+    secret = tmp_path / "password"
+    secret.write_text("hunter2\n")
+
+    result = config(
+        {"DATABASE": {"PASSWORD": string()}},
+        prefix="APP",
+        environ={"APP__DATABASE__PASSWORD_FILE": str(secret)},
+        files=True,
+    )
+
+    assert result.DATABASE.PASSWORD == "hunter2"
+
+
+def test_files_are_off_unless_asked_for(tmp_path):
+    result = config({"PASSWORD": string(missing_default="")}, environ={"PASSWORD_FILE": str(tmp_path)})
+
+    assert result.PASSWORD == ""
+
+
+def test_files_refuse_a_setting_that_would_be_read_as_anothers_file():
+    with pytest.raises(ConfigError, match=r"^With files=True, APP__LOG_FILE would be read as another setting's file"):
+        config(
+            {"LOG": string(), "NESTED": {"OK": string()}, "LOG_FILE": string()}, prefix="APP", environ={}, files=True
+        )
+
+
+def test_files_allow_a_file_setting_with_no_setting_it_belongs_to():
+    result = config({"LOG_FILE": string()}, environ={"LOG_FILE": "/var/log/app"}, files=True)
+
+    assert result.LOG_FILE == "/var/log/app"

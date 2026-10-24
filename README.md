@@ -11,7 +11,8 @@ pip install isik              # isik.common only - no dependencies
 pip install isik[django]      # isik.django.apps, isik.django.http_exceptions
 pip install isik[drf]         # isik.django.drf - brings the django extra with it
 pip install isik[celery]      # isik.django.celery - brings the django extra with it
-pip install isik[all]         # everything, sentry/tiptap/templated_fields included
+pip install isik[cli]         # isik.cli - click and questionary
+pip install isik[all]         # everything, sentry/tiptap/templated_fields/cli included
 ```
 
 Requires Python 3.11+. The `django` and `drf` extras assume **PostgreSQL**: `BaseModel`'s timestamps
@@ -27,6 +28,9 @@ The full index is [docs/INDEX.md](https://github.com/isik-kaplan/isik/blob/maste
 
 - [isik.common](https://github.com/isik-kaplan/isik/blob/master/docs/common/README.md) - caching,
   concurrency, error handling, functional helpers, typed settings from environment variables
+- [isik.cli](https://github.com/isik-kaplan/isik/blob/master/docs/cli/README.md) - settings declared
+  once as class attributes, given by option, environment variable or answer to a question, checked to
+  be reachable all three ways
 - [isik.django.apps](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/common/README.md) -
   `BaseModel`, history tracking, and the `votes()`/`comments()`/`notes()`/`bookmarks()`/`tags()` makers
 - [Idempotency keys](https://github.com/isik-kaplan/isik/blob/master/docs/django/apps/idempotency/README.md) -

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-25
+
+### Added
+
+- **`isik.common.settings`** - settings declared once, as class attributes, with no dependencies:
+
+  ```python
+  class Backup(Settings, prefix="BACKUP_"):
+      level = Setting(int, "Compression level", default=3, min=1, max=22, soft_max=19)
+      password = Setting(str, "Encryption password", secret=True, default="")
+  ```
+
+  A `Settings` subclass is a frozen dataclass, made in code or `from_env()`, and each value knows its
+  `source()`. Values come from option, environment variable (and `_FILE`), answer, current value, then
+  default. Settings can have:
+
+  - hard and soft limits;
+  - lazy and `UNSET` defaults;
+  - conditional settings (`only_when`, `ask_when`) and relations (`requires`, `excludes`);
+  - `check()` across settings, run on every instance;
+  - groups, including over a plain dataclass (`Group.from_dataclass`), selectors that pick a group, and
+    constants;
+  - messages a class can reword.
+
+  An opt-out is an exemption with a reason: `NoOption`, `NoEnv`, `NoQuestion`, `AskedAtUse`,
+  `ReplacedByFlow`. A class's `NoEnv` covers every group it nests. Two settings that would share an
+  option or a variable, `_FILE` and `--no-x` forms included, are refused when the class is defined.
+- **`isik.cli`** (the new `cli` extra: click, questionary) - `@options(Backup)` puts a class's settings
+  on a click command:
+  - **Options:** `--x/--no-x`, repeatable, bare-valued, `--x-file`. A selector's chosen group decides
+    the options, read before parsing.
+  - **Questions:** asked per policy (`terminal_unless_no_input()` with `--no-input`, or
+    `no_option_given()`), in click's or questionary's style per setting.
+  - **Help:** `HelpFormat` lays it out.
+  - **`isik.cli.testing`:** `assert_reachable()` (every setting by option, variable and question, in
+    every selector combination, and no plain click options), `answers()`, `questionary_io()`,
+    `settings_table()` and `assert_docs_current()`.
+- **`natural_boolean`** - a caster taking yes/no, on/off, true/false and 1/0, in any case.
+- **`py.typed`** - editors and type checkers read isik's own annotations.
+- **`config(environ=..., files=True)`** - reads a given mapping instead of `os.environ`, and `KEY_FILE`
+  as the file holding KEY's value. Files are off by default, since a schema may have a `KEY_FILE`
+  setting of its own.
+
 ## [0.32.0] - 2026-10-24
 
 ### Added

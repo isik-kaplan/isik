@@ -1,6 +1,6 @@
 # builder
 
-`config(schema, *, prefix=None, sep="__")` builds a `Config` (a `dict` subclass with attribute access) from environment variables, using a nested dict of casters as the schema. Reach for this instead of scattering `os.environ[...]` calls when you want typed, validated settings loaded once at import time.
+`config(schema, *, prefix=None, sep="__", environ=None, files=False)` builds a `Config` (a `dict` subclass with attribute access) from environment variables, using a nested dict of casters as the schema. Reach for this instead of scattering `os.environ[...]` calls when you want typed, validated settings loaded once at import time.
 
 ```python
 from isik.common.config import config, string, integer, boolean
@@ -26,6 +26,12 @@ settings.DATABASE.refresh("HOST")     # re-read just one nested leaf
 - Nested keys are joined with `sep` (and `prefix`, if given) to form the environment variable name, e.g. `DATABASE__HOST`.
 - Every schema value must be either a caster (a callable produced by `@caster`, see `casters.py`) or another nested dict - anything else raises `ConfigError` at build time.
 - A schema key that collides with a `dict` method name (`items`, `keys`, ...) or with `refresh` itself is only reachable via `config["that_key"]`, not attribute access - `__setattr__`/`__getattr__` are the only overrides, `dict`'s own methods still win.
+- `environ` reads from that mapping instead of `os.environ` - when a value is read, so `refresh()` sees
+  what it holds then.
+- `files=True` also reads `KEY_FILE`, the path of a file holding KEY's value, the way Docker and systemd
+  hand secrets over. The file's final line break is dropped, and setting both `KEY` and `KEY_FILE` is a
+  `ConfigError`. It's off by default, since a schema may already have a `KEY_FILE` setting of its own -
+  with it on, a schema holding both `LOG` and `LOG_FILE` is refused.
 - `refresh()` mutates the existing `Config`/nested `Config` objects in place, so references grabbed before a refresh (e.g. `db = settings.DATABASE`) see the update too.
 - `config.ref(*path)` (or `config.ref(dot="DRF.PAGE_SIZE")` as shorthand for a nested path) is a `missing_default`/`error_default` that falls back to another setting in the same schema instead of a static value:
 

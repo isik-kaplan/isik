@@ -94,12 +94,14 @@ def _reset_claimed_related_names():
 
 def memoized():
     """Every function isik memoizes - tests/test_mutation_tooling.py checks none is missing."""
+    from isik.cli import commands
     from isik.django.apps.common.db import models
     from isik.django.apps.feedback.comments import tiptap
     from isik.django.apps.templated_fields import engine
     from isik.django.apps.templated_fields.policy import TemplatePolicy
 
     return [
+        commands._command_class,
         models._primary_key_function,
         tiptap._load_schema,
         engine._build_environment,

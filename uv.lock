@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -263,9 +263,9 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "asgiref", marker = "python_full_version < '3.12'" },
-    { name = "sqlparse", marker = "python_full_version < '3.12'" },
-    { name = "tzdata", marker = "python_full_version < '3.12' and sys_platform == 'win32'" },
+    { name = "asgiref" },
+    { name = "sqlparse" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bd/55/b9445fc0695b03746f355c05b2eecc54c34e05198c686f4fc4406b722b52/django-5.2.12.tar.gz", hash = "sha256:6b809af7165c73eff5ce1c87fdae75d4da6520d6667f86401ecf55b681eb1eeb", size = 10860574, upload-time = "2026-03-03T13:56:05.509Z" }
 wheels = [
@@ -282,9 +282,9 @@ resolution-markers = [
     "python_full_version == '3.12.*'",
 ]
 dependencies = [
-    { name = "asgiref", marker = "python_full_version >= '3.12'" },
-    { name = "sqlparse", marker = "python_full_version >= '3.12'" },
-    { name = "tzdata", marker = "python_full_version >= '3.12' and sys_platform == 'win32'" },
+    { name = "asgiref" },
+    { name = "sqlparse" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/e1/894115c6bd70e2c8b66b0c40a3c367d83a5a48c034a4d904d31b62f7c53a/django-6.0.3.tar.gz", hash = "sha256:90be765ee756af8a6cbd6693e56452404b5ad15294f4d5e40c0a55a0f4870fe1", size = 10872701, upload-time = "2026-03-03T13:55:15.026Z" }
 wheels = [
@@ -497,6 +497,7 @@ source = { editable = "." }
 [package.optional-dependencies]
 all = [
     { name = "celery" },
+    { name = "click" },
     { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -509,6 +510,7 @@ all = [
     { name = "jinja2" },
     { name = "mjml-python" },
     { name = "prosemirror" },
+    { name = "questionary" },
     { name = "sentry-sdk" },
     { name = "whitenoise" },
 ]
@@ -522,6 +524,10 @@ celery = [
     { name = "django-pghistory" },
     { name = "mjml-python" },
     { name = "whitenoise" },
+]
+cli = [
+    { name = "click" },
+    { name = "questionary" },
 ]
 django = [
     { name = "dalf" },
@@ -573,6 +579,8 @@ dev = [
 requires-dist = [
     { name = "celery", marker = "extra == 'all'" },
     { name = "celery", marker = "extra == 'celery'" },
+    { name = "click", marker = "extra == 'all'", specifier = ">=8.1" },
+    { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "dalf", marker = "extra == 'all'" },
     { name = "dalf", marker = "extra == 'celery'" },
     { name = "dalf", marker = "extra == 'django'" },
@@ -607,6 +615,8 @@ requires-dist = [
     { name = "mjml-python", marker = "extra == 'drf'" },
     { name = "prosemirror", marker = "extra == 'all'" },
     { name = "prosemirror", marker = "extra == 'tiptap'" },
+    { name = "questionary", marker = "extra == 'all'", specifier = ">=2.1.1" },
+    { name = "questionary", marker = "extra == 'cli'", specifier = ">=2.1.1" },
     { name = "sentry-sdk", marker = "extra == 'all'" },
     { name = "sentry-sdk", marker = "extra == 'sentry'" },
     { name = "whitenoise", marker = "extra == 'all'" },
@@ -614,7 +624,7 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'django'" },
     { name = "whitenoise", marker = "extra == 'drf'" },
 ]
-provides-extras = ["all", "celery", "django", "drf", "sentry", "templated-fields", "tiptap"]
+provides-extras = ["all", "celery", "cli", "django", "drf", "sentry", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1287,6 +1297,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/05/10/f42c48fa5153204f42eaa945e8d1fd7c10d6296841dcb2447bf7da1be5c4/pyyaml_ft-8.0.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:052561b89d5b2a8e1289f326d060e794c21fa068aa11255fe71d65baf18a632e", size = 810403, upload-time = "2025-06-10T15:32:11.051Z" },
     { url = "https://files.pythonhosted.org/packages/d5/d2/e369064aa51009eb9245399fd8ad2c562bd0bcd392a00be44b2a824ded7c/pyyaml_ft-8.0.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:3bb4b927929b0cb162fb1605392a321e3333e48ce616cdcfa04a839271373255", size = 835581, upload-time = "2025-06-10T15:32:12.897Z" },
     { url = "https://files.pythonhosted.org/packages/c0/28/26534bed77109632a956977f60d8519049f545abc39215d086e33a61f1f2/pyyaml_ft-8.0.0-cp313-cp313t-win_amd64.whl", hash = "sha256:de04cfe9439565e32f178106c51dd6ca61afaa2907d143835d501d84703d3793", size = 171579, upload-time = "2025-06-10T15:32:14.34Z" },
+]
+
+[[package]]
+name = "questionary"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "prompt-toolkit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f6/45/eafb0bba0f9988f6a2520f9ca2df2c82ddfa8d67c95d6625452e97b204a5/questionary-2.1.1.tar.gz", hash = "sha256:3d7e980292bb0107abaa79c68dd3eee3c561b83a0f89ae482860b181c8bd412d", size = 25845, upload-time = "2025-08-28T19:00:20.851Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/26/1062c7ec1b053db9e499b4d2d5bc231743201b74051c973dadeac80a8f43/questionary-2.1.1-py3-none-any.whl", hash = "sha256:a51af13f345f1cdea62347589fbb6df3b290306ab8930713bfae4d475a7d4a59", size = 36753, upload-time = "2025-08-28T19:00:19.56Z" },
 ]
 
 [[package]]

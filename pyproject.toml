@@ -27,7 +27,9 @@ drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"
 celery = ["isik[django]", "celery"]
 tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
-all = ["isik[sentry,django,drf,celery,tiptap,templated_fields]"]
+# Ranges, not pins: an app pins its own click and questionary, and isik.cli must not fight that.
+cli = ["click>=8.1", "questionary>=2.1.1"]
+all = ["isik[sentry,django,drf,celery,tiptap,templated_fields,cli]"]
 
 [project.urls]
 Homepage = "https://github.com/isik-kaplan/isik"

@@ -22,7 +22,7 @@ The `ConfigError` for an unparseable value names the variable and the caster, ne
 
 ## Built-in casters
 
-`string`, `integer`, `boolean`, `comma_separated_list`, `comma_separated_int_list`, `comma_separated_float_list` - all built with `@caster`, so all accept the same `missing_default`/`error_default` kwargs.
+`string`, `integer`, `boolean`, `natural_boolean`, `comma_separated_list`, `comma_separated_int_list`, `comma_separated_float_list` - all built with `@caster`, so all accept the same `missing_default`/`error_default` kwargs.
 
 ```python
 from isik.common.config.casters import boolean, comma_separated_int_list, integer, string
@@ -30,10 +30,13 @@ from isik.common.config.casters import boolean, comma_separated_int_list, intege
 string()                              # str(value)
 integer()                             # int(value)
 boolean()                             # "true"/"True"/"1" -> True, "false"/"False"/"0" -> False, else raises
+natural_boolean()                     # also yes/no and on/off, in any case: "YES", " off " -> True, False
 comma_separated_int_list()            # "1,2,3" -> [1, 2, 3]
 comma_separated_list()                # "" -> [], "a,,b" -> ["a", "", "b"]
 ```
 
 - The three list casters read a variable that is set but empty (`ALLOWED_HOSTS=`) as `[]`. An unset variable still goes to `missing_default`. An empty item between two commas is kept, so the number lists raise on it.
 
+- `natural_boolean` takes what people type for yes and no in a terminal or a compose file:
+  `1`/`true`/`yes`/`on` and `0`/`false`/`no`/`off`, in any case, with surrounding spaces ignored.
 - `boolean` only recognizes the exact literals `"true"`, `"True"`, `"1"` (truthy) and `"false"`, `"False"`, `"0"` (falsy); anything else raises `ValueError`.

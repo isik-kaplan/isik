@@ -6,6 +6,14 @@
   - [utils/](common/utils/README.md) - caching, concurrency, error handling, functional/iterable
     helpers, metaclasses, sentinels, exemptions (opt-outs that say why), string case conversion
   - [config/](common/config/README.md) - typed settings objects built from environment variables
+  - [settings/](common/settings/README.md) - settings declared once as class attributes, read from
+    environment variables, code, options and questions
+
+## isik.cli
+
+- [cli/](cli/README.md) - a `Settings` class's options, environment variables and questions on a click
+  command, a check that each setting can be reached all three ways, and a generated settings table
+  (`cli` extra)
 
 Using isik from Django? Its imports all start with `isik.django`, so these are easy to miss and come
 up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `Exemption`

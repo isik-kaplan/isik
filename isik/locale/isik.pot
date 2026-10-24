@@ -72,6 +72,21 @@ msgstr ""
 msgid "%(guard)s needs a viewset - %(view)s has no action."
 msgstr ""
 
+#: isik/common/config/environment.py:39
+#, python-format
+msgid "%(key)s and %(file_key)s are both set - set only one of them."
+msgstr ""
+
+#: isik/cli/testing.py:130
+#, python-format
+msgid "%(key)s has no question text - give it help text"
+msgstr ""
+
+#: isik/common/settings/messages.py:43
+#, python-format
+msgid "%(message)s - pass %(override)s to override"
+msgstr ""
+
 #: isik/django/apps/common/middleware/session.py:24
 #, python-format
 msgid "%(middleware)s requires settings.SESSION_HEADER_NAME to be set."
@@ -198,9 +213,79 @@ msgstr ""
 msgid "%(name)r was already used to build a %(builder)s - pass reuse=True if this is intentional, or build it once and reuse the resulting class instead of calling this again under the same name."
 msgstr ""
 
+#: isik/common/settings/base.py:222
+#, python-format
+msgid "%(name)s %(message)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:46
+#, python-format
+msgid "%(name)s and %(other)s can't both be given"
+msgstr ""
+
 #: isik/common/utils/metaclasses.py:58
 #, python-format
 msgid "%(name)s can not be instantiated."
+msgstr ""
+
+#: isik/common/settings/messages.py:49
+#, python-format
+msgid "%(name)s can't be used here"
+msgstr ""
+
+#: isik/common/settings/messages.py:48
+#, python-format
+msgid "%(name)s can't be used with %(other)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:40
+#, python-format
+msgid "%(name)s is %(value)s, above the recommended safe limit of %(soft_max)s - this may take a long time"
+msgstr ""
+
+#: isik/common/settings/messages.py:37
+#, python-format
+msgid "%(name)s is not valid"
+msgstr ""
+
+#: isik/common/settings/messages.py:34
+#, python-format
+msgid "%(name)s is required"
+msgstr ""
+
+#: isik/common/settings/messages.py:38
+#, python-format
+msgid "%(name)s must be at least %(min)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:39
+#, python-format
+msgid "%(name)s must be at most %(max)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:35
+#, python-format
+msgid "%(name)s must not be empty"
+msgstr ""
+
+#: isik/common/config/environment.py:21
+#, python-format
+msgid "%(name)s names %(path)s, which can't be read: %(error)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:47
+#, python-format
+msgid "%(name)s needs %(other)s"
+msgstr ""
+
+#: isik/common/settings/messages.py:36
+#, python-format
+msgid "%(name)s: %(error)s, got %(value)r"
+msgstr ""
+
+#: isik/common/settings/messages.py:53
+#, python-format
+msgid "%(name)s: there's no home directory to expand ~ in - set it to a full path"
 msgstr ""
 
 #: isik/django/apps/templated_fields/engine.py:135
@@ -216,6 +301,11 @@ msgstr ""
 #: isik/django/apps/templated_fields/engine.py:66
 #, python-format
 msgid "%(operator)s would build a value over the %(limit)s char limit"
+msgstr ""
+
+#: isik/cli/testing.py:119
+#, python-format
+msgid "%(option)s is a plain click option - declare it as a Setting, or pass plain_options="
 msgstr ""
 
 #: isik/django/apps/common/checks.py:342
@@ -256,6 +346,11 @@ msgstr ""
 #: isik/django/drf/viewsets/preconditions.py:218
 #, python-format
 msgid "%(owner)s.precondition_read_from takes {write action: read action}, not %(value)r."
+msgstr ""
+
+#: isik/cli/testing.py:245
+#, python-format
+msgid "%(path)s has no %(start)s ... %(end)s block to hold the settings table."
 msgstr ""
 
 #: isik/common/utils/exemptions.py:339
@@ -316,6 +411,16 @@ msgstr ""
 #: isik/django/drf/serializers/flattened_one_to_one.py:131
 #, python-format
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
+msgstr ""
+
+#: isik/common/settings/base.py:82
+#, python-format
+msgid "%(setting)s and %(other)s would both be %(name)s"
+msgstr ""
+
+#: isik/common/settings/base.py:84
+#, python-format
+msgid "%(setting)s would be %(name)s, which the command already is"
 msgstr ""
 
 #: isik/django/drf/viewsets/guarded_fields.py:195
@@ -381,6 +486,21 @@ msgstr ""
 #: isik/common/utils/exemptions.py:153
 #, python-format
 msgid "%(type)s's shows_as must be a str, not %(value)r."
+msgstr ""
+
+#: isik/common/settings/base.py:104
+#, python-format
+msgid "%(type)s.%(name)s comes before its selector %(selector)s - declare the selector first."
+msgstr ""
+
+#: isik/common/settings/base.py:99
+#, python-format
+msgid "%(type)s.%(name)s holds the settings of a selector %(type)s doesn't declare."
+msgstr ""
+
+#: isik/common/settings/base.py:142
+#, python-format
+msgid "%(type)s.%(name)s is the name of a Settings method - name the setting something else."
 msgstr ""
 
 #: isik/django/drf/permissions.py:101
@@ -533,6 +653,11 @@ msgstr ""
 msgid "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't listed."
 msgstr ""
 
+#: isik/common/settings/base.py:88
+#, python-format
+msgid "%(where)s gives two things one name - rename one:\n%(lines)s"
+msgstr ""
+
 #: isik/django/apps/common/checks.py:196
 #, python-format
 msgid "%(where)s has CheckOption.%(option)s - it takes %(takes)s."
@@ -578,7 +703,7 @@ msgstr ""
 msgid "%(write)s reads its version from %(read)r (precondition_read_from), which isn't in precondition_read_actions, so it sends no ETag."
 msgstr ""
 
-#: isik/common/config/builder.py:52
+#: isik/common/config/builder.py:67
 #, python-format
 msgid "'%(key)s' is not a key in this config."
 msgstr ""
@@ -587,12 +712,30 @@ msgstr ""
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
+#: isik/cli/commands.py:320
+msgid "@options(...) goes above @click.command(), so it has the command to add to."
+msgstr ""
+
+#: isik/common/settings/base.py:42
+#, python-format
+msgid "A Settings class's env= takes NoEnv(reason=...), not %(value)r."
+msgstr ""
+
+#: isik/common/settings/base.py:44
+#, python-format
+msgid "A Settings class's prompt= takes a Prompt, not %(value)r."
+msgstr ""
+
 #: isik/django/apps/common/db/models.py:98
 msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
 #: isik/django/apps/idempotency/exceptions.py:28
 msgid "A request with this idempotency key is still being served. Retry it shortly."
+msgstr ""
+
+#: isik/common/settings/declarations.py:139
+msgid "A required setting has no default - drop default= or required=True."
 msgstr ""
 
 #: isik/django/drf/permissions.py:248
@@ -621,6 +764,20 @@ msgstr ""
 #: isik/common/utils/functional.py:128
 #, python-format
 msgid "Arguments to '%(func)s': the governed arguments %(governed)r must match exactly one of: %(merged)s. Other arguments %(ungoverned)r are unconstrained and were ignored."
+msgstr ""
+
+#: isik/cli/testing.py:177
+msgid "Asked"
+msgstr ""
+
+#: isik/cli/testing.py:42
+#, python-format
+msgid "Asked %(key)s again - the answer the test gave was refused."
+msgstr ""
+
+#: isik/cli/testing.py:40
+#, python-format
+msgid "Asked %(key)s, which the test gave no answer for."
 msgstr ""
 
 #: isik/common/utils/functional.py:107
@@ -653,7 +810,7 @@ msgstr ""
 msgid "Cannot satisfy request range"
 msgstr ""
 
-#: isik/common/config/builder.py:126
+#: isik/common/config/builder.py:141
 #, python-format
 msgid "Circular ref() chain: %(chain)s."
 msgstr ""
@@ -690,6 +847,10 @@ msgstr ""
 msgid "ContextField(%(name)r) needs cast= - can't infer a Postgres type for %(field)r (only %(inferred)s are inferred; ForeignKey always needs an explicit cast)."
 msgstr ""
 
+#: isik/common/settings/messages.py:45
+msgid "Continue anyway?"
+msgstr ""
+
 #: isik/django/drf/utils/lazy_relations.py:45
 msgid "Could not determine a serializer for the given data."
 msgstr ""
@@ -706,8 +867,16 @@ msgstr ""
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
+#: isik/cli/testing.py:177
+msgid "Default"
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Dependent action of the request failed"
+msgstr ""
+
+#: isik/cli/testing.py:177
+msgid "Description"
 msgstr ""
 
 #: http.HTTPStatus
@@ -718,6 +887,10 @@ msgstr ""
 msgid "Document has not changed since given time"
 msgstr ""
 
+#: isik/cli/commands.py:109
+msgid "Don't ask any questions - fail on a missing value instead."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Entity body in unsupported format"
 msgstr ""
@@ -726,14 +899,23 @@ msgstr ""
 msgid "Entity is too large"
 msgstr ""
 
-#: isik/common/config/builder.py:152
+#: isik/cli/testing.py:177
+msgid "Environment variable"
+msgstr ""
+
+#: isik/common/config/builder.py:165
 #, python-format
 msgid "Environment variable %(key)s not found. Please set it or provide a `missing_default` to your caster."
 msgstr ""
 
-#: isik/common/config/builder.py:174
+#: isik/common/config/builder.py:187
 #, python-format
 msgid "Error while parsing %(key)s with '%(caster)s'. Please check the value and the caster or provide an `error_default` to your caster."
+msgstr ""
+
+#: isik/common/settings/messages.py:50
+#, python-format
+msgid "Error: %(message)s"
 msgstr ""
 
 #: http.HTTPStatus
@@ -742,6 +924,11 @@ msgstr ""
 
 #: isik/django/apps/common/checks.py:281
 msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
+msgstr ""
+
+#: isik/common/settings/declarations.py:244
+#, python-format
+msgid "Group takes a Settings class - use Group.from_dataclass() for a plain dataclass, not %(value)r."
 msgstr ""
 
 #: isik/django/apps/common/middleware/history.py:42
@@ -857,8 +1044,18 @@ msgstr ""
 msgid "No permission -- see authorization schemes"
 msgstr ""
 
+#: isik/cli/testing.py:70
+#, python-format
+msgid "No question used the answers for %(keys)s."
+msgstr ""
+
 #: isik/django/drf/viewsets/history.py:173
 msgid "Not a valid key."
+msgstr ""
+
+#: isik/cli/testing.py:143
+#, python-format
+msgid "Not every setting can be reached:\n%(problems)s"
 msgstr ""
 
 #: http.HTTPStatus
@@ -891,8 +1088,21 @@ msgstr ""
 msgid "One of %(codes)s."
 msgstr ""
 
+#: isik/common/settings/declarations.py:77
+#, python-format
+msgid "OnlyWhen takes a function of the values so far, not %(value)r."
+msgstr ""
+
 #: http.HTTPStatus
 msgid "Operation has already been reported"
+msgstr ""
+
+#: isik/cli/testing.py:177
+msgid "Option"
+msgstr ""
+
+#: isik/cli/help.py:57
+msgid "Options"
 msgstr ""
 
 #: http.HTTPStatus
@@ -901,6 +1111,20 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "Precondition in headers is false"
+msgstr ""
+
+#: isik/cli/commands.py:140
+#, python-format
+msgid "Read %(option)s from FILE."
+msgstr ""
+
+#: isik/cli/prompts.py:191
+msgid "Repeat for confirmation:"
+msgstr ""
+
+#: isik/common/settings/exemptions.py:51
+#, python-format
+msgid "ReplacedByFlow's flow must be the function that asks, not %(value)r."
 msgstr ""
 
 #: http.HTTPStatus
@@ -1071,6 +1295,11 @@ msgstr ""
 msgid "Tags from this pool."
 msgstr ""
 
+#: isik/cli/testing.py:90
+#, python-format
+msgid "Takes a Settings class or a command options() was put on, not %(value)r."
+msgstr ""
+
 #: isik/django/apps/feedback/bookmarks/_bookmarks.py:48
 #, python-format
 msgid "The %(target)s bookmarked."
@@ -1162,6 +1391,11 @@ msgstr ""
 msgid "The server is unwilling to process the request because its header fields are too large"
 msgstr ""
 
+#: isik/cli/testing.py:262
+#, python-format
+msgid "The settings table in %(path)s is out of date - regenerate it with write_settings_table()."
+msgstr ""
+
 #: isik/django/apps/idempotency/claims.py:70
 msgid "The status the request was answered with."
 msgstr ""
@@ -1174,6 +1408,10 @@ msgstr ""
 msgid "The tag's name, unique in its pool."
 msgstr ""
 
+#: isik/common/settings/messages.py:51
+msgid "The two entries don't match - try again."
+msgstr ""
+
 #: isik/django/apps/common/fields/generic_foreign_key.py:91
 #, python-format
 msgid "The type of the %(name)s object."
@@ -1181,6 +1419,10 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
+msgstr ""
+
+#: isik/common/settings/messages.py:44
+msgid "These may take a long time:"
 msgstr ""
 
 #: isik/django/drf/viewsets/preconditions.py:67
@@ -1270,7 +1512,12 @@ msgstr ""
 msgid "Value %(value)r can not be parsed into a boolean."
 msgstr ""
 
-#: isik/common/config/builder.py:200
+#: isik/common/config/casters.py:75
+#, python-format
+msgid "Value %(value)r is not one of yes/no, true/false, on/off or 1/0."
+msgstr ""
+
+#: isik/common/config/builder.py:212
 #, python-format
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
 msgstr ""
@@ -1319,6 +1566,11 @@ msgstr ""
 msgid "Who wrote this note."
 msgstr ""
 
+#: isik/common/config/builder.py:241
+#, python-format
+msgid "With files=True, %(keys)s would be read as another setting's file - rename it."
+msgstr ""
+
 #: isik/django/drf/permissions.py:692
 #: isik/django/drf/permissions.py:696
 msgid "You may not change this field."
@@ -1341,6 +1593,11 @@ msgstr ""
 msgid "You need the %(permission)s permission to do this."
 msgstr ""
 
+#: isik/cli/help.py:31
+#, python-format
+msgid "[default: %(default)s]"
+msgstr ""
+
 #: isik/django/apps/common/_model_makers.py:46
 #, python-format
 msgid "base_model must be an abstract Model subclass, got %(base)r"
@@ -1360,9 +1617,41 @@ msgstr ""
 msgid "django_permission's message= takes a template, a message or a callable - not %(message)r"
 msgstr ""
 
+#: isik/cli/testing.py:165
+msgid "empty"
+msgstr ""
+
+#: isik/common/settings/declarations.py:146
+#, python-format
+msgid "env= takes the variable's full name, or NoEnv(reason=...), not %(value)r."
+msgstr ""
+
 #: isik/common/utils/exemptions.py:251
 #, python-format
 msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
+msgstr ""
+
+#: isik/common/settings/conversion.py:68
+msgid "expected a number"
+msgstr ""
+
+#: isik/common/settings/conversion.py:66
+msgid "expected a whole number"
+msgstr ""
+
+#: isik/common/settings/conversion.py:40
+#, python-format
+msgid "expected one of %(choices)s"
+msgstr ""
+
+#: isik/cli/commands.py:238
+#: isik/common/settings/conversion.py:32
+msgid "expected yes/no, true/false, on/off or 1/0"
+msgstr ""
+
+#: isik/common/settings/declarations.py:269
+#, python-format
+msgid "from_dataclass() takes a dataclass, not %(value)r."
 msgstr ""
 
 #: isik/django/drf/permissions.py:682
@@ -1412,12 +1701,49 @@ msgstr ""
 msgid "makes_exemption() takes an exemption type, not %(value)r."
 msgstr ""
 
+#: isik/common/settings/base.py:48
+#, python-format
+msgid "messages= is keyed by Message, not %(keys)r."
+msgstr ""
+
 #: isik/django/drf/serializers/meta_combining.py:51
 msgid "meta_fields_to_combine only supports list or dict attributes"
 msgstr ""
 
+#: isik/common/settings/conversion.py:125
+msgid "no"
+msgstr ""
+
+#: isik/cli/testing.py:171
+#, python-format
+msgid "no - %(reason)s"
+msgstr ""
+
+#: isik/cli/testing.py:161
+msgid "off"
+msgstr ""
+
+#: isik/cli/testing.py:163
+msgid "on"
+msgstr ""
+
 #: isik/django/drf/permissions.py:240
 msgid "only_actions requires at least one action - with none it would refuse everything"
+msgstr ""
+
+#: isik/common/settings/declarations.py:142
+#, python-format
+msgid "option= takes the option's name, or NoOption(reason=...), not %(value)r."
+msgstr ""
+
+#: isik/cli/commands.py:77
+#, python-format
+msgid "options() takes a Settings class, not %(value)r."
+msgstr ""
+
+#: isik/cli/testing.py:111
+#, python-format
+msgid "plain option %(name)s is excused with %(value)r - write an exemption such as NoQuestion(reason=...)"
 msgstr ""
 
 #: isik/django/drf/coverage.py:136
@@ -1425,30 +1751,40 @@ msgstr ""
 msgid "plain_views() answers True, False or a reason, not %(verdict)r for %(route)s."
 msgstr ""
 
+#: isik/common/settings/declarations.py:154
+#, python-format
+msgid "prompt= takes a Prompt, not %(value)r."
+msgstr ""
+
+#: isik/common/settings/declarations.py:150
+#, python-format
+msgid "question= takes the question's text, or an exemption such as NoQuestion(reason=...), not %(value)r."
+msgstr ""
+
 #: isik/django/apps/templated_fields/engine.py:90
 #, python-format
 msgid "range() would iterate %(count)s times, over the %(limit)s limit"
 msgstr ""
 
-#: isik/common/config/builder.py:111
+#: isik/common/config/builder.py:126
 #, python-format
 msgid "ref%(path)s does not point to a key in this config."
 msgstr ""
 
-#: isik/common/config/builder.py:114
+#: isik/common/config/builder.py:129
 #, python-format
 msgid "ref%(path)s points to a nested config, not a single setting."
 msgstr ""
 
-#: isik/common/config/builder.py:96
+#: isik/common/config/builder.py:111
 msgid "ref() accepts either positional path segments or `dot=`, not both."
 msgstr ""
 
-#: isik/common/config/builder.py:67
+#: isik/common/config/builder.py:82
 msgid "ref() requires at least one path segment."
 msgstr ""
 
-#: isik/common/config/builder.py:99
+#: isik/common/config/builder.py:114
 #, python-format
 msgid "ref(dot=%(dot)r) is not a valid dotted path."
 msgstr ""
@@ -1463,6 +1799,10 @@ msgstr ""
 msgid "rendered output exceeded the %(limit)s char limit"
 msgstr ""
 
+#: isik/cli/testing.py:156
+msgid "required"
+msgstr ""
+
 #: isik/django/apps/idempotency/claims.py:65
 msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
@@ -1470,6 +1810,11 @@ msgstr ""
 #: isik/django/drf/serializers/history.py:238
 #, python-format
 msgid "shows_change_of names %(field)r, which isn't a tracked field of %(model)s that %(serializer)s hides - list only fields the history would otherwise leave out."
+msgstr ""
+
+#: isik/common/settings/conversion.py:139
+#, python-format
+msgid "soft max %(soft_max)s"
 msgstr ""
 
 #: isik/django/apps/templated_fields/engine.py:150
@@ -1486,6 +1831,10 @@ msgstr ""
 msgid "track_events takes trackers= or condition=, not both - a tracker carries its own condition."
 msgstr ""
 
+#: isik/cli/testing.py:159
+msgid "unset"
+msgstr ""
+
 #: isik/common/utils/validation.py:69
 #, python-format
 msgid "validate_inputs() was given %(given)s positional validators for %(func)r, which only has %(count)s positional parameters (self/cls excluded)."
@@ -1499,4 +1848,9 @@ msgstr ""
 #: isik/django/drf/viewsets/guarded_fields.py:60
 #, python-format
 msgid "writes_no_guarded_fields takes the reason the action writes no guarded field - @writes_no_guarded_fields(\"...\"), not %(value)r."
+msgstr ""
+
+#: isik/cli/testing.py:172
+#: isik/common/settings/conversion.py:125
+msgid "yes"
 msgstr ""

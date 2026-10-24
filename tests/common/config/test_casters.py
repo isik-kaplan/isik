@@ -9,6 +9,7 @@ from isik.common.config.casters import (
     comma_separated_int_list,
     comma_separated_list,
     integer,
+    natural_boolean,
     string,
 )
 
@@ -100,3 +101,21 @@ def test_an_empty_item_between_commas_is_not_a_number(make):
 def test_comma_separated_int_list_round_trips(values):
     raw = ",".join(str(v) for v in values)
     assert comma_separated_int_list()(raw) == values
+
+
+class TestNaturalBoolean:
+    @pytest.mark.parametrize("value", ["1", "true", "True", "YES", "yes", "On", " on "])
+    def test_truthy_words_in_any_case(self, value):
+        assert natural_boolean()(value) is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "No", "off", "OFF "])
+    def test_falsy_words_in_any_case(self, value):
+        assert natural_boolean()(value) is False
+
+    def test_anything_else_is_refused(self):
+        with pytest.raises(ValueError, match=r"^Value 'maybe' is not one of yes/no, true/false, on/off or 1/0\.$"):
+            natural_boolean()("maybe")
+
+    def test_boolean_still_takes_only_its_own_literals(self):
+        with pytest.raises(ValueError):
+            boolean()("yes")
