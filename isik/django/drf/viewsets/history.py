@@ -211,11 +211,13 @@ _ROW_FIELDS = ("event_id", "event_created_at", "action", "changes", "part", "sub
 
 
 def _nullable_owner_fields(own):
+    # The owner serializer's own fields alone - not a row field, nor one history_serializer_bases adds.
+    owned = set(own._declared_fields) - set(_ROW_FIELDS)
+
     def get_fields(self):
         fields = own.get_fields(self)
-        for name, field in fields.items():
-            if name not in _ROW_FIELDS:
-                field.allow_null = True
+        for name in owned:
+            fields[name].allow_null = True
         return fields
 
     return get_fields
@@ -343,6 +345,21 @@ class HistoryMixin:
     the caller's own organization) - without it, the cross-object endpoint answers for objects the
     per-object one would 404 on.
 
+    `history_serializer_bases` (default `()`) are serializer classes mixed into the one built - each
+    row's own fields a project adds, read from `context["history_page"]` that `history_page_context()`
+    fills once per page:
+
+        class ActorLabelSerializer(serializers.Serializer):
+            actor_label = serializers.SerializerMethodField()
+
+            def get_actor_label(self, event) -> str | None:
+                return self.context["history_page"]["actors"].get(event.actor_id)
+
+        class WidgetViewSet(HistoryMixin, BaseModelViewSet):
+            history_serializer_bases = (ActorLabelSerializer,)
+
+    The class keeps the built one's name, and is cached with it under `history_serializer_cache_key()`.
+
     `history_component_prefix` (default `""`) goes in front of the generated serializer's name, and so
     of its schema component. A second `HistoryMixin` viewset over the same model needs one - two
     `WidgetHistory` components would collide, and the schema would keep only one of their shapes:
@@ -362,6 +379,8 @@ class HistoryMixin:
     history_ignores_change_of = ()
     history_list_scoped_to_queryset = False
     history_component_prefix = ""
+    # Serializer classes mixed into the history serializer this view builds - fields of a project's own.
+    history_serializer_bases = ()
 
     @classmethod
     def _refuse_wrong_parts(cls):
@@ -442,6 +461,9 @@ class HistoryMixin:
         )
         if cls.history_also:
             built = cls._streams_serializer(built)
+        if cls.history_serializer_bases:
+            # Under the built one's name, so its schema component keeps it.
+            built = type(built.__name__, (*cls.history_serializer_bases, built), {})
         # On cls.__dict__, not a base class's - a subclass builds its own, as for the filterset.
         cls._history_serializer_classes = {**cached, key: built}
         return built

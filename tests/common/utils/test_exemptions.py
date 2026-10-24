@@ -714,6 +714,26 @@ class TestTypesAndMakersReadFromSource:
         assert unimported_exemption_types([tmp_path]) == [(plain, 3, "Plain")]
         assert unseen_exemption_calls([tmp_path]) == [(plain, 11, "plain_maker")]
 
+    def test_a_type_with_two_type_bases_is_found_once(self, tmp_path):
+        both = write(
+            tmp_path / "both.py",
+            "from isik.common.utils.exemptions import Exemption\n"
+            "\n"
+            "\n"
+            "class One(Exemption, rule='tmp.one', why='x'):\n"
+            "    pass\n"
+            "\n"
+            "\n"
+            "class Other(Exemption, rule='tmp.other', why='x'):\n"
+            "    pass\n"
+            "\n"
+            "\n"
+            "class Both(One, Other):\n"
+            "    pass\n",
+        )
+
+        assert unimported_exemption_types([tmp_path]) == [(both, 4, "One"), (both, 8, "Other"), (both, 12, "Both")]
+
     def test_types_in_test_code_are_skipped_unless_told_otherwise(self, tmp_path):
         source = write(
             tmp_path / "tests" / "types.py", "class InATest(Exemption, rule='tmp.in-a-test', why='x'):\n    pass\n"

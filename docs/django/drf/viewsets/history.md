@@ -115,6 +115,28 @@ GET /widgets/history/?object_id=3&action=update
   (same pattern as `FilterSetMixin.filterset_class`), not rebuilt on every request. Override the
   `history_serializer_cache_key()` classmethod when the history differs by something the class alone
   doesn't say - a schema per surface, a language - and each key gets its own serializer.
+- `history_serializer_bases = (ActorLabelSerializer,)` mixes serializer classes of your own into the
+  one built - fields every row shows that isik doesn't, read from `context["history_page"]`:
+
+  ```python
+  class ActorLabelSerializer(serializers.Serializer):
+      actor_label = serializers.SerializerMethodField()
+
+      def get_actor_label(self, event) -> str | None:
+          return self.context["history_page"]["actors"].get(event.actor_id)
+
+
+  class WidgetViewSet(HistoryMixin, BaseModelViewSet):
+      history_serializer_bases = (ActorLabelSerializer,)
+
+      def history_page_context(self, rows):
+          actors = ...  # one lookup for the page's actors
+          return {**super().history_page_context(rows), "actors": actors}
+  ```
+
+  The class keeps the built one's name, so its schema component does too, and is cached with it
+  under `history_serializer_cache_key()`. Over several streams, a field it adds stays as it declares
+  it - only the owner's own fields are null on another stream's row.
 - `history_page_context(rows)` is what a page's rows need resolved once rather than once each,
   handed to the serializer as `context["history_page"]` (`rows` is the page, read into a list).
   Override it with `super()` to add your own - the actors' names, say. Over one stream it's `{}`;

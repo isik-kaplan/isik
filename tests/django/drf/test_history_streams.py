@@ -512,3 +512,68 @@ class TestTheParts:
 
         assert type(actor).__name__ == "_JSONContextUUIDFilter"
         assert actor.field_name == "pgh_context__user"
+
+
+class ShelfNoteSerializer(serializers.Serializer):
+    """A field of the project's own on every history row, resolved once per page."""
+
+    note = serializers.SerializerMethodField()
+
+    def get_note(self, event) -> str:
+        return self.context["history_page"]["notes"].get(event.pgh_model, "none")
+
+
+class NotedShelfViewSet(ShelfViewSet):
+    exempt_from_registry = ViewSetRegistryExemption(reason="a test's own variant of the shelf viewset, never routed")
+    history_serializer_bases = (ShelfNoteSerializer,)
+
+    def history_page_context(self, rows):
+        return {**super().history_page_context(rows), "notes": {"testapp.ShelfEvent": "the shelf's own"}}
+
+
+class TestSerializerBases:
+    @pytest.fixture(autouse=True)
+    def fresh(self):
+        for attribute in ("_history_filterset_class", "_history_serializer_classes"):
+            if attribute in NotedShelfViewSet.__dict__:
+                delattr(NotedShelfViewSet, attribute)
+
+    def test_add_a_projects_own_field_to_every_row(self, shelf):
+        ShelfItem.objects.create(shelf=shelf, name="cup")
+        in_order(Shelf, ShelfItem)
+        request = APIRequestFactory().get(f"/shelves/{shelf.pk}/history/")
+
+        got = NotedShelfViewSet.as_view({"get": "history"})(request, pk=shelf.pk).data
+
+        assert [(row["part"], row["note"]) for row in got] == [("items", "none"), ("shelf", "the shelf's own")]
+        assert "subject_label" in got[0]
+
+    def test_mixed_into_the_built_one_under_its_name(self):
+        built = NotedShelfViewSet.history_serializer_class
+
+        assert built.__name__ == ShelfViewSet.history_serializer_class.__name__
+        assert built.__mro__[1] is ShelfNoteSerializer
+        assert built.__mro__[2].__name__ == built.__name__
+        assert NotedShelfViewSet.history_serializer_class is built
+
+    def test_none_by_default(self):
+        assert ShelfViewSet.history_serializer_bases == ()
+        assert ShelfNoteSerializer not in ShelfViewSet.history_serializer_class.__mro__
+
+    def test_documented_without_a_warning(self):
+        from django.test import override_settings
+        from drf_spectacular.drainage import GENERATOR_STATS, reset_generator_stats
+        from drf_spectacular.generators import SchemaGenerator
+        from rest_framework.routers import SimpleRouter
+
+        router = SimpleRouter()
+        router.register("noted-shelves", NotedShelfViewSet, basename="noted-shelf")
+        reset_generator_stats()
+        with override_settings(REST_FRAMEWORK={"DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema"}):
+            schema = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+
+        assert not GENERATOR_STATS._warn_cache
+        assert schema["components"]["schemas"]["ShelfHistory"]["properties"]["note"] == {
+            "type": "string",
+            "readOnly": True,
+        }

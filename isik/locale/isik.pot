@@ -458,47 +458,47 @@ msgstr ""
 msgid "%(view)s.%(action)s can't be replayed by reference: its response isn't its own serializer over one of its own rows. Declare it in idempotency_no_replay_actions, or keep response bodies with an AbstractIdempotencyClaimWithBody."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:672
+#: isik/django/drf/viewsets/history.py:694
 #, python-format
 msgid "%(view)s.history_also[%(key)r] is %(value)r, not a HistoryStream."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:732
+#: isik/django/drf/viewsets/history.py:754
 #, python-format
 msgid "%(view)s.history_also[%(key)r] takes the key of %(model)s's own stream - name it otherwise."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:688
+#: isik/django/drf/viewsets/history.py:710
 #, python-format
 msgid "%(view)s.history_also[%(key)r]: %(events)s doesn't record %(path)r - track it in the history."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:675
+#: isik/django/drf/viewsets/history.py:697
 #, python-format
 msgid "%(view)s.history_also[%(key)r]: %(model)s isn't tracked - give it @track_events()."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:682
+#: isik/django/drf/viewsets/history.py:704
 #, python-format
 msgid "%(view)s.history_also[%(key)r]: %(path)r isn't a foreign key or one-to-one of %(model)s to %(owner)s."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:701
+#: isik/django/drf/viewsets/history.py:723
 #, python-format
 msgid "%(view)s.history_detail[%(key)r] is %(value)r, not (foreign key, attribute)."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:698
+#: isik/django/drf/viewsets/history.py:720
 #, python-format
 msgid "%(view)s.history_detail[%(key)r] names no stream of history_also."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:709
+#: isik/django/drf/viewsets/history.py:731
 #, python-format
 msgid "%(view)s.history_detail[%(key)r]: %(field)r isn't a foreign key of %(model)s."
 msgstr ""
 
-#: isik/django/drf/viewsets/history.py:714
+#: isik/django/drf/viewsets/history.py:736
 #, python-format
 msgid "%(view)s.history_detail[%(key)r]: %(model)s has no %(attribute)r."
 msgstr ""

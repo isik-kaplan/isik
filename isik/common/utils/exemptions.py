@@ -402,22 +402,22 @@ class _Scan:
                         if aliases.get(called, called) == "makes_exemption":
                             self.makers.add(node.name)
         # A class is a type when one of its bases is - which may be declared later, or in another file.
-        classes = set()
-        while found := self._subclasses(classes):
-            for file, node in found:
-                classes.add((file, node.lineno))
-                self._declare(file, node.lineno, node.name)
-
-    def _subclasses(self, classes):
-        """Classes not yet in `classes` with a base that's a type - `Exemption` itself, or one found so far."""
-        return [
-            (file, node)
-            for file, tree, aliases in self.files
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ClassDef)
-            and (file, node.lineno) not in classes
-            and any(aliases.get(_name(base), _name(base)) in self.types | {"Exemption"} for base in node.bases)
-        ]
+        # Each class is filed under its bases' names once, then reached from the types it derives from.
+        by_base = {}
+        for file, tree, aliases in self.files:
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for base in node.bases:
+                        by_base.setdefault(aliases.get(_name(base), _name(base)), []).append((file, node))
+        # A for over the list it appends to - no step that consumes it, so nothing that can leave it spinning.
+        names = [*self.types, "Exemption"]
+        reached = set()
+        for name in names:
+            for file, node in by_base.get(name, ()):
+                if (file, node.lineno) not in reached:
+                    reached.add((file, node.lineno))
+                    self._declare(file, node.lineno, node.name)
+                    names.append(node.name)
 
     def _declare(self, file, line, name):
         self.types.add(name)

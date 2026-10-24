@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-24
+
+### Added
+
+- **`HistoryMixin.history_serializer_bases`** - serializer classes mixed into the history serializer a
+  view builds, for fields every row shows that isik doesn't (an actor's label, resolved once per page
+  through `history_page_context()`). The class keeps the built one's name and is cached with it under
+  `history_serializer_cache_key()`, so a project no longer rebuilds or caches it beside isik's. Over
+  several streams, a field it adds keeps its own nullability - only the owner's fields are null on
+  another stream's row.
+
 ## [0.31.0] - 2026-10-24
 
 ### Fixed
