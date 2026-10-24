@@ -48,10 +48,11 @@ GET /widgets/history/?object_id=3&action=update
   stamped by `pghistory.context()` directly), else on `pgh_context` JSON via `context_filter()` if
   `HistoryMiddleware` (or a subclass) is installed, else it's omitted entirely. A value that fails
   a filter's own validation (e.g. `?created_after=not-a-date`) raises a 400 naming it rather than
-  silently filtering on whatever else was valid. The JSON `actor` filter follows the user model's
-  pk: a number for an integer pk, a UUID (compared as the text pghistory stores) otherwise.
-  `context_filter()`/`context_field_filter()` themselves default to an integer-typed filter - pass
-  `filter_cls` for a key holding something else.
+  silently filtering on whatever else was valid. The `actor` filter is typed after what it compares:
+  over an `actor` `ContextField`, after the column itself (a key to a UUID pk takes a UUID); over the
+  JSON, after the user model's pk (a number for an integer pk, a UUID - compared as the text pghistory
+  stores - otherwise). `context_field_filter()` is typed after its column the same way;
+  `context_filter()` defaults to an integer-typed filter. Either takes `filter_cls` to pick another.
 - `extra_history_filters` is your own extension point, merged on top of the built-ins - a matching
   key overrides one, a new key just adds one. `context_filter(key)` builds a filter over a key in
   pghistory's context JSON, without needing to know the `pgh_context__<key>` field-name

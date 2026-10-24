@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-24
+
+### Fixed
+
+- **`HistoryMixin`'s `actor` filter over an `actor` `ContextField` follows the column's type.** 0.30.0
+  typed the JSON `actor` filter after the user model's pk, but the `ContextField` branch - the one
+  `context_field_filter()` recommends - stayed a number, so `?actor=<uuid>` was refused for a UUID-keyed
+  actor. `context_field_filter()` without `filter_cls` now takes django-filter's filter for its column's
+  own type, a foreign key's being that of what it points at.
+- The idempotency mixin's docs, garbled since 0.29.0 where the `idempotency_replayed_header` row ran
+  into the paragraph after it.
+
+### Changed
+
+- **Breaking: `ISIK_CHECKS` is written with enums, never strings.** `Check`, `CheckOption` and `Severity`
+  (`isik.django.apps.common.checks`) name each check, each option and each severity:
+
+  ```python
+  ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.SEVERITY: Severity.WARNING}}
+  ```
+
+  They're plain `Enum`s, so a string never stands in for one: a string key, option or severity is an
+  error, `isik.E012`, naming the member to write - `ISIK_CHECKS names 'documentation' as a string - write
+  Check.DOCUMENTATION.` A project replaces each string in its `ISIK_CHECKS` with the member of that
+  name. `check_options()` and `isik_check()` take a `Check`, and `check_options()` returns a dict keyed
+  by `CheckOption`.
+
 ## [0.30.1] - 2026-10-24
 
 ### Fixed

@@ -92,19 +92,34 @@ class _ContextFieldFilterMixin(NarrowingFilterMixin):
         return qs.filter(pgh_id__in=matching_ids)
 
 
-def context_field_filter(event_model, name, filter_cls=NumberFilter, **kwargs):
+def _column_filter(event_model, name):
+    """
+    (filter class, its options) for a `ContextField`'s column, as django-filter picks them for the
+    column's own type - a foreign key's being the type of what it points at, so a UUID-keyed actor is
+    compared as a UUID and an integer-keyed one as a number.
+    """
+    field = event_model._meta.get_field(name)
+    column = field.target_field if field.is_relation else field
+    made = FilterSet.filter_for_field(column, name)
+    return type(made), {"field_name": made.field_name, **made.extra}
+
+
+def context_field_filter(event_model, name, filter_cls=None, **kwargs):
     """
     Filter over a `ContextField`'s own real, indexed column - e.g.
     `context_field_filter(event_model_for(Widget), "actor")` - instead of a `pgh_context` JSON
-    lookup (`context_filter()`). Correct for whatever type the column actually is, uses its index,
-    and needs no `pghistory.middleware.HistoryMiddleware` (a `ContextField` is stamped by
-    `pghistory.context()` directly, with or without it).
+    lookup (`context_filter()`). Uses its index, and needs no `pghistory.middleware.HistoryMiddleware`
+    (a `ContextField` is stamped by `pghistory.context()` directly, with or without it).
 
-    Defaults to an integer-typed filter, since that's the common case (an auto-incrementing pk).
-    A `ContextField` of another type (e.g. UUID) passes its own `filter_cls` (any django-filter
-    `Filter` subclass) rather than isik guessing - same escape hatch as `context_filter()`.
+    Typed after the column itself: django-filter's filter for its type, a foreign key's being that of
+    what it points at - a UUID column (or a key to a UUID pk) takes a UUID, an integer one a number.
+    Pass `filter_cls` (any django-filter `Filter` subclass) to pick another.
     """
-    kwargs.setdefault("field_name", name)
+    if filter_cls is None:
+        filter_cls, options = _column_filter(event_model, name)
+        kwargs = {**options, **kwargs}
+    else:
+        kwargs.setdefault("field_name", name)
     built_cls = type(f"_ContextField{filter_cls.__name__}", (_ContextFieldFilterMixin, filter_cls), {})
     return built_cls(event_model=event_model, **kwargs)
 
@@ -112,7 +127,7 @@ def context_field_filter(event_model, name, filter_cls=NumberFilter, **kwargs):
 class _StrictFilterSet(FilterSet):
     """
     Raises instead of silently ignoring a value that fails a declared filter's own validation
-    (e.g. `?created_after=not-a-date`, or `?actor=<uuid>` against the integer-typed default) -
+    (e.g. `?created_after=not-a-date`, or `?actor=abc` against an integer actor) -
     django-filter's own default just drops the offending value from `cleaned_data` and filters on
     whatever is left, which reads as "found nothing more to filter" rather than "this parameter
     was rejected". A caller passing a bad filter value gets a 400 naming it instead of a

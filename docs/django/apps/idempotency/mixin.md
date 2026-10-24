@@ -28,10 +28,16 @@ POST /installations/  Idempotency-Key: 0192f5a4-...   -> 201 {"id": 7, ...}   Id
 | `idempotency_normalize`          | `None`             | A function of the request that decides what its body is compared by. See [fingerprint.md](fingerprint.md). |
 | `idempotency_claim_model`        | `None`             | The claim model for this view, or `"app_label.Model"`. See [claims.md](claims.md). |
 | `idempotency_header`             | `"Idempotency-Key"` | The request header holding the key. |
-| `idempotency_replayed_header`    | `"Idempotent-Replayed"` | The rBoth dicts take their type for every action - `NoIdempotencyKey` (rule `isik.idempotency.key`) and
+| `idempotency_replayed_header`    | `"Idempotent-Replayed"` | The response header marking a replay. |
+
+Both dicts take their type for every action - `NoIdempotencyKey` (rule `isik.idempotency.key`) and
 `NoReplay` (rule `isik.idempotency.replay`), each held to a 40-character floor and listed by
 `manage.py exemptions`. A bare string, or anything else, raises `ImproperlyConfigured` naming the type
-to write.xemption should say what it exempts.
+to write. An exemption should say what it exempts.
+
+Every write is covered since 0.30.0 - POST, PUT, PATCH and DELETE. A test client or fixture that sends
+`Idempotency-Key` only on POST (what covering POST alone asked of it) now has every other write refused
+with a 400 before it reaches the view: send a fresh key on each write, as a real client does.
 
 `idempotency_normalize` can also be set per action, because DRF hands an `@action`'s extra keyword
 arguments to the view:

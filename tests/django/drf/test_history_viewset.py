@@ -771,3 +771,62 @@ class TestContextFieldFilter:
         event_model = event_model_for(ContextTrackedWidget)
         built = context_field_filter(event_model, "tenant")
         assert built.field_name == "tenant"
+
+
+class TestAContextFieldFilterIsTypedAfterItsColumn:
+    @pytest.fixture
+    def uuid_actor_events(self):
+        """An event model whose `actor` column is a key to a UUID-keyed model, and `note` is text."""
+        import uuid
+
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        from isik.django.apps.common.db import ContextField, track_events
+
+        with isolate_apps("tests.testapp"):
+            meta = type("Meta", (), {"app_label": "testapp"})
+            tracked = track_events(
+                context_fields=[
+                    ContextField(
+                        "actor",
+                        context_key="user",
+                        cast="uuid",
+                        field=models.ForeignKey(
+                            Widget, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+                        ),
+                    ),
+                    ContextField("note", cast="text", field=models.TextField(null=True)),
+                ]
+            )(type(f"UuidActor{uuid.uuid4().hex[:8]}", (models.Model,), {"__module__": __name__, "Meta": meta}))
+            yield tracked
+
+    def test_a_key_to_a_uuid_pk_takes_a_uuid(self, uuid_actor_events):
+        from django_filters import UUIDFilter
+
+        built = context_field_filter(event_model_for(uuid_actor_events), "actor")
+
+        assert isinstance(built, UUIDFilter)
+        assert built.field_name == "actor"
+
+    def test_a_key_to_an_integer_pk_takes_a_number(self):
+        from django_filters import NumberFilter
+
+        assert isinstance(context_field_filter(event_model_for(ContextTrackedWidget), "actor"), NumberFilter)
+
+    def test_a_text_column_takes_text(self, uuid_actor_events):
+        assert isinstance(context_field_filter(event_model_for(uuid_actor_events), "note"), CharFilter)
+
+    def test_a_filter_class_given_wins(self, uuid_actor_events):
+        built = context_field_filter(event_model_for(uuid_actor_events), "actor", filter_cls=CharFilter)
+
+        assert isinstance(built, CharFilter)
+        assert built.field_name == "actor"
+
+    def test_the_built_in_actor_filter_follows_it(self, uuid_actor_events):
+        from django_filters import UUIDFilter
+
+        class UuidActorViewSet(HistoryMixin):
+            model = uuid_actor_events
+
+        assert isinstance(UuidActorViewSet.default_history_filters()["actor"], UUIDFilter)
