@@ -567,7 +567,7 @@ class FakeAsker:
         self.confirm = confirm
         self.soft = None
 
-    def ask(self, entry, default):
+    def ask(self, entry, default, text):
         self.asked.append((entry.key, default))
         return self.answers.pop(0)
 

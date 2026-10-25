@@ -10,6 +10,7 @@ import pytest
 from isik.common.config import ConfigError, config, string
 from isik.common.config.environment import read_variable
 from isik.common.settings import (
+    KEEP_CURRENT,
     UNSET,
     Constant,
     Group,
@@ -447,3 +448,56 @@ class TestNoHome:
             Worded.from_env({})
         with pytest.raises(SettingsError, match=r"^--hidden is required when there is no home directory$"):
             Worded.from_env({"APP_DATA_DIR": "/d"})
+
+
+class TestNoneFromACaster:
+    """A caster may make text into None - "any" for no limit - and every layer keeps it as a value."""
+
+    @staticmethod
+    def limit(text):
+        return None if text == "any" else int(text)
+
+    def uses(self):
+        class Links(Settings, prefix="APP_"):
+            uses = Setting(TestNoneFromACaster.limit, "Uses", default=1)
+
+        return Links
+
+    def test_from_an_option(self):
+        links = Resolution(self.uses(), options={"uses": (None, Source.OPTION)}).resolve()
+
+        assert (links.uses, links.source("uses")) == (None, Source.OPTION)
+
+    def test_from_a_variable_and_its_file(self, tmp_path):
+        (tmp_path / "uses").write_text("any\n")
+
+        assert self.uses().from_env({"APP_USES": "any"}).uses is None
+        assert self.uses().from_env({"APP_USES_FILE": str(tmp_path / "uses")}).uses is None
+
+    def test_from_a_current_value(self):
+        links = self.uses().from_env({}, current={"APP_USES": "any"})
+
+        assert (links.uses, links.source("uses")) == (None, Source.CURRENT)
+
+    def test_a_current_none_is_the_questions_default_and_kept_on_empty(self):
+        class Links(Settings, prefix="APP_"):
+            uses = Setting(TestNoneFromACaster.limit, "Uses", default=1, on_empty=KEEP_CURRENT)
+
+        class Asker:
+            asked = []
+
+            def ask(self, entry, default, text):
+                self.asked.append((default, text))
+                return ""
+
+        asker = Asker()
+        links = Resolution(Links, current={"APP_USES": "any"}, asker=asker).resolve()
+
+        assert asker.asked == [(None, "any")] and links.uses is None
+
+    def test_from_an_answer(self):
+        class Asker:
+            def ask(self, entry, default, text):
+                return None
+
+        assert Resolution(self.uses(), asker=Asker()).resolve().uses is None

@@ -35,10 +35,10 @@ def entry_for(setting, owner=None):
     return entry(owner, setting, (), "", "")
 
 
-def question(kind, setting, default, *, owner=None):
+def question(kind, setting, default, *, owner=None, text=None):
     here = entry_for(setting, owner)
     asker = Asker(here.owner, Resolution(here.owner).message)
-    return kind(asker, here, setting.question_text(), default)
+    return kind(asker, here, setting.question_text(), default, text)
 
 
 @pytest.fixture
@@ -229,7 +229,7 @@ class TestAsker:
         setting = Setting(int, "Cost", min=1, max=4)
         here = entry_for(setting)
 
-        Asker(here.owner, Resolution(here.owner).message).ask(here, 1)
+        Asker(here.owner, Resolution(here.owner).message).ask(here, 1, None)
 
         assert prompt.calls[0][0] == ("Cost (1-4)",)
 
@@ -291,6 +291,56 @@ class TestEmptyAnswers:
         prompt.replies = [""]
 
         assert question(ClickQuestion, Setting(str.title, "Title"), "Kept").ask() == "Kept"
+
+
+def limit(text):
+    return None if text == "any" else int(text)
+
+
+class TestACurrentNone:
+    """A current value a caster made into None - "any" for no limit - is shown by its text and kept on Enter."""
+
+    def test_click_shows_its_text_and_keeps_it_for_a_required_question(self, prompt):
+        prompt.replies = [""]
+
+        assert question(ClickQuestion, Setting(limit, "Uses", required=True), None, text="any").ask() is None
+        assert prompt.calls == [(("Uses [any]",), {"default": "", "show_default": False})]
+
+    def test_questionary_types_its_text_in_and_keeps_it_for_a_required_question(self, monkeypatch):
+        recorder = Recorder("any")
+        monkeypatch.setattr(questionary, "text", lambda *args, **keywords: Asked(recorder(*args, **keywords)))
+
+        assert question(QuestionaryQuestion, Setting(limit, "Uses", required=True), None, text="any").ask() is None
+        assert recorder.calls == [(("Uses",), {"default": "any"})]
+
+    def test_a_value_that_shows_is_shown_as_it_is_not_by_its_text(self, prompt):
+        prompt.replies = [""]
+
+        assert question(ClickQuestion, Setting(lambda t: int(t, 0), "Mask"), 16, text="0x10").ask() == 16
+        assert prompt.calls == [(("Mask [16]",), {"default": "", "show_default": False})]
+
+    def test_through_a_resolve(self, prompt):
+        class Links(Settings, prefix="APP_"):
+            uses = Setting(limit, "Uses", required=True)
+
+        prompt.replies = [""]
+        resolution = Resolution(Links, current={"APP_USES": "any"})
+        resolution.asker = Asker(Links, resolution.message)
+
+        assert resolution.resolve().uses is None
+        assert prompt.calls == [(("Uses [any]",), {"default": "", "show_default": False})]
+
+    def test_through_a_resolve_with_questionary(self, monkeypatch):
+        class Links(Settings, prefix="APP_"):
+            uses = Setting(limit, "Uses", required=True, prompt=Prompt.QUESTIONARY)
+
+        recorder = Recorder("any")
+        monkeypatch.setattr(questionary, "text", lambda *args, **keywords: Asked(recorder(*args, **keywords)))
+        resolution = Resolution(Links, current={"APP_USES": "any"})
+        resolution.asker = Asker(Links, resolution.message)
+
+        assert resolution.resolve().uses is None
+        assert recorder.calls == [(("Uses",), {"default": "any"})]
 
 
 class TestUnsetDefaults:

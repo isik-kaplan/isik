@@ -48,7 +48,8 @@ class Asker:
         self.root = root
         self.messages = resolution_messages
 
-    def ask(self, entry, default):
+    def ask(self, entry, default, text):
+        """The answer to `entry`'s question - `text` is the current value's own, when `default` is that value."""
         script = scripted.get()
         if script is not None:
             return script.answer(entry)
@@ -57,8 +58,8 @@ class Asker:
             setting.before_ask(default)
         message = setting.question_text() + hint(setting)
         if style_of(entry, self.root) is Prompt.QUESTIONARY:
-            return QuestionaryQuestion(self, entry, message, default).ask()
-        return ClickQuestion(self, entry, message, default).ask()
+            return QuestionaryQuestion(self, entry, message, default, text).ask()
+        return ClickQuestion(self, entry, message, default, text).ask()
 
     def tell(self, message):
         click.echo(message)
@@ -76,12 +77,13 @@ class Asker:
 
 
 class Question:
-    def __init__(self, asker, entry, message, default):
+    def __init__(self, asker, entry, message, default, text):
         self.asker = asker
         self.entry = entry
         self.setting = entry.declaration
         self.message = message
         self.default = default
+        self.current_text = text
 
     def ask(self):
         setting = self.setting
@@ -103,6 +105,10 @@ class Question:
             self.asker.tell(self.asker.messages(self.entry.owner, Message.ASKED_ERROR, message=str(error)))
             return RETRY
 
+    def shown(self):
+        """The default as a prompt shows it - a current value's own text when it shows as nothing, like None."""
+        return display(self.setting, self.default) or self.current_text
+
     def unset_message(self):
         """The question, with `shown` after it for an unset default - a hint to read, never text to edit."""
         if self.default is UNSET and self.setting.shown:
@@ -111,7 +117,7 @@ class Question:
 
     def empty(self):
         """What an empty answer gives - RETRY when there's nothing to fall back to and the setting is required."""
-        if self.default is None and self.setting.required:
+        if self.default is None and self.setting.required and self.current_text is None:
             return RETRY
         return "" if self.default is UNSET else self.default
 
@@ -171,7 +177,7 @@ class ClickQuestion(Question):
         return self.converted_line()
 
     def converted_line(self):
-        shown = display(self.setting, self.default)  # None for an unset default, whose hint unset_message() gives
+        shown = self.shown()  # None for an unset default, whose hint unset_message() gives
         message = f"{self.message} [{shown}]" if shown else self.unset_message()
         while True:
             text = click.prompt(message, default="", show_default=False)
@@ -204,7 +210,7 @@ class QuestionaryQuestion(Question):
 
     def text(self):
         # Only a real default is typed in, ready to edit; an unset one's `shown` goes in the question.
-        filled = display(self.setting, self.default)  # None for an unset one
+        filled = self.shown()  # None for an unset one
         while True:
             text = _answered(questionary.text(self.unset_message(), default=filled or "", **_io()).ask())
             value = self.empty() if text == "" or (filled and text == filled) else self.convert(text)

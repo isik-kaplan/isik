@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-10-25
+
+### Fixed
+
+- **A current value a caster makes into None** - `"any"` for no limit - is kept as that value, and as its
+  question's default, instead of reading as no current value and giving way to the default. Its question
+  shows it by its own text - `Uses [any]` - and Enter keeps it, a required question's too, instead of
+  asking again.
+
 ## [0.35.0] - 2026-10-25
 
 ### Added

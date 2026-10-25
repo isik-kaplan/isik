@@ -326,11 +326,12 @@ class Resolution:
             raise self.invalid(here, source, text, str(error)) from None
 
     def read_current(self, here):
+        """`(value, text)` for a current value - a pair, since a caster may make one into None - or None."""
         if self.current is None or here.env_name is None or here.env_name not in self.current:
             return None
         text = self.current[here.env_name]
         try:
-            return convert(here.declaration, text)
+            return convert(here.declaration, text), text
         except Invalid as error:
             raise self.invalid(here, Source.CURRENT, text, str(error)) from None
 
@@ -375,7 +376,7 @@ class Resolution:
         elif self.asker is not None and setting.asked and (setting.ask_when is None or setting.ask_when(namespace)):
             value, source = self.ask(here, current), Source.QUESTION
         elif current is not None:
-            value, source = current, Source.CURRENT
+            (value, _text), source = current, Source.CURRENT
         elif setting.default is not REQUIRED:
             value, source = default_of(setting), Source.DEFAULT
         else:
@@ -395,12 +396,15 @@ class Resolution:
 
     def ask(self, here, current):
         setting = here.declaration
-        default = current if current is not None else (default_of(setting) if setting.default is not REQUIRED else None)
+        if current is not None:
+            default, text = current
+        else:
+            default, text = (default_of(setting) if setting.default is not REQUIRED else None), None
         while True:
-            value = self.asker.ask(here, default)
+            value = self.asker.ask(here, default, text)
             if value in ("", ()) and setting.on_empty is not REQUIRED:
                 if setting.on_empty is KEEP_CURRENT:
-                    value = current if current is not None else value
+                    value = current[0] if current is not None else value
                 elif callable(setting.on_empty):
                     value = setting.on_empty()
                 else:
