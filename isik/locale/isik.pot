@@ -213,7 +213,7 @@ msgstr ""
 msgid "%(name)r was already used to build a %(builder)s - pass reuse=True if this is intentional, or build it once and reuse the resulting class instead of calling this again under the same name."
 msgstr ""
 
-#: isik/common/settings/base.py:222
+#: isik/common/settings/base.py:224
 #, python-format
 msgid "%(name)s %(message)s"
 msgstr ""
@@ -413,12 +413,12 @@ msgstr ""
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
 msgstr ""
 
-#: isik/common/settings/base.py:82
+#: isik/common/settings/base.py:83
 #, python-format
 msgid "%(setting)s and %(other)s would both be %(name)s"
 msgstr ""
 
-#: isik/common/settings/base.py:84
+#: isik/common/settings/base.py:85
 #, python-format
 msgid "%(setting)s would be %(name)s, which the command already is"
 msgstr ""
@@ -488,17 +488,17 @@ msgstr ""
 msgid "%(type)s's shows_as must be a str, not %(value)r."
 msgstr ""
 
-#: isik/common/settings/base.py:104
+#: isik/common/settings/base.py:105
 #, python-format
 msgid "%(type)s.%(name)s comes before its selector %(selector)s - declare the selector first."
 msgstr ""
 
-#: isik/common/settings/base.py:99
+#: isik/common/settings/base.py:100
 #, python-format
 msgid "%(type)s.%(name)s holds the settings of a selector %(type)s doesn't declare."
 msgstr ""
 
-#: isik/common/settings/base.py:142
+#: isik/common/settings/base.py:144
 #, python-format
 msgid "%(type)s.%(name)s is the name of a Settings method - name the setting something else."
 msgstr ""
@@ -653,7 +653,7 @@ msgstr ""
 msgid "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't listed."
 msgstr ""
 
-#: isik/common/settings/base.py:88
+#: isik/common/settings/base.py:89
 #, python-format
 msgid "%(where)s gives two things one name - rename one:\n%(lines)s"
 msgstr ""
@@ -716,12 +716,12 @@ msgstr ""
 msgid "@options(...) goes above @click.command(), so it has the command to add to."
 msgstr ""
 
-#: isik/common/settings/base.py:42
+#: isik/common/settings/base.py:43
 #, python-format
 msgid "A Settings class's env= takes NoEnv(reason=...), not %(value)r."
 msgstr ""
 
-#: isik/common/settings/base.py:44
+#: isik/common/settings/base.py:45
 #, python-format
 msgid "A Settings class's prompt= takes a Prompt, not %(value)r."
 msgstr ""
@@ -1701,7 +1701,7 @@ msgstr ""
 msgid "makes_exemption() takes an exemption type, not %(value)r."
 msgstr ""
 
-#: isik/common/settings/base.py:48
+#: isik/common/settings/base.py:49
 #, python-format
 msgid "messages= is keyed by Message, not %(keys)r."
 msgstr ""

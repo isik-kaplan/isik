@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import os
 from collections.abc import Mapping
 from enum import Enum
@@ -133,7 +134,8 @@ class Settings:
         found = {}
         for base in reversed(cls.__mro__[1:]):
             found.update(base.__dict__.get("_declarations", {}))
-        annotations = dict(cls.__dict__.get("__annotations__", {}))
+        # The class body's own - read through inspect, since 3.14 keeps them lazily (PEP 649), not in __dict__.
+        annotations = dict(inspect.get_annotations(cls))
         for name, value in list(cls.__dict__.items()):
             if not isinstance(value, Declaration):
                 continue
