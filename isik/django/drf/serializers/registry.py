@@ -8,6 +8,7 @@ from isik.common.utils.exemptions import Exemption
 class SerializerRegistryExemption(
     Exemption,
     rule="isik.serializer-registry",
+    changes_behavior=True,
     why="A model has one serializer in the registry, and a second one over it is usually a mistake.",
 ):
     """Why a serializer stays out of its registry - `exempt_from_registry`'s type."""

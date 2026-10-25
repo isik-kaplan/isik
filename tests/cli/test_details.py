@@ -1,6 +1,8 @@
 """The finer points of a command's options, prompts and checks - each one something a change could quietly break."""
 
+import contextlib
 import io
+import threading
 from enum import Enum
 from pathlib import Path
 
@@ -426,3 +428,84 @@ def test_the_docs_block_is_found_across_lines_and_kept_around(tmp_path):
     assert text.startswith("a\n<!-- settings:settings -->\n| Option |")
     assert text.endswith("|\n<!-- /settings:settings -->\nb\n")
     assert_docs_current(docs, Picks)
+
+
+def test_the_file_options_help_and_the_default_separator_can_be_worded():
+    class Lock(Settings, option_file=True):
+        lock_page = Setting(str, "lock page", default="p")
+
+    help_format = HelpFormat(
+        default_separator=" ",
+        default_text=lambda setting, shown: f"(default: {shown})",
+        option_file_help=lambda setting, option: f"read {option} from FILE ({setting.name})",
+    )
+
+    output = invoke(command(Lock, help=help_format), ["--help"]).output
+
+    assert "--lock-page TEXT       lock page (default: p)\n" in output
+    assert "--lock-page-file FILE  read --lock-page from FILE (lock_page)\n" in output
+
+
+def test_a_group_keeps_its_commands_in_help_and_runs_them():
+    @options(Picks, interactive=lambda given, no_input: False)
+    @click.group(invoke_without_command=True)
+    def links(settings):
+        click.echo(f"group {settings.name}")
+
+    @links.command("add")
+    def add():
+        click.echo("added")
+
+    output = invoke(links, ["--help"]).output
+
+    assert "\nOptions:\n" in output and output.index("Options:") < output.index("Commands:")
+    assert "\nCommands:\n  add\n" in output
+    assert invoke(links, ["--name", "x", "add"]).output == "group x\nadded\n"
+
+
+@pytest.mark.parametrize("asks", [True, False])
+def test_a_command_knows_whether_it_asked(asks):
+    from isik.cli import is_interactive
+
+    seen = []
+
+    @options(Picks, interactive=lambda given, no_input: asks)
+    @click.group(invoke_without_command=True)
+    def main(settings):
+        seen.append(("group", is_interactive()))
+
+    @main.command("sub")
+    def sub():
+        seen.append(("sub", is_interactive()))
+
+    with answers({"mode": "fast", "size": 1, "name": "n"}) if asks else contextlib.nullcontext():
+        invoke(main, ["sub"], catch_exceptions=False)
+
+    assert seen == [("group", asks), ("sub", asks)]
+    # click's contexts are per thread, so a new one is outside every command whatever another test left behind.
+    outside = []
+    thread = threading.Thread(target=lambda: outside.append(is_interactive()))
+    thread.start()
+    thread.join()
+    assert outside == [False]
+
+
+def test_a_groups_commands_are_listed_with_its_context():
+    seen = []
+
+    class Lazy(click.Group):
+        def list_commands(self, ctx):
+            seen.append(ctx.info_name)
+            return super().list_commands(ctx)
+
+    @options(Picks, interactive=lambda given, no_input: False)
+    @click.group(cls=Lazy)
+    def links(settings):
+        pass
+
+    @links.command("add")
+    def add():
+        pass
+
+    assert "\nCommands:\n  add\n" in invoke(links, ["--help"]).output
+    assert seen == ["links"]

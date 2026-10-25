@@ -14,12 +14,30 @@ class HelpFormat:
     - `first_column_max` - the widest the option column may make the description column narrower.
     - `default_text(setting, shown)` - the text for a setting's default, given what isik would show (None
       when there's nothing to): return None to show none, or e.g. `f"(default: {shown})"`.
+    - `default_separator` - between the description and a default on the same line, two spaces as click has.
+    - `option_file_help(setting, option)` - the help of a setting's `--x-file` option.
     """
 
-    def __init__(self, *, default_on_own_line=False, first_column_max=None, default_text=None):
+    def __init__(
+        self,
+        *,
+        default_on_own_line=False,
+        first_column_max=None,
+        default_text=None,
+        default_separator="  ",
+        option_file_help=None,
+    ):
         self.default_on_own_line = default_on_own_line
         self.first_column_max = first_column_max
         self.default_text = default_text
+        self.default_separator = default_separator
+        self.option_file_help = option_file_help
+
+    def file_help(self, setting, option):
+        """The help of `setting`'s option that reads it from a file - `option` is the one it reads."""
+        if self.option_file_help is not None:
+            return self.option_file_help(setting, option)
+        return _("Read %(option)s from FILE.") % {"option": option}
 
     def default_line(self, setting):
         """The text help shows for `setting`'s default, or None."""
@@ -37,7 +55,7 @@ class HelpFormat:
             return text, None
         if self.default_on_own_line:
             return text, default
-        return f"{text}  {default}", None
+        return f"{text}{self.default_separator}{default}", None
 
     def format_options(self, command, ctx, formatter):
         found = [(param, record) for param in command.get_params(ctx) if (record := param.get_help_record(ctx))]

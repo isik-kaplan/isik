@@ -291,3 +291,46 @@ class TestEmptyAnswers:
         prompt.replies = [""]
 
         assert question(ClickQuestion, Setting(str.title, "Title"), "Kept").ask() == "Kept"
+
+
+class TestUnsetDefaults:
+    @pytest.fixture
+    def text(self, monkeypatch):
+        recorder = Recorder()
+        monkeypatch.setattr(questionary, "text", lambda *args, **keywords: Asked(recorder(*args, **keywords)))
+        return recorder
+
+    def test_questionary_shows_an_unset_default_in_the_question_not_the_box(self, text):
+        text.replies = ["/in", ""]
+        setting = Setting(str, "Lock page", default=UNSET, shown="the server's")
+
+        assert question(QuestionaryQuestion, setting, UNSET).ask() == "/in"
+        assert question(QuestionaryQuestion, setting, UNSET).ask() == ""
+        assert text.calls[0] == (("Lock page [the server's]",), {"default": ""})
+
+    def test_a_real_default_is_still_typed_in(self, text):
+        text.replies = ["x"]
+
+        question(QuestionaryQuestion, Setting(str, "Name", default="ada"), "ada").ask()
+
+        assert text.calls == [(("Name",), {"default": "ada"})]
+
+    def test_an_unset_flag_says_so_in_the_question(self, confirm, monkeypatch):
+        confirm.replies = [False]
+        confirmed = Recorder(True)
+        monkeypatch.setattr(questionary, "confirm", lambda *args, **keywords: Asked(confirmed(*args, **keywords)))
+        setting = Setting(bool, "Lock it?", default=UNSET, shown="the server's")
+
+        question(ClickQuestion, setting, UNSET).ask()
+        question(QuestionaryQuestion, setting, UNSET).ask()
+
+        assert confirm.calls == [(("Lock it? [the server's]",), {"default": False})]
+        assert confirmed.calls == [(("Lock it? [the server's]",), {"default": False})]
+
+
+def test_a_real_default_with_shown_text_gets_no_unset_hint(confirm):
+    confirm.replies = [True]
+
+    question(ClickQuestion, Setting(bool, "Lock it?", default=True, shown="the server's"), True).ask()
+
+    assert confirm.calls == [(("Lock it?",), {"default": True})]

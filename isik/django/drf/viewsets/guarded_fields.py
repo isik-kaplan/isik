@@ -35,6 +35,7 @@ def _guards_in(permission):
 class WritesNoGuardedFields(
     Exemption,
     rule="isik.guarded-fields.writes-none",
+    changes_behavior=True,
     why="A write through a viewset with field guards runs them, or it fails and is rolled back.",
 ):
     """Why an action writes no guarded field - `@writes_no_guarded_fields`'s type."""
@@ -75,6 +76,7 @@ def writes_no_guarded_fields(reason):
 class UnguardedField(
     Exemption,
     rule="isik.guarded-fields.unguarded",
+    changes_behavior=True,
     why=(
         "A field one viewset guards is guarded wherever its serializer writes it, or the other viewset is a "
         "way around the guard."
@@ -150,8 +152,10 @@ class GuardedFieldsMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        require_exemptions(cls.__name__, "unguarded_fields", cls.unguarded_fields, UnguardedField)
-        require_exemptions(
+        cls.unguarded_fields = require_exemptions(
+            cls.__name__, "unguarded_fields", cls.unguarded_fields, UnguardedField
+        )
+        cls.actions_writing_no_guarded_fields = require_exemptions(
             cls.__name__,
             "actions_writing_no_guarded_fields",
             cls.actions_writing_no_guarded_fields,

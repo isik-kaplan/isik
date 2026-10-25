@@ -268,8 +268,11 @@ def every_validator_says_whether_it_can_hold_at_the_column(options, **kwargs):
     The validator nobody thought about is the one that errors, rather than the one that quietly
     stays in Python.
     """
-    from isik.django.apps.common.db.constraints import unclassified_validators
+    from isik.common.utils.exemptions import enforced
+    from isik.django.apps.common.db.constraints import NoDatabaseForm, unclassified_validators
 
+    if not enforced(NoDatabaseForm):  # its rule set to Requirement.OFF asks the same as turning this check off
+        return []
     unanswered = unclassified_validators()
     if not unanswered:
         return []

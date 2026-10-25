@@ -13,7 +13,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, overload
 
 from isik._internal.translation import gettext as _
-from isik.common.settings.exemptions import QUESTION_EXEMPTIONS, IsConstant, NoEnv, NoOption
+from isik.common.settings.exemptions import QUESTION_EXEMPTIONS, IsConstant, NoEnv, NoOption, NoQuestion
+from isik.common.utils.exemptions import opted_out
 from isik.common.utils.sentinel import Sentinel
 
 
@@ -79,6 +80,25 @@ class OnlyWhen:
         self.message = message
 
 
+def without(value, exemption_type):
+    """
+    A setting's `option=False`, `env=False` or `question=False` as the exemption it stands for - taken when
+    the rule isn't strict, and refused naming how to loosen it when it is. Anything else is as given.
+    """
+    if value is not False:
+        return value
+    exemption = opted_out(False, exemption_type, plain=False)
+    if exemption is None:
+        raise TypeError(
+            _(
+                "False opts out of %(rule)s without a reason, which needs Requirement.OPTIONAL for it - "
+                "or write %(type)s(reason=...)."
+            )
+            % {"rule": exemption_type.rule, "type": exemption_type.__name__}
+        )
+    return exemption
+
+
 def _relations(value, kind):
     if isinstance(value, str | kind):
         value = (value,)
@@ -137,6 +157,7 @@ class Setting(Declaration, Generic[T]):
     ):
         if required and default is not REQUIRED:
             raise TypeError(_("A required setting has no default - drop default= or required=True."))
+        option, env, question = without(option, NoOption), without(env, NoEnv), without(question, NoQuestion)
         if option is not None and not isinstance(option, str | tuple | list | NoOption):
             raise TypeError(
                 _("option= takes the option's name, or NoOption(reason=...), not %(value)r.") % {"value": option}
@@ -225,9 +246,10 @@ def _choices(kind, choices):
 class Constant(Declaration):
     """`hash_len = Constant(32, reason="...")` - fixed on purpose, so neither given nor asked."""
 
-    def __init__(self, value, *, reason):
+    def __init__(self, value, *, reason=REQUIRED):
         self.value = value
-        self.reason = IsConstant(reason=reason)
+        # No reason is IsConstant's own call to refuse - it takes none only when its rule isn't strict.
+        self.reason = IsConstant() if reason is REQUIRED else IsConstant(reason=reason)
 
 
 class Group(Declaration):

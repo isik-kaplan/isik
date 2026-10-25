@@ -8,6 +8,7 @@ from isik.common.utils.exemptions import Exemption
 class ViewSetRegistryExemption(
     Exemption,
     rule="isik.viewset-registry",
+    changes_behavior=True,
     why="A model has one viewset in the registry, and a second one over it is usually a mistake.",
 ):
     """Why a viewset stays out of its registry - `exempt_from_registry`'s type."""

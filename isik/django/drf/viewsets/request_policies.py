@@ -12,6 +12,7 @@ from isik.common.utils.strings import camel_to_snake
 class RequestPolicyExemption(
     Exemption,
     rule="isik.request-policy",
+    changes_behavior=True,
     why="A request policy holds for every action of a view that carries it, or the one skipping it is a way around it.",
 ):
     """
@@ -106,7 +107,7 @@ class RequestPoliciesMixin:
         super().__init_subclass__(**kwargs)
         for policy in cls.request_policies:
             name = policy.exemptions_attribute_name()
-            require_exemptions(cls.__name__, name, getattr(cls, name, {}), policy.exemption_type)
+            setattr(cls, name, require_exemptions(cls.__name__, name, getattr(cls, name, {}), policy.exemption_type))
 
     @classmethod
     def request_policy_exemptions(cls, policy):

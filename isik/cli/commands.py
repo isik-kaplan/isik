@@ -33,6 +33,7 @@ from isik.common.settings.resolution import Resolution, clashes, default_selecti
 OPTION = "isik__"
 OPTION_FILE = "isik_file__"
 NO_INPUT = "isik_no_input"
+INTERACTIVE = "isik.interactive"
 
 
 class CasterType(click.ParamType):
@@ -137,7 +138,7 @@ class Binding:
                 click.Option(
                     [entry.option_file_name, OPTION_FILE + entry.key],
                     metavar="FILE",
-                    help=_("Read %(option)s from FILE.") % {"option": max(names, key=len)},
+                    help=self.help.file_help(setting, max(names, key=len)),
                 )
             )
         return found
@@ -196,6 +197,9 @@ class SettingsCommandMixin:
 
     def format_options(self, ctx, formatter):
         self.isik_binding.help.format_options(self, ctx, formatter)
+        # A group's own format_options lists its commands after its options - this replaces it, so says so too.
+        if isinstance(self, click.Group):
+            self.format_commands(ctx, formatter)
 
 
 @functools.cache
@@ -263,6 +267,7 @@ def _run(binding, callback, **values):
         selection = ctx.meta["isik.selection"]
         sources = {**_environment_sources(binding, selection), **{key: found[1] for key, found in given.items()}}
         interactive = scripted.get() is not None or binding.interactive(sources, no_input)
+        ctx.meta[INTERACTIVE] = interactive
         resolution = Resolution(
             binding.settings_class,
             options=given,
@@ -279,6 +284,17 @@ def _run(binding, callback, **values):
     except SettingsAborted:
         raise click.Abort() from None
     return callback(**values, **{binding.name: settings})
+
+
+def is_interactive():
+    """
+    Whether the running command asks its questions - its policy's answer, for the decisions a command
+    makes itself after its settings are resolved (a confirmation of its own, a flow of its own). False
+    outside a command `options()` was put on.
+    """
+    ctx = click.get_current_context(silent=True)
+    # meta is one dict for a context and all it nests, so a group's subcommands see the group's answer.
+    return ctx is not None and bool(ctx.meta.get(INTERACTIVE))
 
 
 def options(

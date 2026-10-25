@@ -29,6 +29,7 @@ import os
 import re
 import sys
 import sysconfig
+from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -37,6 +38,26 @@ from isik.common.utils.sentinel import Sentinel
 
 
 NOT_GIVEN = Sentinel("EXEMPTION_NOT_GIVEN")
+
+
+class Requirement(Enum):
+    """
+    How much a rule asks of an opt-out - set per rule, by its owner's default and by the project:
+
+    - `STRICT` - an exemption with a reason over the type's floor. The default.
+    - `OPTIONAL` - that, or one with no reason, or the plain value the slot reads as "opt out"
+      (`question=False`, `exempt_from_registry=True`) - still made into an exemption and listed.
+    - `OFF` - a check of the rule asks nothing (`enforced()` is False). Refused for a rule whose
+      exemption changes what code does, rather than answering a check - there's nothing to turn off.
+    """
+
+    STRICT = "strict"
+    OPTIONAL = "optional"
+    OFF = "off"
+
+
+# {rule: Requirement}, set by exemption_requirements() - where a project without Django says its levels.
+_levels = {}
 RULE_PATTERN = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)*")
 DEFAULT_MIN_LENGTH = 40
 
@@ -107,9 +128,31 @@ class Exemption(str):
     # Listed under the request policy it exempts from, with the action, rather than under its own rule -
     # see isik.django.drf.viewsets.request_policies.RequestPolicyExemption.
     listed_by_policy = False
+    # The level its owner gives the rule, and whether its exemption changes what code does - see Requirement.
+    requirement = Requirement.STRICT
+    changes_behavior = False
 
-    def __init_subclass__(cls, *, rule=None, why=None, min_length=None, shows_as=NOT_GIVEN, **kwargs):
+    def __init_subclass__(
+        cls,
+        *,
+        rule=None,
+        why=None,
+        min_length=None,
+        shows_as=NOT_GIVEN,
+        requirement=None,
+        changes_behavior=None,
+        **kwargs,
+    ):
         super().__init_subclass__(**kwargs)
+        if requirement is not None and not isinstance(requirement, Requirement):
+            raise TypeError(
+                _("%(type)s's requirement must be a Requirement, not %(value)r.")
+                % {"type": cls.__name__, "value": requirement}
+            )
+        if requirement is not None:
+            cls.requirement = requirement
+        if changes_behavior is not None:
+            cls.changes_behavior = bool(changes_behavior)
         if rule is not None:
             if not isinstance(rule, str) or not RULE_PATTERN.fullmatch(rule):
                 raise TypeError(
@@ -176,9 +219,10 @@ class Exemption(str):
             raise TypeError(
                 _("%(type)s takes only reason=, not %(names)s.") % {"type": cls.__name__, "names": ", ".join(unknown)}
             )
-        if "reason" not in kwargs:
+        strict = requirement_of(cls) is Requirement.STRICT
+        if "reason" not in kwargs and strict:
             raise TypeError(_("%(type)s needs reason=.") % {"type": cls.__name__})
-        self = cls._made(cls._cleaned(kwargs["reason"]))
+        self = cls._made(cls._cleaned(kwargs.get("reason", ""), strict=strict))
         frame, file = _call_site()
         if frame is not None:
             self.file, self.line = file, frame.f_lineno
@@ -188,13 +232,14 @@ class Exemption(str):
         return self
 
     @classmethod
-    def _cleaned(cls, reason):
+    def _cleaned(cls, reason, *, strict):
         if not isinstance(reason, str):
             raise TypeError(
                 _("%(type)s's reason must be text, not %(value)r.") % {"type": cls.__name__, "value": reason}
             )
         reason = " ".join(reason.split())
-        if len(reason) < cls.min_length:
+        # Not strict: no reason is fine, but one that's given still says something.
+        if (strict or reason) and len(reason) < cls.min_length:
             raise ValueError(
                 _("%(type)s needs a reason of at least %(length)d characters. %(why)s Got %(reason)r.")
                 % {"type": cls.__name__, "length": cls.min_length, "why": cls.why, "reason": reason}
@@ -208,6 +253,11 @@ class Exemption(str):
         self.file = self.line = None
         self.library = False
         return self
+
+    def __bool__(self):
+        # Declaring one is the opt-out, reason or not - `if cls.exempt_from_registry:` holds for a reasonless
+        # one too. A type that shows as something else ("" for Django to see as empty) is truthy as that is.
+        return True if self.shows_as is None else bool(self.shows_as)
 
     def __reduce__(self):
         return _restored, (type(self), self.reason)
@@ -231,7 +281,18 @@ def _restored(cls, reason):
     return cls._made(reason)
 
 
-def exemption_class(name, *, rule, why, min_length=None, shows_as=NOT_GIVEN, base=Exemption, module=None):
+def exemption_class(
+    name,
+    *,
+    rule,
+    why,
+    min_length=None,
+    shows_as=NOT_GIVEN,
+    requirement=None,
+    changes_behavior=None,
+    base=Exemption,
+    module=None,
+):
     """
     `Exemption` subclassed in one line, in the caller's module - so migrations can import it by name:
 
@@ -243,6 +304,7 @@ def exemption_class(name, *, rule, why, min_length=None, shows_as=NOT_GIVEN, bas
         )
 
     `module=` names the module it's importable from instead, when it's assigned somewhere else.
+    `requirement=` is the rule's level unless a project sets another - see `Requirement`.
     """
     if module is None:
         frame, _file = _call_site()
@@ -251,7 +313,88 @@ def exemption_class(name, *, rule, why, min_length=None, shows_as=NOT_GIVEN, bas
                 _("exemption_class() can't tell which module %(name)s is in - pass module=.") % {"name": name}
             )
         module = frame.f_globals["__name__"]
-    return type(name, (base,), {"__module__": module}, rule=rule, why=why, min_length=min_length, shows_as=shows_as)
+    keywords = {"requirement": requirement, "changes_behavior": changes_behavior}
+    return type(
+        name, (base,), {"__module__": module}, rule=rule, why=why, min_length=min_length, shows_as=shows_as, **keywords
+    )
+
+
+def _checked_levels(levels, where):
+    for rule, level in levels.items():
+        if not isinstance(level, Requirement):
+            raise TypeError(
+                _("%(where)s gives %(rule)r the level %(level)r - write a Requirement, e.g. Requirement.OPTIONAL.")
+                % {"where": where, "rule": rule, "level": level}
+            )
+    return levels
+
+
+def exemption_requirements(levels):
+    """
+    Sets the level of each rule named, `{rule: Requirement}`, replacing what an earlier call set - for a
+    project without Django, before what declares exemptions is imported. With Django, the
+    `ISIK_EXEMPTIONS` setting says the same, and a rule named here wins over it.
+
+        exemption_requirements({"settings.question": Requirement.OPTIONAL, "foo.bar": Requirement.OFF})
+    """
+    _levels.clear()
+    _levels.update(_checked_levels(dict(levels), "exemption_requirements()"))
+
+
+def _django_levels():
+    try:
+        from django.conf import settings
+    except ImportError:
+        return {}
+    if not settings.configured:
+        return {}
+    return _checked_levels(getattr(settings, "ISIK_EXEMPTIONS", {}), "ISIK_EXEMPTIONS")
+
+
+def requirement_of(exemption_type):
+    """
+    The level `exemption_type`'s rule is held to: the project's, for its rule or a rule it's a kind of
+    (`NoReauthentication` under `isik.request-policy`), else the level its owner gave it.
+    """
+    for source in (_levels, _django_levels()):
+        for cls in exemption_type.__mro__:
+            rule = cls.__dict__.get("rule")
+            if rule is not None and rule in source:
+                level = source[rule]
+                if level is Requirement.OFF and exemption_type.changes_behavior:
+                    raise TypeError(
+                        _(
+                            "%(rule)s can't be Requirement.OFF: its exemption changes what code does rather "
+                            "than answering a check. Make it Requirement.OPTIONAL instead."
+                        )
+                        % {"rule": rule}
+                    )
+                return level
+    return exemption_type.requirement
+
+
+def enforced(exemption_type):
+    """False when `exemption_type`'s rule is `Requirement.OFF` - a check of it then asks nothing."""
+    return requirement_of(exemption_type) is not Requirement.OFF
+
+
+def opted_out(value, exemption_type, *, plain):
+    """
+    The exemption `value` declares, for a check or an API to act on - None when it declares none:
+
+    - an `exemption_type` is itself;
+    - `plain` - the value the slot reads as "opt out", `True` for `exempt_from_registry`, `False` for a
+      setting's `question=` - is, unless the rule is strict, an `exemption_type` with no reason, listed
+      with the rest;
+    - anything else is None, for the caller to refuse or ignore.
+
+        opted_out(cls.exempt_from_registry, ViewSetRegistryExemption, plain=True)
+    """
+    if isinstance(value, exemption_type):
+        return value
+    if value is plain and requirement_of(exemption_type) is not Requirement.STRICT:
+        return exemption_type()
+    return None
 
 
 def makes_exemption(exemption_type):

@@ -140,6 +140,21 @@ selectors. The `--no-x` and `--x-file` forms and the `_FILE` variable count too:
 `APP_LOCK_FILE` and a `LOCK_` group's `file` setting can't both exist. `options()` checks the same against
 the command's own options, `--no-input`, and its `prefix=`.
 
+## Opting out without a reason
+
+Where a project makes a settings rule `Requirement.OPTIONAL` (see
+[exemptions](../utils/exemptions.md#how-much-a-rule-asks)), `False` stands for the exemption:
+
+```python
+ISIK_EXEMPTIONS = {"settings.question": Requirement.OPTIONAL, "settings.environment-variable": Requirement.OPTIONAL}
+
+verbose = Setting(bool, "Show every file", default=False, question=False)   # never asked
+class Server(Settings, env=False): ...                                     # no variables at all
+```
+
+Under a strict rule, `False` is refused, naming the rule to loosen. `Constant(32)` without a reason works
+the same way, under `settings.constant`.
+
 ## Errors
 
 `SettingsError` (a [`ConfigError`](../config/exceptions.md)) names the setting the way it was given, such as

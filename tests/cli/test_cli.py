@@ -503,7 +503,7 @@ class TestQuestionary:
         replies["select"] = ["slow"]
         replies["confirm"] = [True]
         replies["password"] = ["a", "b", "t", "t", "p"]
-        replies["text"] = ["30", "4", "", "ada", "x", "", "the server's", "/tmp/x"]
+        replies["text"] = ["30", "4", "", "ada", "x", "", "", "/tmp/x"]
 
         output = run(command(Every)).output
 

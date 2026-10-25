@@ -48,6 +48,7 @@ ETAG_ANNOTATION = "isik_concurrency_etag"
 class UnprovenConcurrencyToken(
     Exemption,
     rule="isik.concurrency-token.unproven",
+    changes_behavior=True,
     why=(
         "A concurrency token must change on every write, or a write made against an older version "
         "passes for one made against the current one - and isik can prove that only of its own triggers."
@@ -77,6 +78,7 @@ class ConcurrencyToken:
 class ConcurrencyParts(
     Exemption,
     rule="isik.concurrency-parts.unproven",
+    changes_behavior=True,
     why=(
         "A version computed in Python covers only what its concurrency_parts() reads, and nothing proves "
         "that's everything a write could lose - nor locks what it reads, unless its relations are named."

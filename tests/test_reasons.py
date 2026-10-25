@@ -47,10 +47,13 @@ class TestIsReason:
 
 
 class TestAMapOfExemptions:
-    def test_a_mapping_of_the_type_is_returned_as_it_is(self):
+    def test_a_mapping_of_the_type_comes_back_with_the_same_exemptions(self):
         exemptions = {"a": ViewSetRegistryExemption(reason=REASON), "b": ViewSetRegistryExemption(reason=REASON)}
 
-        assert require_exemptions("Owner", "exempt", exemptions, ViewSetRegistryExemption) is exemptions
+        returned = require_exemptions("Owner", "exempt", exemptions, ViewSetRegistryExemption)
+
+        assert returned == exemptions
+        assert all(returned[name] is exemptions[name] for name in exemptions)
 
     @pytest.mark.parametrize("value", [("a", "b"), ["a"], "a"])
     def test_names_without_their_exemptions_are_refused(self, value):

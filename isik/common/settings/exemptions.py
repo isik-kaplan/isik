@@ -11,6 +11,7 @@ class NoOption(
     Exemption,
     rule="settings.option",
     why="Every setting can be given as a command-line option.",
+    changes_behavior=True,
 ):
     pass
 
@@ -19,6 +20,7 @@ class NoEnv(
     Exemption,
     rule="settings.environment-variable",
     why="Every setting can be given as an environment variable.",
+    changes_behavior=True,
 ):
     pass
 
@@ -27,6 +29,7 @@ class NoQuestion(
     Exemption,
     rule="settings.question",
     why="Every setting is asked for when a command runs interactively.",
+    changes_behavior=True,
 ):
     pass
 
@@ -35,6 +38,7 @@ class AskedAtUse(
     Exemption,
     rule="settings.question.asked-at-use",
     why="Every setting is asked for with the others; one asked only where it's used must say so.",
+    changes_behavior=True,
 ):
     pass
 
@@ -43,6 +47,7 @@ class ReplacedByFlow(
     Exemption,
     rule="settings.question.replaced-by-flow",
     why="Every setting is asked for with the others; one a hand-written flow asks for instead must say so.",
+    changes_behavior=True,
 ):
     """`question=ReplacedByFlow(flow=ask_for_locks, reason=...)` - `flow` is the app's own; isik never calls it."""
 
@@ -58,6 +63,7 @@ class IsConstant(
     Exemption,
     rule="settings.constant",
     why="A setting is something a user can set; a fixed value must say why it's fixed.",
+    changes_behavior=True,
 ):
     pass
 

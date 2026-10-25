@@ -16,6 +16,7 @@ from isik.common.settings.declarations import (
     SelectedGroup,
     Setting,
     Source,
+    without,
 )
 from isik.common.settings.errors import SettingsError
 from isik.common.settings.exemptions import NoEnv
@@ -39,6 +40,8 @@ RESERVED = frozenset({"source", "sources", "as_dict", "error", "check", "replace
 
 
 def _class_option(name, value):
+    if name == "env":
+        value = without(value, NoEnv)
     if name == "env" and value is not None and not isinstance(value, NoEnv):
         raise TypeError(_("A Settings class's env= takes NoEnv(reason=...), not %(value)r.") % {"value": value})
     if name == "prompt" and value is not None and not isinstance(value, Prompt):

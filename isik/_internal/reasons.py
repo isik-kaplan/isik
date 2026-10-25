@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from django.core.exceptions import ImproperlyConfigured
 
 from isik._internal.translation import gettext as _
-from isik.common.utils.exemptions import Exemption
+from isik.common.utils.exemptions import Exemption, opted_out
 
 
 # What gets typed where a reason should be, by someone who has none yet.
@@ -46,27 +46,33 @@ def _refusal(owner, attribute, value, exemption_type, name=None):
 def require_exemption(owner, attribute, value, exemption_type):
     """
     The exemption `value` declares - an `exemption_type` - or None for `False`/`None`, which don't opt
-    out. Anything else is refused: `True` says to opt out but not why, and a bare string says why
-    without saying it's a reason.
+    out. `True` opts out without saying why, which only a rule that isn't strict takes. Anything else is
+    refused: a bare string says why without saying it's a reason.
     """
     if value is None or value is False:
         return None
-    if isinstance(value, exemption_type):
-        return value
-    raise _refusal(owner, attribute, value, exemption_type)
+    exemption = opted_out(value, exemption_type, plain=True)
+    if exemption is None:
+        raise _refusal(owner, attribute, value, exemption_type)
+    return exemption
 
 
 def require_exemptions(owner, attribute, exemptions, exemption_type):
-    """Refuses `exemptions` unless it's a `{name: exemption_type(reason=...)}` mapping, and returns it."""
+    """
+    `exemptions` - a `{name: exemption_type(reason=...)}` mapping - with each value an `exemption_type`:
+    `True` is one with no reason, where the rule isn't strict. Anything else is refused.
+    """
     if not isinstance(exemptions, Mapping):
         raise ImproperlyConfigured(
             _("%(owner)s.%(attribute)s takes {name: %(type)s(reason=...)}, not %(value)r.")
             % {"owner": owner, "attribute": attribute, "type": exemption_type.__name__, "value": exemptions}
         )
+    made = {}
     for name, value in exemptions.items():
-        if not isinstance(value, exemption_type):
+        made[name] = opted_out(value, exemption_type, plain=True)
+        if made[name] is None:
             raise _refusal(owner, attribute, value, exemption_type, name)
-    return exemptions
+    return made
 
 
 def made_exemption(owner, attribute, reason, exemption_type):

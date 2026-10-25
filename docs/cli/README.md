@@ -51,6 +51,10 @@ keywords, each with a default:
   question is asked with it as the default; `on_empty=KEEP_CURRENT` keeps a secret on an empty answer.
 - `name` - the keyword the instance is passed as, `"settings"`.
 
+`is_interactive()`, called inside the command, says whether this run asked its questions: the policy's
+answer. It's for decisions the command makes itself after its settings are resolved, such as a
+confirmation or a flow of its own. A group's subcommands see the group's answer.
+
 ## Selectors
 
 The options are built from the chosen groups. The selector's value is read from the arguments before

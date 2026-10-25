@@ -56,6 +56,44 @@ import it from. Pass `module=` when the class is importable from somewhere else.
   Django and drf-spectacular must see as empty (`help_text`, `db_comment`) while it still carries its
   reason.
 
+## How much a rule asks
+
+Every rule has a level, a `Requirement`. The rule's owner gives the default, and a project can override
+it, for isik's rules and its own alike:
+
+- `Requirement.STRICT`: an exemption with a reason over the type's floor. This is the default.
+- `Requirement.OPTIONAL`: that, or one with no reason (`FooReason()`), or the plain value its slot reads as
+  "opt out". That's `True` for `exempt_from_registry` and `{"destroy": True}`, and `False` for a setting's
+  `question=`/`env=`/`option=`. The plain value is still made into an exemption, listed and counted with
+  the rest, with no reason.
+- `Requirement.OFF`: a check of the rule asks nothing. Refused for a rule whose exemption changes what
+  code does, such as the registry, preconditions, `not_atomic` or the settings opt-outs, since there's no
+  check to turn off. Use `OPTIONAL` for those.
+
+```python
+from isik.common.utils.exemptions import Requirement, exemption_class, exemption_requirements
+
+# The owner's default:
+FooReason = exemption_class("FooReason", rule="foo.bar", why="...", requirement=Requirement.OPTIONAL)
+
+# The project's levels, in Django settings - keyed by rule, a rule covering the kinds of it:
+ISIK_EXEMPTIONS = {"foo.bar": Requirement.STRICT, "settings.question": Requirement.OPTIONAL}
+
+# Without Django, before what declares exemptions is imported (a call wins over the setting):
+exemption_requirements({"settings.question": Requirement.OPTIONAL})
+```
+
+A level is read when an exemption is made, so set it before the code that declares them is imported.
+Levels are always `Requirement` members, never strings.
+
+A check of a project's own rule asks the utility instead of testing the type itself, so it honors the
+level:
+
+- `opted_out(value, FooReason, plain=True)` gives the exemption `value` declares, or None.
+- `enforced(FooReason)` is False when the rule is `OFF`.
+
+isik's own checks keep their own switches (`ISIK_CHECKS`) as well.
+
 ## Making one
 
 Only `reason=`, as a keyword: `NoHelpText(reason="...")`. A positional reason, any other keyword, a

@@ -103,6 +103,12 @@ class Question:
             self.asker.tell(self.asker.messages(self.entry.owner, Message.ASKED_ERROR, message=str(error)))
             return RETRY
 
+    def unset_message(self):
+        """The question, with `shown` after it for an unset default - a hint to read, never text to edit."""
+        if self.default is UNSET and self.setting.shown:
+            return f"{self.message} [{self.setting.shown}]"
+        return self.message
+
     def empty(self):
         """What an empty answer gives - RETRY when there's nothing to fall back to and the setting is required."""
         if self.default is None and self.setting.required:
@@ -138,7 +144,7 @@ class ClickQuestion(Question):
         return labels[answer]
 
     def confirm(self):
-        return click.confirm(self.message, default=bool(self.default))
+        return click.confirm(self.unset_message(), default=bool(self.default))
 
     def secret(self):
         if self.setting.required:
@@ -165,8 +171,8 @@ class ClickQuestion(Question):
         return self.converted_line()
 
     def converted_line(self):
-        shown = self.setting.shown if self.default is UNSET else display(self.setting, self.default)
-        message = f"{self.message} [{shown}]" if shown else self.message
+        shown = display(self.setting, self.default)  # None for an unset default, whose hint unset_message() gives
+        message = f"{self.message} [{shown}]" if shown else self.unset_message()
         while True:
             text = click.prompt(message, default="", show_default=False)
             value = self.empty() if text == "" else self.convert(text)
@@ -181,7 +187,7 @@ class QuestionaryQuestion(Question):
         return labels[_answered(answer)]
 
     def confirm(self):
-        return _answered(questionary.confirm(self.message, default=bool(self.default), **_io()).ask())
+        return _answered(questionary.confirm(self.unset_message(), default=bool(self.default), **_io()).ask())
 
     def secret(self):
         while True:
@@ -197,9 +203,10 @@ class QuestionaryQuestion(Question):
         return _answered(questionary.text(message, **_io()).ask())
 
     def text(self):
-        shown = self.setting.shown if self.default is UNSET else display(self.setting, self.default)
+        # Only a real default is typed in, ready to edit; an unset one's `shown` goes in the question.
+        filled = display(self.setting, self.default)  # None for an unset one
         while True:
-            text = _answered(questionary.text(self.message, default=shown or "", **_io()).ask())
-            value = self.empty() if text == "" or (shown and text == shown) else self.convert(text)
+            text = _answered(questionary.text(self.unset_message(), default=filled or "", **_io()).ask())
+            value = self.empty() if text == "" or (filled and text == filled) else self.convert(text)
             if value is not RETRY:
                 return value

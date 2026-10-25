@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-10-25
+
+### Added
+
+- **`Requirement` - how much a rule asks of an opt-out**: `STRICT` (a reason over the floor, the default),
+  `OPTIONAL` (no reason, or the slot's plain opt-out value: `exempt_from_registry=True`,
+  `{"destroy": True}`, a setting's `question=False`), or `OFF` (a check asks nothing; refused for a rule
+  whose exemption changes behavior). A rule's owner gives the default, `exemption_class(...,
+  requirement=...)`, and a project sets any rule's level, its own or isik's, in `ISIK_EXEMPTIONS` or with
+  `exemption_requirements()`. A project's checks honor it through `opted_out()` and `enforced()`. A
+  plain opt-out is still made into an exemption, listed and counted. An exemption is always truthy
+  unless its type shows as something else.
+- **`isik.cli.is_interactive()`** - whether the running command asked its questions, for the decisions it
+  makes itself afterwards.
+- **`HelpFormat(default_separator=..., option_file_help=...)`** - the text between a description and its
+  default, and the help of a `--x-file` option, each worded the app's own way.
+
+### Changed
+
+- **A view's exemption maps are copies once its class is made**: `precondition_exempt_actions`,
+  `idempotency_*_actions`, `unguarded_fields` and the like hold the same exemptions, with any plain opt-out
+  made into its exemption, but they're no longer the dict the class body wrote.
+
+### Fixed
+
+- **`options()` on a click group** keeps the group's `Commands:` section in `--help`.
+- **A questionary question with an unset default** shows its `shown` text in the question -
+  `Lock page [the server's]` - rather than typed into the answer, where it had to be deleted first. A
+  flag with an unset default says so in its question too, in either prompt style.
+
 ## [0.33.0] - 2026-10-25
 
 ### Added

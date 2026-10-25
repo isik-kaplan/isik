@@ -23,6 +23,7 @@ LOCK_TIMEOUT = 10_000
 class NoIdempotencyKey(
     Exemption,
     rule="isik.idempotency.key",
+    changes_behavior=True,
     why=(
         "A request that changes state honors an Idempotency-Key, or a retry after a lost response does the work twice."
     ),
@@ -33,6 +34,7 @@ class NoIdempotencyKey(
 class NoReplay(
     Exemption,
     rule="isik.idempotency.replay",
+    changes_behavior=True,
     why="A retry with the same key gets the first response back, or it can't tell what the first did.",
 ):
     """Why an action's response mustn't be kept for a replay - `idempotency_no_replay_actions`' type."""
@@ -101,8 +103,12 @@ class IdempotencyMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        require_exemptions(cls.__name__, "idempotency_exempt_actions", cls.idempotency_exempt_actions, NoIdempotencyKey)
-        require_exemptions(cls.__name__, "idempotency_no_replay_actions", cls.idempotency_no_replay_actions, NoReplay)
+        cls.idempotency_exempt_actions = require_exemptions(
+            cls.__name__, "idempotency_exempt_actions", cls.idempotency_exempt_actions, NoIdempotencyKey
+        )
+        cls.idempotency_no_replay_actions = require_exemptions(
+            cls.__name__, "idempotency_no_replay_actions", cls.idempotency_no_replay_actions, NoReplay
+        )
 
     @property
     def idempotency_action(self):

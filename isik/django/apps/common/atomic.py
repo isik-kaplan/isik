@@ -11,6 +11,7 @@ from isik.common.utils.exemptions import Exemption
 class NotAtomic(
     Exemption,
     rule="isik.not-atomic",
+    changes_behavior=True,
     why=(
         "A request served outside a transaction leaves whatever it wrote before failing written, and "
         "loses the row locks and rollbacks every other guard here counts on."

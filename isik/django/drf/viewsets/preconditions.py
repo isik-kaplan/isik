@@ -30,6 +30,7 @@ from isik.django.apps.common.db.concurrency import (
 class NoPrecondition(
     Exemption,
     rule="isik.precondition",
+    changes_behavior=True,
     why=(
         "A write that doesn't say which version of the row it was made against (If-Match) overwrites "
         "whatever changed since that version was read."
@@ -41,6 +42,7 @@ class NoPrecondition(
 class NoReadableVersion(
     Exemption,
     rule="isik.precondition.readable-version",
+    changes_behavior=True,
     why=(
         "A write that asks If-Match needs a read that hands out the version to send - a GET sending its "
         "ETag - or a client has nothing to name but a version it guessed."
@@ -209,8 +211,10 @@ class PreconditionMixin:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        require_exemptions(cls.__name__, "precondition_exempt_actions", cls.precondition_exempt_actions, NoPrecondition)
-        require_exemptions(
+        cls.precondition_exempt_actions = require_exemptions(
+            cls.__name__, "precondition_exempt_actions", cls.precondition_exempt_actions, NoPrecondition
+        )
+        cls.precondition_unread_actions = require_exemptions(
             cls.__name__, "precondition_unread_actions", cls.precondition_unread_actions, NoReadableVersion
         )
         if not isinstance(cls.precondition_read_from, Mapping):
