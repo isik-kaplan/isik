@@ -50,6 +50,10 @@ keywords, each with a default:
 - `current()` - `{variable: text}` for what's already in place, such as a service's env file. Each
   question is asked with it as the default; `on_empty=KEEP_CURRENT` keeps a secret on an empty answer.
 - `name` - the keyword the instance is passed as, `"settings"`.
+- `errors` - how a value the command can't use is shown. `ErrorStyle.USAGE`, the default, is click's usage
+  error: the usage line, "Try '... --help' for help.", then `Error: <message>`. `ErrorStyle.MESSAGE`
+  prints the message alone on stderr. Both exit with 2, and a declined soft limit aborts either way.
+  Values click itself refuses, such as a choice that isn't one, are still click's usage errors.
 
 `is_interactive()`, called inside the command, says whether this run asked its questions: the policy's
 answer. It's for decisions the command makes itself after its settings are resolved, such as a

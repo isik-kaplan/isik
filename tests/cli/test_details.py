@@ -509,3 +509,52 @@ def test_a_groups_commands_are_listed_with_its_context():
 
     assert "\nCommands:\n  add\n" in invoke(links, ["--help"]).output
     assert seen == ["links"]
+
+
+class TestErrorStyle:
+    class Bounded(Settings, prefix="B_", option_file=True):
+        size = Setting(int, "Size", default=1, max=2)
+
+    def test_the_message_alone_on_stderr_with_a_usage_errors_exit_code(self, tmp_path):
+        from isik.cli import ErrorStyle
+
+        main = command(self.Bounded, errors=ErrorStyle.MESSAGE)
+        result = CliRunner().invoke(main, ["--size", "3"])
+
+        assert (result.exit_code, result.stdout, result.stderr) == (2, "", "--size must be at most 2\n")
+        both = CliRunner().invoke(main, ["--size", "1", "--size-file", str(tmp_path)])
+        assert both.stderr == "--size and --size-file can't both be given\n"
+
+    def test_usage_is_the_default(self):
+        from isik.cli import ErrorStyle
+
+        for main in (command(self.Bounded), command(self.Bounded, errors=ErrorStyle.USAGE)):
+            result = CliRunner().invoke(main, ["--size", "3"])
+            assert result.exit_code == 2
+            assert (
+                result.stderr
+                == "Usage: main [OPTIONS]\nTry 'main --help' for help.\n\nError: --size must be at most 2\n"
+            )
+
+    def test_a_declined_soft_limit_still_aborts(self):
+        from isik.cli import ErrorStyle
+
+        class Slow(Settings, prompt=Prompt.CLICK):
+            level = Setting(int, "Level", default=1, soft_max=5)
+
+        result = CliRunner().invoke(command(Slow, errors=ErrorStyle.MESSAGE), input="9\nn\n")
+
+        assert result.exit_code == 1 and "Aborted!" in result.output
+
+    def test_errors_takes_an_error_style(self):
+        with pytest.raises(TypeError, match=r"^options\(\)'s errors= takes an ErrorStyle, not 'message'\.$"):
+            options(Picks, errors="message")
+
+
+def test_a_message_error_shows_where_its_told():
+    from isik.cli.commands import MessageError
+
+    written = io.StringIO()
+    MessageError("--size must be at most 2").show(file=written)
+
+    assert written.getvalue() == "--size must be at most 2\n"

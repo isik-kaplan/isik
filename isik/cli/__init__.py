@@ -13,9 +13,9 @@ from isik._internal.checks import check_extra
 check_extra("cli", "click")
 check_extra("cli", "questionary")
 
-from isik.cli.commands import is_interactive, options  # noqa: E402
+from isik.cli.commands import ErrorStyle, is_interactive, options  # noqa: E402
 from isik.cli.help import HelpFormat  # noqa: E402
 from isik.cli.policies import no_option_given, terminal_unless_no_input  # noqa: E402
 
 
-__all__ = ["HelpFormat", "is_interactive", "no_option_given", "options", "terminal_unless_no_input"]
+__all__ = ["ErrorStyle", "HelpFormat", "is_interactive", "no_option_given", "options", "terminal_unless_no_input"]

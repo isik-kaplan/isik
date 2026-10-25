@@ -727,7 +727,7 @@ msgstr ""
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
-#: isik/cli/commands.py:336
+#: isik/cli/commands.py:363
 msgid "@options(...) goes above @click.command(), so it has the command to add to."
 msgstr ""
 
@@ -902,7 +902,7 @@ msgstr ""
 msgid "Document has not changed since given time"
 msgstr ""
 
-#: isik/cli/commands.py:110
+#: isik/cli/commands.py:132
 msgid "Don't ask any questions - fail on a missing value instead."
 msgstr ""
 
@@ -1664,7 +1664,7 @@ msgstr ""
 msgid "expected one of %(choices)s"
 msgstr ""
 
-#: isik/cli/commands.py:242
+#: isik/cli/commands.py:264
 #: isik/common/settings/conversion.py:32
 msgid "expected yes/no, true/false, on/off or 1/0"
 msgstr ""
@@ -1756,9 +1756,14 @@ msgstr ""
 msgid "option= takes the option's name, or NoOption(reason=...), not %(value)r."
 msgstr ""
 
-#: isik/cli/commands.py:78
+#: isik/cli/commands.py:97
 #, python-format
 msgid "options() takes a Settings class, not %(value)r."
+msgstr ""
+
+#: isik/cli/commands.py:99
+#, python-format
+msgid "options()'s errors= takes an ErrorStyle, not %(value)r."
 msgstr ""
 
 #: isik/cli/testing.py:111

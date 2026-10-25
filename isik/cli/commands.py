@@ -10,6 +10,7 @@ the command runs. It goes above `@click.command()`, so it has the command to cha
 
 import functools
 import os
+from enum import Enum
 from pathlib import Path
 
 import click
@@ -70,12 +71,33 @@ def click_type(setting):
     return CasterType(setting)
 
 
+class ErrorStyle(Enum):
+    """How a command shows a value it can't use - `options(errors=...)`."""
+
+    # click's usage error: the usage line, "Try '... --help' for help.", then "Error: <message>".
+    USAGE = "usage"
+    # The message alone, on stderr - for a command whose errors read as its own.
+    MESSAGE = "message"
+
+
+class MessageError(click.ClickException):
+    """A usage error shown as its message alone, with the exit code a usage error has."""
+
+    exit_code = 2
+
+    def show(self, file=None):
+        click.echo(self.format_message(), file=file, err=True)
+
+
 class Binding:
     """One `options(...)` - which class, how its command asks and shows it."""
 
-    def __init__(self, settings_class, *, only, exclude, prefix, interactive, help, epilog, current, name):
+    def __init__(self, settings_class, *, only, exclude, prefix, interactive, help, epilog, current, name, errors):
         if not (isinstance(settings_class, type) and issubclass(settings_class, Settings)):
             raise TypeError(_("options() takes a Settings class, not %(value)r.") % {"value": settings_class})
+        if not isinstance(errors, ErrorStyle):
+            raise TypeError(_("options()'s errors= takes an ErrorStyle, not %(value)r.") % {"value": errors})
+        self.errors = errors
         self.settings_class = settings_class
         self.only = None if only is None else frozenset(only)
         self.exclude = frozenset(exclude)
@@ -280,6 +302,8 @@ def _run(binding, callback, **values):
             resolution.asker = Asker(binding.settings_class, resolution.message)
         settings = resolution.resolve()
     except SettingsError as error:
+        if binding.errors is ErrorStyle.MESSAGE:
+            raise MessageError(str(error)) from None
         raise click.UsageError(str(error)) from None  # click adds the usage line itself
     except SettingsAborted:
         raise click.Abort() from None
@@ -308,6 +332,7 @@ def options(
     epilog=None,
     current=None,
     name="settings",
+    errors=ErrorStyle.USAGE,
 ):
     """
     Puts `settings_class`'s settings on the click command below it, and hands the resolved instance to the
@@ -318,6 +343,7 @@ def options(
     - `interactive` - when to ask: `terminal_unless_no_input()`, `no_option_given(...)`, or a function.
     - `help` - a `HelpFormat`. `epilog(selection)` - the help's closing text for the chosen groups.
     - `current()` - `{variable: text}` the values already in place, asked with as each question's default.
+    - `errors` - `ErrorStyle.USAGE`, click's usage error, or `ErrorStyle.MESSAGE`, the message alone.
     """
     binding = Binding(
         settings_class,
@@ -329,6 +355,7 @@ def options(
         epilog=epilog,
         current=current,
         name=name,
+        errors=errors,
     )
 
     def decorate(command):
