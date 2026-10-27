@@ -1,90 +1,68 @@
 """votes() maker + UserVoteMixin - see `votes` for usage."""
 
-from django.conf import settings
 from django.db import models
+from django.db.models import Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 
+from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy, lazy_format
-from isik.django.apps.common._model_makers import (
-    build_model,
-    claim_related_name,
-    expose_via_reverse_accessor,
-    resolve_base_model,
-    resolve_field,
-)
+from isik.django.apps.common._contracts import kind
+from isik.django.apps.common._model_makers import resolve_field
+from isik.django.apps.feedback._attachment import FeedbackAttachment
 
 
-class _VotesField:
+class _VotesField(FeedbackAttachment):
     """Descriptor returned by `votes()` - see `votes` for the public docstring."""
 
-    def __init__(
-        self,
-        *,
-        user_related_name,
-        target_name,
-        target_related_name,
-        user_model=None,
-        base_model=None,
-        extra_fields=None,
-        model_name=None,
-    ):
-        self.user_related_name = user_related_name
-        self.target_name = target_name
-        self.target_related_name = target_related_name
-        self.user_model = user_model or settings.AUTH_USER_MODEL
-        self.base_model = base_model
-        self.extra_fields = extra_fields or {}
-        self.model_name = model_name
+    maker = "votes()"
+    noun = "Vote"
+    base_setting = "FEEDBACK_VOTES_BASE_MODEL"
+    default_related_name = "votes"
+    unique_per_user = True
 
-    def contribute_to_class(self, host_cls, name):
-        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Vote"
-        claim_related_name(host_cls, self.target_related_name, model_name)
-        claim_related_name(self.user_model, self.user_related_name, model_name)
+    def descriptions(self, host_cls):
+        return (
+            (
+                lazy_format("The %(target)s this vote is on.", target=host_cls.__name__),
+                f"The {host_cls.__name__} this vote is on.",
+            ),
+            (gettext_lazy("Who cast this vote."), "Who cast this vote."),
+        )
 
-        fields = {
-            self.target_name: models.ForeignKey(
-                host_cls,
-                on_delete=models.CASCADE,
-                related_name=self.target_related_name,
-                help_text=lazy_format("The %(target)s this vote is on.", target=host_cls.__name__),
-                db_comment=f"The {host_cls.__name__} this vote is on.",
-            ),
-            "user": models.ForeignKey(
-                self.user_model,
-                on_delete=models.CASCADE,
-                related_name=self.user_related_name,
-                help_text=gettext_lazy("Who cast this vote."),
-                db_comment="Who cast this vote.",
-            ),
+    def own_fields(self):
+        return {
             "value": models.SmallIntegerField(
                 choices=[(1, "up"), (-1, "down")],
                 help_text=gettext_lazy("1 for an upvote, -1 for a downvote."),
                 db_comment="1 for an upvote, -1 for a downvote.",
             ),
-            **self.extra_fields,
         }
-        generated_model = build_model(
-            model_name,
-            host_cls,
-            fields=fields,
-            base_model=resolve_base_model(self.base_model, "FEEDBACK_VOTES_BASE_MODEL"),
-            meta_attrs={
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=[self.target_name, "user"], name=f"unique_{model_name.lower()}_per_user"
-                    )
-                ]
-            },
-        )
-        expose_via_reverse_accessor(
-            host_cls, name, self.target_related_name, generated_model=generated_model, config=self
+
+    def own_needs(self):
+        return (kind("value", models.IntegerField, _("an IntegerField holding 1 or -1")),)
+
+    def own_annotations(self, signed_in, user):
+        rows = self.rows()
+        score = Coalesce(Subquery(rows.values(self.target_name).annotate(n=Sum("value")).values("n")), 0)
+        if signed_in:
+            # One row at most - a user's vote is unique on its target.
+            mine = Subquery(rows.filter(user=user).values("value"))
+        else:
+            mine = Value(None, output_field=models.SmallIntegerField())
+        return (
+            ("score", score),
+            ("up", self.count(rows.filter(value=1))),
+            ("down", self.count(rows.filter(value=-1))),
+            ("mine", mine),
         )
 
 
 def votes(
     *,
-    user_related_name,
-    target_name="target",
-    target_related_name="votes",
+    model=None,
+    user_related_name=None,
+    target_name=None,
+    target_related_name=None,
     user_model=None,
     base_model=None,
     extra_fields=None,
@@ -120,15 +98,22 @@ def votes(
     `model_name` overrides the generated model's class name (default `<Host><Attr>Vote`, e.g.
     `Post.votes` -> `PostVotesVote`). It also names the table and constraints, so settle it before
     the first migration.
+
+    `model=` binds a model you wrote instead - a class or `"app_label.Model"`, checked against what
+    this reads of it once registered; the options that describe a built model are refused beside it.
+    See docs/django/apps/feedback/your_own_models.md.
     """
     return _VotesField(
-        user_related_name=user_related_name,
+        model=model,
         target_name=target_name,
-        target_related_name=target_related_name,
-        user_model=user_model,
-        base_model=base_model,
-        extra_fields=extra_fields,
-        model_name=model_name,
+        generating={
+            "user_related_name": user_related_name,
+            "target_related_name": target_related_name,
+            "user_model": user_model,
+            "base_model": base_model,
+            "extra_fields": extra_fields,
+            "model_name": model_name,
+        },
     )
 
 

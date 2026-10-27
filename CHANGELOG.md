@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-10-26
+
+### Added
+
+- **`model=` on `votes()`, `comments()`, `notes()` and `bookmarks()`** binds a model the project wrote - a
+  class or `"app_label.Model"`, written before or after its host - instead of building one. It's checked
+  once registered against what the maker reads of it (its fields, its key to the host, its unique field
+  sets), with every problem raised in one `ImproperlyConfigured`. The options that describe a built model
+  are refused beside it. **`tags(tag_model=..., through_model=...)`** does the same for a tag pool - which
+  several hosts can then share - with **`AbstractTag`** as a base for the tag model.
+- **`with_feedback(queryset, user)`** annotates a host's rows with each attachment's `_score`, `_up`,
+  `_down`, `_mine` (votes), `_count` (comments, bookmarks), `_mine` (bookmarks) and `_mine_count` (notes) -
+  one subquery each, so a list is one query. **`ranked(queryset, Post.votes, by=...)`** orders by
+  `score`, `wilson` (the lower bound of the 95% Wilson interval) or `controversial`, computed in the query.
+  **`VotesField`, `BookmarksField`, `CommentCountField` and `NoteCountField`** read them in a serializer.
+- **`VoteActions`, `BookmarkActions`, `CommentActions` and `NoteActions`** add a host's feedback routes to
+  its own viewset - `PUT`/`DELETE {id}/vote/` and `{id}/bookmark/`, a page of `{id}/comments/` and
+  `{id}/notes/` with create, edit and delete - fetching the host with the view's own `get_object()`,
+  checked with `feedback_permission_classes`, and exempt from isik's write guards where they don't apply.
+- **Threaded comments**: `comments(threaded=True, max_depth=..., track_edits=True)` adds `parent` and
+  `edited_at` - a bound model has them by having the fields - with `UserCommentMixin.reply()`,
+  `edit_comment()` and `delete_comment()`, `reply_count`, and `?parent=` / `?top_level=` on the comments
+  route. Threads come back flat.
+- **`with_tag_usage(queryset, field)`** and **`TagUsageField`** - tag usage counts as one subquery;
+  `generic_tag_serializer()`'s `usage_count` reads them.
+- **`schema_actions` and `schema_list_actions`** on a view tell isik's `AutoSchema` an action's request,
+  response, status and parameters, and which GETs answer with a page - read when the schema is
+  generated, unlike `@extend_schema`.
+
+### Changed
+
+- **Breaking: a `base_model`'s Meta reaches the model a maker builds** - its `ordering`, `indexes`,
+  `constraints` and the rest, which were dropped. A project whose base declares Meta options gets a
+  migration for them.
+- **Breaking: `extra_fields` can't replace a field the maker builds** - an extra field named `value`,
+  `body`, `user` or the host key raises `TypeError` instead of silently replacing it.
+- **Breaking: generic_tag_serializer()'s `usage_count` is a `TagUsageField`**, not a
+  `ModelRelatedCountField` - the same count, read from `with_tag_usage()` when the queryset has it.
+- `user_related_name` is refused beside `model=` and needed without it, with a message saying so.
+
+### Fixed
+
+- **`TaggableMixin.remove_tag()`** normalizes the name as `add_tag()` does, so a tag added as `"Python"`
+  under `normalize=str.lower` is removed by `"Python"` too.
+
 ## [0.35.1] - 2026-10-25
 
 ### Fixed

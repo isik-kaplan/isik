@@ -60,12 +60,12 @@ def test_marking_one_again_replaces_it(monkeypatch):
 
 @isolate_apps("tests.testapp")
 def test_a_model_a_maker_builds_is_a_maker(monkeypatch):
-    from isik.django.apps.common._model_makers import build_model
+    from isik.django.apps.common._model_makers import DefaultMakerBase, build_model
 
     monkeypatch.setattr(generated, "_generated", {})
     host = type("Host", (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
 
-    built = build_model("HostThing", host, fields={}, base_model=models.Model)
+    built = build_model("HostThing", host, fields={}, base_model=DefaultMakerBase)
 
     assert built.isik_generated == "maker"
     assert generated_models("maker") == [built]

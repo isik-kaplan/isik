@@ -161,6 +161,10 @@ def _idempotency_key(view):
 _error_serializers = weakref.WeakKeyDictionary()
 
 
+# What a view's schema_actions doesn't say, so the operation is described as it would be without it.
+_UNDECLARED = object()
+
+
 class AutoSchema(_BaseAutoSchema):
     """
     drf-spectacular `AutoSchema` fixing two gaps that are properties of isik's own mixins, not of
@@ -169,6 +173,14 @@ class AutoSchema(_BaseAutoSchema):
         REST_FRAMEWORK = {"DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema"}
 
     A project with its own `AutoSchema` customizations subclasses this instead of drf-spectacular's.
+
+    A view's `schema_actions` - `{action: {"request": ..., "response": ..., "status": 201, "parameters":
+    [...]}}`, or the same per method, `{action: {"PUT": {...}, "DELETE": {...}}}` - describes its actions where
+    `get_serializer_class()` can't, as `@extend_schema` would; read when the schema is generated, so
+    it holds whatever `DEFAULT_SCHEMA_CLASS` was when the view was defined.
+
+    An action a view names in `schema_list_actions` publishes a paginated array for its GET, without the
+    view's own filters - a page of rows that aren't the view's, as `CommentActions`' comments are.
 
     `HistoryMixin`'s `history()`/`history_list()` publish a paginated array (drf-spectacular's own
     action-name heuristic doesn't know that, since neither is called `list`), a unique operation id
@@ -198,9 +210,15 @@ class AutoSchema(_BaseAutoSchema):
     """
 
     def _is_list_view(self, serializer=None):
-        if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
+        if getattr(self.view, "action", None) in _HISTORY_ACTIONS or self._is_own_list():
             return True
         return super()._is_list_view(serializer)
+
+    def _is_own_list(self):
+        """A GET of an action the view names in `schema_list_actions` - one answering with a page of
+        rows that aren't the view's own, as `CommentActions`' comments do."""
+        listed = getattr(self.view, "schema_list_actions", ())
+        return getattr(self.view, "action", None) in listed and self.method == "GET"
 
     def get_operation_id(self):
         action = getattr(self.view, "action", None)
@@ -216,12 +234,32 @@ class AutoSchema(_BaseAutoSchema):
         # viewset's other actions, not of history()/history_list(), which never call
         # filter_queryset()/use filter_backends at all. history_filterset_class's own filters are
         # already added separately in get_override_parameters().
-        if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
+        if getattr(self.view, "action", None) in _HISTORY_ACTIONS or self._is_own_list():
             return []
         return super().get_filter_backends()
 
+    def _declared(self, which):
+        """What the view's `schema_actions` says of `which` - "request", "response", "status" or "parameters" - for
+        this operation: `{action: {which: value}}`, or `{action: {method: {which: value}}}` per method."""
+        declared = getattr(self.view, "schema_actions", {}).get(getattr(self.view, "action", None), {})
+        declared = declared.get(self.method, declared)
+        return declared.get(which, _UNDECLARED)
+
+    def get_request_serializer(self):
+        declared = self._declared("request")
+        return super().get_request_serializer() if declared is _UNDECLARED else declared
+
+    def get_response_serializers(self):
+        declared = self._declared("response")
+        answered = super().get_response_serializers() if declared is _UNDECLARED else declared
+        status = self._declared("status")
+        return answered if status is _UNDECLARED else {status: answered}
+
     def get_override_parameters(self):
         parameters = super().get_override_parameters()
+        declared = self._declared("parameters")
+        if declared is not _UNDECLARED:
+            parameters = [*parameters, *declared]
         if getattr(self.view, "action", None) in _HISTORY_ACTIONS:
             parameters = [*parameters, *_history_filter_parameters(self.view.history_filterset_class)]
         serializer_class = self._resolve_serializer_class()

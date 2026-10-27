@@ -226,3 +226,80 @@ class TestBuildModel:
         )
         assert generated._was_stamped is True
         assert generated._meta.app_label == "testapp"
+
+    @isolate_apps("tests.testapp")
+    def test_the_base_models_meta_reaches_the_generated_model(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+        class Base(models.Model):
+            rank = models.IntegerField(default=0)
+
+            class Meta:
+                abstract = True
+                ordering = ["-rank"]
+                db_table_comment = "Ranked rows."
+                indexes = [models.Index(fields=["rank"], name="%(class)s_rank")]
+                constraints = [models.CheckConstraint(condition=models.Q(rank__gte=0), name="%(class)s_rank_gte_0")]
+
+        generated = _model_makers.build_model(
+            "HostThing",
+            Host,
+            fields={},
+            base_model=Base,
+            meta_attrs={"constraints": [models.UniqueConstraint(fields=["rank"], name="hostthing_unique_rank")]},
+        )
+
+        assert generated._meta.ordering == ["-rank"]
+        assert generated._meta.db_table_comment == "Ranked rows."
+        assert [index.name for index in generated._meta.indexes] == ["hostthing_rank"]
+        assert [constraint.name for constraint in generated._meta.constraints] == [
+            "hostthing_rank_gte_0",
+            "hostthing_unique_rank",
+        ]
+        assert generated._meta.abstract is False
+
+
+class TestHelpers:
+    def test_keyword_list(self):
+        assert _model_makers.keyword_list(["a", "b"]) == "a=, b="
+
+    def test_merge_fields_adds_what_doesnt_clash(self):
+        assert _model_makers.merge_fields({"a": 1}, {"b": 2}, "Thing") == {"a": 1, "b": 2}
+
+
+class TestContracts:
+    @isolate_apps("tests.testapp")
+    def test_a_relation_named_without_its_app_is_the_owners(self):
+        from isik.django.apps.common._contracts import label, points_at
+
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+        class Thing(models.Model):
+            host = models.ForeignKey("Host", on_delete=models.CASCADE)
+            itself = models.ForeignKey("self", null=True, on_delete=models.CASCADE)
+
+            class Meta:
+                app_label = "testapp"
+
+        assert label(Host) == label("testapp.Host") == "testapp.host"
+        assert points_at(Thing._meta.get_field("host"), Host)
+        assert points_at(Thing._meta.get_field("itself"), "testapp.Thing")
+        assert not points_at(Thing._meta.get_field("id"), Host)
+
+    @isolate_apps("tests.testapp")
+    def test_a_relation_not_resolved_yet_is_read_as_written(self):
+        from isik.django.apps.common._contracts import points_at
+
+        class Early(models.Model):
+            later = models.ForeignKey("Later", on_delete=models.CASCADE)
+
+            class Meta:
+                app_label = "testapp"
+
+        assert Early._meta.get_field("later").remote_field.model == "Later"
+        assert points_at(Early._meta.get_field("later"), "testapp.Later")
+        assert not points_at(Early._meta.get_field("later"), "other.Later")

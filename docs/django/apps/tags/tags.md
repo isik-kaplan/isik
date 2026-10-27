@@ -21,6 +21,7 @@ Post.topics.through                  # generated PostTopicsObjectTag through mod
 - `normalize` (e.g. `str.lower`) is off by default - `"Python"` and `"python"` are different tags unless you opt in.
 - A name is one or more letters, digits, `.`, `-` or `_` by default; `name_validators=` replaces that rule. The empty name is refused.
 - A host can attach `tags()` more than once - pass `field=Post.topics` to disambiguate when there's more than one.
+- `remove_tag()` normalizes the name as `add_tag()` does.
 
 ## TaggableMixin
 Mix into a host model to get `add_tag`/`remove_tag`/`set_tags`/`tag_names` verbs for any `tags()` attached to it.
@@ -45,4 +46,45 @@ The generated models are `<Host><Attr>Tag` and `<Host><Attr>ObjectTag` by defaul
 
 ```python
 topics = tags(related_name="posts_with_topic", tag_model_name="Topic", through_model_name="PostTopic")
+```
+
+## Your own models
+
+`tag_model=` takes a tag model you write - shared by as many hosts as name it - and `through_model=` the
+through model too (it needs `tag_model=`, since its tag key points at that model). Each is a class or
+`"app_label.Model"`, checked once registered.
+
+```python
+class Topic(AbstractTag):           # a unique `name` with the default validators, and TagManager
+    pass
+
+class PostTopic(models.Model):
+    tag = models.ForeignKey(Topic, on_delete=models.CASCADE)
+    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE, related_name="topic_links")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["tag", "post"], name="one_post_topic")]
+
+class Post(TaggableMixin, models.Model):
+    topics = tags(related_name="posts", tag_model=Topic, through_model=PostTopic)
+```
+
+- A tag model needs a unique `CharField` named `name` and a `TagManager` as its default manager -
+  `AbstractTag` has both. Give it `_normalize`, a function of a name, to normalize as `normalize=` does.
+- A through model needs a `ForeignKey` named `tag` to the tag model, one to the host (or `target_name=`
+  naming it), and the two unique together.
+- The options that describe a model `tags()` builds are refused beside the one you give: the `name_*`,
+  `normalize` and `tag_*` options beside `tag_model=`; `target_related_name` and the `through_*` options
+  beside `through_model=`.
+
+## with_tag_usage(queryset, field)
+
+Annotates a tag model's queryset with `usage_count` - how many of `field`'s host rows carry each tag - as
+one subquery, so a list of tags costs one query. A pool several hosts share is counted for `field`'s
+host only.
+
+```python
+from isik.django.apps.tags.tags import with_tag_usage
+
+with_tag_usage(Post.topics.model.objects.all(), Post.topics).order_by("-usage_count")
 ```

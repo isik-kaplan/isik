@@ -31,7 +31,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   tracking, ORM helpers, email templates, middleware, skippable validators, and the shared
   model-maker plumbing behind the apps below
 - [django/apps/feedback/](django/apps/feedback/README.md) - `votes()`, `bookmarks()`, `notes()`,
-  `comments()`: per-host interaction models attached with no migration to hand-write
+  `comments()`: per-host interaction models, built or your own, with query annotations, ranking,
+  threads and viewset actions
 - [django/apps/tags/](django/apps/tags/README.md) - `tags()`: a per-host tag pool + M2M
   through-table, deduped by name
 - [django/apps/idempotency/](django/apps/idempotency/README.md) - `IdempotencyMixin`: a retry

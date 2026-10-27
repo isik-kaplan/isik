@@ -37,6 +37,11 @@ msgstr ""
 msgid "%(field)r is not a template field on this model."
 msgstr ""
 
+#: isik/django/apps/feedback/drf.py:47
+#, python-format
+msgid "%(field)s takes a %(maker)s attachment - Host.<name> - not %(value)r"
+msgstr ""
+
 #: isik/django/apps/common/db/orm.py:36
 #, python-format
 msgid "%(field)s's db_default %(default)r has no value in Python - give the field one before encoding."
@@ -82,6 +87,16 @@ msgstr ""
 msgid "%(key)s has no question text - give it help text"
 msgstr ""
 
+#: isik/django/apps/feedback/_attachment.py:71
+#, python-format
+msgid "%(maker)s needs user_related_name= unless model= is given"
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:67
+#, python-format
+msgid "%(maker)s(model=...) uses the model as it is - drop %(options)s"
+msgstr ""
+
 #: isik/common/settings/messages.py:43
 #, python-format
 msgid "%(message)s - pass %(override)s to override"
@@ -92,7 +107,32 @@ msgstr ""
 msgid "%(middleware)s requires settings.SESSION_HEADER_NAME to be set."
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:135
+#: isik/django/apps/common/_contracts.py:94
+#, python-format
+msgid "%(model)s can't be %(maker)s's model: %(problems)s."
+msgstr ""
+
+#: isik/django/apps/common/_contracts.py:129
+#, python-format
+msgid "%(model)s can't be %(maker)s's model: it needs exactly one ForeignKey to %(target)s, or target_name= naming the one to use - it has %(count)d."
+msgstr ""
+
+#: isik/django/apps/common/_contracts.py:122
+#, python-format
+msgid "%(model)s can't be %(maker)s's model: its %(field)s must be a ForeignKey to %(target)s."
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:135
+#, python-format
+msgid "%(model)s can't be %(maker)s's model: its %(field)s needs a related_name that isn't hidden."
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:105
+#, python-format
+msgid "%(model)s can't be tags()'s model: its default manager must be a TagManager - see AbstractTag."
+msgstr ""
+
+#: isik/django/apps/common/_model_makers.py:142
 #, python-format
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
@@ -122,15 +162,25 @@ msgstr ""
 msgid "%(model)s has no concurrency token."
 msgstr ""
 
+#: isik/django/apps/feedback/annotations.py:43
+#, python-format
+msgid "%(model)s has no votes(), comments(), notes() or bookmarks() named %(names)s"
+msgstr ""
+
 #: isik/django/drf/serializers/registry.py:70
 #: isik/django/drf/viewsets/registry.py:74
 #, python-format
 msgid "%(model)s is already registered to %(existing)s"
 msgstr ""
 
-#: isik/django/apps/common/_model_makers.py:130
+#: isik/django/apps/common/_model_makers.py:137
 #, python-format
 msgid "%(model)s is not %(verb)s - attach the matching maker to it first"
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:41
+#, python-format
+msgid "%(model)s isn't a model of votes(), comments(), notes() or bookmarks()"
 msgstr ""
 
 #: isik/django/apps/common/db/concurrency.py:439
@@ -548,6 +598,11 @@ msgstr ""
 msgid "%(view)s answers %(method)s without honoring an Idempotency-Key."
 msgstr ""
 
+#: isik/django/apps/feedback/viewsets.py:157
+#, python-format
+msgid "%(view)s can't tell which of %(model)s's %(found)s to use - set %(option)s to one of them."
+msgstr ""
+
 #: isik/django/drf/viewsets/preconditions.py:297
 #, python-format
 msgid "%(view)s compares If-Match with the row it locks, which needs its request served in a transaction - turn on ATOMIC_REQUESTS."
@@ -581,6 +636,11 @@ msgstr ""
 #: isik/django/drf/viewsets/preconditions.py:529
 #, python-format
 msgid "%(view)s's precondition option 'missing_row_status' is %(value)r - PRECONDITION_MISSING_ROW_STATUS and precondition_missing_row_status take 404 or 412."
+msgstr ""
+
+#: isik/django/apps/feedback/viewsets.py:148
+#, python-format
+msgid "%(view)s's routes need a %(maker)s on %(model)s, which has none."
 msgstr ""
 
 #: isik/django/apps/idempotency/claims.py:112
@@ -723,7 +783,7 @@ msgstr ""
 msgid "'%(key)s' is not a key in this config."
 msgstr ""
 
-#: isik/django/apps/feedback/votes/_votes.py:60
+#: isik/django/apps/feedback/votes/_votes.py:36
 msgid "1 for an upvote, -1 for a downvote."
 msgstr ""
 
@@ -741,8 +801,16 @@ msgstr ""
 msgid "A Settings class's prompt= takes a Prompt, not %(value)r."
 msgstr ""
 
+#: isik/django/apps/feedback/viewsets.py:346
+msgid "A comment can't be moved under another one."
+msgstr ""
+
 #: isik/django/apps/common/db/models.py:98
 msgid "A random identifier, assigned when the row is created."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:263
+msgid "A reply has to be on the same thing as the comment it replies to."
 msgstr ""
 
 #: isik/django/apps/idempotency/exceptions.py:28
@@ -964,8 +1032,20 @@ msgstr ""
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
+#: isik/django/apps/feedback/drf.py:33
+msgid "How many bookmarked it."
+msgstr ""
+
+#: isik/django/apps/feedback/drf.py:24
+msgid "How many downvoted it."
+msgstr ""
+
 #: isik/django/apps/common/db/models.py:152
 msgid "How many times the row has been written, counting the write that created it."
+msgstr ""
+
+#: isik/django/apps/feedback/drf.py:23
+msgid "How many upvoted it."
 msgstr ""
 
 #: isik/django/apps/common/db/models.py:97
@@ -1108,6 +1188,18 @@ msgstr ""
 msgid "One of %(codes)s."
 msgstr ""
 
+#: isik/django/apps/feedback/viewsets.py:338
+msgid "Only its author can change it."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:246
+msgid "Only its author can delete a comment."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:236
+msgid "Only its author can edit a comment."
+msgstr ""
+
 #: isik/common/settings/declarations.py:78
 #, python-format
 msgid "OnlyWhen takes a function of the values so far, not %(value)r."
@@ -1145,6 +1237,11 @@ msgstr ""
 #: isik/common/settings/exemptions.py:56
 #, python-format
 msgid "ReplacedByFlow's flow must be the function that asks, not %(value)r."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:272
+#, python-format
+msgid "Replies go %(max_depth)d deep at most - this one would be deeper."
 msgstr ""
 
 #: http.HTTPStatus
@@ -1307,11 +1404,11 @@ msgstr ""
 msgid "Switching to new protocol; obey Upgrade header"
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:17
+#: isik/django/apps/tags/tags.py:25
 msgid "Tags can only contain letters, numbers, ., - and _."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:153
+#: isik/django/apps/tags/tags.py:195
 msgid "Tags from this pool."
 msgstr ""
 
@@ -1320,33 +1417,37 @@ msgstr ""
 msgid "Takes a Settings class or a command options() was put on, not %(value)r."
 msgstr ""
 
-#: isik/django/apps/feedback/bookmarks/_bookmarks.py:48
+#: isik/django/apps/feedback/bookmarks/_bookmarks.py:22
 #, python-format
 msgid "The %(target)s bookmarked."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:128
+#: isik/django/apps/tags/tags.py:233
 #, python-format
 msgid "The %(target)s tagged."
 msgstr ""
 
-#: isik/django/apps/feedback/comments/_comments.py:88
+#: isik/django/apps/feedback/comments/_comments.py:43
 #, python-format
 msgid "The %(target)s this comment is on."
 msgstr ""
 
-#: isik/django/apps/feedback/notes/_notes.py:60
+#: isik/django/apps/feedback/notes/_notes.py:29
 #, python-format
 msgid "The %(target)s this note is on."
 msgstr ""
 
-#: isik/django/apps/feedback/votes/_votes.py:48
+#: isik/django/apps/feedback/votes/_votes.py:26
 #, python-format
 msgid "The %(target)s this vote is on."
 msgstr ""
 
 #: isik/django/apps/idempotency/claims.py:60
 msgid "The Idempotency-Key the caller sent."
+msgstr ""
+
+#: isik/django/apps/feedback/drf.py:26
+msgid "The caller's own vote - 1, -1, or null for none."
 msgstr ""
 
 #: isik/django/apps/idempotency/claims.py:49
@@ -1357,11 +1458,15 @@ msgstr ""
 msgid "The client needs to authenticate to gain network access"
 msgstr ""
 
-#: isik/django/apps/feedback/comments/_comments.py:73
+#: isik/django/apps/feedback/comments/_comments.py:58
+msgid "The comment this one replies to - empty for a top-level comment."
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:90
 msgid "The comment's text."
 msgstr ""
 
-#: isik/django/apps/feedback/comments/_comments.py:64
+#: isik/django/apps/feedback/comments/_comments.py:81
 msgid "The comment, as a Tiptap document."
 msgstr ""
 
@@ -1374,7 +1479,7 @@ msgstr ""
 msgid "The module you are trying to use requires '%(extra)s'. Please install it with: pip install isik[%(extra)s]"
 msgstr ""
 
-#: isik/django/apps/feedback/notes/_notes.py:49
+#: isik/django/apps/feedback/notes/_notes.py:40
 msgid "The note's text."
 msgstr ""
 
@@ -1420,11 +1525,12 @@ msgstr ""
 msgid "The status the request was answered with."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:121
+#: isik/django/apps/tags/tags.py:226
 msgid "The tag applied."
 msgstr ""
 
-#: isik/django/apps/tags/tags.py:103
+#: isik/django/apps/tags/tags.py:83
+#: isik/django/apps/tags/tags.py:208
 msgid "The tag's name, unique in its pool."
 msgstr ""
 
@@ -1439,6 +1545,14 @@ msgstr ""
 
 #: http.HTTPStatus
 msgid "The user has sent too many requests in a given amount of time (\"rate limiting\")"
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:261
+msgid "These comments aren't threaded - a comment can't reply to another."
+msgstr ""
+
+#: isik/django/apps/feedback/viewsets.py:395
+msgid "These comments aren't threaded."
 msgstr ""
 
 #: isik/common/settings/messages.py:44
@@ -1513,6 +1627,10 @@ msgstr ""
 msgid "Updated At"
 msgstr ""
 
+#: isik/django/apps/feedback/drf.py:22
+msgid "Upvotes minus downvotes."
+msgstr ""
+
 #: isik/django/drf/permissions.py:164
 msgid "User is not the owner of the object"
 msgstr ""
@@ -1546,6 +1664,10 @@ msgstr ""
 msgid "Version"
 msgstr ""
 
+#: isik/django/apps/feedback/comments/_comments.py:65
+msgid "When its author last edited it - empty if never."
+msgstr ""
+
 #: isik/django/apps/idempotency/claims.py:75
 msgid "When the key was spent."
 msgstr ""
@@ -1566,11 +1688,15 @@ msgstr ""
 msgid "When the row was created."
 msgstr ""
 
-#: isik/django/apps/feedback/bookmarks/_bookmarks.py:55
+#: isik/django/apps/feedback/drf.py:34
+msgid "Whether the caller bookmarked it."
+msgstr ""
+
+#: isik/django/apps/feedback/bookmarks/_bookmarks.py:25
 msgid "Who bookmarked it."
 msgstr ""
 
-#: isik/django/apps/feedback/votes/_votes.py:55
+#: isik/django/apps/feedback/votes/_votes.py:29
 msgid "Who cast this vote."
 msgstr ""
 
@@ -1578,11 +1704,11 @@ msgstr ""
 msgid "Who spent the key - a key is only ever compared with its caller's own."
 msgstr ""
 
-#: isik/django/apps/feedback/comments/_comments.py:95
+#: isik/django/apps/feedback/comments/_comments.py:46
 msgid "Who wrote this comment."
 msgstr ""
 
-#: isik/django/apps/feedback/notes/_notes.py:67
+#: isik/django/apps/feedback/notes/_notes.py:32
 msgid "Who wrote this note."
 msgstr ""
 
@@ -1616,6 +1742,43 @@ msgstr ""
 #: isik/cli/help.py:49
 #, python-format
 msgid "[default: %(default)s]"
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:147
+#: isik/django/apps/feedback/comments/_comments.py:105
+msgid "a DateTimeField"
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:104
+msgid "a ForeignKey to the comment model itself"
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:258
+msgid "a ForeignKey to the tag model"
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:146
+msgid "a ForeignKey to the user model"
+msgstr ""
+
+#: isik/django/apps/feedback/notes/_notes.py:46
+msgid "a TextField or CharField"
+msgstr ""
+
+#: isik/django/apps/feedback/comments/_comments.py:98
+msgid "a TextField, CharField or JSONField"
+msgstr ""
+
+#: isik/django/apps/feedback/_attachment.py:145
+msgid "a primary key named id"
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:96
+msgid "a unique CharField"
+msgstr ""
+
+#: isik/django/apps/feedback/votes/_votes.py:42
+msgid "an IntegerField holding 1 or -1"
 msgstr ""
 
 #: isik/django/apps/common/_model_makers.py:46
@@ -1669,6 +1832,11 @@ msgstr ""
 msgid "expected yes/no, true/false, on/off or 1/0"
 msgstr ""
 
+#: isik/django/apps/common/_model_makers.py:175
+#, python-format
+msgid "extra_fields can't replace %(model)s's own %(fields)s - give the extra field another name"
+msgstr ""
+
 #: isik/common/settings/declarations.py:291
 #, python-format
 msgid "from_dataclass() takes a dataclass, not %(value)r."
@@ -1709,6 +1877,21 @@ msgstr ""
 #: isik/django/drf/serializers/history.py:249
 #, python-format
 msgid "ignores_change_of names %(field)r, which isn't a tracked field of %(model)s or is named by shows_change_of too - its change can't both list an update and not."
+msgstr ""
+
+#: isik/django/apps/common/_contracts.py:65
+#, python-format
+msgid "it has no %(field)s - %(maker)s needs %(what)s named %(field)s"
+msgstr ""
+
+#: isik/django/apps/common/_contracts.py:79
+#, python-format
+msgid "it needs a unique constraint on (%(fields)s) - %(maker)s relies on it"
+msgstr ""
+
+#: isik/django/apps/common/_contracts.py:87
+#, python-format
+msgid "its %(field)s must be %(what)s"
 msgstr ""
 
 #: isik/django/apps/common/db/constraints.py:335
@@ -1791,6 +1974,16 @@ msgstr ""
 msgid "range() would iterate %(count)s times, over the %(limit)s limit"
 msgstr ""
 
+#: isik/django/apps/feedback/annotations.py:84
+#, python-format
+msgid "ranked() ranks by %(rankings)s, not %(by)r"
+msgstr ""
+
+#: isik/django/apps/feedback/annotations.py:82
+#, python-format
+msgid "ranked() ranks by a votes() attachment, not %(field)r"
+msgstr ""
+
 #: isik/common/config/builder.py:126
 #, python-format
 msgid "ref%(path)s does not point to a key in this config."
@@ -1840,6 +2033,15 @@ msgstr ""
 #: isik/common/settings/conversion.py:139
 #, python-format
 msgid "soft max %(soft_max)s"
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:154
+#, python-format
+msgid "tags(%(option)s=...) uses the model as it is - drop %(options)s"
+msgstr ""
+
+#: isik/django/apps/tags/tags.py:146
+msgid "tags(through_model=...) needs tag_model= too - its tag key points at that model"
 msgstr ""
 
 #: isik/django/apps/templated_fields/engine.py:150

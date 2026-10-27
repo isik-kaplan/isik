@@ -73,3 +73,27 @@ from isik.django.apps.common._model_makers import build_model
 
 generated = build_model("PostVote", Post, fields={"user": user_field}, base_model=DefaultMakerBase)
 ```
+
+The generated model's Meta subclasses `base_model.Meta`, so the base's options - `ordering`,
+`db_table_comment`, its `indexes` and `constraints` - reach it, with the maker's own constraints
+added beside the base's.
+
+## merge_fields
+
+A maker's own fields with `extra_fields=` added - raising `TypeError` for an extra field named like
+one the maker builds, which the rest of the maker relies on being what it built.
+
+## when_registered
+
+`when_registered(host_cls, model_ref, callback)` calls `callback(model)` once `model_ref` (a class or
+`"app_label.Model"`) and `host_cls` are registered and Django has resolved the model's relations to the
+host - how `model=` binds a model written after its host. Django resolves a relation in an operation
+queued when its model is defined, and one queued earlier for the same model would run first, so for a
+model not yet registered this queues its own from `class_prepared`, after Django's.
+
+## Contracts
+
+`isik.django.apps.common._contracts` - what a maker reads of a model a project wrote: `Contract(maker,
+needs, optional, unique)` checks a model's fields and unique field sets, `check(model)` raising one
+`ImproperlyConfigured` naming every problem. Relations are compared by label, so a check holds before
+Django has resolved them. See [your own models](../feedback/your_own_models.md).

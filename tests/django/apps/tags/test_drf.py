@@ -3,10 +3,9 @@ from django.db import connection, models
 from django.test.utils import isolate_apps
 from rest_framework import serializers
 
-from isik.django.apps.tags.drf import generic_tag_field, generic_tag_serializer
+from isik.django.apps.tags.drf import TagUsageField, generic_tag_field, generic_tag_serializer
 from isik.django.apps.tags.tags import tags
 from isik.django.drf.serializers.base import BaseModelSerializer
-from isik.django.drf.utils.related_count import ModelRelatedCountField
 from tests.testapp.models import Post
 
 
@@ -150,8 +149,8 @@ def test_generic_tag_serializer_usage_count_field_is_present_and_wired():
     Host = _fresh_host_with_tags()
     Serializer = generic_tag_serializer(Host.topics)
     field = Serializer().fields["usage_count"]
-    assert isinstance(field, ModelRelatedCountField)
-    assert field.related_name == Host.topics.config.related_name
+    assert isinstance(field, TagUsageField)
+    assert field.tagged is Host.topics
 
 
 @isolate_apps("tests.testapp")

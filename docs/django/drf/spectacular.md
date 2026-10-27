@@ -29,6 +29,29 @@ Fixes [`history()`/`history_list()`'s](viewsets/history.md) remaining schema def
   makes drf-spectacular consider `filter_backends` at all, so this needs its own fix rather than
   falling out of the others.
 
+## Actions a view describes itself
+
+A view's `schema_actions` describes its actions where `get_serializer_class()` can't - as
+`@extend_schema` would, but read when the schema is generated, so it doesn't capture whatever
+`DEFAULT_SCHEMA_CLASS` was when the view was defined:
+
+```python
+schema_actions = {
+    "vote": {
+        "PUT": {"request": VoteInputSerializer, "response": VoteSummarySerializer},
+        "DELETE": {"request": None, "response": VoteSummarySerializer, "status": 200},
+    },
+    "comment": {"parameters": [OpenApiParameter("comment_pk", str, OpenApiParameter.PATH)]},
+}
+```
+
+Per action, or per method under it: `request`, `response`, `status` (the code the response is
+published under, in place of drf-spectacular's own pick) and `parameters` (added to the rest).
+
+An action named in `schema_list_actions` publishes a paginated array for its GET, without the view's
+own filters - a page of rows that aren't the view's, as the
+[feedback actions'](../apps/feedback/viewsets.md) comments and notes are.
+
 ## `ConditionalSerializerMixin`
 
 Any serializer using [`ConditionalSerializerMixin`](serializers/conditional_serializer.md) gets

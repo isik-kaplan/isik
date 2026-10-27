@@ -39,7 +39,7 @@ from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
 from isik.django.apps.feedback.notes import UserNoteMixin, notes
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
-from isik.django.apps.tags.tags import TaggableMixin, tags
+from isik.django.apps.tags.tags import AbstractTag, TaggableMixin, tags
 from isik.django.apps.templated_fields import TemplateCharField, TemplatePolicy, TemplateTextField
 from tests.testapp.exemptions import NoComment, NoHelpText
 
@@ -267,6 +267,9 @@ class Post(TaggableMixin, BaseModel):
     comments = comments(
         user_related_name="post_comments",
         extra_fields={"votes": votes(user_related_name="post_comment_votes")},
+        threaded=True,
+        track_edits=True,
+        max_depth=2,
     )
     votes = votes(user_related_name="post_votes")
     bookmarks = bookmarks(user_related_name="post_bookmarks")
@@ -295,6 +298,77 @@ class Article(BaseModel):
 
     class Meta:
         app_label = "testapp"
+
+
+class Thread(TaggableMixin, BaseModel):
+    """Every maker bound to a model written here instead of one it builds - `model=`, `tag_model=`,
+    `through_model=` - the hand-written counterpart of Post, run through the same behaviour."""
+
+    title = models.CharField(max_length=100)
+
+    comments = comments(model="testapp.ThreadComment", max_depth=2)
+    votes = votes(model="testapp.ThreadVote")
+    bookmarks = bookmarks(model="testapp.ThreadBookmark")
+    notes = notes(model="testapp.ThreadNote")
+    topics = tags(related_name="threads_with_topic", tag_model="testapp.SharedTag", through_model="testapp.ThreadTopic")
+
+    class Meta:
+        app_label = "testapp"
+
+
+class ThreadComment(BaseModel):
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="comments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="thread_comments")
+    body = models.TextField()
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="replies")
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class ThreadVote(BaseModel):
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="thread_votes")
+    value = models.SmallIntegerField(choices=[(1, "up"), (-1, "down")])
+
+    class Meta:
+        app_label = "testapp"
+        constraints = [models.UniqueConstraint(fields=["thread", "user"], name="one_thread_vote_per_user")]
+
+
+class ThreadBookmark(BaseModel):
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="bookmarks")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="thread_bookmarks")
+
+    class Meta:
+        app_label = "testapp"
+        unique_together = [("thread", "user")]
+
+
+class ThreadNote(BaseModel):
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="notes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="thread_notes")
+    body = models.CharField(max_length=500)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class SharedTag(AbstractTag):
+    """A tag pool of the project's own - any host's tags() can use it."""
+
+    class Meta:
+        app_label = "testapp"
+
+
+class ThreadTopic(models.Model):
+    tag = models.ForeignKey(SharedTag, on_delete=models.CASCADE)
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="topic_links")
+
+    class Meta:
+        app_label = "testapp"
+        constraints = [models.UniqueConstraint(fields=["tag", "thread"], name="one_thread_topic_per_tag")]
 
 
 class MultiVoteHost(BaseModel):

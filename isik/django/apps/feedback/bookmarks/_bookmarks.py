@@ -1,85 +1,42 @@
 """bookmarks() maker + UserBookmarkMixin - see `bookmarks` for usage."""
 
-from django.conf import settings
-from django.db import models
+from django.db.models import Exists, Value
 
 from isik._internal.translation import gettext_lazy, lazy_format
-from isik.django.apps.common._model_makers import (
-    build_model,
-    claim_related_name,
-    expose_via_reverse_accessor,
-    resolve_base_model,
-    resolve_field,
-)
+from isik.django.apps.common._model_makers import resolve_field
+from isik.django.apps.feedback._attachment import FeedbackAttachment
 
 
-class _BookmarksField:
+class _BookmarksField(FeedbackAttachment):
     """Descriptor returned by `bookmarks()` - see `bookmarks` for the public docstring."""
 
-    def __init__(
-        self,
-        *,
-        user_related_name,
-        target_name,
-        target_related_name,
-        user_model=None,
-        base_model=None,
-        extra_fields=None,
-        model_name=None,
-    ):
-        self.user_related_name = user_related_name
-        self.target_name = target_name
-        self.target_related_name = target_related_name
-        self.user_model = user_model or settings.AUTH_USER_MODEL
-        self.base_model = base_model
-        self.extra_fields = extra_fields or {}
-        self.model_name = model_name
+    maker = "bookmarks()"
+    noun = "Bookmark"
+    base_setting = "FEEDBACK_BOOKMARKS_BASE_MODEL"
+    default_related_name = "bookmarks"
+    unique_per_user = True
 
-    def contribute_to_class(self, host_cls, name):
-        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Bookmark"
-        claim_related_name(host_cls, self.target_related_name, model_name)
-        claim_related_name(self.user_model, self.user_related_name, model_name)
+    def descriptions(self, host_cls):
+        return (
+            (
+                lazy_format("The %(target)s bookmarked.", target=host_cls.__name__),
+                f"The {host_cls.__name__} bookmarked.",
+            ),
+            (gettext_lazy("Who bookmarked it."), "Who bookmarked it."),
+        )
 
-        fields = {
-            self.target_name: models.ForeignKey(
-                host_cls,
-                on_delete=models.CASCADE,
-                related_name=self.target_related_name,
-                help_text=lazy_format("The %(target)s bookmarked.", target=host_cls.__name__),
-                db_comment=f"The {host_cls.__name__} bookmarked.",
-            ),
-            "user": models.ForeignKey(
-                self.user_model,
-                on_delete=models.CASCADE,
-                related_name=self.user_related_name,
-                help_text=gettext_lazy("Who bookmarked it."),
-                db_comment="Who bookmarked it.",
-            ),
-            **self.extra_fields,
-        }
-        generated_model = build_model(
-            model_name,
-            host_cls,
-            fields=fields,
-            base_model=resolve_base_model(self.base_model, "FEEDBACK_BOOKMARKS_BASE_MODEL"),
-            meta_attrs={
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=[self.target_name, "user"], name=f"unique_{model_name.lower()}_per_user"
-                    )
-                ]
-            },
-        )
-        expose_via_reverse_accessor(
-            host_cls, name, self.target_related_name, generated_model=generated_model, config=self
-        )
+    def own_annotations(self, signed_in, user):
+        rows = self.rows()
+        mine = Exists(rows.filter(user=user)) if signed_in else Value(False)
+        return (("count", self.count(rows)), ("mine", mine))
 
 
 def bookmarks(
     *,
-    user_related_name,
-    target_name="target",
-    target_related_name="bookmarks",
+    model=None,
+    user_related_name=None,
+    target_name=None,
+    target_related_name=None,
     user_model=None,
     base_model=None,
     extra_fields=None,
@@ -107,15 +64,22 @@ def bookmarks(
     `model_name` overrides the generated model's class name (default `<Host><Attr>Bookmark`, e.g.
     `Post.bookmarks` -> `PostBookmarksBookmark`). It also names the table and constraints, so settle it
     before the first migration.
+
+    `model=` binds a model you wrote instead - a class or `"app_label.Model"`, checked against what
+    this reads of it once registered; the options that describe a built model are refused beside it.
+    See docs/django/apps/feedback/your_own_models.md.
     """
     return _BookmarksField(
-        user_related_name=user_related_name,
+        model=model,
         target_name=target_name,
-        target_related_name=target_related_name,
-        user_model=user_model,
-        base_model=base_model,
-        extra_fields=extra_fields,
-        model_name=model_name,
+        generating={
+            "user_related_name": user_related_name,
+            "target_related_name": target_related_name,
+            "user_model": user_model,
+            "base_model": base_model,
+            "extra_fields": extra_fields,
+            "model_name": model_name,
+        },
     )
 
 

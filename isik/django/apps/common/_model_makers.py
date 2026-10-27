@@ -6,10 +6,10 @@ object - so `Host.<name>.model`/`.config` work for introspection while `host_ins
 stays Django's own manager. Not tied to either app.
 """
 
-from types import SimpleNamespace
-
 from django.conf import settings
 from django.db import models
+from django.db.models.signals import class_prepared
+from django.db.models.utils import make_model_tuple
 from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
@@ -107,15 +107,9 @@ def expose_via_reverse_accessor(host_cls, name, accessor_name, *, generated_mode
     host_cls._meta.apps.lazy_model_operation(_expose, (host_cls._meta.app_label, host_cls._meta.model_name))
 
 
-def resolve_field(obj, explicit, field_cls, verb):
-    """
-    Returns `explicit` if given, else the single attribute on `obj`'s class whose `.config` is a
-    `field_cls` instance. Raises `TypeError` if none match, or if more than one does and
-    `explicit` wasn't given (disambiguate with e.g. `field=Post.topics`).
-    """
-    if explicit is not None:
-        return explicit
-    cls = obj if isinstance(obj, type) else type(obj)
+def attached(cls, field_cls):
+    """Every attribute on `cls` - its own or inherited, a subclass's shadowing its base's - whose
+    `.config` is a `field_cls` instance, in the order they're declared."""
     seen = set()
     matches = []
     for klass in cls.__mro__:
@@ -125,6 +119,19 @@ def resolve_field(obj, explicit, field_cls, verb):
             seen.add(attr_name)
             if isinstance(getattr(value, "config", None), field_cls):
                 matches.append(value)
+    return matches
+
+
+def resolve_field(obj, explicit, field_cls, verb):
+    """
+    Returns `explicit` if given, else the single attribute on `obj`'s class whose `.config` is a
+    `field_cls` instance. Raises `TypeError` if none match, or if more than one does and
+    `explicit` wasn't given (disambiguate with e.g. `field=Post.topics`).
+    """
+    if explicit is not None:
+        return explicit
+    cls = obj if isinstance(obj, type) else type(obj)
+    matches = attached(cls, field_cls)
     if not matches:
         raise TypeError(
             _("%(model)s is not %(verb)s - attach the matching maker to it first")
@@ -144,7 +151,72 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     any `contribute_to_class`-having value in `fields` (e.g. another maker via `extra_fields=`)
     wires up exactly like a hand-written field, with no special-casing needed here.
     """
-    # Django reads only a Meta's attributes, so a namespace holding them is all it needs.
-    meta = SimpleNamespace(app_label=host_cls._meta.app_label, **(meta_attrs or {}))
-    attrs = {**fields, **(extra_attrs or {}), "Meta": meta, "__module__": host_cls.__module__}
+
+    # The base's own Meta - every abstract model has one - so its options reach the generated model,
+    # with its constraints and indexes kept beside the maker's own.
+    class Meta(base_model.Meta):
+        app_label = host_cls._meta.app_label
+
+    meta_attrs = dict(meta_attrs or {})
+    for option in ("constraints", "indexes"):
+        meta_attrs[option] = [*getattr(base_model.Meta, option, []), *meta_attrs.get(option, [])]
+    for option, value in meta_attrs.items():
+        setattr(Meta, option, value)
+    attrs = {**fields, **(extra_attrs or {}), "Meta": Meta, "__module__": host_cls.__module__}
     return mark_generated(type(model_name, (base_model,), attrs), "maker")
+
+
+def merge_fields(fields, extra_fields, model_name):
+    """`fields` with `extra_fields` added - raising for one that would replace a field the maker
+    builds itself, which the rest of the maker relies on being what it built."""
+    clashing = sorted(set(fields) & set(extra_fields))
+    if clashing:
+        raise TypeError(
+            _("extra_fields can't replace %(model)s's own %(fields)s - give the extra field another name")
+            % {"model": model_name, "fields": ", ".join(clashing)}
+        )
+    return {**fields, **extra_fields}
+
+
+# The class_prepared listeners when_registered() is waiting on - held here, as a signal holds its
+# listeners weakly, until each hears its model.
+_waiting = set()
+
+
+def when_registered(host_cls, model_ref, callback):
+    """
+    Calls `callback(model)` once `model_ref` - a class, or `"app_label.Model"` - and `host_cls` are both
+    registered and Django has resolved the model's relations to the host, so the reverse accessors
+    they add exist. Django resolves a relation in an operation queued when its model is defined;
+    one queued earlier for the same model runs first, before the accessor is there - so for a model
+    not yet registered this queues its own from `class_prepared`, after Django's.
+    """
+    apps = host_cls._meta.apps
+    key = make_model_tuple(model_ref)
+
+    def queue():
+        apps.lazy_model_operation(
+            lambda *models: callback(apps.get_registered_model(*key)),
+            key,
+            (host_cls._meta.app_label, host_cls._meta.model_name),
+        )
+
+    try:
+        apps.get_registered_model(*key)
+    except LookupError:
+
+        def prepared(sender, **kwargs):
+            if sender._meta.apps is apps and (sender._meta.app_label, sender._meta.model_name) == key:
+                _waiting.discard(prepared)
+                class_prepared.disconnect(prepared)
+                queue()
+
+        _waiting.add(prepared)
+        class_prepared.connect(prepared)
+    else:
+        queue()
+
+
+def keyword_list(names):
+    """`a=, b=` - option names as a call would spell them."""
+    return ", ".join(f"{name}=" for name in names)

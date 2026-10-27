@@ -3,52 +3,69 @@ comments() maker + UserCommentMixin - see `comments` for usage. Tiptap validatio
 `comments.tiptap`, imported lazily so plain-text comments never require `prosemirror` installed.
 """
 
-from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import MinLengthValidator
 from django.db import models
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 
+from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy, lazy_format
-from isik.django.apps.common._model_makers import (
-    build_model,
-    claim_related_name,
-    expose_via_reverse_accessor,
-    resolve_base_model,
-    resolve_field,
-)
+from isik.django.apps.common._contracts import Need, kind, points_at
+from isik.django.apps.common._model_makers import resolve_field
+from isik.django.apps.feedback._attachment import FeedbackAttachment, config_of, has_field
 
 
-class _CommentsField:
+class _CommentsField(FeedbackAttachment):
     """Descriptor returned by `comments()` - see `comments` for the public docstring."""
 
-    # tiptap/comment_min_length/comment_max_length/tiptap_schema_path have no default here - like
-    # target_name/target_related_name, _CommentsField is only ever built by the comments() maker
-    # below, which always forwards its own (already-defaulted) values explicitly.
-    def __init__(
-        self,
-        *,
-        user_related_name,
-        target_name,
-        target_related_name,
-        user_model=None,
-        base_model=None,
-        extra_fields=None,
-        model_name=None,
-        tiptap,
-        comment_min_length,
-        comment_max_length,
-        tiptap_schema_path,
-    ):
-        self.user_related_name = user_related_name
-        self.target_name = target_name
-        self.target_related_name = target_related_name
-        self.user_model = user_model or settings.AUTH_USER_MODEL
-        self.base_model = base_model
-        self.extra_fields = extra_fields or {}
-        self.model_name = model_name
-        self.tiptap = tiptap
-        self.comment_min_length = comment_min_length
-        self.comment_max_length = comment_max_length
-        self.tiptap_schema_path = tiptap_schema_path
+    maker = "comments()"
+    noun = "Comment"
+    base_setting = "FEEDBACK_COMMENTS_BASE_MODEL"
+    default_related_name = "comments"
+    timestamps = ("created_at", "updated_at")
+
+    def __init__(self, *, max_depth, **keywords):
+        super().__init__(**keywords)
+        generating = keywords["generating"]
+        self.tiptap = generating["tiptap"]
+        self.comment_min_length = 1 if generating["comment_min_length"] is None else generating["comment_min_length"]
+        self.comment_max_length = generating["comment_max_length"]
+        self.tiptap_schema_path = generating["tiptap_schema_path"]
+        self.threaded = generating["threaded"]
+        self.track_edits = generating["track_edits"]
+        self.max_depth = max_depth
+
+    def descriptions(self, host_cls):
+        return (
+            (
+                lazy_format("The %(target)s this comment is on.", target=host_cls.__name__),
+                f"The {host_cls.__name__} this comment is on.",
+            ),
+            (gettext_lazy("Who wrote this comment."), "Who wrote this comment."),
+        )
+
+    def own_fields(self):
+        fields = {"body": self._body_field()}
+        if self.threaded:
+            fields["parent"] = models.ForeignKey(
+                "self",
+                null=True,
+                blank=True,
+                on_delete=models.CASCADE,
+                related_name="replies",
+                help_text=gettext_lazy("The comment this one replies to - empty for a top-level comment."),
+                db_comment="The comment this one replies to - null for a top-level comment.",
+            )
+        if self.track_edits:
+            fields["edited_at"] = models.DateTimeField(
+                null=True,
+                blank=True,
+                help_text=gettext_lazy("When its author last edited it - empty if never."),
+                db_comment="When its author last edited it - null if never.",
+            )
+        return fields
 
     def _body_field(self):
         if self.tiptap:
@@ -75,53 +92,65 @@ class _CommentsField:
             return models.CharField(max_length=self.comment_max_length, validators=validators, **described)
         return models.TextField(validators=validators, **described)
 
-    def contribute_to_class(self, host_cls, name):
-        model_name = self.model_name or f"{host_cls.__name__}{name.capitalize()}Comment"
-        claim_related_name(host_cls, self.target_related_name, model_name)
-        claim_related_name(self.user_model, self.user_related_name, model_name)
+    def own_needs(self):
+        return (
+            kind(
+                "body", (models.TextField, models.CharField, models.JSONField), _("a TextField, CharField or JSONField")
+            ),
+        )
 
-        fields = {
-            self.target_name: models.ForeignKey(
-                host_cls,
-                on_delete=models.CASCADE,
-                related_name=self.target_related_name,
-                help_text=lazy_format("The %(target)s this comment is on.", target=host_cls.__name__),
-                db_comment=f"The {host_cls.__name__} this comment is on.",
-            ),
-            "user": models.ForeignKey(
-                self.user_model,
-                on_delete=models.CASCADE,
-                related_name=self.user_related_name,
-                help_text=gettext_lazy("Who wrote this comment."),
-                db_comment="Who wrote this comment.",
-            ),
-            "body": self._body_field(),
-            **self.extra_fields,
-        }
-        generated_model = build_model(
-            model_name,
-            host_cls,
-            fields=fields,
-            base_model=resolve_base_model(self.base_model, "FEEDBACK_COMMENTS_BASE_MODEL"),
+    def optional_needs(self):
+        return (
+            Need("parent", _("a ForeignKey to the comment model itself"), self._is_parent),
+            kind("edited_at", models.DateTimeField, _("a DateTimeField")),
         )
-        expose_via_reverse_accessor(
-            host_cls, name, self.target_related_name, generated_model=generated_model, config=self
+
+    @staticmethod
+    def _is_parent(found):
+        return points_at(found, found.model) and found.null
+
+    def own_annotations(self, signed_in, user):
+        return (("count", self.count(self.rows())),)
+
+    def with_reply_counts(self, queryset):
+        """`queryset` - of its comments - with `reply_count`, each one's direct replies."""
+        replies = self.model._default_manager.filter(parent=OuterRef("pk")).order_by()
+        return queryset.annotate(
+            reply_count=Coalesce(Subquery(replies.values("parent").annotate(n=Count("pk")).values("n")), 0)
         )
+
+    @property
+    def is_threaded(self):
+        """Whether its comments reply to each other - its model has a `parent`."""
+        return has_field(self.host_descriptor.model, "parent")
+
+    @property
+    def tracks_edits(self):
+        """Whether an edit is stamped - its model has an `edited_at`."""
+        return has_field(self.host_descriptor.model, "edited_at")
+
+    @property
+    def host_descriptor(self):
+        return getattr(self.host, self.attname)
 
 
 def comments(
     *,
-    user_related_name,
-    target_name="target",
-    target_related_name="comments",
+    model=None,
+    user_related_name=None,
+    target_name=None,
+    target_related_name=None,
     user_model=None,
     base_model=None,
     extra_fields=None,
     model_name=None,
-    tiptap=False,
-    comment_min_length=1,
+    tiptap=None,
+    comment_min_length=None,
     comment_max_length=None,
     tiptap_schema_path=None,
+    threaded=None,
+    track_edits=None,
+    max_depth=None,
 ):
     """
     Attaches a per-host-model comment log, plus `UserCommentMixin` on the User model.
@@ -150,19 +179,32 @@ def comments(
     `model_name` overrides the generated model's class name (default `<Host><Attr>Comment`, e.g.
     `Post.comments` -> `PostCommentsComment`). It also names the table and constraints, so settle it
     before the first migration.
+
+    `threaded=True` adds `parent` - the comment one replies to - with replies going at most `max_depth`
+    deep (top-level is 0; unset, no limit); `track_edits=True` adds `edited_at`, stamped on each edit.
+
+    `model=` binds a model you wrote instead - a class or `"app_label.Model"`, checked against what
+    this reads of it once registered; the options that describe a built model are refused beside it.
+    See docs/django/apps/feedback/your_own_models.md.
     """
     return _CommentsField(
-        user_related_name=user_related_name,
+        model=model,
         target_name=target_name,
-        target_related_name=target_related_name,
-        user_model=user_model,
-        base_model=base_model,
-        extra_fields=extra_fields,
-        model_name=model_name,
-        tiptap=tiptap,
-        comment_min_length=comment_min_length,
-        comment_max_length=comment_max_length,
-        tiptap_schema_path=tiptap_schema_path,
+        max_depth=max_depth,
+        generating={
+            "user_related_name": user_related_name,
+            "target_related_name": target_related_name,
+            "user_model": user_model,
+            "base_model": base_model,
+            "extra_fields": extra_fields,
+            "model_name": model_name,
+            "tiptap": tiptap,
+            "comment_min_length": comment_min_length,
+            "comment_max_length": comment_max_length,
+            "tiptap_schema_path": tiptap_schema_path,
+            "threaded": threaded,
+            "track_edits": track_edits,
+        },
     )
 
 
@@ -176,3 +218,56 @@ class UserCommentMixin:
     def comments_on(self, obj, *, field=None):
         field = resolve_field(obj, field, _CommentsField, "commentable")
         return field.model.objects.filter(**{field.config.target_name: obj})
+
+    def reply(self, comment, body):
+        """A reply to `comment`, on the same target - refused past the attachment's `max_depth`."""
+        config = config_of(type(comment))
+        check_parent(config, comment, getattr(comment, f"{config.target_name}_id"))
+        return type(comment).objects.create(
+            **{f"{config.target_name}_id": getattr(comment, f"{config.target_name}_id")},
+            user=self,
+            body=body,
+            parent=comment,
+        )
+
+    def edit_comment(self, comment, body):
+        """Sets `comment`'s body - its author's own only - stamping `edited_at` where the model has one."""
+        config = config_of(type(comment))
+        self._check_author(comment, _("Only its author can edit a comment."))
+        comment.body = body
+        if config.tracks_edits:
+            comment.edited_at = timezone.now()
+        comment.save()
+        return comment
+
+    def delete_comment(self, comment):
+        """Deletes `comment` - its author's own only - and, on a threaded attachment, its replies."""
+        config_of(type(comment))
+        self._check_author(comment, _("Only its author can delete a comment."))
+        comment.delete()
+
+    def _check_author(self, comment, message):
+        if comment.user_id != self.pk:
+            raise PermissionDenied(message)
+
+
+def check_parent(config, parent, target_id):
+    """
+    Raises `ValidationError` unless `parent` can be replied to on the target `target_id`: the
+    attachment is threaded, `parent` is on that target, and a reply to it stays within `max_depth`
+    (top-level comments are depth 0). Depth is counted by walking up the parents - nothing stores it.
+    """
+    if not config.is_threaded:
+        raise ValidationError(_("These comments aren't threaded - a comment can't reply to another."))
+    if getattr(parent, f"{config.target_name}_id") != target_id:
+        raise ValidationError(_("A reply has to be on the same thing as the comment it replies to."))
+    if config.max_depth is None:
+        return
+    depth, above = 1, parent.parent_id
+    while above is not None and depth <= config.max_depth:
+        depth += 1
+        above = type(parent).objects.filter(pk=above).values_list("parent_id", flat=True).first()
+    if depth > config.max_depth:
+        raise ValidationError(
+            _("Replies go %(max_depth)d deep at most - this one would be deeper.") % {"max_depth": config.max_depth}
+        )
