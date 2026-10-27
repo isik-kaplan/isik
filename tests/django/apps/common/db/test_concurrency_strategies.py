@@ -145,14 +145,14 @@ class TestColumn:
 
         assert with_concurrency_etags(queryset) is queryset
 
-    def test_its_trigger_updates_the_owner_row_and_changes_nothing_itself(self):
+    def test_its_trigger_moves_the_owners_version_on(self):
         trigger = base_models._relation_lock_trigger(Squad, "members", Squad.members.through._meta.get_field("squad"))
 
         assert trigger.name == "bump_members_owner"
         assert trigger.func == (
-            'IF TG_OP <> \'INSERT\' THEN UPDATE "testapp_squad" SET "id" = "id" WHERE "id" = OLD."squad_id"; '
-            'END IF; IF TG_OP <> \'DELETE\' THEN UPDATE "testapp_squad" SET "id" = "id" WHERE "id" = '
-            'NEW."squad_id"; END IF; RETURN NULL;'
+            'IF TG_OP <> \'INSERT\' THEN UPDATE "testapp_squad" SET "version" = "version" + 1 WHERE "id" = '
+            'OLD."squad_id"; END IF; IF TG_OP <> \'DELETE\' THEN UPDATE "testapp_squad" SET "version" = '
+            '"version" + 1 WHERE "id" = NEW."squad_id"; END IF; RETURN NULL;'
         )
 
     def test_the_helper_proves_it(self, alice):

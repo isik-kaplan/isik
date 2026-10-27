@@ -10,7 +10,7 @@ from django.db import models
 from django.test.utils import isolate_apps
 
 from isik.common.utils.exemptions import declared_exemptions
-from isik.django.apps.common.db import DatabaseTimestampsModel, VersionedModel
+from isik.django.apps.common.db import DatabaseTimestampsModel, VersionedModel, concurrency
 from isik.django.apps.common.db.concurrency import (
     ConcurrencyToken,
     UnprovenConcurrencyToken,
@@ -227,6 +227,29 @@ class TestTheETag:
         assert current_concurrency_etag(VersionedNote, 0) is None
 
 
+class TestTheTokensTheHelperWrites:
+    def test_an_older_one(self):
+        moment = datetime.datetime(2026, 10, 27, tzinfo=datetime.UTC)
+
+        assert concurrency._older(5) == 4
+        assert concurrency._older(moment) == moment - datetime.timedelta(days=1)
+
+    def test_a_newer_one_past_one_step(self):
+        moment = datetime.datetime(2026, 10, 27, tzinfo=datetime.UTC)
+
+        assert concurrency._newer(5) == 7
+        assert concurrency._newer(moment) == moment + datetime.timedelta(days=1)
+
+    @pytest.mark.parametrize("make", ["_older", "_newer"])
+    def test_any_other_uuid(self, make):
+        token = uuid.uuid4()
+
+        made = getattr(concurrency, make)(token)
+
+        assert isinstance(made, uuid.UUID)
+        assert made != token
+
+
 @pytest.mark.django_db
 class TestAssertConcurrencyFieldChanges:
     @pytest.mark.parametrize("model", [Widget, VersionedWidget, VersionedNote, RevisionedNote])
@@ -235,23 +258,25 @@ class TestAssertConcurrencyFieldChanges:
 
         assert_concurrency_field_changes(instance)
 
-    def test_it_writes_three_times(self):
+    def test_only_the_writes_naming_a_newer_token_move_isiks(self):
         note = VersionedNote.objects.create(text="a")
 
         assert_concurrency_field_changes(note)
 
         note.refresh_from_db()
-        assert note.version == 4
+        assert note.version == 3
 
-    def test_a_token_nothing_keeps_is_caught_at_the_first_write(self):
+    def test_a_token_nothing_keeps_is_caught_taking_the_older_one(self):
         note = StuckNote.objects.create(text="a")
 
         with pytest.raises(AssertionError) as raised:
             assert_concurrency_field_changes(note)
 
-        assert str(raised.value) == "testapp.StuckNote's concurrency token 'revision' was 1 again after save()."
+        assert str(raised.value) == (
+            "testapp.StuckNote's concurrency token 'revision' was 0 after QuerySet.update() naming an older token."
+        )
 
-    def test_a_token_only_save_moves_on_is_caught_at_the_update(self, monkeypatch):
+    def test_a_token_only_save_moves_on_is_caught_going_back(self, monkeypatch):
         def save(self, *args, **kwargs):
             self.revision += 1
             models.Model.save(self, *args, **kwargs)
@@ -263,7 +288,31 @@ class TestAssertConcurrencyFieldChanges:
             assert_concurrency_field_changes(note)
 
         assert str(raised.value) == (
-            "testapp.StuckNote's concurrency token 'revision' was 3 again after QuerySet.update()."
+            "testapp.StuckNote's concurrency token 'revision' was 1 after QuerySet.update() naming an older token."
+        )
+
+    def test_a_newer_token_that_doesnt_move_it_is_caught(self, monkeypatch):
+        # Named as older than it is, isik's trigger holds it where it was.
+        monkeypatch.setattr(concurrency, "_newer", lambda token: token - 1)
+        note = VersionedNote.objects.create(text="a")
+
+        with pytest.raises(AssertionError) as raised:
+            assert_concurrency_field_changes(note)
+
+        assert str(raised.value) == (
+            "testapp.VersionedNote's concurrency token 'version' was 1 after QuerySet.update() naming a newer token."
+        )
+
+    def test_a_newer_token_taken_as_named_is_caught(self, monkeypatch):
+        # One step on is where isik's trigger puts it anyway - _newer() names two for that.
+        monkeypatch.setattr(concurrency, "_newer", lambda token: token + 1)
+        note = VersionedNote.objects.create(text="a")
+
+        with pytest.raises(AssertionError) as raised:
+            assert_concurrency_field_changes(note)
+
+        assert str(raised.value) == (
+            "testapp.VersionedNote's concurrency token 'version' was 2 after QuerySet.update() naming a newer token."
         )
 
     def test_a_model_without_a_token_is_refused(self):

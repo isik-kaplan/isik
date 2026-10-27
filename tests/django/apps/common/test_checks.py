@@ -14,7 +14,7 @@ from isik.django.apps.common.checks import (
     Severity,
     every_validator_says_whether_it_can_hold_at_the_column,
 )
-from isik.django.apps.common.db import constraints, documentation
+from isik.django.apps.common.db import conditions, constraints, documentation
 from isik.django.apps.common.db import history as db_history
 from isik.django.apps.common.project import project_app_configs
 from isik.django.drf.serializers import flattened_singleton_related
@@ -137,6 +137,7 @@ class TestTheSettings:
             "exemptions",
             "documentation",
             "not_atomic",
+            "kept_field_conditions",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -202,7 +203,7 @@ class TestTheSettingsCheck:
             "ISIK_CHECKS names 'idempotence', which isn't a Check: Check.VALIDATORS, Check.CONCURRENCY_TOKENS, "
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
-            "Check.NOT_ATOMIC."
+            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -410,6 +411,34 @@ class TestTheHistoryIndexCheck:
 
     def test_the_test_project_has_every_index(self):
         assert checks.every_event_model_indexes_its_streams(app_configs=None) == []
+
+
+class TestTheKeptFieldConditionCheck:
+    def test_reads_the_projects_own_apps(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(
+            conditions, "kept_field_condition_problems", lambda configs: seen.append(configs) or ["one", "two"]
+        )
+
+        errors = checks.no_trigger_condition_compares_a_kept_field(app_configs=None)
+
+        assert [(error.id, error.msg) for error in errors] == [("isik.E013", "one"), ("isik.E013", "two")]
+        assert errors[0].hint == (
+            "See AnyChange and its siblings (isik.django.apps.common.db.conditions), which leave them out."
+        )
+        assert [config.label for config in seen[0]] == ["testapp"]
+
+    def test_reads_the_apps_it_is_told(self, settings, monkeypatch):
+        seen = []
+        monkeypatch.setattr(conditions, "kept_field_condition_problems", lambda configs: seen.append(configs) or [])
+        settings.ISIK_CHECKS = {Check.KEPT_FIELD_CONDITIONS: {CheckOption.APPS: ["isik_common"]}}
+
+        checks.no_trigger_condition_compares_a_kept_field(app_configs=None)
+
+        assert [config.label for config in seen[0]] == ["isik_common"]
+
+    def test_the_test_project_has_none(self):
+        assert checks.no_trigger_condition_compares_a_kept_field(app_configs=None) == []
 
 
 class TestTheExemptionsCheck:

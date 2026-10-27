@@ -13,7 +13,7 @@ Not part of `BaseModel`, and added beside it when wanted:
 
 | Model | Adds |
 |---|---|
-| `VersionedModel` | a `version` the database counts up on every UPDATE (needs `pgtrigger`) |
+| `VersionedModel` | a `version` the database counts up whenever the row changes (needs `pgtrigger`) |
 
 ```python
 from isik.django.apps.common.db import DatabaseTimestampsModel, FullCleanOnSaveModel
@@ -35,7 +35,7 @@ selectively bypassed. `full_clean()` runs on every `save()` unless bypassed.
 
 `created_at`/`updated_at` are maintained by the database, not Django: `created_at` gets
 `db_default=Now()` plus a trigger refusing any UPDATE that changes it, and `updated_at` is stamped
-by a `BEFORE UPDATE` trigger on every UPDATE, including `QuerySet.update()`/`bulk_update()`/raw
+by a `BEFORE UPDATE` trigger whenever the row changes, including through `QuerySet.update()`/`bulk_update()`/raw
 SQL - not just `Model.save()`, the only thing `auto_now`/`auto_now_add` ever covered. Requires
 `pgtrigger` in `INSTALLED_APPS` (`django-pghistory` already depends on it) - `DatabaseTimestampsModel` raises
 `ImproperlyConfigured` at import time if it's missing. The trigger stamps the column `updated_at` is
@@ -50,9 +50,34 @@ stepping back, still move it on. That makes `updated_at` a [concurrency token](c
 version a write can name, and be refused for naming once it's stale. After a step back the column runs
 ahead of the clock, a microsecond per write, until the clock catches up.
 
-Unlike `auto_now`, the trigger fires unconditionally - `save(update_fields=["name"])` still
-advances `updated_at` even though `"updated_at"` isn't in `update_fields`. Naming it explicitly
-there is harmless leftover habit from `auto_now`, not something this still requires.
+Unlike `auto_now`, `update_fields` doesn't gate it - `save(update_fields=["name"])` advances
+`updated_at` when `name` changed, even though `"updated_at"` isn't in `update_fields`. Naming it
+explicitly there is harmless leftover habit from `auto_now`, not something this still requires.
+
+### A write that changes nothing
+
+The trigger compares every other column with the row as it was. A write changing none of them -
+`save()` on an unedited instance, `update(name=...)` to the name it has - leaves `updated_at` (and
+`version`) where they were. So the ETag stays put, and a history event's condition sees no change and
+records nothing. The trigger still fires on that write, holding the column at what the row had: Django
+writes every field back, so an instance saved twice sends the first save's stale `updated_at`, and
+without that the token would go backwards.
+
+`database_kept_fields(model)` names the fields the database keeps this way: `("version", "updated_at")`
+on a model with both, `()` on one with neither.
+
+A change the row doesn't show - rows of another table that the row's version should cover, say -
+moves them with `touch_rows(queryset)`, which writes the first kept field one step forward. A kept
+field written forward counts as a change, so every kept field moves with it:
+
+```python
+from isik.django.apps.common.db import touch_rows
+
+touch_rows(Invoice.objects.filter(pk=invoice.pk))   # returns the number of rows, as update() does
+```
+
+A trigger of the project's own whose condition compares columns should leave the kept fields out - see
+[conditions](conditions.md).
 
 ```python
 from isik.django.apps.common.db import BaseModel
@@ -102,8 +127,9 @@ from `uuid.uuid4` to `new_primary_key`.
 ## VersionedModel
 
 `version`, a `PositiveBigIntegerField` the database keeps: `db_default=1` on insert, and a `BEFORE
-UPDATE` trigger (`bump_version`) setting it to `OLD.version + 1` on every UPDATE, whatever the write
-set it to - `QuerySet.update(version=99)` still moves it on by one. Not editable, so a `ModelSerializer`
+UPDATE` trigger (`bump_version`) setting it to `OLD.version + 1` whenever the row changes, whatever the
+write set it to - `QuerySet.update(name="nut", version=99)` still moves it on by one, and a write
+changing nothing else leaves it where it was ([a write that changes nothing](#a-write-that-changes-nothing)). Not editable, so a `ModelSerializer`
 or a form makes it read-only. A model with it uses `version` as its [concurrency token](concurrency.md),
 over `updated_at`. Like `updated_at`, it doesn't count as a change in [history](../../../drf/serializers/history.md).
 

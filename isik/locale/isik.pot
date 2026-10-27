@@ -27,6 +27,11 @@ msgstr ""
 msgid "%(cls)s must define a `%(name)s` attribute"
 msgstr ""
 
+#: isik/django/apps/common/db/conditions.py:47
+#, python-format
+msgid "%(condition)s names %(fields)s on %(model)s, which it leaves out - the database keeps them."
+msgstr ""
+
 #: isik/django/apps/common/management/commands/exemptions.py:124
 #, python-format
 msgid "%(count)d exemption call(s) or type(s) weren't loaded, so the listing isn't complete."
@@ -47,12 +52,12 @@ msgstr ""
 msgid "%(field)s's db_default %(default)r has no value in Python - give the field one before encoding."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:461
+#: isik/django/apps/common/checks.py:464
 #, python-format
 msgid "%(file)s:%(line)s declares %(name)s, which loading the project didn't import."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:456
+#: isik/django/apps/common/checks.py:459
 #, python-format
 msgid "%(file)s:%(line)s makes an exemption through %(name)s that loading the project didn't."
 msgstr ""
@@ -157,7 +162,7 @@ msgstr ""
 msgid "%(model)s has no concurrency token - make it a VersionedModel or a DatabaseTimestampsModel, or name one with concurrency_field = ConcurrencyToken(field, reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:375
+#: isik/django/apps/common/db/concurrency.py:389
 #, python-format
 msgid "%(model)s has no concurrency token."
 msgstr ""
@@ -183,7 +188,7 @@ msgstr ""
 msgid "%(model)s isn't a model of votes(), comments(), notes() or bookmarks()"
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:439
+#: isik/django/apps/common/db/concurrency.py:470
 #, python-format
 msgid "%(model)s's ETag was %(etag)s still after %(relation)s.%(write)s."
 msgstr ""
@@ -218,9 +223,9 @@ msgstr ""
 msgid "%(model)s's concurrency token %(field)r must be an integer, a datetime or a UUID."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:385
+#: isik/django/apps/common/db/concurrency.py:399
 #, python-format
-msgid "%(model)s's concurrency token %(field)r was %(token)r again after %(write)s."
+msgid "%(model)s's concurrency token %(field)r was %(token)r after %(write)s."
 msgstr ""
 
 #: isik/django/apps/common/db/concurrency.py:198
@@ -243,12 +248,17 @@ msgstr ""
 msgid "%(model)s's history has ContextFields named like its own tracked fields: %(names)s - name them otherwise, or leave those fields out of the history."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:393
+#: isik/django/apps/common/db/conditions.py:135
+#, python-format
+msgid "%(model)s's trigger %(trigger)s has a condition comparing %(fields)s, which the database moves whenever any other column changes - leave them out of it."
+msgstr ""
+
+#: isik/django/apps/common/db/concurrency.py:424
 #, python-format
 msgid "%(model)s's version covers %(relation)r - pass related={%(relation)r: <an object to add>}."
 msgstr ""
 
-#: isik/django/apps/common/db/concurrency.py:413
+#: isik/django/apps/common/db/concurrency.py:444
 #, python-format
 msgid "%(model)s's version covers %(relation)r, rows pointing at it - pass related={%(relation)r: <a function making one for the instance it's given>}."
 msgstr ""
@@ -358,7 +368,7 @@ msgstr ""
 msgid "%(option)s is a plain click option - declare it as a Setting, or pass plain_options="
 msgstr ""
 
-#: isik/django/apps/common/checks.py:345
+#: isik/django/apps/common/checks.py:348
 #, python-format
 msgid "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is %(status)s on database %(database)r - a change to it can slip past a write's If-Match."
 msgstr ""
@@ -588,12 +598,12 @@ msgstr ""
 msgid "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of precondition_read_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:426
+#: isik/django/apps/common/checks.py:429
 #, python-format
 msgid "%(view)s answers %(method)s without asking If-Match."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:395
+#: isik/django/apps/common/checks.py:398
 #, python-format
 msgid "%(view)s answers %(method)s without honoring an Idempotency-Key."
 msgstr ""
@@ -733,7 +743,7 @@ msgstr ""
 msgid "%(where)s gives two things one name - rename one:\n%(lines)s"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:196
+#: isik/django/apps/common/checks.py:199
 #, python-format
 msgid "%(where)s has CheckOption.%(option)s - it takes %(takes)s."
 msgstr ""
@@ -743,17 +753,17 @@ msgstr ""
 msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:174
+#: isik/django/apps/common/checks.py:177
 #, python-format
 msgid "%(where)s names %(key)r as a string - write %(member)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:179
+#: isik/django/apps/common/checks.py:182
 #, python-format
 msgid "%(where)s names %(key)r, which isn't a %(enum)s: %(members)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:207
+#: isik/django/apps/common/checks.py:210
 #, python-format
 msgid "%(where)s's severity is %(value)r - write %(choices)s."
 msgstr ""
@@ -805,7 +815,7 @@ msgstr ""
 msgid "A comment can't be moved under another one."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:98
+#: isik/django/apps/common/db/models.py:99
 msgid "A random identifier, assigned when the row is created."
 msgstr ""
 
@@ -831,11 +841,11 @@ msgstr ""
 msgid "Actions should not be: %(actions)s"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:396
+#: isik/django/apps/common/checks.py:399
 msgid "Add IdempotencyMixin (BaseModelViewSet has it) with the method in idempotent_methods, or exempt the action in idempotency_exempt_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:427
+#: isik/django/apps/common/checks.py:430
 msgid "Add PreconditionMixin (BaseModelViewSet has it) with the method in precondition_methods, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
@@ -942,11 +952,11 @@ msgstr ""
 msgid "Could not determine a unique serializer for the given data."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:118
+#: isik/django/apps/common/db/models.py:122
 msgid "Created At"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:43
+#: isik/django/apps/common/db/models.py:44
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
@@ -1010,7 +1020,7 @@ msgstr ""
 msgid "False opts out of %(rule)s without a reason, which needs Requirement.OPTIONAL for it - or write %(type)s(reason=...)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:284
+#: isik/django/apps/common/checks.py:287
 msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
 msgstr ""
 
@@ -1040,29 +1050,29 @@ msgstr ""
 msgid "How many downvoted it."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:152
-msgid "How many times the row has been written, counting the write that created it."
+#: isik/django/apps/common/db/models.py:158
+msgid "How many times the row has changed, counting the write that created it."
 msgstr ""
 
 #: isik/django/apps/feedback/drf.py:23
 msgid "How many upvoted it."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:97
+#: isik/django/apps/common/db/models.py:98
 msgid "ID"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:247
+#: isik/django/apps/common/checks.py:250
 #, python-format
 msgid "ISIK_CHECKS is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:256
+#: isik/django/apps/common/checks.py:259
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:231
+#: isik/django/apps/common/checks.py:234
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s."
 msgstr ""
@@ -1097,11 +1107,11 @@ msgstr ""
 msgid "Invalid responses from another server/proxy"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:233
+#: isik/django/apps/common/checks.py:236
 msgid "Leave out CheckOption.URLCONFS to check every urlconf the project serves."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:453
+#: isik/django/apps/common/checks.py:456
 msgid "Make it where loading the project runs it - see manage.py exemptions."
 msgstr ""
 
@@ -1292,40 +1302,44 @@ msgstr ""
 msgid "Response contains multiple statuses in the body"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:356
+#: isik/django/apps/common/checks.py:359
 #, python-format
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:413
+#: isik/django/apps/common/checks.py:506
+msgid "See AnyChange and its siblings (isik.django.apps.common.db.conditions), which leave them out."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:416
 msgid "See FlattenedSingletonRelatedMixin (isik.django.drf.serializers)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:303
+#: isik/django/apps/common/checks.py:306
 msgid "See PreconditionMixin (isik.django.drf.viewsets.preconditions) and concurrency tokens (isik.django.apps.common.db.concurrency)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:320
+#: isik/django/apps/common/checks.py:323
 msgid "See PreconditionMixin's options (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:371
+#: isik/django/apps/common/checks.py:374
 msgid "See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:476
+#: isik/django/apps/common/checks.py:479
 msgid "See documentation_problems() (isik.django.apps.common.db.documentation)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:248
+#: isik/django/apps/common/checks.py:251
 msgid "See isik.django.apps.common.checks."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:494
+#: isik/django/apps/common/checks.py:497
 msgid "See not_atomic() (isik.django.apps.common.atomic)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:444
+#: isik/django/apps/common/checks.py:447
 msgid "See object_stream_index() (isik.django.apps.common.db.history)."
 msgstr ""
 
@@ -1623,7 +1637,7 @@ msgstr ""
 msgid "URI not available in preferred format"
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:130
+#: isik/django/apps/common/db/models.py:134
 msgid "Updated At"
 msgstr ""
 
@@ -1640,7 +1654,7 @@ msgstr ""
 msgid "User property %(property)s is False"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:282
+#: isik/django/apps/common/checks.py:285
 #, python-format
 msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
@@ -1660,7 +1674,7 @@ msgstr ""
 msgid "Values either must be callables or other mappings, not %(type)s. Key=%(key)s."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:151
+#: isik/django/apps/common/db/models.py:157
 msgid "Version"
 msgstr ""
 
@@ -1672,7 +1686,7 @@ msgstr ""
 msgid "When the key was spent."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:131
+#: isik/django/apps/common/db/models.py:135
 msgid "When the row last changed, by the database's clock."
 msgstr ""
 
@@ -1680,7 +1694,7 @@ msgstr ""
 msgid "When the row last changed."
 msgstr ""
 
-#: isik/django/apps/common/db/models.py:119
+#: isik/django/apps/common/db/models.py:123
 msgid "When the row was created, by the database's clock. Never changes."
 msgstr ""
 
@@ -2052,6 +2066,11 @@ msgstr ""
 #: isik/django/apps/templated_fields/engine.py:80
 #, python-format
 msgid "the loops in this template ran over the %(limit)s iteration limit"
+msgstr ""
+
+#: isik/django/apps/common/db/models.py:408
+#, python-format
+msgid "touch_rows() moves version and updated_at, and %(model)s has neither."
 msgstr ""
 
 #: isik/django/apps/common/db/history.py:215

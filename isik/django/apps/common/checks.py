@@ -35,6 +35,7 @@ belongs included - is an error, `isik.E012`.
 | Check.EXEMPTIONS           | isik.E009              | an exemption loading the project didn't see                  |
 | Check.DOCUMENTATION        | isik.E010              | a field without help_text or db_comment                      |
 | Check.NOT_ATOMIC           | isik.E011              | a view outside ATOMIC_REQUESTS that doesn't say why          |
+| Check.KEPT_FIELD_CONDITIONS | isik.E013             | a trigger condition comparing version or updated_at          |
 """
 
 import functools
@@ -65,6 +66,7 @@ class Check(Enum):
     EXEMPTIONS = "exemptions"
     DOCUMENTATION = "documentation"
     NOT_ATOMIC = "not_atomic"
+    KEPT_FIELD_CONDITIONS = "kept_field_conditions"
 
 
 class CheckOption(Enum):
@@ -101,6 +103,7 @@ CHECKS = {
     Check.EXEMPTIONS: (CheckOption.URLCONFS,),
     Check.DOCUMENTATION: (CheckOption.APPS, CheckOption.EXEMPTION_TYPES, CheckOption.INHERITED_FROM_LIBRARIES),
     Check.NOT_ATOMIC: (CheckOption.URLCONFS,),
+    Check.KEPT_FIELD_CONDITIONS: (CheckOption.APPS,),
 }
 
 DEFAULTS = {
@@ -493,3 +496,15 @@ def every_view_outside_the_transaction_says_why(options, **kwargs):
 
     hint = _("See not_atomic() (isik.django.apps.common.atomic).")
     return [Error(problem, hint=hint, id="isik.E011") for problem in not_atomic_problems(options[CheckOption.URLCONFS])]
+
+
+@isik_check(Check.KEPT_FIELD_CONDITIONS)
+def no_trigger_condition_compares_a_kept_field(options, **kwargs):
+    """A condition comparing version or updated_at sees every change as one to them - see `db/conditions.py`."""
+    from isik.django.apps.common.db.conditions import kept_field_condition_problems
+
+    hint = _("See AnyChange and its siblings (isik.django.apps.common.db.conditions), which leave them out.")
+    return [
+        Error(problem, hint=hint, id="isik.E013")
+        for problem in kept_field_condition_problems(_project_configs(options))
+    ]

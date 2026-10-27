@@ -2,6 +2,7 @@ import functools
 import os
 import time
 from contextlib import contextmanager
+from datetime import timedelta
 from functools import partial
 from uuid import UUID
 
@@ -106,9 +107,12 @@ class UUIDPrimaryKeyModel(models.Model):
 class DatabaseTimestampsModel(models.Model):
     """
     `created_at`/`updated_at` kept by the database rather than by Django: `db_default=Now()` on insert,
-    a trigger refusing any change to `created_at`, and a BEFORE UPDATE trigger stamping `updated_at` -
-    so `QuerySet.update()`, `bulk_update()` and raw SQL keep them true too, none of which `auto_now`
-    touches. Needs `pgtrigger` installed; the triggers attach to every concrete subclass.
+    a trigger refusing any change to `created_at`, and a BEFORE UPDATE trigger stamping `updated_at`
+    whenever the row changes - so `QuerySet.update()`, `bulk_update()` and raw SQL keep them true too,
+    none of which `auto_now` touches. A write changing nothing leaves `updated_at` as it was, and so
+    records no history event; `touch_rows()` moves it for a change the row doesn't show. A trigger
+    condition of a project's own leaves it out - see `db/conditions.py`. Needs `pgtrigger` installed;
+    the triggers attach to every concrete subclass.
     """
 
     created_at = models.DateTimeField(
@@ -119,17 +123,17 @@ class DatabaseTimestampsModel(models.Model):
         help_text=gettext_lazy("When the row was created, by the database's clock. Never changes."),
         db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.",
     )
-    # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) that
-    # fires unconditionally - update_fields does not gate it. save(update_fields=["name"]) still
-    # advances updated_at; explicitly naming "updated_at" in update_fields is harmless but no
-    # longer necessary.
+    # Unlike auto_now, stamped by a BEFORE UPDATE trigger (see _timestamp_triggers() below) whenever
+    # the row changes - update_fields does not gate it. save(update_fields=["name"]) advances
+    # updated_at when name changed; naming "updated_at" in update_fields is harmless but no longer
+    # necessary, and a stale value saved back is held where the row had it.
     updated_at = models.DateTimeField(
         db_default=Now(),
         db_index=True,
         editable=False,
         verbose_name=gettext_lazy("Updated At"),
         help_text=gettext_lazy("When the row last changed, by the database's clock."),
-        db_comment="When the row last changed, by the database's clock. Stamped by a trigger on every update.",
+        db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.",
     )
 
     class Meta:
@@ -138,9 +142,11 @@ class DatabaseTimestampsModel(models.Model):
 
 class VersionedModel(models.Model):
     """
-    A `version` the database keeps: 1 on insert, and `OLD.version + 1` on every UPDATE by a BEFORE
-    UPDATE trigger, whatever the write set it to - `QuerySet.update()`, `bulk_update()` and raw SQL
-    included. A concurrency token that is a plain count rather than a time; see `db/concurrency.py`.
+    A `version` the database keeps: 1 on insert, and `OLD.version + 1` by a BEFORE UPDATE trigger
+    whenever the row changes, whatever the write set it to - `QuerySet.update()`, `bulk_update()` and
+    raw SQL included. A write changing nothing leaves it as it was; `touch_rows()` moves it for a change
+    the row doesn't show. A concurrency token that is a plain count rather than a time; see
+    `db/concurrency.py`.
     Needs `pgtrigger` installed, like `DatabaseTimestampsModel`; the trigger attaches to every
     concrete subclass.
     """
@@ -149,8 +155,8 @@ class VersionedModel(models.Model):
         db_default=1,
         editable=False,
         verbose_name=gettext_lazy("Version"),
-        help_text=gettext_lazy("How many times the row has been written, counting the write that created it."),
-        db_comment="How many times the row has been written. A trigger adds one on every update.",
+        help_text=gettext_lazy("How many times the row has changed, counting the write that created it."),
+        db_comment="How many times the row has changed. A trigger adds one whenever it does.",
     )
 
     class Meta:
@@ -295,50 +301,116 @@ class BaseModel(UUIDPrimaryKeyModel, DatabaseTimestampsModel, FullCleanOnSaveMod
         abstract = True
 
 
+def database_kept_fields(model):
+    """
+    The names of `model`'s fields the database keeps on every change - `version` on a `VersionedModel`,
+    `updated_at` on a `DatabaseTimestampsModel` - in that order, or `()`.
+    """
+    names = []
+    if issubclass(model, VersionedModel):
+        names.append("version")
+    if issubclass(model, DatabaseTimestampsModel):
+        names.append("updated_at")
+    return tuple(names)
+
+
+def _row_changes(model, kept):
+    """
+    The SQL for "this UPDATE changes the row": a column other than the `kept` ones differs from OLD, or a
+    kept one was moved forward - `touch_rows()`, or another kept field's trigger having moved it.
+    """
+    quote = connection.ops.quote_name
+    # A generated column isn't computed yet in a BEFORE trigger's NEW - it follows the others anyway.
+    derived = [field.name for field in model._meta.concrete_fields if field.generated]
+    others = pgtrigger.AnyChange(exclude=[*kept, *derived]).resolve(model)
+    columns = [quote(model._meta.get_field(name).column) for name in kept]
+    forward = [f"NEW.{column} > OLD.{column}" for column in columns]
+    return " OR ".join([f"({others})", *forward])
+
+
+class _KeptFieldTrigger(pgtrigger.Trigger):
+    """
+    A BEFORE UPDATE trigger moving `field` on with `step` (SQL over `{column}`) when the row changes,
+    and holding it at OLD when it doesn't - see `_row_changes()`. It fires on every UPDATE: held at OLD,
+    a stale value a write sends back can't take the field backwards. `kept` is every database-kept
+    field of the model, named when it's registered: a migration renders the trigger against a model of
+    its own state, which is no subclass of the bases that say which they are.
+    """
+
+    when = pgtrigger.Before
+    operation = pgtrigger.Update
+
+    def __init__(self, *, name, field, step, kept):
+        self.field, self.step, self.kept = field, step, kept
+        super().__init__(name=name)
+
+    def get_func(self, model):
+        # The column, not the field name: a subclass giving the field a db_column would otherwise leave
+        # the trigger assigning to a column that doesn't exist, failing every UPDATE.
+        column = connection.ops.quote_name(model._meta.get_field(self.field).column)
+        return (
+            f"IF {_row_changes(model, self.kept)} THEN NEW.{column} = {self.step.format(column=column)}; "
+            f"ELSE NEW.{column} = OLD.{column}; END IF; RETURN NEW;"
+        )
+
+
 def _timestamp_triggers(model):
-    # The column, not the field name: a subclass giving updated_at a db_column would otherwise leave
-    # the trigger assigning to a column that doesn't exist, failing every UPDATE.
-    updated_at = connection.ops.quote_name(model._meta.get_field("updated_at").column)
     return [
         # db_default=Now() only fires on INSERT - nothing stops a later UPDATE from changing
         # created_at, so it also needs protecting at the row level.
         pgtrigger.ReadOnly(name="protect_created_at", fields=["created_at"]),
-        # db_default=Now() covers the initial value; this keeps it current on every UPDATE,
-        # including QuerySet.update()/bulk_update() and raw SQL, none of which auto_now touches.
+        # db_default=Now() covers the initial value; this keeps it current on every UPDATE that changes
+        # the row, including QuerySet.update()/bulk_update() and raw SQL, none of which auto_now touches.
         # clock_timestamp(), not NOW(): NOW() is when the transaction began, so one that began first
         # and wrote last stamped the row earlier than the write before it.
-        # GREATEST(..., OLD + 1 microsecond) makes every UPDATE move it strictly forward, which is
+        # GREATEST(..., OLD + 1 microsecond) makes every change move it strictly forward, which is
         # what lets updated_at be a concurrency token (see db/concurrency.py): a write that left it
         # equal - two in the same microsecond, the server's clock stepping back - would leave a
         # stale If-Match matching. A microsecond is timestamptz's resolution, the smallest step
         # there is. After a step back the column runs ahead of the clock, a microsecond per write,
         # until the clock catches up - it never goes backwards, and nothing reads it as wall time
         # more precisely than that.
-        pgtrigger.Trigger(
+        _KeptFieldTrigger(
             name="stamp_updated_at",
-            when=pgtrigger.Before,
-            operation=pgtrigger.Update,
-            func=(
-                f"NEW.{updated_at} = GREATEST(clock_timestamp(), OLD.{updated_at} + interval '1 microsecond'); "
-                "RETURN NEW;"
-            ),
+            field="updated_at",
+            step="GREATEST(clock_timestamp(), OLD.{column} + interval '1 microsecond')",
+            kept=database_kept_fields(model),
         ),
     ]
 
 
 def _version_triggers(model):
-    # The column, not the field name - see _timestamp_triggers().
-    version = connection.ops.quote_name(model._meta.get_field("version").column)
+    # OLD, not NEW: a write that sets version itself - a stale one sent back, say - still only moves it
+    # on by one from what the row held. Postgres runs BEFORE triggers in name order, so this one decides
+    # before stamp_updated_at, which sees the version it moved and moves with it. A project's own BEFORE
+    # trigger sorting between the two that changes a column on a write that changed nothing else moves
+    # updated_at without the version.
     return [
-        # OLD, not NEW: a write that sets version itself - a stale one sent back, say - still only
-        # moves it on by one from what the row held.
-        pgtrigger.Trigger(
-            name="bump_version",
-            when=pgtrigger.Before,
-            operation=pgtrigger.Update,
-            func=f"NEW.{version} = OLD.{version} + 1; RETURN NEW;",
-        ),
+        _KeptFieldTrigger(
+            name="bump_version", field="version", step="OLD.{column} + 1", kept=database_kept_fields(model)
+        )
     ]
+
+
+def touch_rows(queryset):
+    """
+    Moves the database-kept fields (`database_kept_fields()`) of every row in `queryset` on, as a change
+    to the row would - for a write the row itself doesn't show, which should still move its version
+    and `updated_at`. An UPDATE that changes nothing leaves them as they are. Returns the number of
+    rows, as `QuerySet.update()` does.
+
+        touch_rows(Invoice.objects.filter(pk=invoice.pk))
+    """
+    model = queryset.model
+    kept = database_kept_fields(model)
+    if not kept:
+        raise TypeError(
+            _("touch_rows() moves version and updated_at, and %(model)s has neither.") % {"model": model._meta.label}
+        )
+    # One kept field moved forward is enough - the triggers move every kept field together.
+    name = kept[0]
+    step = 1 if name == "version" else timedelta(microseconds=1)
+    return queryset.update(**{name: models.F(name) + step})
 
 
 def _register_triggers(sender, **kwargs):
@@ -364,6 +436,16 @@ class_prepared.connect(_register_triggers, dispatch_uid="isik_base_model_timesta
 relation_locks = []
 
 
+def _forward(model, key):
+    """The SET list of an UPDATE moving `model`'s first database-kept field forward - else its key to itself."""
+    kept = database_kept_fields(model)
+    if not kept:
+        return f"{key} = {key}"
+    column = connection.ops.quote_name(model._meta.get_field(kept[0]).column)
+    step = "1" if kept[0] == "version" else "interval '1 microsecond'"
+    return f"{column} = {column} + {step}"
+
+
 def _relation_lock_trigger(owner, name, owner_key):
     """
     The trigger on the table a relation's rows live in - a many-to-many's through table, or the table of
@@ -373,11 +455,13 @@ def _relation_lock_trigger(owner, name, owner_key):
     table, key = quote(owner._meta.db_table), quote(owner_key.target_field.column)
     owner_row = f"{key} = %s.{quote(owner_key.column)}"
     if getattr(owner, "concurrency_strategy", None) == "column":
-        # The column strategy: an UPDATE of the owner row that changes nothing itself, so the owner's own
-        # BEFORE UPDATE triggers move its token - and updated_at with it. Those only assign NEW and never
-        # touch this table, so it's one UPDATE of the owner per row changed here, never a loop. The
-        # UPDATE locks the owner row as the lock below does.
-        trigger_name, statement = f"bump_{name}_owner", f"UPDATE {table} SET {key} = {key} WHERE {owner_row};"
+        # The column strategy: an UPDATE of the owner row moving its database-kept fields forward, as
+        # touch_rows() does - its own BEFORE UPDATE triggers move them only for a change, and a row of
+        # this table is one the owner's row doesn't show. A token a trigger of the project's own keeps
+        # gets its UPDATE all the same. Those triggers only assign NEW and never touch this table, so
+        # it's one UPDATE of the owner per row changed here, never a loop. The UPDATE locks the owner
+        # row as the lock below does.
+        trigger_name, statement = f"bump_{name}_owner", f"UPDATE {table} SET {_forward(owner, key)} WHERE {owner_row};"
     else:
         # The computed strategy: locks the owner row and writes nothing. Adding a row already takes this
         # lock, through its foreign key's check; removing one doesn't - and either has to wait for a

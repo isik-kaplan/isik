@@ -10,12 +10,15 @@ token as an `ETag` and compares `If-Match` with it.
 A model's token is its `concurrency_field`. By default it's:
 
 - `version` on a [`VersionedModel`](models.md#versionedmodel), whose trigger sets it to
-  `OLD.version + 1` on every UPDATE;
+  `OLD.version + 1` whenever the row changes;
 - else `updated_at` on a `DatabaseTimestampsModel` (so every `BaseModel`), whose trigger moves it
-  strictly forward on every UPDATE.
+  strictly forward whenever the row changes.
 
 Both triggers fire whatever wrote the row - `save()`, `QuerySet.update()`, `bulk_update()`, raw SQL -
-and whatever the write set the column to. That is what makes them tokens. A model that is both uses
+and whatever the write set the column to: a write can't choose the token, or take it back. That is
+what makes them tokens. A write that changes nothing leaves them where they were - there's nothing a
+write made against the version before it could lose
+([a write that changes nothing](models.md#a-write-that-changes-nothing)). A model that is both uses
 `version`.
 
 Any other field is declared, with the reason it changes on every write. A trigger of the project's
@@ -114,9 +117,12 @@ class User(AbstractUser, BaseModel):
 ### Column
 
 The relations move the token itself. Each relation's table gets a trigger (`bump_<relation>_owner`)
-that runs a plain `UPDATE` of the owner row, setting nothing that changes. The owner's own BEFORE UPDATE
-triggers then move its token, as they do for any write. Those triggers only assign `NEW` and never touch
-the relation's table, so it's one `UPDATE` of the owner per row changed there - never a loop.
+that runs an `UPDATE` of the owner row moving its first database-kept field one step forward, as
+[`touch_rows()`](models.md#a-write-that-changes-nothing) does - a write naming a kept field forward is a
+change, so the owner's own BEFORE UPDATE triggers move every kept field. An owner keeping neither gets
+an `UPDATE` setting nothing that changes, for its own token's trigger to fire on. Those triggers only
+assign `NEW` and never touch the relation's table, so it's one `UPDATE` of the owner per row changed
+there - never a loop.
 
 - *When.* The cheapest reads: the ETag is the token, in today's format, with no subquery and nothing to
   annotate.
@@ -186,16 +192,17 @@ ETag), and be kept by one of isik's triggers or declared with `ConcurrencyToken`
 
 ## assert_concurrency_field_changes(instance)
 
-Proves on a real database that the token changes on every write, for a test:
+Proves on a real database that a write can't choose the token, for a test:
 
 ```python
 def test_the_invoice_revision_is_a_concurrency_token(invoice):
     assert_concurrency_field_changes(invoice)
 ```
 
-It saves `instance`, then twice writes the token back to the value it already holds with
-`QuerySet.update()`, back to back. It raises `AssertionError` naming the first write that left a token
-an earlier one had already left.
+With `QuerySet.update()`, back to back, it writes an older token, which must not take, then twice a
+newer one, each of which must move the token to a value it hasn't held and that isn't the one the write
+named. It raises `AssertionError` naming the first write that didn't. A token nothing keeps fails at the
+older one: it takes whatever a write names.
 
 A model whose version covers relations takes one object per relation, as `obj` or as
 `(obj, through_defaults)`. Each object is added, removed, added again and cleared, and every step must

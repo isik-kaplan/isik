@@ -350,16 +350,30 @@ def current_concurrency_etag(model, pk):
     return next((_etag(value) for value in values), None)
 
 
+def _older(token):
+    """A value before `token` - any other one, for a UUID, which has no order."""
+    if isinstance(token, uuid.UUID):
+        return uuid.uuid4()
+    return token - (datetime.timedelta(days=1) if isinstance(token, datetime.datetime) else 1)
+
+
+def _newer(token):
+    """A value well after `token` - past where a trigger moving it one step would put it."""
+    if isinstance(token, uuid.UUID):
+        return uuid.uuid4()
+    return token + (datetime.timedelta(days=1) if isinstance(token, datetime.datetime) else 2)
+
+
 def assert_concurrency_field_changes(instance, related=None):
     """
-    Proves on the database that `instance`'s version changes on every write - for a test:
+    Proves on the database that a write can't choose `instance`'s version - for a test:
 
         def test_the_invoice_revision_is_a_concurrency_token(invoice):
             assert_concurrency_field_changes(invoice)
 
-    It saves `instance`, then twice writes the token back to the value it already holds, with
-    `QuerySet.update()`, back to back - so the clock barely moves - and raises
-    `AssertionError` naming the first write that left a token an earlier one had left.
+    With `QuerySet.update()`, back to back - so the clock barely moves - it writes an older token, which
+    must not take, then twice a newer one, each of which must move the token to a value it hasn't held
+    and isn't the one the write named. It raises `AssertionError` naming the first write that didn't.
 
     A model whose version covers relations takes one per relation in `related`. For a many-to-many it's
     an object - or `(obj, through_defaults)` for a through model with fields of its own - added, removed,
@@ -375,17 +389,34 @@ def assert_concurrency_field_changes(instance, related=None):
         raise AssertionError(_("%(model)s has no concurrency token.") % {"model": model._meta.label})
     attname = concurrency_attname(model)
     row = model._base_manager.filter(pk=instance.pk)
-    writes = [("save()", instance.save), *[("QuerySet.update()", lambda: row.update(**{attname: F(attname)}))] * 2]
+
+    def write(value):
+        row.update(**{attname: value})
+        return row.values_list(attname, flat=True).get()
+
+    def refuse(token, write):
+        raise AssertionError(
+            _("%(model)s's concurrency token %(field)r was %(token)r after %(write)s.")
+            % {"model": model._meta.label, "field": name, "token": token, "write": write}
+        )
+
     seen = [row.values_list(attname, flat=True).get()]
-    for write, run in writes:
-        run()
-        token = row.values_list(attname, flat=True).get()
-        if token in seen:
-            raise AssertionError(
-                _("%(model)s's concurrency token %(field)r was %(token)r again after %(write)s.")
-                % {"model": model._meta.label, "field": name, "token": token, "write": write}
-            )
+    older = _older(seen[-1])
+    token = write(older)
+    if token == older:
+        refuse(token, "QuerySet.update() naming an older token")
+    seen.append(token)
+
+    def moving_on():
+        newer = _newer(seen[-1])
+        token = write(newer)
+        if token in seen or token == newer:
+            refuse(token, "QuerySet.update() naming a newer token")
         seen.append(token)
+
+    # Twice, back to back: the second within the microsecond of the first, as often as not.
+    moving_on()
+    moving_on()
     related = related or {}
     for relation in concurrency_relations(model):
         if relation not in related:

@@ -1,6 +1,7 @@
 """with_feedback(), ranked() and the serializer fields that read them."""
 
 import math
+import uuid
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -171,11 +172,13 @@ class TestRanked:
         assert seen == [{"only": ["votes"]}]
 
     def test_ties_go_to_the_higher_primary_key(self, model):
-        older, newer = model.objects.create(title="old"), model.objects.create(title="new")
+        # Made lower key first, so the order rows are stored in is the opposite of the one asked for.
+        model.objects.create(pk=uuid.UUID(int=1), title="lower")
+        model.objects.create(pk=uuid.UUID(int=2), title="higher")
 
         titles = list(ranked(model.objects.all(), model.votes).values_list("title", flat=True))
 
-        assert titles == sorted([older.title, newer.title], key=lambda title: -model.objects.get(title=title).pk.int)
+        assert titles == ["higher", "lower"]
 
     def test_the_caller_has_their_own_vote(self, model, hosts, people):
         assert ranked(model.objects.filter(title="a"), model.votes, user=people[0]).get().votes_mine == 1

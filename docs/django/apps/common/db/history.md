@@ -6,7 +6,8 @@ repeating that setup at each call site. Extra `kwargs` pass straight through to
 `pghistory.track()`.
 
 - `trackers=[...]` records pghistory's own trackers instead of the three - each with a condition of
-  its own (`UpdateEvent(condition=pghistory.AnyChange("name"))`).
+  its own (`UpdateEvent(condition=pghistory.AnyChange("name"))`). A condition comparing several columns
+  on a `BaseModel` takes isik's [conditions](conditions.md), which leave `updated_at` and `version` out.
 - `condition=` is the condition of the default update event alone, keeping insert and delete. Not
   with `trackers`, which carry their own - both is a `TypeError`.
 - `append_only=True` makes the event table refuse updates and deletes (pghistory's own option). Left

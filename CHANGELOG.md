@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-10-27
+
+### Added
+
+- **`AnyChange`, `AnyDontChange`, `AllChange` and `AllDontChange`** in
+  `isik.django.apps.common.db.conditions`: pgtrigger's (and pghistory's) change conditions, leaving a
+  model's `version` and `updated_at` out of what they compare.
+- **The system check `isik.E013`** (`Check.KEPT_FIELD_CONDITIONS`) refuses a trigger condition comparing
+  `version` or `updated_at`, which sees every change as one to them - an AFTER trigger comparing every
+  column excepted.
+- **`touch_rows(queryset)`** moves the rows' `version` and `updated_at` for a change the row doesn't
+  show, and **`database_kept_fields(model)`** names the fields the database keeps.
+
+### Changed
+
+- **Breaking:** `bump_version` and `stamp_updated_at` move `version` and `updated_at` only when the write
+  changes the row - another column, or a kept field written forward. A write changing nothing leaves
+  them where they were, so the ETag stays and pghistory's update event records nothing; before, every
+  UPDATE moved them and recorded an event. They still fire on every UPDATE, holding the fields where
+  the row had them, so a stale value an instance saves back can't take them backwards. Code relying on
+  a `save()` to move them should change a field or call `touch_rows()`. Every model with them gets a
+  migration for the new trigger SQL.
+- **Breaking:** `version` and `updated_at` have reworded `help_text` and `db_comment`, so every model with
+  them gets an `AlterField`. Django changes a column's comment with `ALTER COLUMN ... TYPE` too, which
+  Postgres refuses on a column a trigger's condition names - regenerate migrations instead.
+- **Breaking:** `assert_concurrency_field_changes()` proves a write can't choose the token: an older one
+  written must not take, and a newer one written must move it to a value of its own. It no longer saves
+  the instance, and a test counting the writes it made (`version == 4`) now sees two that moved it.
+- The column strategy's `bump_<relation>_owner` trigger moves the owner's first kept field forward
+  instead of updating it to itself - a migration for each.
+
 ## [0.36.0] - 2026-10-26
 
 ### Added

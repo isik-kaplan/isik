@@ -57,7 +57,7 @@ class TestALazyObject:
         assert_concurrency_field_changes(SimpleLazyObject(lambda: note))
 
         note.refresh_from_db()
-        assert note.version == 4
+        assert note.version == 3
 
     @pytest.mark.django_db
     @pytest.mark.usefixtures("urls", "atomic_requests")

@@ -33,6 +33,7 @@ imports nothing of a project's, so a settings file can import it.
 | `Check.EXEMPTIONS` | `isik.E009` | an exemption loading the project didn't see ([exemptions](../../../common/utils/exemptions.md)) |
 | `Check.DOCUMENTATION` | `isik.E010` | a field without `help_text` or `db_comment` |
 | `Check.NOT_ATOMIC` | `isik.E011` | a view served outside `ATOMIC_REQUESTS` that doesn't say why ([atomic](atomic.md)) |
+| `Check.KEPT_FIELD_CONDITIONS` | `isik.E013` | a trigger condition comparing `version` or `updated_at` ([conditions](db/conditions.md)) |
 
 ## Options
 
@@ -45,7 +46,8 @@ imports nothing of a project's, so a settings file can import it.
   project serves by default (`project_urlconfs()`: `ROOT_URLCONF`, and each django-hosts host's).
   A list leaving a served one out is a warning, `isik.W003`, naming it - a check that can't see a
   urlconf passes it without saying so otherwise.
-- `CheckOption.APPS` - for a check over models (`Check.HISTORY_INDEXES`, `Check.DOCUMENTATION`): app labels. The project's
+- `CheckOption.APPS` - for a check over models (`Check.HISTORY_INDEXES`, `Check.DOCUMENTATION`,
+  `Check.KEPT_FIELD_CONDITIONS`): app labels. The project's
   own apps by default - `project_app_configs()`: every installed app not installed as a library, and
   not isik's.
 - `CheckOption.EXEMPTION_TYPES` - for `Check.DOCUMENTATION`: the `Exemption` types, or their dotted paths, that answer

@@ -15,6 +15,8 @@ from isik.django.apps.common.db.models import (
     ReprModel,
     UUIDPrimaryKeyModel,
     VersionedModel,
+    database_kept_fields,
+    touch_rows,
 )
 from isik.django.apps.common.db.orm import get_object_or_none, starts_with, with_python_defaults
 
@@ -23,6 +25,7 @@ __all__ = [
     "BaseModel",
     "ContextField",
     "context_fields_trigger",
+    "database_kept_fields",
     "DatabaseTimestampsModel",
     "FullCleanOnSaveModel",
     "ReprModel",
@@ -34,6 +37,7 @@ __all__ = [
     "object_stream_index",
     "open_history_context",
     "starts_with",
+    "touch_rows",
     "track_events",
     "with_python_defaults",
 ]

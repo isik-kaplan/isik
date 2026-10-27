@@ -445,9 +445,9 @@ class TestContextFieldsAndActorIdCompose:
         assert update["changes"]["name"] == ["bolt", "nut"]
         assert "actor_id" not in update["changes"]
 
-    def test_changes_still_reports_updated_at_when_only_the_actor_changed(self):
-        # A pure actor handoff (no real field edit) still leaves updated_at in the diff - BaseModel
-        # stamps it on every UPDATE - and the serializer shows it, so only actor_id is filtered out.
+    def test_a_save_by_another_actor_that_changes_nothing_records_nothing(self):
+        # BaseModel stamps updated_at only when the row changes, so the update event's condition -
+        # pghistory's AnyChange() - sees no change at all.
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
         bob = EmailUser.objects.create(username="bob", email="bob@example.com")
 
@@ -459,7 +459,7 @@ class TestContextFieldsAndActorIdCompose:
         Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
-        assert data[1]["changes"] == {"updated_at": [data[0]["updated_at"], data[1]["updated_at"]]}
+        assert len(data) == 1
 
     def test_a_context_actor_id_wins_over_the_middlewares_even_with_it_installed(self):
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):

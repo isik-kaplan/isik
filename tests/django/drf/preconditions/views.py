@@ -316,6 +316,7 @@ class WidgetPeekView(PreconditionMixin, GenericAPIView):
     def post(self, request, pk):
         # Not a detail action, so If-Match isn't asked - but the row it fetched is the one it answers for.
         widget = self.get_object()
+        widget.name = "peeked"
         widget.save()
         return Response({"name": widget.name})
 

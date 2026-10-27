@@ -1,12 +1,15 @@
 import datetime
 import time
 import uuid
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import connections, models
+from django.db.models import F
+from django.db.models.functions import Upper
 from django.test.utils import isolate_apps
 from django.utils import timezone
 from django_lifecycle import AFTER_DELETE, BEFORE_DELETE, bypass_hooks_for
@@ -60,16 +63,30 @@ def test_timestamp_triggers_protects_created_at_and_stamps_updated_at():
     assert stamp_updated_at.name == "stamp_updated_at"
     assert stamp_updated_at.when == pgtrigger.Before
     assert stamp_updated_at.operation == pgtrigger.Update
-    assert stamp_updated_at.func == (
-        'NEW."updated_at" = GREATEST(clock_timestamp(), OLD."updated_at" + interval \'1 microsecond\'); RETURN NEW;'
+    assert stamp_updated_at.get_func(TimestampedNote) == (
+        'IF ((OLD."created_at" IS DISTINCT FROM (NEW."created_at") OR OLD."id" IS DISTINCT FROM (NEW."id") OR '
+        'OLD."text" IS DISTINCT FROM (NEW."text"))) OR NEW."updated_at" > OLD."updated_at" THEN '
+        'NEW."updated_at" = GREATEST(clock_timestamp(), OLD."updated_at" + interval \'1 microsecond\'); '
+        'ELSE NEW."updated_at" = OLD."updated_at"; END IF; RETURN NEW;'
     )
 
 
 def test_timestamp_triggers_stamp_the_column_updated_at_is_stored_in():
     _, stamp_updated_at = base_models._timestamp_triggers(ModifiedColumnNote)
-    assert stamp_updated_at.func == (
-        'NEW."Modified" = GREATEST(clock_timestamp(), OLD."Modified" + interval \'1 microsecond\'); RETURN NEW;'
+    assert stamp_updated_at.get_func(ModifiedColumnNote) == (
+        'IF ((OLD."created_at" IS DISTINCT FROM (NEW."created_at") OR OLD."id" IS DISTINCT FROM (NEW."id") OR '
+        'OLD."text" IS DISTINCT FROM (NEW."text"))) OR NEW."Modified" > OLD."Modified" THEN '
+        'NEW."Modified" = GREATEST(clock_timestamp(), OLD."Modified" + interval \'1 microsecond\'); '
+        'ELSE NEW."Modified" = OLD."Modified"; END IF; RETURN NEW;'
     )
+
+
+def test_the_kept_fields_are_named_as_the_trigger_is_made_not_as_it_is_rendered():
+    # A migration renders it against a model of its own state - no subclass of DatabaseTimestampsModel.
+    _, stamp_updated_at = base_models._timestamp_triggers(TimestampedNote)
+
+    assert stamp_updated_at.kept == ("updated_at",)
+    assert base_models._version_triggers(VersionedWidget)[0].kept == ("version", "updated_at")
 
 
 def test_updated_at_moves_on_by_a_microsecond_when_the_clock_is_behind_it():
@@ -377,12 +394,21 @@ class TestVersionedModel:
         assert bump_version.name == "bump_version"
         assert bump_version.when == pgtrigger.Before
         assert bump_version.operation == pgtrigger.Update
-        assert bump_version.func == 'NEW."version" = OLD."version" + 1; RETURN NEW;'
+        assert bump_version.get_func(VersionedWidget) == (
+            'IF ((OLD."created_at" IS DISTINCT FROM (NEW."created_at") OR OLD."id" IS DISTINCT FROM (NEW."id") OR '
+            'OLD."name" IS DISTINCT FROM (NEW."name"))) OR NEW."version" > OLD."version" OR '
+            'NEW."updated_at" > OLD."updated_at" THEN NEW."version" = OLD."version" + 1; '
+            'ELSE NEW."version" = OLD."version"; END IF; RETURN NEW;'
+        )
 
     def test_its_trigger_follows_the_column_the_version_is_stored_in(self):
         (bump_version,) = base_models._version_triggers(VersionedNote)
 
-        assert bump_version.func == 'NEW."Revision" = OLD."Revision" + 1; RETURN NEW;'
+        assert bump_version.get_func(VersionedNote) == (
+            'IF ((OLD."id" IS DISTINCT FROM (NEW."id") OR OLD."text" IS DISTINCT FROM (NEW."text"))) OR '
+            'NEW."Revision" > OLD."Revision" THEN NEW."Revision" = OLD."Revision" + 1; '
+            'ELSE NEW."Revision" = OLD."Revision"; END IF; RETURN NEW;'
+        )
 
     def test_a_new_row_is_version_one(self):
         assert VersionedNote.objects.create(text="a").version == 1
@@ -559,3 +585,151 @@ def test_the_app_is_labelled_so_a_projects_common_can_be_common():
     from django.apps import apps
 
     assert apps.get_app_config("isik_common").name == "isik.django.apps.common"
+
+
+class TestAWriteThatChangesNothing:
+    """The kept fields move for a change to the row and only for one - and never back."""
+
+    def read(self, widget):
+        return VersionedWidget.objects.values_list("version", "updated_at").get(pk=widget.pk)
+
+    def test_a_save_changing_nothing_moves_neither(self):
+        widget = VersionedWidget.objects.create(name="bolt")
+        before = self.read(widget)
+
+        VersionedWidget.objects.get(pk=widget.pk).save()
+        VersionedWidget.objects.filter(pk=widget.pk).update(name="bolt")
+
+        assert self.read(widget) == before
+
+    def test_a_change_moves_both(self):
+        widget = VersionedWidget.objects.create(name="bolt")
+        version, updated_at = self.read(widget)
+
+        VersionedWidget.objects.filter(pk=widget.pk).update(name="nut")
+
+        assert self.read(widget)[0] == version + 1
+        assert self.read(widget)[1] > updated_at
+
+    def test_a_stale_instance_saved_again_doesnt_take_them_back(self):
+        widget = VersionedWidget.objects.create(name="bolt")
+        widget.refresh_from_db()
+        widget.name = "nut"
+        widget.save()
+        moved = self.read(widget)
+
+        widget.save()
+
+        assert (widget.version, self.read(widget)) == (1, moved)
+        assert moved[0] == 2
+
+    def test_an_older_version_written_alone_doesnt_take(self):
+        widget = VersionedWidget.objects.create(name="bolt")
+        VersionedWidget.objects.filter(pk=widget.pk).update(name="nut")
+        moved = self.read(widget)
+
+        VersionedWidget.objects.filter(pk=widget.pk).update(version=1)
+
+        assert self.read(widget) == moved
+
+    @pytest.mark.parametrize("field", ["version", "updated_at"])
+    def test_either_moved_forward_alone_moves_both(self, field):
+        widget = VersionedWidget.objects.create(name="bolt")
+        version, updated_at = self.read(widget)
+        step = 1 if field == "version" else datetime.timedelta(microseconds=1)
+
+        VersionedWidget.objects.filter(pk=widget.pk).update(**{field: F(field) + step})
+
+        assert self.read(widget)[0] == version + 1
+        assert self.read(widget)[1] > updated_at
+
+
+class TestTouchRows:
+    def test_it_moves_the_kept_fields_of_every_row_it_names(self):
+        for name in ("bolt", "nut"):
+            VersionedWidget.objects.create(name=name)
+        untouched = VersionedWidget.objects.create(name="washer")
+
+        assert base_models.touch_rows(VersionedWidget.objects.exclude(pk=untouched.pk)) == 2
+
+        assert sorted(VersionedWidget.objects.values_list("name", "version")) == [
+            ("bolt", 2),
+            ("nut", 2),
+            ("washer", 1),
+        ]
+
+    def test_updated_at_alone_moves_too(self):
+        note = TimestampedNote.objects.create(text="a")
+        before = TimestampedNote.objects.values_list("updated_at", flat=True).get(pk=note.pk)
+
+        base_models.touch_rows(TimestampedNote.objects.filter(pk=note.pk))
+
+        assert TimestampedNote.objects.values_list("updated_at", flat=True).get(pk=note.pk) > before
+
+    @pytest.mark.parametrize(
+        ("model", "field", "step", "keeping"),
+        [
+            (VersionedWidget, "version", 1, "bump_version"),
+            (TimestampedNote, "updated_at", datetime.timedelta(microseconds=1), "stamp_updated_at"),
+        ],
+    )
+    def test_it_writes_one_step_forward(self, model, field, step, keeping):
+        # The trigger keeping the field sets it itself - without it, what touch_rows() wrote stays.
+        made = model.objects.create(**({"name": "bolt"} if model is VersionedWidget else {"text": "a"}))
+        before = model.objects.values_list(field, flat=True).get(pk=made.pk)
+
+        with pgtrigger.ignore(f"testapp.{model.__name__}:{keeping}"):
+            base_models.touch_rows(model.objects.filter(pk=made.pk))
+
+        assert model.objects.values_list(field, flat=True).get(pk=made.pk) == before + step
+
+    def test_a_model_keeping_neither_is_refused(self):
+        with pytest.raises(TypeError) as raised:
+            base_models.touch_rows(CleanedNote.objects.all())
+
+        assert str(raised.value) == "touch_rows() moves version and updated_at, and testapp.CleanedNote has neither."
+
+
+def test_the_kept_fields_of_each_kind_of_model():
+    assert base_models.database_kept_fields(VersionedWidget) == ("version", "updated_at")
+    assert base_models.database_kept_fields(VersionedNote) == ("version",)
+    assert base_models.database_kept_fields(TimestampedNote) == ("updated_at",)
+    assert base_models.database_kept_fields(CleanedNote) == ()
+
+
+@isolate_apps("tests.testapp")
+def test_a_generated_column_isnt_compared():
+    # A BEFORE trigger's NEW doesn't hold it yet - it follows the other columns anyway.
+    made = type(
+        f"Generated{uuid.uuid4().hex[:8]}",
+        (DatabaseTimestampsModel,),
+        {
+            "__module__": __name__,
+            "Meta": type("Meta", (), {"app_label": "testapp"}),
+            "text": models.TextField(),
+            "shout": models.GeneratedField(expression=Upper("text"), output_field=models.TextField(), db_persist=True),
+        },
+    )
+
+    func = base_models._timestamp_triggers(made)[1].get_func(made)
+
+    assert '"text"' in func
+    assert '"shout"' not in func
+
+
+class TestARelationMovingItsOwner:
+    def test_the_first_kept_field_goes_forward(self):
+        assert base_models._forward(VersionedWidget, '"id"') == '"version" = "version" + 1'
+        assert base_models._forward(Widget, '"id"') == '"updated_at" = "updated_at" + interval \'1 microsecond\''
+
+    def test_an_owner_keeping_none_is_updated_to_itself(self):
+        assert base_models._forward(CleanedNote, '"id"') == '"id" = "id"'
+
+
+def test_a_column_strategy_owner_keeping_neither_is_updated_by_its_key(monkeypatch):
+    monkeypatch.setattr(CleanedNote, "concurrency_strategy", "column", raising=False)
+    key = SimpleNamespace(target_field=SimpleNamespace(column="id"), column="note_id")
+
+    trigger = base_models._relation_lock_trigger(CleanedNote, "notes", key)
+
+    assert 'UPDATE "testapp_cleanednote" SET "id" = "id" WHERE "id" = NEW."note_id";' in trigger.func

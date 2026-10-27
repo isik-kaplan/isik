@@ -22,7 +22,7 @@ from isik.django.apps.feedback.votes import votes
 from isik.django.apps.idempotency.by_reference.models import IdempotencyClaim
 from isik.django.apps.idempotency.with_body.models import IdempotencyClaimWithBody
 from isik.django.apps.tags.tags import tags
-from tests.testapp.models import EmailUser, Widget
+from tests.testapp.models import EmailUser, VersionedWidget, Widget
 
 
 def described(model, *names):
@@ -195,8 +195,17 @@ def test_the_base_models_fields_say_what_they_hold():
         ),
         "updated_at": (
             "When the row last changed, by the database's clock.",
-            "When the row last changed, by the database's clock. Stamped by a trigger on every update.",
+            "When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.",
         ),
+    }
+
+
+def test_a_versioned_models_version_says_what_it_counts():
+    assert described(VersionedWidget, "version") == {
+        "version": (
+            "How many times the row has changed, counting the write that created it.",
+            "How many times the row has changed. A trigger adds one whenever it does.",
+        )
     }
 
 
