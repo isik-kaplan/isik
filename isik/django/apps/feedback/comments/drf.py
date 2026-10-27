@@ -24,14 +24,11 @@ class _ThreadedCommentMixin:
     """A reply's `parent` is checked against the target the comment goes on - `context["target"]`."""
 
     def validate_parent(self, parent):
-        if parent is None:
-            return parent
-        config = config_of(self.Meta.model)
-        target = self.context["target"]
-        try:
-            check_parent(config, parent, target.pk)
-        except DjangoValidationError as error:
-            raise serializers.ValidationError(error.messages) from None
+        if parent is not None:
+            try:
+                check_parent(config_of(self.Meta.model), parent, self.context["target"].pk)
+            except DjangoValidationError as error:
+                raise serializers.ValidationError(error.messages) from None
         return parent
 
 

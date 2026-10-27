@@ -154,6 +154,12 @@ class TestComments:
         assert response.json()["parent"] is None
         assert response.json()["reply_count"] == 0
 
+    def test_a_parent_given_as_null_is_a_top_level_comment(self, route, host, alice):
+        response = self.post(client_for(alice), route, host, {"body": "first", "parent": None})
+
+        assert response.status_code == 201
+        assert response.json()["parent"] is None
+
     def test_a_new_comment_takes_an_idempotency_key(self, route, host, alice):
         response = client_for(alice).post(f"/{route}/{host.pk}/comments/", {"body": "first"}, format="json")
 
