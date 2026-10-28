@@ -39,6 +39,10 @@ from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
 from isik.django.apps.feedback.notes import UserNoteMixin, notes
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
+from isik.django.apps.notifications.audiences import Field, Subscribers
+from isik.django.apps.notifications.kinds import declare_kind, notifies
+from isik.django.apps.notifications.models import Policy, Source
+from isik.django.apps.notifications.partitions import Follow
 from isik.django.apps.tags.tags import AbstractTag, TaggableMixin, tags
 from isik.django.apps.templated_fields import TemplateCharField, TemplatePolicy, TemplateTextField
 from tests.testapp.exemptions import NoComment, NoHelpText
@@ -678,3 +682,57 @@ class SiteDomain(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=["site"], condition=models.Q(is_primary=True), name="one_primary_domain"),
         ]
+
+
+# The test project's vocabulary of kinds - parcel_routed aside, declared by name where it's written, as a
+# one-file project would.
+PARCEL_SHIPPED = declare_kind("parcel_shipped")
+PARCEL_FLAGGED = declare_kind("parcel_flagged", variants=("lost", "damaged"))
+PARCEL_REMINDER = declare_kind(
+    "parcel_reminder", variants=("daily", "weekly"), audience=Subscribers, policy=Policy.DEFAULT_OFF
+)
+# An email its sender sends itself - a password reset, say - and the ledger only records.
+PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Source.RECORDED)
+
+
+@notifies(
+    PARCEL_SHIPPED,
+    on=pgtrigger.Update,
+    condition=pgtrigger.Q(new__status="shipped") & ~pgtrigger.Q(old__status="shipped"),
+    snapshot=["status", "recipient", "sender"],
+    previous=True,
+    audience=Field("recipient"),
+    policy=Policy.DEFAULT_ON,
+)
+@notifies(
+    "parcel_routed",
+    on=pgtrigger.Insert,
+    condition=pgtrigger.Q(new__status="routed"),
+    snapshot=["sender"],
+    audience=Field("sender"),
+    policy=Policy.MANDATORY,
+    channels=("inbox",),
+    # Its partition read through the sender - here, their username.
+    partition=Follow("sender", "username"),
+)
+@notifies(
+    PARCEL_FLAGGED,
+    on=pgtrigger.Insert | pgtrigger.Update,
+    variants={"lost": pgtrigger.Q(new__status="lost"), "damaged": pgtrigger.Q(new__status="damaged")},
+    snapshot=["status", "sender"],
+    audience=Field("sender"),
+    policy=Policy.DEFAULT_OFF,
+    channels=("inbox", "email", "webhook"),
+)
+class Parcel(BaseModel):
+    """A row notices are written about: two trigger-sourced kinds, one with variants, and a column none carries."""
+
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    status = models.CharField(max_length=20, default="packed")
+    tracking_secret = models.CharField(max_length=50, blank=True, default="")
+
+    class Meta:
+        app_label = "testapp"

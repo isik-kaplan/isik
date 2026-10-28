@@ -36,6 +36,7 @@ belongs included - is an error, `isik.E012`.
 | Check.DOCUMENTATION        | isik.E010              | a field without help_text or db_comment                      |
 | Check.NOT_ATOMIC           | isik.E011              | a view outside ATOMIC_REQUESTS that doesn't say why          |
 | Check.KEPT_FIELD_CONDITIONS | isik.E013             | a trigger condition comparing version or updated_at          |
+| Check.NOTIFICATIONS        | isik.E014, isik.W004-9 | a notifications declaration that can't work, a retired kind |
 """
 
 import functools
@@ -67,6 +68,7 @@ class Check(Enum):
     DOCUMENTATION = "documentation"
     NOT_ATOMIC = "not_atomic"
     KEPT_FIELD_CONDITIONS = "kept_field_conditions"
+    NOTIFICATIONS = "notifications"
 
 
 class CheckOption(Enum):
@@ -104,6 +106,7 @@ CHECKS = {
     Check.DOCUMENTATION: (CheckOption.APPS, CheckOption.EXEMPTION_TYPES, CheckOption.INHERITED_FROM_LIBRARIES),
     Check.NOT_ATOMIC: (CheckOption.URLCONFS,),
     Check.KEPT_FIELD_CONDITIONS: (CheckOption.APPS,),
+    Check.NOTIFICATIONS: (),
 }
 
 DEFAULTS = {

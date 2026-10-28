@@ -19,10 +19,18 @@ from isik.django.apps.common.db.models import (
     touch_rows,
 )
 from isik.django.apps.common.db.orm import get_object_or_none, starts_with, with_python_defaults
+from isik.django.apps.common.db.triggers import (
+    ProtectTruncate,
+    allow_truncate,
+    flushing_through_truncate_protection,
+    truncate_protections,
+)
 
 
 __all__ = [
     "BaseModel",
+    "ProtectTruncate",
+    "allow_truncate",
     "ContextField",
     "context_fields_trigger",
     "database_kept_fields",
@@ -32,6 +40,7 @@ __all__ = [
     "UUIDPrimaryKeyModel",
     "VersionedModel",
     "event_model_for",
+    "flushing_through_truncate_protection",
     "get_object_or_none",
     "history_middleware_installed",
     "object_stream_index",
@@ -39,5 +48,6 @@ __all__ = [
     "starts_with",
     "touch_rows",
     "track_events",
+    "truncate_protections",
     "with_python_defaults",
 ]

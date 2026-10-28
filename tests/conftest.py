@@ -86,6 +86,21 @@ def django_db_modify_db_settings():
 # masking the mutation instead of exercising it. Reset before every test so each one always starts
 # from a genuinely empty registry, not whatever the parent process happened to leave behind.
 @pytest.fixture(autouse=True)
+def _forget_triggers_registered_by_the_test():
+    # A test building a model of its own (isolate_apps, a fresh uuid name) registers its triggers in
+    # pgtrigger's process-wide registry, which nothing empties. Each Postgres function name carries only a
+    # 5-hex-digit hash, so across a run - and mutmut runs the suite twice in one process - two of those
+    # throwaway models eventually hash alike and the second is refused. Forget them once the test is over;
+    # popped rather than deleted, which would also edit the throwaway model's Meta.
+    from pgtrigger.registry import _registry
+
+    before = set(_registry)
+    yield
+    for uri in set(_registry) - before:
+        _registry.pop(uri)
+
+
+@pytest.fixture(autouse=True)
 def _reset_claimed_related_names():
     from isik.django.apps.common import _model_makers
 
@@ -97,6 +112,7 @@ def memoized():
     from isik.cli import commands
     from isik.django.apps.common.db import models
     from isik.django.apps.feedback.comments import tiptap
+    from isik.django.apps.notifications import drf as notifications
     from isik.django.apps.templated_fields import engine
     from isik.django.apps.templated_fields.policy import TemplatePolicy
 
@@ -104,6 +120,10 @@ def memoized():
         commands._command_class,
         models._primary_key_function,
         tiptap._load_schema,
+        notifications.inbox_item_serializer,
+        notifications.subscription_serializer,
+        notifications.endpoint_serializer,
+        notifications.delivery_serializer,
         engine._build_environment,
         engine._compile,
         TemplatePolicy.VARIABLES_ONLY.__func__,

@@ -120,6 +120,11 @@ the end of the primary key's index rather than all over it:
 ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
 ```
 
+**A project with a key convention of its own sets it.** Nothing fails when it doesn't: every model
+isik keys - its own apps' among them - quietly gets random `uuid4` keys beside the project's, the wrong
+shape for good on exactly the append-heavy tables read by recency, where a key that doesn't sort by time
+spreads every insert across the index.
+
 The setting is read once per process. A model's migration names `new_primary_key`, not the setting,
 so changing it needs no migration - a project upgrading from 0.29 gets one `AlterField` per model,
 from `uuid.uuid4` to `new_primary_key`.

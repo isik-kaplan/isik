@@ -51,6 +51,9 @@ handler returned. Use this when responses aren't serialized rows.
 If that leaves no model, or both apps are installed with nothing chosen, it raises
 `ImproperlyConfigured`.
 
+Read the claim through `get_claim_model()` everywhere, your tests included: importing a shipped claim's
+class names a model that stops being there the moment its app leaves `INSTALLED_APPS`.
+
 ## Your own claim
 
 Subclass one of the abstract claims in your own app and point `IDEMPOTENCY_CLAIM_MODEL` at it. You

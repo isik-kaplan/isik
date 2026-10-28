@@ -25,11 +25,18 @@ django = ["django", "mjml-python", "django-pghistory", "django-object-actions", 
 drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"]
 # isik.django.celery carries pghistory context into a worker, so it brings the django extra.
 celery = ["isik[django]", "celery"]
+# isik.django.apps.notifications fans notices out in celery tasks and POSTs webhooks with httpx.
+notifications = ["isik[django,celery]", "httpx"]
 tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
 # Ranges, not pins: an app pins its own click and questionary, and isik.cli must not fight that.
 cli = ["click>=8.1", "questionary>=2.1.1"]
-all = ["isik[sentry,django,drf,celery,tiptap,templated_fields,cli]"]
+all = ["isik[sentry,django,drf,celery,notifications,tiptap,templated_fields,cli]"]
+
+[project.entry-points.pytest11]
+# Lets a transaction=True test's flush through the notifications ledger's TRUNCATE protection - a no-op
+# unless that app is installed.
+isik_notifications = "isik.django.apps.notifications.pytest_plugin"
 
 [project.urls]
 Homepage = "https://github.com/isik-kaplan/isik"

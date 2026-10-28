@@ -138,6 +138,7 @@ class TestTheSettings:
             "documentation",
             "not_atomic",
             "kept_field_conditions",
+            "notifications",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -203,7 +204,7 @@ class TestTheSettingsCheck:
             "ISIK_CHECKS names 'idempotence', which isn't a Check: Check.VALIDATORS, Check.CONCURRENCY_TOKENS, "
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
-            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS."
+            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS."
         ]
 
     def test_an_entry_not_a_dict(self, settings):

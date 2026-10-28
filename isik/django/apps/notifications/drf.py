@@ -1,0 +1,519 @@
+"""
+REST views over the audience and its deliveries - `InboxViewSet`, `SubscriptionViewSet`, `EndpointViewSet`
+and `DeliveryViewSet` - for a project to route, or ignore:
+
+    router.register("notifications/inbox", InboxViewSet, basename="inbox")
+    router.register("notifications/subscriptions", SubscriptionViewSet, basename="subscription")
+    router.register("notifications/endpoints", AcmeEndpointViewSet, basename="endpoint")
+    router.register("notifications/deliveries", AcmeDeliveryViewSet, basename="delivery")
+
+Each is held to isik's write guards (an `Idempotency-Key`, and `If-Match` on a write to one object), with
+the exemptions its own writes earn. The inbox and subscriptions are always the caller's own. Whose
+endpoints a caller sees, and so whose deliveries, is the project's to say: set `owner_field` - the
+endpoint's field naming its owner - and `owner(request)` when the owner isn't the caller, or override
+`get_queryset()` (and `perform_create()`).
+"""
+
+import secrets
+from functools import cache
+
+from django.core.exceptions import ImproperlyConfigured
+from django.db.models import CharField
+from django.db.models.functions import Cast
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_field,
+    extend_schema_view,
+    inline_serializer,
+)
+from rest_framework import mixins, serializers, status
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import makes_own_exemptions
+from isik.django.apps.common.db.models import touch_rows
+from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
+from isik.django.apps.notifications.audience.helpers import mark_read, subscribe
+from isik.django.apps.notifications.audience.swapping import (
+    get_endpoint_kind_model,
+    get_endpoint_model,
+    get_inbox_item_model,
+    get_subscription_model,
+)
+from isik.django.apps.notifications.choices import Policy
+from isik.django.apps.notifications.kinds import kinds
+from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
+from isik.django.apps.notifications.swapping import (
+    get_delivery_attempt_model,
+    get_delivery_model,
+    get_kind_policy_model,
+)
+from isik.django.drf.viewsets.base import BaseViewSet
+from isik.django.drf.viewsets.preconditions import NoPrecondition, PreconditionMixin
+from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
+
+
+@makes_own_exemptions
+def _own_exemptions():
+    # isik's own, recorded at this line and left out of a project's listing and budgets.
+    return {
+        "read": NoPrecondition(reason="marks the caller's own items read, which an item without a version can't name"),
+        "read_key": NoIdempotencyKey(reason="marks items read, and a retry finds them read already"),
+        "preference": NoIdempotencyKey(
+            reason="sets the caller's preference to the state it names, so a retry changes nothing"
+        ),
+        "forget": NoPrecondition(reason="forgets the caller's own preference, which has no version to name"),
+        "forget_key": NoIdempotencyKey(reason="forgets a preference, and a retry finds it forgotten"),
+        "secret": NoReplay(reason="answers with a new secret, shown once and never stored to be shown again"),
+        "retry": NoPrecondition(
+            reason="retries a delivery, which only an abandoned one may be - its state is the guard"
+        ),
+    }
+
+
+_EXEMPT = _own_exemptions()
+
+# How a caller's subscriptions, and an endpoint's kinds, are listed.
+BY_KIND = ("kind_id", "variant")
+
+
+# A kind's name - typed here, for a serializer with no model to type it by.
+@extend_schema_field(OpenApiTypes.STR)
+class KindField(serializers.SlugRelatedField):
+    """A kind, by its name - one of the configured policy model's rows that isn't retired."""
+
+    def __init__(self, **kwargs):
+        super().__init__(slug_field="kind", **kwargs)
+
+    def get_queryset(self):
+        return get_kind_policy_model()._default_manager.filter(retired_at=None)
+
+
+@cache
+def inbox_item_serializer(model):
+    """The serializer of an inbox item of `model`."""
+
+    class InboxItemSerializer(serializers.ModelSerializer):
+        kind = serializers.CharField(source="kind_id", read_only=True)
+
+        class Meta:
+            fields = ["id", "kind", "variant", "subject_label", "subject_id", "payload", "read_at", "created_at"]
+            read_only_fields = fields
+
+    InboxItemSerializer.Meta.model = model
+    return InboxItemSerializer
+
+
+@cache
+def subscription_serializer(model):
+    """The serializer of a subscription of `model`."""
+
+    class SubscriptionSerializer(serializers.ModelSerializer):
+        kind = KindField()
+
+        class Meta:
+            fields = ["id", "kind", "variant", "enabled"]
+
+        def validate(self, data):
+            policy, variant = data["kind"], data.get("variant")
+            if policy.policy == Policy.MANDATORY:
+                raise ValidationError(
+                    {"kind": _("%(kind)s is mandatory - it can't be turned on or off.") % {"kind": policy.kind}}
+                )
+            if variant is not None and variant not in policy.variants:
+                raise ValidationError(
+                    {
+                        "variant": _("%(kind)s declares no variant %(variant)r.")
+                        % {"kind": policy.kind, "variant": variant}
+                    }
+                )
+            return data
+
+    SubscriptionSerializer.Meta.model = model
+    return SubscriptionSerializer
+
+
+class EndpointKindSerializer(serializers.Serializer):
+    kind = KindField()
+    variant = serializers.CharField(allow_null=True, required=False, default=None)
+
+    def validate(self, data):
+        policy, variant = data["kind"], data.get("variant")
+        if variant is not None and variant not in policy.variants:
+            raise ValidationError(
+                {"variant": _("%(kind)s declares no variant %(variant)r.") % {"kind": policy.kind, "variant": variant}}
+            )
+        return data
+
+
+def kinds_problem(wanted):
+    """Why the endpoint can't want `wanted` together, or None - what the database would refuse, said first."""
+    seen = {}
+    for each in wanted:
+        kind, variant = each["kind"].kind, each.get("variant")
+        if variant in seen.get(kind, ()):
+            return _("%(kind)s is named twice.") % {"kind": kind}
+        seen.setdefault(kind, set()).add(variant)
+    for kind, variants in seen.items():
+        if None in variants and len(variants) > 1:
+            return _("%(kind)s is wanted for every variant and for some - name it once, with no variant, for all.") % {
+                "kind": kind
+            }
+    return None
+
+
+@cache
+def endpoint_serializer(model):
+    """The serializer of an endpoint of `model` - its secret shown only when it's new."""
+
+    class EndpointSerializer(serializers.ModelSerializer):
+        kinds = EndpointKindSerializer(many=True, required=False)
+        secret = serializers.SerializerMethodField()
+
+        class Meta:
+            fields = ["id", "url", "is_active", "kinds", "consecutive_failures", "parked_at", "secret", "updated_at"]
+            # id and updated_at aren't editable, so they're read-only already.
+            read_only_fields = ["consecutive_failures", "parked_at"]
+
+        def get_secret(self, endpoint) -> str | None:
+            return getattr(endpoint, "new_secret", None)
+
+        def to_representation(self, endpoint):
+            data = super().to_representation(endpoint)
+            wanted = get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint).order_by(*BY_KIND)
+            data["kinds"] = [
+                {"kind": kind, "variant": variant} for kind, variant in wanted.values_list("kind_id", "variant")
+            ]
+            return data
+
+        def validate_kinds(self, wanted):
+            problem = kinds_problem(wanted)
+            if problem is not None:
+                raise ValidationError(problem)
+            return wanted
+
+        def _set_kinds(self, endpoint, wanted):
+            get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint).delete()
+            for each in wanted:
+                get_endpoint_kind_model()._default_manager.create(
+                    endpoint=endpoint, kind=each["kind"], variant=each.get("variant")
+                )
+
+        def create(self, data):
+            wanted = data.pop("kinds", [])
+            endpoint = model._default_manager.create(**data, secret=secrets.token_urlsafe())
+            endpoint.new_secret = endpoint.secret
+            self._set_kinds(endpoint, wanted)
+            return endpoint
+
+        def update(self, endpoint, data):
+            wanted = data.pop("kinds", None)
+            endpoint = super().update(endpoint, data)
+            if wanted is not None:
+                self._set_kinds(endpoint, wanted)
+                # Its kinds are part of the endpoint its version names - a change to them alone moves it too.
+                touch_rows(model._default_manager.filter(pk=endpoint.pk))
+                endpoint.refresh_from_db()
+            return endpoint
+
+    EndpointSerializer.Meta.model = model
+    return EndpointSerializer
+
+
+class SwappedModel:
+    """
+    A viewset's `model`, read from its getter whenever it's asked for - the model a project swapped in, not
+    the one isik ships - so isik's checks and schema generation find it on the class, with no request.
+    """
+
+    def __init__(self, getter):
+        self.getter = getter
+
+    def __get__(self, instance, owner):
+        return self.getter()
+
+
+# Each viewset's docstring, and each action's, is what drf-spectacular publishes to the project's API callers -
+# written for them. What a developer needs is in these comments.
+
+
+# The caller's inbox items, newest first.
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[OpenApiParameter("unread", OpenApiTypes.BOOL, description="Only the unread notifications.")]
+    )
+)
+class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin):
+    """Your notifications, newest first. Add `?unread=true` for the unread ones alone."""
+
+    model = SwappedModel(get_inbox_item_model)
+    permission_classes = [IsAuthenticated]
+    precondition_exempt_actions = {"read": _EXEMPT["read"], "read_all": _EXEMPT["read"]}
+    idempotency_exempt_actions = {"read": _EXEMPT["read_key"], "read_all": _EXEMPT["read_key"]}
+
+    @none_during_schema_generation
+    def get_queryset(self):
+        items = get_inbox_item_model()._default_manager.filter(user=self.request.user)
+        if self.action == "list" and self.request.query_params.get("unread") in ("true", "1"):
+            items = items.filter(read_at__isnull=True)
+        return items
+
+    def get_serializer_class(self):
+        return inbox_item_serializer(get_inbox_item_model())
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def read(self, request, *args, **kwargs):
+        """Marks this notification read."""
+        item = self.get_object()
+        mark_read(self.get_queryset().filter(pk=item.pk))
+        item.refresh_from_db()
+        return Response(self.get_serializer(item).data)
+
+    @extend_schema(request=None, responses=inline_serializer("Marked", {"marked": serializers.IntegerField()}))
+    @action(detail=False, methods=["post"], url_path="read-all")
+    def read_all(self, request, *args, **kwargs):
+        """Marks all your notifications read, and says how many were unread."""
+        return Response({"marked": mark_read(self.get_queryset())})
+
+
+# The caller's subscriptions - each a deviation from its kind's policy. `POST` sets one through
+# `subscribe()`, and `DELETE` forgets it, so the kind's policy decides again.
+class SubscriptionViewSet(
+    IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.ListModelMixin, mixins.DestroyModelMixin
+):
+    """
+    Your notification preferences. Each one turns a kind of notification - or one variant of it - on or off
+    for you; delete one to go back to the kind's default.
+    """
+
+    model = SwappedModel(get_subscription_model)
+    permission_classes = [IsAuthenticated]
+    precondition_exempt_actions = {"destroy": _EXEMPT["forget"]}
+    idempotency_exempt_actions = {"create": _EXEMPT["preference"], "destroy": _EXEMPT["forget_key"]}
+
+    @none_during_schema_generation
+    def get_queryset(self):
+        return get_subscription_model()._default_manager.filter(user=self.request.user).order_by(*BY_KIND)
+
+    def get_serializer_class(self):
+        return subscription_serializer(get_subscription_model())
+
+    def create(self, request, *args, **kwargs):
+        """Sets your preference for a kind of notification, or one variant of it - made, or replacing the one before."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            subscription = subscribe(
+                request.user, data["kind"].kind, data.get("variant"), enabled=data.get("enabled", True)
+            )
+        except ValueError as error:
+            raise ValidationError({"variant": [str(error)]}) from error
+        return Response(self.get_serializer(subscription).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        responses=inline_serializer(
+            "ChoosableKind",
+            {
+                "kind": serializers.CharField(),
+                "policy": serializers.ChoiceField(choices=Policy.choices),
+                "variants": serializers.ListField(child=serializers.CharField()),
+            },
+            many=True,
+        )
+    )
+    # A short list, answered whole - and documented whole, not as a page, whatever paginator the project sets.
+    @action(detail=False, methods=["get"], pagination_class=None)
+    def kinds(self, request, *args, **kwargs):
+        """The kinds of notification you can choose about, each with its default and its variants."""
+        declared = kinds()
+        choosable = (
+            get_kind_policy_model()
+            ._default_manager.filter(retired_at=None, kind__in=list(declared))
+            .exclude(policy=Policy.MANDATORY)
+        )
+        return Response(
+            [
+                {"kind": policy.kind, "policy": policy.policy, "variants": policy.variants}
+                for policy in choosable.order_by("kind")
+            ]
+        )
+
+
+class OwnedByCaller:
+    """
+    Whose endpoints a caller sees: those whose `owner_field` is `owner(request)` - the caller, unless it's
+    overridden (`request.user.organization`, say). With no `owner_field`, the view refuses to guess.
+    """
+
+    owner_field = None
+
+    def owner(self, request):
+        return request.user
+
+    def owned_endpoints(self):
+        if self.owner_field is None:
+            raise ImproperlyConfigured(
+                _(
+                    "%(view)s doesn't know whose endpoints a caller sees - set its owner_field, or override "
+                    "get_queryset()."
+                )
+                % {"view": type(self).__name__}
+            )
+        return get_endpoint_model()._default_manager.filter(**{self.owner_field: self.owner(self.request)})
+
+
+# Webhook endpoints and the kinds each wants. Subclass it to say whose endpoints a caller sees and who owns a
+# new one: `owner_field = "user"` (and `owner()`, for an owner that isn't the caller), or `get_queryset()` and
+# `perform_create()` of your own - and set ENDPOINT_OWNER_FIELD to match.
+class EndpointViewSet(
+    OwnedByCaller,
+    IdempotencyMixin,
+    PreconditionMixin,
+    BaseViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+):
+    """
+    Webhook endpoints, and the kinds of notification each receives. An endpoint's secret is shown once:
+    in the response that creates it, and in the one that rotates it.
+    """
+
+    model = SwappedModel(get_endpoint_model)
+    permission_classes = [IsAuthenticated]
+    idempotency_no_replay_actions = {"create": _EXEMPT["secret"], "rotate_secret": _EXEMPT["secret"]}
+
+    @none_during_schema_generation
+    def get_queryset(self):
+        return self.owned_endpoints().order_by("pk")
+
+    def get_serializer_class(self):
+        return endpoint_serializer(get_endpoint_model())
+
+    def _answer(self, endpoint):
+        return Response(self.get_serializer(endpoint).data)
+
+    def perform_create(self, serializer):
+        """Saves the new endpoint, its `owner_field` given the `owner()` - override for an owner set otherwise."""
+        serializer.save(**({self.owner_field: self.owner(self.request)} if self.owner_field else {}))
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"], url_path="rotate-secret")
+    def rotate_secret(self, request, *args, **kwargs):
+        """
+        Gives the endpoint a new secret, shown here once. Requests are signed with both, the old and the new,
+        until the rotation is finished.
+        """
+        endpoint = self.get_object()
+        endpoint.secret_previous, endpoint.secret = endpoint.secret, secrets.token_urlsafe()
+        endpoint.save()
+        endpoint.new_secret = endpoint.secret
+        return self._answer(endpoint)
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"], url_path="finish-rotation")
+    def finish_rotation(self, request, *args, **kwargs):
+        """Stops signing with the endpoint's old secret."""
+        endpoint = self.get_object()
+        endpoint.secret_previous = None
+        endpoint.save()
+        return self._answer(endpoint)
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def unpark(self, request, *args, **kwargs):
+        """Sends to an endpoint again after it was parked for failing too often."""
+        endpoint = self.get_object()
+        endpoint.unpark()
+        return self._answer(endpoint)
+
+
+@cache
+def delivery_serializer(model, attempt_model):
+    """The serializer of a delivery of `model`, with its attempts of `attempt_model`."""
+
+    class DeliveryAttemptSerializer(serializers.ModelSerializer):
+        class Meta:
+            fields = [
+                "attempt_no",
+                "status_code",
+                "succeeded",
+                "error",
+                "response",
+                "started_at",
+                "duration_ms",
+                "triggered_by",
+            ]
+            read_only_fields = fields
+
+    class DeliverySerializer(serializers.ModelSerializer):
+        kind = serializers.CharField(source="notice.kind_id", read_only=True)
+        variant = serializers.CharField(source="notice.variant", read_only=True)
+        attempts = DeliveryAttemptSerializer(many=True, read_only=True)
+
+        class Meta:
+            fields = [
+                "id",
+                "kind",
+                "variant",
+                "channel",
+                "target_key",
+                "state",
+                "attempt_count",
+                "next_attempt_at",
+                "sent_at",
+                "created_at",
+                "attempts",
+            ]
+            read_only_fields = fields
+
+    DeliveryAttemptSerializer.Meta.model = attempt_model
+    DeliverySerializer.Meta.model = model
+    return DeliverySerializer
+
+
+# The webhook deliveries to a caller's endpoints. `retry` sends an abandoned one again (`retry_delivery()`),
+# refused with why while its endpoint is parked or gone. Whose endpoints are the caller's is `owner_field`'s
+# to say, as on EndpointViewSet, or `get_queryset()`'s.
+class DeliveryViewSet(
+    OwnedByCaller, IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin
+):
+    """The webhook requests sent to your endpoints, newest first, each with its attempts."""
+
+    model = SwappedModel(get_delivery_model)
+    permission_classes = [IsAuthenticated]
+    precondition_exempt_actions = {"retry": _EXEMPT["retry"]}
+
+    def get_serializer_class(self):
+        return delivery_serializer(get_delivery_model(), get_delivery_attempt_model())
+
+    @none_during_schema_generation
+    def get_queryset(self):
+        endpoints = self.owned_endpoints().annotate(key=Cast("pk", CharField())).values("key")
+        return (
+            get_delivery_model()
+            ._default_manager.filter(webhook__endpoint_id__in=endpoints)
+            .select_related("notice")
+            .prefetch_related("attempts")
+            .order_by("-created_at")
+        )
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def retry(self, request, *args, **kwargs):
+        """Sends a delivery that was given up on again. Refused, saying why, while its endpoint is parked or gone."""
+        delivery = self.get_object()
+        try:
+            delivery = retry_delivery(delivery)
+        except RetryRefused as refused:
+            raise ValidationError({"detail": str(refused)}) from refused
+        return Response(self.get_serializer(delivery).data)

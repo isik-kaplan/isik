@@ -6,6 +6,8 @@ details come from the environment so the same settings work locally and in CI.
 import getpass
 import os
 
+from isik.django.apps.notifications.exemptions import ScheduledElsewhere
+
 
 SECRET_KEY = "not-a-secret-just-for-tests"
 
@@ -41,6 +43,8 @@ INSTALLED_APPS = [
     # Both claim apps, so both claims are tested - a project installs one (see get_claim_model()).
     "isik.django.apps.idempotency.by_reference",
     "isik.django.apps.idempotency.with_body",
+    "isik.django.apps.notifications",
+    "isik.django.apps.notifications.audience",
     "tests.testapp",
 ]
 
@@ -89,6 +93,16 @@ REST_FRAMEWORK = {
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.OrderingFilter",
     ],
+    # A project documenting its API with drf-spectacular sets it, and what extend_schema() decorates binds to
+    # it when the decorated module is imported.
+    "DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema",
 }
 
 FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "tiptap_schema.json")
+
+ISIK_NOTIFICATIONS = {
+    "PROJECT_NAME": "Testapp",
+    # Where the actor lives - the schema a multi-schema project would say.
+    "NOTICE_CONTEXT_KEYS": ("user", "schema"),
+    "FAN_OUT_BY": ScheduledElsewhere(reason="each test runs the fan-out it needs itself, with no beat or worker"),
+}

@@ -7,4 +7,5 @@
 - [lookups](lookups.md) — registers the `length` field lookup
 - [models](models.md) — `BaseModel`, `VersionedModel`, `database_kept_fields`, `touch_rows`, `new_primary_key`, `uuid7`
 - [orm](orm.md) — `starts_with`, `get_object_or_none`, `with_python_defaults`
+- `triggers.py` — `ProtectTruncate` (a BEFORE TRUNCATE trigger refusing every `TRUNCATE`, `pgtrigger.ignore()` aside), `allow_truncate()`, and `flushing_through_truncate_protection()` for a test's flush (see [notifications' operations](../../notifications/operations.md#tests))
 - `documentation.py` — `documentation_problems(app_configs, exemption_types)`: fields without `help_text` or `db_comment`, what the system check `isik.E010` reports (see [checks](../checks.md))

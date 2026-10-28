@@ -37,6 +37,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   through-table, deduped by name
 - [django/apps/idempotency/](django/apps/idempotency/README.md) - `IdempotencyMixin`: a retry
   with the same `Idempotency-Key` replays the first response, by reference or from a kept body
+- [django/apps/notifications/](django/apps/notifications/README.md) - notices written by a trigger in
+  the changing transaction, fanned out to the inbox, email and webhooks (`notifications` extra)
 - [django/apps/templated_fields/](django/apps/templated_fields/README.md) - model fields storing
   a sandboxed Jinja template, rendered on demand against a caller-supplied context
 

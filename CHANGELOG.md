@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-10-28
+
+### Added
+
+- **`isik.django.apps.notifications`** and **`isik.django.apps.notifications.audience`** (the
+  `notifications` extra): notices written by a trigger in the transaction that made the change, fanned
+  out by Celery tasks into deliveries on the in-app inbox, email and webhooks, each tried until it's sent.
+  - **Kinds.** `declare_kind()` declares the vocabulary in one place and returns a `KindName`.
+    `@notifies(KIND, on=..., ...)` gives a trigger-sourced kind its behavior, on the model it watches; `on` is
+    required. An application kind gets its audience and policy from `declare_kind()` and is raised with
+    `raise_notice()`. Each kind has:
+    - an allow-listed `snapshot`
+    - optional `variants`
+    - an audience
+    - a `Policy` (mandatory, default on, default off)
+    - a `Scope`
+
+    The declarations are mirrored into `NoticeKindPolicy` after every migrate; a kind is retired, never
+    deleted.
+  - **Audiences** are an open protocol (`recipients(notice)`), given as an instance or a class, with `Field`
+    and `Subscribers` built in. Subscriptions hold only deviations from a kind's policy, for every variant
+    or one, guarded in the database (`VariantGuard`).
+  - **Webhooks:**
+    - signed `t=...,v1=...` in `X-<PROJECT_NAME>-Signature`, with a second `v1=` while a secret is
+      rotated out
+    - the delivery's id as their `Idempotency-Key`
+    - retried on a backoff for `RETRYABLE_STATUSES`
+    - an endpoint failing too often is parked (`endpoint_parked`)
+    - owned endpoints (`ENDPOINT_OWNER_FIELD`) hear only their owner's notices; a check holds the REST
+      views' `owner_field` to the same, and `isik.W008` warns of an endpoint model keyed to the user model
+      with it unset
+    - a webhook reaches only public addresses unless `ALLOW_PRIVATE_TARGETS` says otherwise, checked
+      where it's connected; redirects aren't followed; an optional `WEBHOOK_PROXY`
+    - responses read to a size and time limit
+  - **Email** goes through a hook, always in the recipient's language. By default it renders templates by
+    kind, plain text unescaped, over `EMAIL_CONTEXT`'s shared context. A second sender renders MJML.
+  - **Partitions** let a project split its data - a schema per tenant, say:
+    - settings: `PARTITIONS`, `IN_PARTITION`, `PARTITION_EXISTS`
+    - each kind's partition is read through a resolver (`Constant`, `Column`, `Follow`, `Connection`,
+      `Expression`), the kind's own or `DEFAULT_PARTITION`
+    - a cross-partition kind scatters into `FanOutShard`s
+    - work for a partition that's gone is abandoned with that reason
+  - **Reliability:**
+    - a notice that can't be fanned out is set aside as a shard, so it never blocks the queue
+    - a worker finishes only its own claim
+    - the reaper abandons what's spent
+    - pruning runs in batches
+  - **Manual retries:** `retry_delivery()` sends an abandoned delivery again, as a new run.
+  - **Who acted:** each notice records `actor_id` from its history context (`ACTOR_CONTEXT_KEY`), and the
+    `context` keys `NOTICE_CONTEXT_KEYS` names beside it; the inbox item carries both, and no shipped
+    serializer or webhook shows them.
+  - **Recorded email:** `record_email()` records an email its caller sends itself - a password reset - as a
+    notice of a `Source.RECORDED` kind and its delivery. `send()` is called first, and nothing after it can
+    stop the email; the message itself is never kept. A retrying sender passes `key=`, and its tries are one
+    delivery's attempts.
+  - **Every model is the project's to own:** all twelve - the ledger's eight and the audience's four - are
+    swappable, each with an abstract base whose rules (triggers, constraints, indexes) follow it to the
+    project's table. The ledger protects itself: frozen notices, a write-once `fanned_out_at`, append-only
+    attempts, no `TRUNCATE`.
+  - **Migrations:** a trigger writes nothing until its kind's policy row exists, so a data migration writing
+    a watched row needs no dependency on the ledger; `isik.W009` reports a declared kind with no row.
+  - **Configuration and checks:** `ISIK_NOTIFICATIONS` configures it. The system check `isik.E014`
+    (`Check.NOTIFICATIONS`) refuses a setting or declaration that can't work, `isik.W004` reports a declared
+    kind that was retired, and `isik.W005` a snapshot field that looks secret - each one carried only with a
+    `SensitiveSnapshotField(reason=...)`.
+  - **Tools:**
+    - `schedule.merge_beat_schedule(app)` and `beat_schedule()`, importable from `celery.py` before Django is set up
+    - without a beat: `FanOutAfterWritesMiddleware`, `FAN_OUT_AFTER_TASKS`, and `manage.py notices --work`
+      for a cron (fan-out, reaper, prunes); `isik.W006` warns when nothing starts a fan-out, `isik.W007`
+      when webhooks would be sent inside the writing request
+    - `manage.py notices`
+    - `oldest_unfanned_notice_age()` for health checks
+    - optional REST views: `InboxViewSet`, `SubscriptionViewSet`, `EndpointViewSet` and `DeliveryViewSet`,
+      scoped by an `owner_field`
+- **`ProtectTruncate`**, a trigger refusing `TRUNCATE`, with `allow_truncate()` and
+  `flushing_through_truncate_protection()` in `isik.django.apps.common.db`, and a pytest plugin that lets a
+  `transaction=True` test's flush through whenever the notifications ledger is installed.
+
 ## [0.37.0] - 2026-10-27
 
 ### Added
