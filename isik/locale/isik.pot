@@ -1631,7 +1631,7 @@ msgstr ""
 msgid "Read %(option)s from FILE."
 msgstr ""
 
-#: isik/cli/prompts.py:203
+#: isik/cli/prompts.py:206
 msgid "Repeat for confirmation:"
 msgstr ""
 
@@ -2783,7 +2783,7 @@ msgstr ""
 
 #: isik/common/settings/declarations.py:175
 #, python-format
-msgid "prompt= takes a Prompt, not %(value)r."
+msgid "prompt= takes a Prompt, or the function that asks, not %(value)r."
 msgstr ""
 
 #: isik/common/settings/declarations.py:171

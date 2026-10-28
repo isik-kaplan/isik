@@ -224,6 +224,42 @@ class TestAsker:
         assert style(Setting(str, "x", choices=["a"]), Plain, Plain) is Prompt.QUESTIONARY
         assert style(Setting(str, "x"), Plain, Plain) is Prompt.CLICK
 
+    def test_a_function_asks_the_question_itself(self, prompt):
+        asked = Recorder(3)
+        setting = Setting(int, "Cost", min=1, max=4, prompt=asked)
+        here = entry_for(setting)
+
+        assert Asker(here.owner, Resolution(here.owner).message).ask(here, 2, None) == 3
+        assert asked.calls == [(("Cost (1-4)", 2), {})]
+        assert prompt.calls == []
+
+    def test_before_ask_runs_before_the_function(self):
+        order = []
+        setting = Setting(
+            str,
+            "Seed",
+            before_ask=lambda default: order.append(("before", default)),
+            prompt=lambda message, default: order.append(("asked", message)) or "s",
+        )
+        here = entry_for(setting)
+
+        Asker(here.owner, Resolution(here.owner).message).ask(here, None, None)
+
+        assert order == [("before", None), ("asked", "Seed")]
+
+    def test_a_function_is_asked_again_after_an_answer_past_a_hard_limit(self, capsys):
+        asked = Recorder(9, 2)
+
+        class Costs(Settings):
+            cost = Setting(int, "Cost", max=4, prompt=asked)
+
+        resolution = Resolution(Costs)
+        resolution.asker = Asker(Costs, resolution.message)
+
+        assert resolution.resolve().cost == 2
+        assert len(asked.calls) == 2
+        assert "at most 4" in capsys.readouterr().out
+
     def test_the_question_carries_its_limits(self, prompt):
         prompt.replies = [2]
         setting = Setting(int, "Cost", min=1, max=4)

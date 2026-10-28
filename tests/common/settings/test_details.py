@@ -46,7 +46,7 @@ class TestDeclarationMessages:
                 {"question": 3},
                 "question= takes the question's text, or an exemption such as NoQuestion(reason=...), not 3.",
             ),
-            ({"prompt": "click"}, "prompt= takes a Prompt, not 'click'."),
+            ({"prompt": "click"}, "prompt= takes a Prompt, or the function that asks, not 'click'."),
         ],
     )
     def test_the_whole_message(self, keywords, message):

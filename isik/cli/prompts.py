@@ -57,6 +57,9 @@ class Asker:
         if setting.before_ask is not None:
             setting.before_ask(default)
         message = setting.question_text() + hint(setting)
+        if callable(setting.prompt):
+            # The app's own question: it gets what isik would have asked with and returns the value.
+            return setting.prompt(message, default)
         if style_of(entry, self.root) is Prompt.QUESTIONARY:
             return QuestionaryQuestion(self, entry, message, default, text).ask()
         return ClickQuestion(self, entry, message, default, text).ask()

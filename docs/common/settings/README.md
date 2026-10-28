@@ -68,7 +68,7 @@ says otherwise. Both are required: a setting with nothing to say for itself can'
 | `negatable` | `True` | A `bool` is `--x/--no-x`; `False` makes it a plain `--x` flag. |
 | `metavar` | the type's | `USER@HOST`. |
 | `question` | `help` | The question's text, or `NoQuestion`, `AskedAtUse` or `ReplacedByFlow(flow=..., ...)`, each with `reason=`. |
-| `prompt` | the class's | `Prompt.CLICK` or `Prompt.QUESTIONARY`, for this question alone. |
+| `prompt` | the class's | `Prompt.CLICK` or `Prompt.QUESTIONARY`, for this question alone. Or the function that asks it: `prompt(question, default)` gets the question with its limits and returns the value, which is checked like any answer. |
 | `ask_when` | always | `lambda values: values.lock` - asked only when that holds of the answers so far. |
 | `only_when` | always | The setting exists only when it holds; given anyway, it's an error. `OnlyWhen(test, message=...)` words it. |
 | `requires`, `excludes` | none | Names, or `Requires(name, message=...)` / `Excludes(name, message=...)`: with a value, the other needs one / can't be given. |

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-10-28
+
+### Added
+
+- A setting's `prompt=` also takes the function that asks its question, for a question isik's prompts
+  can't ask - one that redraws as you type, say. `prompt(question, default)` gets the question with its
+  limits and returns the value. It runs after `before_ask`, the answer is checked like any other and
+  asked again past a hard limit, and options, variables, `required` and the order of questions are as
+  for any setting. A class's `prompt` still takes only a `Prompt`.
+
 ## [0.38.0] - 2026-10-28
 
 ### Added

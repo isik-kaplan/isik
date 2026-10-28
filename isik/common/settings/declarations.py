@@ -146,7 +146,7 @@ class Setting(Declaration, Generic[T]):
         negatable: bool = True,
         metavar: str | None = None,
         question: Any = None,
-        prompt: Prompt | None = None,
+        prompt: Prompt | Callable[[str, Any], Any] | None = None,
         ask_when: Callable[[Any], bool] | None = None,
         only_when: Any = None,
         requires: Any = (),
@@ -171,8 +171,8 @@ class Setting(Declaration, Generic[T]):
                 _("question= takes the question's text, or an exemption such as NoQuestion(reason=...), not %(value)r.")
                 % {"value": question}
             )
-        if prompt is not None and not isinstance(prompt, Prompt):
-            raise TypeError(_("prompt= takes a Prompt, not %(value)r.") % {"value": prompt})
+        if prompt is not None and not isinstance(prompt, Prompt) and not callable(prompt):
+            raise TypeError(_("prompt= takes a Prompt, or the function that asks, not %(value)r.") % {"value": prompt})
         if only_when is not None and not isinstance(only_when, OnlyWhen):
             only_when = OnlyWhen(only_when)
         self.kind = kind
