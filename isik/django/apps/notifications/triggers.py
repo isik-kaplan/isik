@@ -176,17 +176,16 @@ class VariantGuard(pgtrigger.Trigger):
         variant, kind, owner = _column(model, "variant"), _column(model, "kind"), _column(model, self.owner)
         pk = _column(model, model._meta.pk.name)
         table = _quote(model._meta.db_table)
+        refusal = self._refuse(
+            f"{model._meta.label}: a row naming no variant, which covers every one, "
+            f"cannot sit beside one naming a variant for the same {self.owner} and kind."
+        )
         return (
             f"PERFORM pg_advisory_xact_lock(hashtext({literal(model._meta.db_table)}), "
             f"hashtext(NEW.{owner}::text || ':' || NEW.{kind}::text)); "
             f"IF EXISTS (SELECT 1 FROM {table} WHERE {owner} = NEW.{owner} AND {kind} = NEW.{kind} "
             f"AND {pk} IS DISTINCT FROM NEW.{pk} AND ({variant} IS NULL) <> (NEW.{variant} IS NULL)) THEN "
-            f"{
-                self._refuse(
-                    f'{model._meta.label}: a row naming no variant, which covers every one, '
-                    f'cannot sit beside one naming a variant for the same {self.owner} and kind.'
-                )
-            } END IF;"
+            f"{refusal} END IF;"
         )
 
     def get_func(self, model):

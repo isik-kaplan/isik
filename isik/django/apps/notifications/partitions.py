@@ -80,7 +80,8 @@ def _concrete(model, name):
         field = model._meta.get_field(name)
     except FieldDoesNotExist:
         return None
-    return field if getattr(field, "column", None) else None
+    # A many-to-many field is a table of its own - some Django versions give it a column all the same.
+    return field if getattr(field, "column", None) and not field.many_to_many else None
 
 
 class PartitionSource:

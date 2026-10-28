@@ -104,17 +104,17 @@ msgstr ""
 msgid "%(kind)s declares no variant %(variant)r."
 msgstr ""
 
-#: isik/django/apps/notifications/partitions.py:184
+#: isik/django/apps/notifications/partitions.py:185
 #, python-format
 msgid "%(kind)s follows %(key)s to its partition on a delete, and the database deletes what it points at first - use Column, or Django's CASCADE."
 msgstr ""
 
-#: isik/django/apps/notifications/partitions.py:162
+#: isik/django/apps/notifications/partitions.py:163
 #, python-format
 msgid "%(kind)s follows %(key)s to its partition, which isn't a key of %(model)s."
 msgstr ""
 
-#: isik/django/apps/notifications/partitions.py:173
+#: isik/django/apps/notifications/partitions.py:174
 #, python-format
 msgid "%(kind)s follows %(key)s to its partition, which may be empty - a notice with no partition reaches nobody. Say allow_null=True if that's meant."
 msgstr ""
@@ -214,12 +214,12 @@ msgstr ""
 msgid "%(kind)s is wanted for every variant and for some - name it once, with no variant, for all."
 msgstr ""
 
-#: isik/django/apps/notifications/partitions.py:131
+#: isik/django/apps/notifications/partitions.py:132
 #, python-format
 msgid "%(kind)s reads its partition from %(field)s, which %(model)s has no column for."
 msgstr ""
 
-#: isik/django/apps/notifications/partitions.py:168
+#: isik/django/apps/notifications/partitions.py:169
 #, python-format
 msgid "%(kind)s reads its partition from %(model)s.%(field)s, which has no column."
 msgstr ""
