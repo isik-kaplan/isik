@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asked again past a hard limit, and options, variables, `required` and the order of questions are as
   for any setting. A class's `prompt` still takes only a `Prompt`.
 
+### Fixed
+
+- pytest runs again in a project with isik but no Django - one using `isik[cli]` alone. 0.38.0's pytest
+  plugin, which pytest loads wherever isik is installed, lived in `isik.django`, whose import requires
+  Django; it's `isik.pytest_plugin` now, and still does nothing without the notifications ledger.
+
 ## [0.38.0] - 2026-10-28
 
 ### Added

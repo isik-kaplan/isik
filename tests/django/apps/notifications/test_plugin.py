@@ -1,10 +1,11 @@
 """The pytest plugin letting a test's flush through the ledger's TRUNCATE protection - only where the ledger is."""
 
+import subprocess
 import sys
 
 from django.test import TransactionTestCase
 
-from isik.django.apps.notifications import pytest_plugin
+from isik import pytest_plugin
 
 
 def run(fixture):
@@ -53,4 +54,20 @@ def test_without_django_it_isnt(monkeypatch):
 def test_it_is_registered_for_pytest():
     from importlib.metadata import entry_points
 
-    assert "isik.django.apps.notifications.pytest_plugin" in [entry.value for entry in entry_points(group="pytest11")]
+    assert "isik.pytest_plugin" in [entry.value for entry in entry_points(group="pytest11")]
+
+
+def test_it_is_loaded_where_django_isnt():
+    # What pytest does in a project with isik[cli] alone: import the plugin, with no Django to import.
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.modules['django'] = None; import isik.pytest_plugin as plugin; "
+            "assert plugin.ledger_installed() is False",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert run.returncode == 0, run.stderr

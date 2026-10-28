@@ -2,6 +2,9 @@
 A pytest plugin, registered by isik's `pytest11` entry point: when the notifications ledger is installed,
 the flush a `transaction=True` test ends with goes through the ledger's TRUNCATE protection - see
 `flushing_through_truncate_protection()`. Without Django, or without the ledger, it does nothing.
+
+It lives outside `isik.django`, whose import requires Django: pytest loads it in every project with isik
+installed, one using only `isik[cli]` among them.
 """
 
 import pytest
