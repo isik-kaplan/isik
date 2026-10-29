@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-10-29
+
+### Added
+
+- `isik.django.drf.error_handling.exception_handler`, for `REST_FRAMEWORK["EXCEPTION_HANDLER"]`: an error
+  with one message carries its code beside it, `{"detail", "code"}` - the shape request policies and
+  preconditions already answer with - so a client tells two refusals apart by their code. Validation
+  errors keep DRF's shape.
+- `HistoryContextMiddleware`'s optional context keys take `"build"`, from `HISTORY_CONTEXT_BUILD` - the
+  build itself, a commit say, beside `"version"`: one version can be many builds.
+
+- **Breaking:** the system check `isik.E015` (`Check.TRUNCATE_PROTECTION`) refuses a model whose rows a
+  `pgtrigger.Protect` keeps from being deleted while nothing refuses a TRUNCATE of its table - which
+  empties it at once. Add `ProtectTruncate` beside the delete protection. A condition on the delete
+  protection can't carry over - a TRUNCATE has no row to read - so its twin refuses the whole table.
+
+### Fixed
+
+- `NoticeKindPolicy` refuses a TRUNCATE as it refuses a delete - a notice outlives its kind, and emptying the
+  table would orphan every one (migration `isik_notifications.0002`; a project owning the model gets the
+  trigger through the base, and drops one it declared itself).
+- `SubscriptionViewSet`'s create is DRF's own `CreateModelMixin.create`, writing through `subscribe()` in
+  `perform_create`, so drf-spectacular reads its request body rather than inferring it from a method it
+  can't read.
+- A test holds that no viewset mixin of isik's overrides `get_serializer`: doing so turns drf-spectacular
+  onto calling it for every view during schema generation, with no request for a serializer context to
+  read.
+
 ## [0.39.0] - 2026-10-28
 
 ### Added

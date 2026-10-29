@@ -1,5 +1,8 @@
 """isik's own system checks."""
 
+import types
+
+import pgtrigger
 import pytest
 from django.apps import apps
 from django.core.checks import Error
@@ -16,9 +19,12 @@ from isik.django.apps.common.checks import (
 )
 from isik.django.apps.common.db import conditions, constraints, documentation
 from isik.django.apps.common.db import history as db_history
+from isik.django.apps.common.db import triggers as db_triggers
+from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.project import project_app_configs
 from isik.django.drf.serializers import flattened_singleton_related
 from isik.django.drf.viewsets import ViewSetRegistryExemption, preconditions
+from tests.testapp.models import TimestampedNote, Widget
 
 
 def test_a_project_that_answers_for_every_validator_reports_nothing():
@@ -139,6 +145,7 @@ class TestTheSettings:
             "not_atomic",
             "kept_field_conditions",
             "notifications",
+            "truncate_protection",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -204,7 +211,7 @@ class TestTheSettingsCheck:
             "ISIK_CHECKS names 'idempotence', which isn't a Check: Check.VALIDATORS, Check.CONCURRENCY_TOKENS, "
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
-            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS."
+            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -613,3 +620,77 @@ def test_the_documentation_check_hands_on_inherited_from_libraries(settings, mon
 
     assert seen == [True, False]
     assert checks.isik_checks_are_configured(None) == []
+
+
+class TestTruncateProtection:
+    APPS = [types.SimpleNamespace(label="testapp")]
+
+    def problems(self, monkeypatch, *registered):
+        monkeypatch.setattr(db_triggers.pgtrigger, "registered", lambda: list(registered))
+        return db_triggers.truncate_protection_problems(self.APPS)
+
+    def test_a_table_refusing_a_delete_and_not_a_truncate(self, monkeypatch):
+        refusing = pgtrigger.Protect(name="no_delete", operation=pgtrigger.Update | pgtrigger.Delete)
+
+        assert self.problems(monkeypatch, (Widget, refusing)) == [
+            "testapp.Widget refuses deleting its rows with no_delete, and nothing refuses a TRUNCATE, which empties "
+            "its table at once - add ProtectTruncate beside it."
+        ]
+
+    def test_its_twin_answers_it(self, monkeypatch):
+        refusing = pgtrigger.Protect(name="no_delete", operation=pgtrigger.Delete)
+
+        assert self.problems(monkeypatch, (Widget, refusing), (Widget, ProtectTruncate(name="no_truncate"))) == []
+
+    def test_a_twin_on_another_table_doesnt(self, monkeypatch):
+        refusing = pgtrigger.Protect(name="no_delete", operation=pgtrigger.Delete)
+
+        assert len(self.problems(monkeypatch, (Widget, refusing), (TimestampedNote, ProtectTruncate(name="t")))) == 1
+
+    def test_refusing_only_an_update_asks_nothing(self, monkeypatch):
+        assert self.problems(monkeypatch, (Widget, pgtrigger.Protect(name="frozen", operation=pgtrigger.Update))) == []
+
+    def test_a_trigger_that_watches_a_delete_without_refusing_it_asks_nothing(self, monkeypatch):
+        watching = pgtrigger.Trigger(
+            name="cascade", when=pgtrigger.After, operation=pgtrigger.Delete, func="RETURN NULL;"
+        )
+
+        assert self.problems(monkeypatch, (Widget, watching)) == []
+
+    def test_only_the_apps_given(self, monkeypatch):
+        refusing = pgtrigger.Protect(name="no_delete", operation=pgtrigger.Delete)
+        monkeypatch.setattr(db_triggers.pgtrigger, "registered", lambda: [(Widget, refusing)])
+
+        assert db_triggers.truncate_protection_problems([types.SimpleNamespace(label="elsewhere")]) == []
+
+    def test_a_swapped_out_model_has_no_table_to_protect(self, monkeypatch, settings):
+        from isik.django.apps.notifications.audience.models import Subscription
+
+        settings.ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL = "testapp.Parcel"
+        refusing = pgtrigger.Protect(name="no_delete", operation=pgtrigger.Delete)
+        monkeypatch.setattr(db_triggers.pgtrigger, "registered", lambda: [(Subscription, refusing)])
+
+        assert db_triggers.truncate_protection_problems([apps.get_app_config("isik_notifications_audience")]) == []
+
+    def test_the_test_project_has_none(self):
+        assert checks.every_table_refusing_a_delete_refuses_a_truncate(app_configs=None) == []
+
+    def test_the_check_reports_them(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(
+            db_triggers, "truncate_protection_problems", lambda configs: seen.append(configs) or ["one"]
+        )
+
+        errors = checks.every_table_refusing_a_delete_refuses_a_truncate(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E015", "one", "See ProtectTruncate (isik.django.apps.common.db).")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]
+
+    def test_isiks_own_kind_policy_refuses_both(self):
+        from isik.django.apps.notifications.models import NoticeKindPolicy
+
+        assert {"protect_policy_delete", "protect_policy_truncate"} <= {
+            trigger.name for trigger in NoticeKindPolicy._meta.triggers
+        }

@@ -37,6 +37,7 @@ belongs included - is an error, `isik.E012`.
 | Check.NOT_ATOMIC           | isik.E011              | a view outside ATOMIC_REQUESTS that doesn't say why          |
 | Check.KEPT_FIELD_CONDITIONS | isik.E013             | a trigger condition comparing version or updated_at          |
 | Check.NOTIFICATIONS        | isik.E014, isik.W004-9 | a notifications declaration that can't work, a retired kind |
+| Check.TRUNCATE_PROTECTION  | isik.E015              | a table refusing a row's DELETE and not a TRUNCATE           |
 """
 
 import functools
@@ -69,6 +70,7 @@ class Check(Enum):
     NOT_ATOMIC = "not_atomic"
     KEPT_FIELD_CONDITIONS = "kept_field_conditions"
     NOTIFICATIONS = "notifications"
+    TRUNCATE_PROTECTION = "truncate_protection"
 
 
 class CheckOption(Enum):
@@ -107,6 +109,7 @@ CHECKS = {
     Check.NOT_ATOMIC: (CheckOption.URLCONFS,),
     Check.KEPT_FIELD_CONDITIONS: (CheckOption.APPS,),
     Check.NOTIFICATIONS: (),
+    Check.TRUNCATE_PROTECTION: (CheckOption.APPS,),
 }
 
 DEFAULTS = {
@@ -449,6 +452,17 @@ def every_event_model_indexes_its_streams(options, **kwargs):
 
     hint = _("See object_stream_index() (isik.django.apps.common.db.history).")
     return [Error(problem, hint=hint, id="isik.E008") for problem in history_index_problems(_project_configs(options))]
+
+
+@isik_check(Check.TRUNCATE_PROTECTION, Tags.models)
+def every_table_refusing_a_delete_refuses_a_truncate(options, **kwargs):
+    """A row that can't be deleted one at a time mustn't go a tableful at a time either."""
+    from isik.django.apps.common.db.triggers import truncate_protection_problems
+
+    hint = _("See ProtectTruncate (isik.django.apps.common.db).")
+    return [
+        Error(problem, hint=hint, id="isik.E015") for problem in truncate_protection_problems(_project_configs(options))
+    ]
 
 
 @isik_check(Check.EXEMPTIONS)

@@ -509,6 +509,8 @@ def _rules(model):
             [
                 pgtrigger.ReadOnly(name="protect_kind", fields=["kind"]),
                 pgtrigger.Protect(name="protect_policy_delete", operation=pgtrigger.Delete),
+                # A notice outlives its kind: emptying the table would orphan every one, as deleting a row does.
+                ProtectTruncate(name="protect_policy_truncate"),
             ],
             [],
             [],

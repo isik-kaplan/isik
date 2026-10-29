@@ -137,6 +137,23 @@ class TestOptionalKeys:
 
         assert self.seen(rf)["version"] == "1.2.3"
 
+    def test_the_version_and_its_build(self, rf, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["version", "build"]
+        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
+        settings.HISTORY_CONTEXT_BUILD = "5c49407"
+
+        seen = self.seen(rf)
+
+        assert (seen["version"], seen["build"]) == ("1.2.3", "5c49407")
+
+    def test_the_build_needs_its_setting(self, settings):
+        settings.HISTORY_CONTEXT_KEYS = ["build"]
+
+        with pytest.raises(ImproperlyConfigured) as raised:
+            HistoryContextMiddleware(get_response=lambda request: None)
+
+        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names build, and HISTORY_CONTEXT_BUILD isn't set."
+
     def test_the_request_id_a_proxy_sent(self, rf, settings):
         settings.HISTORY_CONTEXT_KEYS = ["request_id"]
 
@@ -156,13 +173,13 @@ class TestOptionalKeys:
         assert len(first) == 32 and first != second
 
     def test_an_unknown_key_is_refused(self, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["version", "build", "commit"]
+        settings.HISTORY_CONTEXT_KEYS = ["version", "sha", "commit"]
         settings.HISTORY_CONTEXT_VERSION = "1.2.3"
 
         with pytest.raises(ImproperlyConfigured) as raised:
             HistoryContextMiddleware(get_response=lambda request: None)
 
-        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names build, commit - it takes version, request_id."
+        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names commit, sha - it takes version, build, request_id."
 
     def test_the_version_needs_its_setting(self, settings):
         settings.HISTORY_CONTEXT_KEYS = ["version"]

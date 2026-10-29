@@ -11,7 +11,9 @@ from isik.django.apps.common.db.history import _open_history_context
 
 
 # The keys a project may add to every request's context by naming them in HISTORY_CONTEXT_KEYS.
-OPTIONAL_CONTEXT_KEYS = ("version", "request_id")
+OPTIONAL_CONTEXT_KEYS = ("version", "build", "request_id")
+# The keys whose value a setting gives, the same for every request - required once the key is named.
+FROM_SETTINGS = {"version": "HISTORY_CONTEXT_VERSION", "build": "HISTORY_CONTEXT_BUILD"}
 # Where a request's id is read from, unless HISTORY_REQUEST_ID_HEADER names another.
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -27,8 +29,10 @@ class HistoryContextMiddleware(HistoryMiddleware):
     It also offers keys a project picks with `HISTORY_CONTEXT_KEYS` - none by default, so the context
     is pghistory's own:
 
-    - `"version"` - `HISTORY_CONTEXT_VERSION`, the build serving the request, so a row says which code
-      wrote it. Required once named.
+    - `"version"` - `HISTORY_CONTEXT_VERSION`, the version serving the request, so a row says which
+      release wrote it. Required once named.
+    - `"build"` - `HISTORY_CONTEXT_BUILD`, the build itself - a commit, say - for when one version is many
+      builds. Required once named.
     - `"request_id"` - the request's `HISTORY_REQUEST_ID_HEADER` (`X-Request-ID` unless set), as a
       proxy or a client sent it, else one made here - so a row can be found again from a log line.
     """
@@ -42,13 +46,18 @@ class HistoryContextMiddleware(HistoryMiddleware):
                 _("HISTORY_CONTEXT_KEYS names %(unknown)s - it takes %(known)s.")
                 % {"unknown": ", ".join(unknown), "known": ", ".join(OPTIONAL_CONTEXT_KEYS)}
             )
-        if "version" in self.context_keys and not getattr(settings, "HISTORY_CONTEXT_VERSION", None):
-            raise ImproperlyConfigured(_("HISTORY_CONTEXT_KEYS names version, and HISTORY_CONTEXT_VERSION isn't set."))
+        for key, setting in FROM_SETTINGS.items():
+            if key in self.context_keys and not getattr(settings, setting, None):
+                raise ImproperlyConfigured(
+                    _("HISTORY_CONTEXT_KEYS names %(key)s, and %(setting)s isn't set.")
+                    % {"key": key, "setting": setting}
+                )
 
     def get_context(self, request):
         context = super().get_context(request)
-        if "version" in self.context_keys:
-            context["version"] = settings.HISTORY_CONTEXT_VERSION
+        for key, setting in FROM_SETTINGS.items():
+            if key in self.context_keys:
+                context[key] = getattr(settings, setting)
         if "request_id" in self.context_keys:
             header = getattr(settings, "HISTORY_REQUEST_ID_HEADER", REQUEST_ID_HEADER)
             context["request_id"] = request.headers.get(header) or uuid.uuid4().hex

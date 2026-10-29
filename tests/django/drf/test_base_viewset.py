@@ -119,3 +119,27 @@ class TestTheWriteGuardsItCarries:
         assert issubclass(BaseModelViewSet, PreconditionMixin)
         # A key's replay runs in initial(), a precondition in get_object() - either order would work.
         assert BaseModelViewSet.__mro__.index(IdempotencyMixin) < BaseModelViewSet.__mro__.index(PreconditionMixin)
+
+
+def test_no_mixin_of_isiks_overrides_get_serializer():
+    # Overriding it flips drf-spectacular onto calling it for every view during schema generation, with no
+    # request for a serializer context to read - a project's view breaks for adding an unrelated mixin.
+    import importlib
+    import inspect
+    import pkgutil
+
+    import isik.django.drf.viewsets as viewsets
+
+    modules = [
+        importlib.import_module(f"{viewsets.__name__}.{info.name}") for info in pkgutil.iter_modules(viewsets.__path__)
+    ]
+    modules.append(importlib.import_module("isik.django.apps.notifications.drf"))
+    assert len(modules) == 12
+    overriding = [
+        f"{cls.__module__}.{cls.__name__}"
+        for module in modules
+        for cls in vars(module).values()
+        if inspect.isclass(cls) and cls.__module__.startswith("isik.") and "get_serializer" in vars(cls)
+    ]
+
+    assert overriding == []

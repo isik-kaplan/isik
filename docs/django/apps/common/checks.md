@@ -34,6 +34,7 @@ imports nothing of a project's, so a settings file can import it.
 | `Check.DOCUMENTATION` | `isik.E010` | a field without `help_text` or `db_comment` |
 | `Check.NOT_ATOMIC` | `isik.E011` | a view served outside `ATOMIC_REQUESTS` that doesn't say why ([atomic](atomic.md)) |
 | `Check.KEPT_FIELD_CONDITIONS` | `isik.E013` | a trigger condition comparing `version` or `updated_at` ([conditions](db/conditions.md)) |
+| `Check.TRUNCATE_PROTECTION` | `isik.E015` | a table whose rows a `pgtrigger.Protect` keeps from a DELETE, and that nothing keeps from a TRUNCATE ([ProtectTruncate](db/README.md)) |
 | `Check.NOTIFICATIONS` | `isik.E014`, `isik.W004`-`isik.W009` | a notifications setting or kind declaration that can't work; a declared kind the database retired; a snapshot field that looks secret; nothing starting a fan-out; a webhook sent inside the writing request; endpoints keyed to a user with no owner field; a declared kind with no policy row ([notifications](../notifications/kinds.md)) |
 
 ## Options

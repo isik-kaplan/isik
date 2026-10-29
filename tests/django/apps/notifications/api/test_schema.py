@@ -154,3 +154,11 @@ def test_what_answers_a_list_or_one_is_documented_so_under_any_paginator(paginat
         "/unscoped-deliveries/{id}/retry/",
     ):
         assert set(answer(path, "post")) == {"$ref"}, path
+
+
+def test_every_write_is_drfs_own_or_declared():
+    # A create of its own would leave drf-spectacular inferring its body from a method it can't read.
+    assert "create" not in vars(SubscriptionViewSet)
+    body = schema()["paths"]["/subscriptions/"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+
+    assert body == {"$ref": "#/components/schemas/Subscription"}

@@ -28,7 +28,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
     inline_serializer,
 )
-from rest_framework import mixins, serializers, status
+from rest_framework import mixins, serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -285,11 +285,16 @@ class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.List
 # The caller's subscriptions - each a deviation from its kind's policy. `POST` sets one through
 # `subscribe()`, and `DELETE` forgets it, so the kind's policy decides again.
 class SubscriptionViewSet(
-    IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.ListModelMixin, mixins.DestroyModelMixin
+    IdempotencyMixin,
+    PreconditionMixin,
+    BaseViewSet,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
 ):
     """
     Your notification preferences. Each one turns a kind of notification - or one variant of it - on or off
-    for you; delete one to go back to the kind's default.
+    for you; setting one replaces the one before, and deleting one goes back to the kind's default.
     """
 
     model = SwappedModel(get_subscription_model)
@@ -304,18 +309,16 @@ class SubscriptionViewSet(
     def get_serializer_class(self):
         return subscription_serializer(get_subscription_model())
 
-    def create(self, request, *args, **kwargs):
-        """Sets your preference for a kind of notification, or one variant of it - made, or replacing the one before."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    # DRF's own create, so drf-spectacular reads its body and answer as for any create; the row is written by
+    # subscribe(), which sets one or replaces the one before.
+    def perform_create(self, serializer):
         data = serializer.validated_data
         try:
-            subscription = subscribe(
-                request.user, data["kind"].kind, data.get("variant"), enabled=data.get("enabled", True)
+            serializer.instance = subscribe(
+                self.request.user, data["kind"].kind, data.get("variant"), enabled=data.get("enabled", True)
             )
         except ValueError as error:
             raise ValidationError({"variant": [str(error)]}) from error
-        return Response(self.get_serializer(subscription).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         responses=inline_serializer(

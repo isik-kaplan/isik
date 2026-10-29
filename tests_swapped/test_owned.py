@@ -136,6 +136,11 @@ def test_the_projects_notice_and_attempts_are_protected(alice):
         cursor.execute("TRUNCATE owned_delivery_attempt")
 
 
+def test_the_projects_kind_policy_refuses_a_truncate_as_it_refuses_a_delete():
+    with pytest.raises(ProgrammingError, match="Cannot truncate"), connection.cursor() as cursor:
+        cursor.execute("TRUNCATE owned_kind_policy CASCADE")
+
+
 def test_a_retry_and_pruning_on_the_projects_tables(alice, settings):
     settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
     notice = lose(alice)

@@ -3,7 +3,7 @@
 DRF (Django REST Framework) helpers: error translation, filters, pagination, permissions, ad hoc schema builders, plus serializer/viewset mixin subfolders.
 
 - [coverage.md](coverage.md) - `routed_actions`, `routed_views`, `request_policy_coverage`, `precondition_coverage`: which routed views carry a rule, which are exempt and why, which say nothing
-- [error_handling.md](error_handling.md) - `django_to_drf_validation_error` decorator
+- [error_handling.md](error_handling.md) - `django_to_drf_validation_error` decorator, and an `exception_handler` that keeps each error's code
 - [filters.md](filters.md) - `make_filters`, a lookup-expression dict builder
 - [pagination.md](pagination.md) - `PageNumberPagination` with `total_pages`/`page_size`
 - [permissions.md](permissions.md) - `ReadOnly`, `is_owner`, `user_property`, `object_property`, `guarding` (field- and action-scoped permissions), and other permission factories

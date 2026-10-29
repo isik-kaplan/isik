@@ -57,12 +57,12 @@ msgstr ""
 msgid "%(field)s's db_default %(default)r has no value in Python - give the field one before encoding."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:467
+#: isik/django/apps/common/checks.py:481
 #, python-format
 msgid "%(file)s:%(line)s declares %(name)s, which loading the project didn't import."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:462
+#: isik/django/apps/common/checks.py:476
 #, python-format
 msgid "%(file)s:%(line)s makes an exemption through %(name)s that loading the project didn't."
 msgstr ""
@@ -365,6 +365,11 @@ msgstr ""
 msgid "%(model)s isn't a model of votes(), comments(), notes() or bookmarks()"
 msgstr ""
 
+#: isik/django/apps/common/db/triggers.py:47
+#, python-format
+msgid "%(model)s refuses deleting its rows with %(trigger)s, and nothing refuses a TRUNCATE, which empties its table at once - add ProtectTruncate beside it."
+msgstr ""
+
 #: isik/django/apps/common/db/concurrency.py:470
 #, python-format
 msgid "%(model)s's ETag was %(etag)s still after %(relation)s.%(write)s."
@@ -545,7 +550,7 @@ msgstr ""
 msgid "%(option)s is a plain click option - declare it as a Setting, or pass plain_options="
 msgstr ""
 
-#: isik/django/apps/common/checks.py:351
+#: isik/django/apps/common/checks.py:354
 #, python-format
 msgid "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is %(status)s on database %(database)r - a change to it can slip past a write's If-Match."
 msgstr ""
@@ -790,12 +795,12 @@ msgstr ""
 msgid "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of precondition_read_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:432
+#: isik/django/apps/common/checks.py:435
 #, python-format
 msgid "%(view)s answers %(method)s without asking If-Match."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:401
+#: isik/django/apps/common/checks.py:404
 #, python-format
 msgid "%(view)s answers %(method)s without honoring an Idempotency-Key."
 msgstr ""
@@ -820,7 +825,7 @@ msgstr ""
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:363
+#: isik/django/apps/notifications/drf.py:366
 #, python-format
 msgid "%(view)s doesn't know whose endpoints a caller sees - set its owner_field, or override get_queryset()."
 msgstr ""
@@ -945,7 +950,7 @@ msgstr ""
 msgid "%(where)s gives two things one name - rename one:\n%(lines)s"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:202
+#: isik/django/apps/common/checks.py:205
 #, python-format
 msgid "%(where)s has CheckOption.%(option)s - it takes %(takes)s."
 msgstr ""
@@ -955,17 +960,17 @@ msgstr ""
 msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:180
+#: isik/django/apps/common/checks.py:183
 #, python-format
 msgid "%(where)s names %(key)r as a string - write %(member)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:185
+#: isik/django/apps/common/checks.py:188
 #, python-format
 msgid "%(where)s names %(key)r, which isn't a %(enum)s: %(members)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:213
+#: isik/django/apps/common/checks.py:216
 #, python-format
 msgid "%(where)s's severity is %(value)r - write %(choices)s."
 msgstr ""
@@ -1060,11 +1065,11 @@ msgstr ""
 msgid "Actions should not be: %(actions)s"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:402
+#: isik/django/apps/common/checks.py:405
 msgid "Add IdempotencyMixin (BaseModelViewSet has it) with the method in idempotent_methods, or exempt the action in idempotency_exempt_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:433
+#: isik/django/apps/common/checks.py:436
 msgid "Add PreconditionMixin (BaseModelViewSet has it) with the method in precondition_methods, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
@@ -1278,7 +1283,7 @@ msgstr ""
 msgid "Finished"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:290
+#: isik/django/apps/common/checks.py:293
 msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
 msgstr ""
 
@@ -1287,13 +1292,14 @@ msgstr ""
 msgid "Group takes a Settings class - use Group.from_dataclass() for a plain dataclass, not %(value)r."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:42
+#: isik/django/apps/common/middleware/history.py:52
 #, python-format
-msgid "HISTORY_CONTEXT_KEYS names %(unknown)s - it takes %(known)s."
+msgid "HISTORY_CONTEXT_KEYS names %(key)s, and %(setting)s isn't set."
 msgstr ""
 
 #: isik/django/apps/common/middleware/history.py:46
-msgid "HISTORY_CONTEXT_KEYS names version, and HISTORY_CONTEXT_VERSION isn't set."
+#, python-format
+msgid "HISTORY_CONTEXT_KEYS names %(unknown)s - it takes %(known)s."
 msgstr ""
 
 #: http.HTTPStatus
@@ -1340,17 +1346,17 @@ msgstr ""
 msgid "ID"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:253
+#: isik/django/apps/common/checks.py:256
 #, python-format
 msgid "ISIK_CHECKS is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:262
+#: isik/django/apps/common/checks.py:265
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:237
+#: isik/django/apps/common/checks.py:240
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s."
 msgstr ""
@@ -1441,11 +1447,11 @@ msgstr ""
 msgid "Its target, as one key - what keeps a notice from reaching one target twice."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:239
+#: isik/django/apps/common/checks.py:242
 msgid "Leave out CheckOption.URLCONFS to check every urlconf the project serves."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:459
+#: isik/django/apps/common/checks.py:473
 msgid "Make it where loading the project runs it - see manage.py exemptions."
 msgstr ""
 
@@ -1698,36 +1704,40 @@ msgstr ""
 msgid "Retired %(kind)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:362
+#: isik/django/apps/common/checks.py:365
 #, python-format
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:509
+#: isik/django/apps/common/checks.py:523
 msgid "See AnyChange and its siblings (isik.django.apps.common.db.conditions), which leave them out."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:419
+#: isik/django/apps/common/checks.py:422
 msgid "See FlattenedSingletonRelatedMixin (isik.django.drf.serializers)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:309
+#: isik/django/apps/common/checks.py:312
 msgid "See PreconditionMixin (isik.django.drf.viewsets.preconditions) and concurrency tokens (isik.django.apps.common.db.concurrency)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:326
+#: isik/django/apps/common/checks.py:329
 msgid "See PreconditionMixin's options (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:377
+#: isik/django/apps/common/checks.py:380
 msgid "See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:482
+#: isik/django/apps/common/checks.py:462
+msgid "See ProtectTruncate (isik.django.apps.common.db)."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:496
 msgid "See documentation_problems() (isik.django.apps.common.db.documentation)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:254
+#: isik/django/apps/common/checks.py:257
 msgid "See isik.django.apps.common.checks."
 msgstr ""
 
@@ -1735,11 +1745,11 @@ msgstr ""
 msgid "See isik.django.apps.notifications."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:500
+#: isik/django/apps/common/checks.py:514
 msgid "See not_atomic() (isik.django.apps.common.atomic)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:450
+#: isik/django/apps/common/checks.py:453
 msgid "See object_stream_index() (isik.django.apps.common.db.history)."
 msgstr ""
 
@@ -2265,7 +2275,7 @@ msgstr ""
 msgid "User property %(property)s is False"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:288
+#: isik/django/apps/common/checks.py:291
 #, python-format
 msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
