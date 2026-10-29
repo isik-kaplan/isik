@@ -30,10 +30,12 @@ unless a declaration names it - and one that looks secret is named only with a r
 `sensitive={"api_key_last4": SensitiveSnapshotField(reason="...")}`.
 """
 
+import json
 from dataclasses import dataclass, field
 
 import pgtrigger
 from django.core.exceptions import ImproperlyConfigured
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connection, models, transaction
 from django.db.models import Q
 from django.db.models.expressions import RawSQL
@@ -53,12 +55,53 @@ class SensitiveSnapshotField(
     """Why a kind's snapshot carries a field that looks secret - one per field, in `notifies(sensitive=...)`."""
 
 
-class KindName(str):
-    """A declared kind's name - what `declare_kind()` returns - carrying the variants it declares."""
+@dataclass(frozen=True)
+class KindText:
+    """
+    What a kind says to people, each lazy-translated text resolved in the request's language:
 
-    def __new__(cls, name, variants=()):
+    - `label` - its name, as a settings page lists it ("Parcel reminders").
+    - `description` - a sentence on what it's about.
+    - `message` / `title` - an inbox item's sentence and heading: text formatted with the item's data
+      (`"A token named %(name)s was created."`), or a callable taking the data and returning the text.
+    """
+
+    label: object = None
+    description: object = None
+    message: object = None
+    title: object = None
+
+    def merged_over(self, other):
+        """This text, any part it leaves out taken from `other`."""
+        return KindText(**{name: getattr(self, name) or getattr(other, name) for name in TEXT_PARTS})
+
+
+TEXT_PARTS = ("label", "description", "message", "title")
+
+
+def rendered(text, data, variant):
+    """
+    `text` (a `message` or `title`) for an item of `variant` carrying `data` - a callable is given both, a `%`-format
+    the data. None when there's none, or it can't be filled.
+    """
+    if text is None:
+        return None
+    if callable(text):
+        return str(text(data, variant))
+    try:
+        return str(text) % data
+    except (KeyError, TypeError, ValueError):
+        # An item older than the text - its data lacks what the text names - reads as the text unfilled.
+        return None
+
+
+class KindName(str):
+    """A declared kind's name - what `declare_kind()` returns - carrying the variants and text it declares."""
+
+    def __new__(cls, name, variants=(), text=None):
         declared_name = super().__new__(cls, name)
         declared_name.variants = tuple(variants)
+        declared_name.text = text or KindText()
         return declared_name
 
 
@@ -82,6 +125,7 @@ class Kind:
     partition: object = None
     # {field: SensitiveSnapshotField} - the snapshot fields that look secret, each with why it's carried.
     sensitive: dict = field(default_factory=dict)
+    text: KindText = field(default_factory=KindText)
     declared_in: str = field(default="", compare=False)
 
     @property
@@ -110,6 +154,13 @@ def get_kind(name):
     return kinds().get(name)
 
 
+def text_of(name):
+    """What the kind called `name` says to people: its declaration's text, over its vocabulary entry's."""
+    in_vocabulary = next((entry.text for entry in vocabulary if entry == name), KindText())
+    kind = get_kind(name)
+    return kind.text.merged_over(in_vocabulary) if kind is not None else in_vocabulary
+
+
 def _declare(kind):
     declared.append(kind)
     return kind
@@ -134,6 +185,10 @@ def notifies(
     channels=None,
     partition=None,
     sensitive=None,
+    label=None,
+    description=None,
+    message=None,
+    title=None,
 ):
     """
     Declares the trigger-sourced kind `name` on the decorated model: a trigger writing a notice whenever
@@ -152,8 +207,11 @@ def notifies(
     - `partition`: where the row's partition is read from - a resolver from `partitions.py`, else
       `DEFAULT_PARTITION`. A project with no partitions leaves it out.
     - `sensitive`: `{field: SensitiveSnapshotField(reason=...)}`, for each snapshot field that looks secret.
+    - `label`, `description`, `message`, `title`: what it says to people (see `KindText`) - over what its
+      `declare_kind()` said.
     """
     sensitive = require_exemptions(name, "sensitive", sensitive or {}, SensitiveSnapshotField)
+    text = KindText(label=label, description=description, message=message, title=title)
 
     def declare(model):
         kind = Kind(
@@ -170,6 +228,7 @@ def notifies(
             previous=previous,
             partition=partition,
             sensitive=sensitive,
+            text=text,
             declared_in=model._meta.label,
         )
         from isik.django.apps.notifications.triggers import NoticeTrigger
@@ -189,6 +248,10 @@ def declare_kind(
     scope=Scope.SINGLE_PARTITION,
     channels=None,
     source=Source.APPLICATION,
+    label=None,
+    description=None,
+    message=None,
+    title=None,
 ):
     """
     Declares the kind `name`, and the `variants` it may have - its place in the vocabulary - and returns its
@@ -198,8 +261,11 @@ def declare_kind(
 
     `source=Source.RECORDED` declares a kind of email its caller sends itself and `record_email()` records -
     mandatory, on email alone, with no audience: it takes none of those.
+
+    `label`, `description`, `message` and `title` are what it says to people - see `KindText`.
     """
-    declared_name = KindName(name, variants)
+    text = KindText(label=label, description=description, message=message, title=title)
+    declared_name = KindName(name, variants, text)
     # Built before anything is registered, so a declaration that fails leaves the registry as it was.
     if source == Source.RECORDED:
         if audience is not None or policy is not None or channels is not None:
@@ -269,7 +335,8 @@ def write_notice(name, *, variant, subject, snapshot, partition, **fields):
         subject_label=subject._meta.label if subject is not None else None,
         subject_id=str(subject.pk) if subject is not None else None,
         subject_partition=partition,
-        snapshot=snapshot or {},
+        # As JSON carries it - a key or a time as text - which is how a trigger's snapshot holds them too.
+        snapshot=json.loads(json.dumps(snapshot or {}, cls=DjangoJSONEncoder)),
         actor_id=RawSQL(actor(), []),
         context=RawSQL(context(), []),
         # The context a trigger-written notice would carry - the one the change's event rows carry.
@@ -309,6 +376,7 @@ def matching_variant(queryset, variant):
 __all__ = [
     "Kind",
     "KindName",
+    "KindText",
     "Policy",
     "SensitiveSnapshotField",
     "Scope",
@@ -319,4 +387,6 @@ __all__ = [
     "matching_variant",
     "notifies",
     "raise_notice",
+    "rendered",
+    "text_of",
 ]

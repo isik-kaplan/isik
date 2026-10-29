@@ -146,6 +146,8 @@ class TestTheSettings:
             "kept_field_conditions",
             "notifications",
             "truncate_protection",
+            "labels",
+            "features",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -211,7 +213,8 @@ class TestTheSettingsCheck:
             "ISIK_CHECKS names 'idempotence', which isn't a Check: Check.VALIDATORS, Check.CONCURRENCY_TOKENS, "
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
-            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION."
+            "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
+            "Check.LABELS, Check.FEATURES."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -694,3 +697,9 @@ class TestTruncateProtection:
         assert {"protect_policy_delete", "protect_policy_truncate"} <= {
             trigger.name for trigger in NoticeKindPolicy._meta.triggers
         }
+
+
+def test_the_label_check_reads_nothing_without_notifications(monkeypatch):
+    monkeypatch.setattr(apps, "is_installed", lambda name: False)
+
+    assert checks.every_declaration_says_what_it_is(app_configs=None) == []

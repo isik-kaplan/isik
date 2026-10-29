@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.notifications import conf
+from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audience.swapping import get_subscription_model
 from isik.django.apps.notifications.channels import Outcome, get_channel
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
@@ -53,18 +54,36 @@ def backoff(attempts):
 
 
 def chosen_users(notice, kind):
-    """The users `notice` is for: its audience's, less those its policy and their subscriptions leave out."""
+    """
+    The users `notice` is for: its audience's, less those its policy and their subscriptions leave out - each as
+    `gets()` decides. A person has one row matching a variant at most, which `VariantGuard` holds them to.
+    """
     users = list(kind.audience.recipients(notice))
-    if kind.policy == Policy.MANDATORY or not users:
+    if kind.policy == Policy.MANDATORY:
         return users
     subscriptions = matching_variant(
         get_subscription_model()._default_manager.filter(kind_id=notice.kind_id), notice.variant
     )
-    if kind.policy == Policy.DEFAULT_ON:
-        off = set(subscriptions.filter(enabled=False).values_list("user", flat=True))
-        return [user for user in users if user.pk not in off]
-    on = set(subscriptions.filter(enabled=True).values_list("user", flat=True))
-    return [user for user in users if user.pk in on]
+    rows = {row.user_id: row for row in subscriptions}
+    return [user for user in users if gets(rows.get(user.pk), kind.policy)]
+
+
+def gets(subscription, policy):
+    """
+    Whether a person gets a notice of a kind with `policy`, `subscription` being their row matching it, or None - the
+    one answer the fan-out and every view give: a force, else their own choice, else the policy.
+    """
+    if policy == Policy.MANDATORY:
+        return True
+    if subscription is None:
+        return policy == Policy.DEFAULT_ON
+    # A row not of the person's own choosing exists only while forced (a constraint holds it to that).
+    return subscription.forced_enabled if is_forced(subscription) else subscription.enabled
+
+
+def is_forced(subscription):
+    """Whether `subscription` - a row, or None - is forced: never, on a model that can't be."""
+    return isinstance(subscription, AbstractForceableSubscription) and subscription.forced
 
 
 def targets(notice, kind, partition):

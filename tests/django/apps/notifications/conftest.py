@@ -46,3 +46,12 @@ def declaring(monkeypatch):
         monkeypatch.setattr(kinds, "vocabulary", list(names.values()))
 
     return declare
+
+
+@pytest.fixture
+def forceable(settings):
+    """The project's subscription model swapped for one staff can force."""
+    from tests.testapp.models import ForceableSubscription
+
+    settings.ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL = "testapp.ForceableSubscription"
+    return ForceableSubscription.objects

@@ -1,4 +1,7 @@
-"""Every notifications model, the project's own - empty subclasses of isik's bases, under tables of their own."""
+"""
+Every notifications and features model, the project's own - empty subclasses of isik's bases, under tables of
+their own.
+"""
 
 import uuid
 
@@ -6,6 +9,9 @@ import pgtrigger
 from django.conf import settings
 from django.db import models
 
+from isik.django.apps.common.db.history import track_events
+from isik.django.apps.features import bases as features
+from isik.django.apps.features.audiences import HolderPeople
 from isik.django.apps.notifications import bases
 from isik.django.apps.notifications.audience import bases as audience
 from isik.django.apps.notifications.audiences import Field
@@ -96,7 +102,9 @@ class EndpointKind(audience.AbstractEndpointKind):
     Meta = table("endpoint_kind")
 
 
-PACKAGE_LOST = declare_kind("package_lost", variants=("stolen", "misplaced"))
+PACKAGE_LOST = declare_kind(
+    "package_lost", variants=("stolen", "misplaced"), label="Package lost", message="%(label)s is lost."
+)
 
 
 @notifies(
@@ -111,3 +119,45 @@ class Package(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     label = models.CharField(max_length=50)
     state = models.CharField(max_length=20, default="moving")
+
+
+# The features app with an organization as the holder, and every model of it the project's own.
+
+
+class Organization(models.Model):
+    name = models.CharField(max_length=50)
+    seat_limit = models.PositiveIntegerField(default=5)
+
+
+class Membership(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+
+
+class Feature(features.AbstractFeature):
+    Meta = table("feature")
+
+
+class FeatureGrant(features.AbstractFeatureGrant):
+    Meta = table("feature_grant")
+
+
+class SweepCursor(features.AbstractSweepCursor):
+    Meta = table("sweep_cursor")
+
+
+@track_events()
+class OrganizationOverrides(features.AbstractOverrides):
+    Meta = table("organization_overrides")
+
+
+FEATURE_GRANTED = declare_kind("feature_granted", label="Feature granted", message="%(feature)s is yours.")
+
+notifies(
+    FEATURE_GRANTED,
+    on=pgtrigger.Insert,
+    snapshot=["holder", "feature"],
+    audience=HolderPeople(),
+    policy=Policy.MANDATORY,
+    channels=("inbox",),
+)(FeatureGrant)

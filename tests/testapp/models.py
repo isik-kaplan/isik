@@ -35,10 +35,13 @@ from isik.django.apps.common.db import (
 from isik.django.apps.common.db.concurrency import ConcurrencyParts, ConcurrencyToken
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
+from isik.django.apps.common.forcing import declare_force_source
+from isik.django.apps.features.bases import AbstractOverrides
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
 from isik.django.apps.feedback.notes import UserNoteMixin, notes
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
+from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audiences import Field, Subscribers
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy, Source
@@ -686,13 +689,45 @@ class SiteDomain(BaseModel):
 
 # The test project's vocabulary of kinds - parcel_routed aside, declared by name where it's written, as a
 # one-file project would.
-PARCEL_SHIPPED = declare_kind("parcel_shipped")
-PARCEL_FLAGGED = declare_kind("parcel_flagged", variants=("lost", "damaged"))
+PARCEL_SHIPPED = declare_kind(
+    "parcel_shipped",
+    label="Parcel shipped",
+    description="A parcel you sent or will receive is on its way.",
+    message="Your parcel is %(status)s.",
+)
+PARCEL_FLAGGED = declare_kind(
+    "parcel_flagged",
+    variants=("lost", "damaged"),
+    label="Parcel flagged",
+    message="A parcel you sent is %(status)s.",
+    title="A parcel was %(status)s",
+)
 PARCEL_REMINDER = declare_kind(
-    "parcel_reminder", variants=("daily", "weekly"), audience=Subscribers, policy=Policy.DEFAULT_OFF
+    "parcel_reminder",
+    variants=("daily", "weekly"),
+    audience=Subscribers,
+    policy=Policy.DEFAULT_OFF,
+    label="Parcel reminders",
+    # One sentence per variant: a callable message is given the variant beside the data.
+    message=lambda data, variant: f"Your {variant} reminder: {data.get('name', 'your parcel')}.",
+    title=lambda data, variant: f"{variant.capitalize()} reminder",
+)
+# Who forces a subscription or a setting on someone: staff, with a reason worth reading and shown to the
+# person; an account review staff can't lift and the person isn't told the reason of; an automated one.
+STAFF = declare_force_source("staff", label="Staff", shows_reason_to_holder=True)
+REVIEW = declare_force_source("account_review", label="Account review", operator_may_release=False)
+AUTOMATED = declare_force_source("automated", label="Automated", reason_floor=5, shows_reason_to_holder=True)
+# Telling a person staff forced or released one of their subscriptions - never through the forced kind.
+SUBSCRIPTION_FORCED = declare_kind(
+    "subscription_forced",
+    audience=Field("user"),
+    policy=Policy.MANDATORY,
+    channels=("inbox",),
+    label="Notification settings changed",
+    message="Staff changed your notification settings.",
 )
 # An email its sender sends itself - a password reset, say - and the ledger only records.
-PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Source.RECORDED)
+PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Source.RECORDED, label="Parcel receipts")
 
 
 @notifies(
@@ -706,6 +741,8 @@ PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Sou
 )
 @notifies(
     "parcel_routed",
+    label="Parcel routed",
+    message="A parcel was routed.",
     on=pgtrigger.Insert,
     condition=pgtrigger.Q(new__status="routed"),
     snapshot=["sender"],
@@ -736,3 +773,18 @@ class Parcel(BaseModel):
 
     class Meta:
         app_label = "testapp"
+
+
+@track_events()
+class ForceableSubscription(AbstractForceableSubscription):
+    """A subscription staff can force - the model a project opting in subclasses, tracked as it must be."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+", help_text="Whose.")
+    kind = models.ForeignKey(
+        "isik_notifications.NoticeKindPolicy", on_delete=models.CASCADE, related_name="+", help_text="Which kind."
+    )
+
+
+@track_events()
+class UserOverrides(AbstractOverrides):
+    """A user's settings - the overrides model a project owns, tracked as it must be."""

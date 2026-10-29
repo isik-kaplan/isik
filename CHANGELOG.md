@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-10-29
+
+### Added
+
+- `isik.django.apps.features` (label `isik_features`): features granted to a holder, and settings the holder
+  chooses within them that staff can force. The holder is `ISIK_FEATURES_HOLDER_MODEL` - the user by default,
+  an organization where a project has them.
+  - `declare_feature()`, mirrored into a catalog that refuses a delete; grants (`grant()`, `revoke()`,
+    `has_feature()`) are a ledger the database keeps append-only, a revoke written once.
+  - `declare_setting(name, field, default, feature=, without_feature=, own=, holder_may_change=)`: what a
+    missing feature does is the setting's own (`Default()`, `Fixed(value)`, `AtMost(n)`, `AtLeast(n)`), the
+    holder's own value lives on the project's overrides model or, with `OnHolder("field")`, on the holder
+    itself - read there as it's in force with `OnHolder("field", resolved_as="name")` - and
+    `holder_may_change=False` makes one the holder reads and only staff set.
+  - `effective()` resolves forced → feature missing → limited → own → default, cached per holder, and
+    `effective_expression()` gives the same answer in SQL. `set_setting()`, `force_setting()` and
+    `release_setting()` write it; a force keeps the holder's own value for its release, and
+    `release_everything_forced_by()` lifts every force one source made.
+  - The overrides model is the project's (`AbstractOverrides`, `ISIK_FEATURES_OVERRIDES_MODEL`), each
+    declared setting adding its columns and their constraint; it has to be history-tracked.
+  - `setting_changed` and `feature_changed` signals; `sweep_boundaries()` (a beat task merged by
+    `features.schedule.merge_beat_schedule(app)`, and `manage.py features --sweep`) tells each grant
+    boundary crossed with no write - as of its own moment, in order, and once: what a grant moves as it's
+    written, `grant()` tells.
+  - The holder keys' `on_delete` is `ERASE`: deleting a holder erases its grants, overrides and their history
+    in the delete's transaction; `erase_holder()` erases them without the delete. A project refusing a
+    holder's delete declares its key `PROTECT`.
+  - `HasFeature("name")` for DRF and `requires_feature("name")` for services.
+  - `FeatureViewSet` and `SettingViewSet`: each setting typed, labelled and explained (`origin`, `chosen`,
+    `may_change`, `requires_feature`, the forced reason where its source shows it), a PATCH under one ETag per holder - a
+    "defaults" one before the first write - and a setting's own `request_policies`.
+  - The system check `isik.E017` (`Check.FEATURES`).
+- Force sources, `isik.django.apps.common.forcing.declare_force_source()`: who forces a value, with what it
+  allows on the source - `operator_may_release`, `reason_floor`, `shows_reason_to_holder`. The features app's
+  settings and notifications' forceable subscriptions take them.
+- Forceable notification subscriptions, an optional base: `AbstractForceableSubscription`, with
+  `force_subscription()` and `release_subscription()`. Who gets a notice is then a forced variant, a forced
+  kind, their own variant, their own kind, the policy. `SUBSCRIPTION_FORCED_KIND` names the kind telling
+  the person. The default `AbstractSubscription` is unchanged.
+- Kinds say what they are: `declare_kind()` and `notifies()` take `label`, `description`, `title` and
+  `message`; an inbox item reads its `title` and `message` rendered from its snapshot in the request's
+  language - a callable one given the snapshot and the item's variant.
+- `NoticeKindViewSet`: every active kind, mandatory ones too, with its label, policy, variants, channels,
+  `may_change`, what the caller gets now (`enabled`, `enabled_variants` - the fan-out's own answer, from the
+  new `pipeline.gets()`) and whether it's forced for them (`forced_enabled`, also on a subscription) -
+  `KINDS_VISIBLE` and `NOTICE_KIND_FIELDS` say what a caller sees.
+- `isik.django.drf.error_handling.refusal(message, code=)`, a `409` carrying its code.
+
+- **Breaking:** the subscription viewset's `kinds/` action is gone - `NoticeKindViewSet` answers which kinds
+  there are, and a client filters on `may_change` for the ones a person chooses.
+- **Breaking:** `subscribe()` refuses a `MANDATORY` kind (`KindIsMandatory`, code `kind_mandatory`), and the
+  REST create answers it `409` - a row there was a choice nobody could make. `KindIsMandatory` and
+  `SubscriptionForced` are `SubscriptionRefused`s - `ValueError`s, as its other refusals are - carrying a
+  `code`.
+- **Breaking:** the system check `isik.E016` (`Check.LABELS`) refuses a kind, feature or setting with no
+  `label`, and an inbox kind with no `message`. Give them, or set the check's severity in `ISIK_CHECKS`.
+
+### Fixed
+
+- A notice's snapshot is stored as JSON carries it: `raise_notice()` given a UUID or a datetime - a UUID user
+  key, say - failed to serialize it. A key or a time is kept as text, as a trigger's snapshot keeps one.
+- A model swapped out for the project's own registers no concurrency relation locks: it has no table, and the
+  model its keys point at may not be in a migration's state yet - which failed `migrate` with "app isn't
+  installed" where the project's own model came in a later migration.
+
 ## [0.40.0] - 2026-10-29
 
 ### Added

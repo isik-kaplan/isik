@@ -509,6 +509,10 @@ def _lock_pointing_key(table, owner, key):
 
 
 def _register_relation_locks(sender, **kwargs):
+    # A model swapped out for the project's own has no table - nothing to lock, and what its keys point at may be
+    # an app a migration's state doesn't hold yet.
+    if sender._meta.swapped:
+        return
     for name in getattr(sender, "concurrency_relations", ()):
         relation = next((field for field in sender._meta.local_many_to_many if field.name == name), None)
         # A name that isn't one is a reverse relation, registered from its own side below - or

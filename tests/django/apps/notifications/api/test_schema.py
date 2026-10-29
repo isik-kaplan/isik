@@ -125,10 +125,7 @@ def test_each_operation_documents_what_it_does():
     ):
         assert body(path, "post") is None, path
     assert answer("/inbox/read-all/", "post") == {"$ref": "#/components/schemas/Marked"}
-    assert answer("/subscriptions/kinds/", "get") == {
-        "type": "array",
-        "items": {"$ref": "#/components/schemas/ChoosableKind"},
-    }
+    assert answer("/kinds/", "get") == {"type": "array", "items": {"$ref": "#/components/schemas/NoticeKind"}}
     assert answer("/subscriptions/", "post", "201") == {"$ref": "#/components/schemas/Subscription"}
     assert answer("/unscoped-endpoints/{id}/unpark/", "post") == {"$ref": "#/components/schemas/Endpoint"}
     assert answer("/unscoped-deliveries/{id}/retry/", "post") == {"$ref": "#/components/schemas/Delivery"}
@@ -144,7 +141,7 @@ def test_what_answers_a_list_or_one_is_documented_so_under_any_paginator(paginat
     def answer(path, method):
         return paths[path][method]["responses"]["200"]["content"]["application/json"]["schema"]
 
-    assert answer("/subscriptions/kinds/", "get")["type"] == "array"
+    assert answer("/kinds/", "get")["type"] == "array"
     assert answer("/inbox/read-all/", "post") == {"$ref": "#/components/schemas/Marked"}
     for path in (
         "/inbox/{id}/read/",
@@ -157,8 +154,11 @@ def test_what_answers_a_list_or_one_is_documented_so_under_any_paginator(paginat
 
 
 def test_every_write_is_drfs_own_or_declared():
-    # A create of its own would leave drf-spectacular inferring its body from a method it can't read.
-    assert "create" not in vars(SubscriptionViewSet)
-    body = schema()["paths"]["/subscriptions/"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    # A create of its own would leave drf-spectacular inferring its body from a method it can't read - so the
+    # subscription view's create only names the act, and DRF's mixin does it.
+    assert "perform_create" in vars(SubscriptionViewSet)
+    operation = schema()["paths"]["/subscriptions/"]["post"]
+    body = operation["requestBody"]["content"]["application/json"]["schema"]
 
     assert body == {"$ref": "#/components/schemas/Subscription"}
+    assert operation["description"].startswith("Sets your preference for a kind of notification")

@@ -1,7 +1,9 @@
 from django.core.exceptions import ValidationError
-from rest_framework.exceptions import ErrorDetail
+from rest_framework import status
+from rest_framework.exceptions import APIException, ErrorDetail
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
+from isik._internal.translation import gettext_lazy
 from isik.common.utils.error_handling import TransformExceptions
 
 
@@ -41,3 +43,16 @@ def exception_handler(exc, context):
         if isinstance(detail, ErrorDetail):
             response.data["code"] = detail.code
     return response
+
+
+class Refused(APIException):
+    """A change refused for what the row is, not what was sent - a forced subscription, say."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = gettext_lazy("This can't be changed.")
+    default_code = "refused"
+
+
+def refusal(message, *, code):
+    """`Refused`, its body `{"detail", "code"}` whatever exception handler a project sets - a client reads the code."""
+    return Refused({"detail": message, "code": code})

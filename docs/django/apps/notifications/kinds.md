@@ -26,6 +26,36 @@ declaring the kind there and then - unless `REQUIRE_DECLARED_KINDS` is on, which
 An audience taking no arguments is given as its class - `audience=Subscribers` - and one that needs them
 as an instance, `Field("owner")`; a class that needs arguments fails at import, naming them.
 
+## What a person reads: labels and messages
+
+A client built from the API alone knows nothing of your kinds, so each says what it is, lazy-translated
+and sent in the request's language:
+
+```python
+PARCEL_FLAGGED = declare_kind(
+    "parcel_flagged",
+    variants=("lost", "damaged"),
+    label=_("Parcel problems"),                              # what the preference is called
+    description=_("When a parcel you sent is lost or damaged."),
+    title=_("A parcel was flagged"),
+    message=_("Your parcel %(tracking)s was reported %(status)s."),
+)
+```
+
+`title` and `message` are what an inbox item reads as: a `%`-format over the notice's snapshot, or a
+callable given it and the item's variant - `message=lambda data, variant: ...`, one sentence per variant -
+rendered when the item is read - so a client shows a sentence with no switch per kind.
+An item whose snapshot lacks what the text names - older than the text - reads as no message rather than
+failing. `notifies()` given a bare name takes the same four.
+
+`isik.E016` (`Check.LABELS`) reports a kind with no `label`, and an inbox kind with no `message`; set its
+severity, or turn it off, in `ISIK_CHECKS` like any other.
+
+**Run `makemessages` after declaring text, and clear the fuzzy entries it writes.** For a new string it
+guesses a translation from a similar existing one and marks it `#, fuzzy` - another sentence's meaning,
+which a catalog compiled without refusing fuzzies would show your users. Translate each new entry yourself,
+and have your catalog check refuse a fuzzy one.
+
 ## Trigger-sourced: `notifies()`
 
 On the model the kind watches:

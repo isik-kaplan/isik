@@ -324,6 +324,27 @@ class TestTheLockTriggers:
         assert (owner.__name__, relation) == (f"Early{suffix}", "later")
         assert f'= NEW."early{suffix}_id"' in trigger.func
 
+    def test_a_model_swapped_out_gets_none(self, monkeypatch, settings):
+        # It has no table, and the model its key points at may not be in a migration's state yet.
+        monkeypatch.setattr(base_models, "relation_locks", [])
+        settings.ISIK_TEST_SWAPPED_CREW = "testapp.Widget"
+        name = f"Crew{uuid.uuid4().hex[:8]}"
+
+        @isolate_apps("tests.testapp")
+        def define():
+            from django.db import models
+
+            meta = type("Meta", (), {"app_label": "testapp", "swappable": "ISIK_TEST_SWAPPED_CREW"})
+            fields = {
+                "tags": models.ManyToManyField("self", symmetrical=False, related_name="+"),
+                "lead": models.ForeignKey(f"Missing{name}", on_delete=models.CASCADE, related_name="crews"),
+                "concurrency_relations": ("tags",),
+            }
+            return type(name, (models.Model,), {"__module__": __name__, "Meta": meta, **fields})
+
+        assert define()._meta.swapped == "testapp.Widget"
+        assert base_models.relation_locks == []
+
     def test_a_relation_named_wrongly_gets_none(self):
         @isolate_apps("tests.testapp")
         def define():

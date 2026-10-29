@@ -30,15 +30,18 @@ from drf_spectacular.utils import (
 )
 from rest_framework import mixins, serializers
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from isik._internal.translation import gettext as _
+from isik._internal.translation import gettext_lazy
 from isik.common.utils.exemptions import makes_own_exemptions
 from isik.django.apps.common.db.models import touch_rows
+from isik.django.apps.common.forcing import force_sources
 from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
-from isik.django.apps.notifications.audience.helpers import mark_read, subscribe
+from isik.django.apps.notifications import conf
+from isik.django.apps.notifications.audience.helpers import SubscriptionRefused, mark_read, subscribe
 from isik.django.apps.notifications.audience.swapping import (
     get_endpoint_kind_model,
     get_endpoint_model,
@@ -46,13 +49,14 @@ from isik.django.apps.notifications.audience.swapping import (
     get_subscription_model,
 )
 from isik.django.apps.notifications.choices import Policy
-from isik.django.apps.notifications.kinds import kinds
-from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
+from isik.django.apps.notifications.kinds import kinds, rendered, text_of
+from isik.django.apps.notifications.pipeline import RetryRefused, gets, is_forced, retry_delivery
 from isik.django.apps.notifications.swapping import (
     get_delivery_attempt_model,
     get_delivery_model,
     get_kind_policy_model,
 )
+from isik.django.drf.error_handling import refusal
 from isik.django.drf.viewsets.base import BaseViewSet
 from isik.django.drf.viewsets.preconditions import NoPrecondition, PreconditionMixin
 from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
@@ -94,16 +98,42 @@ class KindField(serializers.SlugRelatedField):
         return get_kind_policy_model()._default_manager.filter(retired_at=None)
 
 
+def _data(item):
+    """What an inbox item's text is filled from: the data its payload carries, if any."""
+    return item.payload.get("data") or {}
+
+
 @cache
 def inbox_item_serializer(model):
     """The serializer of an inbox item of `model`."""
 
     class InboxItemSerializer(serializers.ModelSerializer):
         kind = serializers.CharField(source="kind_id", read_only=True)
+        title = serializers.SerializerMethodField()
+        message = serializers.SerializerMethodField()
 
         class Meta:
-            fields = ["id", "kind", "variant", "subject_label", "subject_id", "payload", "read_at", "created_at"]
+            fields = [
+                "id",
+                "kind",
+                "variant",
+                "title",
+                "message",
+                "subject_label",
+                "subject_id",
+                "payload",
+                "read_at",
+                "created_at",
+            ]
             read_only_fields = fields
+
+        def get_title(self, item) -> str | None:
+            """The item's heading, in the request's language - its kind's `title` filled from its data."""
+            return rendered(text_of(item.kind_id).title, _data(item), item.variant)
+
+        def get_message(self, item) -> str | None:
+            """The item as a sentence, in the request's language - its kind's `message` filled from its data."""
+            return rendered(text_of(item.kind_id).message, _data(item), item.variant)
 
     InboxItemSerializer.Meta.model = model
     return InboxItemSerializer
@@ -115,16 +145,28 @@ def subscription_serializer(model):
 
     class SubscriptionSerializer(serializers.ModelSerializer):
         kind = KindField()
+        forced = serializers.SerializerMethodField()
+        forced_enabled = serializers.SerializerMethodField()
+        forced_reason = serializers.SerializerMethodField()
 
         class Meta:
-            fields = ["id", "kind", "variant", "enabled"]
+            fields = ["id", "kind", "variant", "enabled", "forced", "forced_enabled", "forced_reason"]
+
+        def get_forced(self, subscription) -> bool:
+            """Whether staff forced it, so it can't be changed - always False on a model that can't be forced."""
+            return is_forced(subscription)
+
+        def get_forced_enabled(self, subscription) -> bool | None:
+            """What staff forced it to - on or off - while it's forced; `enabled` stays your own choice."""
+            return subscription.forced_enabled if self.get_forced(subscription) else None
+
+        def get_forced_reason(self, subscription) -> str | None:
+            """Why it was forced - where its source lets the person read it, else none."""
+            return shown_reason(subscription) if self.get_forced(subscription) else None
 
         def validate(self, data):
+            # A mandatory kind is subscribe()'s to refuse, with its code - a 409 the client tells apart.
             policy, variant = data["kind"], data.get("variant")
-            if policy.policy == Policy.MANDATORY:
-                raise ValidationError(
-                    {"kind": _("%(kind)s is mandatory - it can't be turned on or off.") % {"kind": policy.kind}}
-                )
             if variant is not None and variant not in policy.variants:
                 raise ValidationError(
                     {
@@ -283,7 +325,14 @@ class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.List
 
 
 # The caller's subscriptions - each a deviation from its kind's policy. `POST` sets one through
-# `subscribe()`, and `DELETE` forgets it, so the kind's policy decides again.
+# `subscribe()`, and `DELETE` forgets it, so the kind's policy decides again. DRF's own create, so
+# drf-spectacular reads its body and answer as for any; the schema only names the act.
+@extend_schema_view(
+    create=extend_schema(
+        description="Sets your preference for a kind of notification, or one variant of it - made, or replacing the "
+        "one before."
+    )
+)
 class SubscriptionViewSet(
     IdempotencyMixin,
     PreconditionMixin,
@@ -309,44 +358,151 @@ class SubscriptionViewSet(
     def get_serializer_class(self):
         return subscription_serializer(get_subscription_model())
 
-    # DRF's own create, so drf-spectacular reads its body and answer as for any create; the row is written by
-    # subscribe(), which sets one or replaces the one before.
+    # The row is written by subscribe(), which sets one or replaces the one before.
     def perform_create(self, serializer):
         data = serializer.validated_data
         try:
             serializer.instance = subscribe(
                 self.request.user, data["kind"].kind, data.get("variant"), enabled=data.get("enabled", True)
             )
+        except SubscriptionRefused as refused:
+            raise refusal(str(refused), code=refused.code) from refused
         except ValueError as error:
             raise ValidationError({"variant": [str(error)]}) from error
 
-    @extend_schema(
-        responses=inline_serializer(
-            "ChoosableKind",
-            {
-                "kind": serializers.CharField(),
-                "policy": serializers.ChoiceField(choices=Policy.choices),
-                "variants": serializers.ListField(child=serializers.CharField()),
-            },
-            many=True,
-        )
+    def perform_destroy(self, instance):
+        if is_forced(instance):
+            raise refusal(
+                _("This subscription is forced by staff, so it can't be changed."), code="subscription_forced"
+            )
+        super().perform_destroy(instance)
+
+
+def shown_reason(forced):
+    """`forced`'s reason, where its force source lets the person it's forced on read it - else None."""
+    source = force_sources().get(forced.forced_source)
+    return forced.forced_reason if source is not None and source.shows_reason_to_holder else None
+
+
+def kind_states(user, names):
+    """
+    {kind: {"may_change", "enabled", "enabled_variants", "forced", "forced_enabled", "forced_variants",
+    "forced_reason"}} for `user` - one answer for every view saying what a person gets of a kind, whether they may
+    change it and whether it's forced for them, so two lists can't disagree, nor either with the fan-out.
+    """
+    policies = {
+        kind: (policy, variants)
+        for kind, policy, variants in get_kind_policy_model()
+        ._default_manager.filter(kind__in=names)
+        .values_list("kind", "policy", "variants")
+    }
+    rows = list(get_subscription_model()._default_manager.filter(user=user))
+    states = {}
+    for name in names:
+        policy, variants = policies[name]
+        mine = {row.variant: row for row in rows if row.kind_id == name}
+        whole = mine.get(None)
+        forced = whole if is_forced(whole) else None
+        states[name] = {
+            "may_change": policy != Policy.MANDATORY and forced is None,
+            "enabled": gets(whole, policy),
+            "enabled_variants": {variant: gets(mine.get(variant, whole), policy) for variant in variants},
+            "forced": forced is not None,
+            "forced_enabled": forced.forced_enabled if forced is not None else None,
+            "forced_variants": sorted(
+                variant for variant, row in mine.items() if variant is not None and is_forced(row)
+            ),
+            "forced_reason": shown_reason(forced) if forced is not None else None,
+        }
+    return states
+
+
+class NoticeKindSerializer(serializers.Serializer):
+    """A kind of notification as a person sees it: what it is, what it's sent on, and what they may do about it."""
+
+    kind = serializers.CharField(help_text=gettext_lazy("The kind's name - the key everything else names it by."))
+    label = serializers.CharField(allow_null=True, help_text=gettext_lazy("Its name, as a person reads it."))
+    description = serializers.CharField(allow_null=True, help_text=gettext_lazy("What it's about."))
+    policy = serializers.ChoiceField(choices=Policy.choices, help_text=gettext_lazy("What a person gets by default."))
+    variants = serializers.ListField(child=serializers.CharField(), help_text=gettext_lazy("Its variants, if any."))
+    channels = serializers.ListField(child=serializers.CharField(), help_text=gettext_lazy("What it's sent on."))
+    may_change = serializers.BooleanField(help_text=gettext_lazy("Whether you may turn it on or off."))
+    enabled = serializers.BooleanField(
+        help_text=gettext_lazy("Whether you get it now, every variant - forced, your own choice, or its policy.")
     )
-    # A short list, answered whole - and documented whole, not as a page, whatever paginator the project sets.
-    @action(detail=False, methods=["get"], pagination_class=None)
-    def kinds(self, request, *args, **kwargs):
-        """The kinds of notification you can choose about, each with its default and its variants."""
+    enabled_variants = serializers.DictField(
+        child=serializers.BooleanField(), help_text=gettext_lazy("Whether you get each variant of it now.")
+    )
+    forced = serializers.BooleanField(help_text=gettext_lazy("Whether staff forced it for you, every variant."))
+    forced_enabled = serializers.BooleanField(
+        allow_null=True, help_text=gettext_lazy("What staff forced it to for you, every variant - else none.")
+    )
+    forced_variants = serializers.ListField(
+        child=serializers.CharField(), help_text=gettext_lazy("The variants staff forced for you, one by one.")
+    )
+    forced_reason = serializers.CharField(
+        allow_null=True, help_text=gettext_lazy("Why it was forced, if you may read it.")
+    )
+
+    def get_fields(self):
+        fields = super().get_fields()
+        published = conf.setting("NOTICE_KIND_FIELDS")
+        return fields if published is None else {name: field for name, field in fields.items() if name in published}
+
+
+class NoticeKindViewSet(BaseViewSet):
+    """
+    Every kind of notification you may get - the ones you can't turn off too - with what each is, what it's sent
+    on, and whether you may change it.
+    """
+
+    # Which kinds a person sees is KINDS_VISIBLE's to say; the fields published, NOTICE_KIND_FIELDS'.
+    permission_classes = [IsAuthenticated]
+    lookup_field = "kind"
+    lookup_value_regex = "[^/]+"
+    pagination_class = None
+
+    model = SwappedModel(get_kind_policy_model)
+
+    def get_queryset(self):
+        """The kinds declared and not retired - what a schema types the `{kind}` path by, and `visible()` reads."""
+        return get_kind_policy_model()._default_manager.filter(retired_at=None, kind__in=list(kinds()))
+
+    def visible(self):
         declared = kinds()
-        choosable = (
-            get_kind_policy_model()
-            ._default_manager.filter(retired_at=None, kind__in=list(declared))
-            .exclude(policy=Policy.MANDATORY)
-        )
-        return Response(
-            [
-                {"kind": policy.kind, "policy": policy.policy, "variants": policy.variants}
-                for policy in choosable.order_by("kind")
-            ]
-        )
+        active = self.get_queryset().order_by("kind").values_list("kind", "policy", "variants")
+        hook = conf.setting("KINDS_VISIBLE")
+        shown = None if hook is None else set(hook(self.request))
+        rows = [row for row in active if shown is None or row[0] in shown]
+        states = kind_states(self.request.user, [name for name, _policy, _variants in rows])
+        return {
+            name: {
+                "kind": name,
+                "label": _text(text_of(name).label),
+                "description": _text(text_of(name).description),
+                "policy": policy,
+                "variants": variants,
+                "channels": list(declared[name].enabled_channels),
+                **states[name],
+            }
+            for name, policy, variants in rows
+        }
+
+    @extend_schema(responses=NoticeKindSerializer(many=True))
+    def list(self, request, *args, **kwargs):
+        return Response(NoticeKindSerializer(list(self.visible().values()), many=True).data)
+
+    @extend_schema(responses=NoticeKindSerializer)
+    def retrieve(self, request, *args, **kwargs):
+        """One kind of notification, by its name."""
+        shown = self.visible().get(kwargs[self.lookup_field])
+        if shown is None:
+            raise NotFound()
+        return Response(NoticeKindSerializer(shown).data)
+
+
+def _text(text):
+    return str(text) if text is not None else None
 
 
 class OwnedByCaller:

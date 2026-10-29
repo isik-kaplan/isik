@@ -92,6 +92,13 @@ DEFAULTS = {
     # Why sending webhooks inside the writing request or task is fine: an exemptions.SendsInline(reason=...), which
     # quiets isik.W007.
     "SENDS_INLINE": None,
+    # A MANDATORY application kind telling a person staff forced or released one of their subscriptions - raised
+    # with {user, kind, variant, forced, enabled}; never the forced kind itself, which a force could silence.
+    "SUBSCRIPTION_FORCED_KIND": None,
+    # f(request) -> the kind names NoticeKindViewSet shows that person - every active kind when None.
+    "KINDS_VISIBLE": None,
+    # The fields NoticeKindViewSet publishes - every one when None (channels, say, left out by naming the rest).
+    "NOTICE_KIND_FIELDS": None,
     "BATCH_SIZE": 100,
     "STRANDED_AFTER": timedelta(minutes=10),
     "HOUSEKEEPING_BATCH": 1000,
@@ -103,6 +110,7 @@ HOOKS = (
     "EMAIL_ADDRESS",
     "RECIPIENT_LANGUAGE",
     "EMAIL_CONTEXT",
+    "KINDS_VISIBLE",
     "PARTITIONS",
     "IN_PARTITION",
     "PARTITION_EXISTS",

@@ -87,4 +87,49 @@ can't dangle. Both names are stable: a project may name them as what guards its 
 covering every variant is refused - `unsubscribe()` the kind first. Endpoint kinds and inbox items are held to declared variants
 the same way.
 
+A `MANDATORY` kind has no choice to record: `subscribe()` refuses it (`KindIsMandatory`, code
+`kind_mandatory`), so no row says a person turned off what they can't. Each refusal is a
+`SubscriptionRefused` carrying its `code`.
+
+## Forcing one person's subscription
+
+Staff turning a kind back on (or off) for one person, which they then can't change, is an optional model
+base - a project that never forces one carries none of its columns. Base your subscription model on
+`AbstractForceableSubscription` instead, track its history, and point
+`ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL` at it:
+
+```python
+from isik.django.apps.common.db.history import track_events
+from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
+
+@track_events()
+class Subscription(AbstractForceableSubscription):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    kind = models.ForeignKey(NoticeKindPolicy, on_delete=models.PROTECT, related_name="+")
+```
+
+It adds `chosen` (whether the person chose this row themselves), `forced`, `forced_enabled`,
+`forced_source` and `forced_reason`, constrained to be set together. The person's own `enabled` is kept
+beside the forced one, so a release brings their choice back.
+
+```python
+from isik.django.apps.notifications.audience.helpers import force_subscription, release_subscription
+
+force_subscription(user, "security_alert", enabled=True, source=STAFF, reason="...")
+release_subscription(user, "security_alert")
+```
+
+The sources are the [force sources](../features/README.md#force-sources) the features app's settings
+take - each saying how long a reason must be, whether staff may lift it, and whether the person may read
+it. Who gets a notice is then, per person: **a forced variant > a forced kind > their own variant > their
+own kind > the kind's policy**. With the plain base it's exactly the policy and their own rows, as before.
+
+- A `MANDATORY` kind can't be forced: off would silence what must reach them, on means nothing.
+- `subscribe()` and `unsubscribe()` refuse a forced row (`SubscriptionForced`, code
+  `subscription_forced`), and so do the REST create and delete, with that code in a `409`.
+- `ISIK_NOTIFICATIONS["SUBSCRIPTION_FORCED_KIND"]` names a `MANDATORY` application kind of yours,
+  raised on each force and release with `{user, kind, variant, forced, enabled}` - never the forced kind
+  itself, which a force could silence.
+- `isik.E014` refuses a forceable subscription model that isn't tracked.
+
 The inbox: `unread(user)`, and `mark_read(items)` over a queryset of items.

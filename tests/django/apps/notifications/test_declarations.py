@@ -120,6 +120,15 @@ class TestRaisingANotice:
         )
         assert (notice.snapshot, notice.subject_partition, notice.pgh_context) == ({"n": 1}, "p", None)
 
+    def test_a_key_or_a_time_is_kept_as_json_carries_it(self):
+        # A user with a UUID key, say - kept as text, as a trigger's snapshot keeps a key.
+        key = uuid.uuid4()
+        when = timezone.now().replace(microsecond=0)
+
+        notice = raise_notice(PARCEL_REMINDER, snapshot={"user": key, "at": when})
+
+        assert notice.snapshot == {"user": str(key), "at": when.isoformat().replace("+00:00", "Z")}
+
     def test_one_about_nothing(self):
         notice = raise_notice(PARCEL_REMINDER)
 

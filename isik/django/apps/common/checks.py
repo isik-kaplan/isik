@@ -38,6 +38,8 @@ belongs included - is an error, `isik.E012`.
 | Check.KEPT_FIELD_CONDITIONS | isik.E013             | a trigger condition comparing version or updated_at          |
 | Check.NOTIFICATIONS        | isik.E014, isik.W004-9 | a notifications declaration that can't work, a retired kind |
 | Check.TRUNCATE_PROTECTION  | isik.E015              | a table refusing a row's DELETE and not a TRUNCATE           |
+| Check.LABELS               | isik.E016              | a notice kind, feature or setting that can't say what it is  |
+| Check.FEATURES             | isik.E017              | a features setting or declaration that can't work            |
 """
 
 import functools
@@ -71,6 +73,8 @@ class Check(Enum):
     KEPT_FIELD_CONDITIONS = "kept_field_conditions"
     NOTIFICATIONS = "notifications"
     TRUNCATE_PROTECTION = "truncate_protection"
+    LABELS = "labels"
+    FEATURES = "features"
 
 
 class CheckOption(Enum):
@@ -110,6 +114,8 @@ CHECKS = {
     Check.KEPT_FIELD_CONDITIONS: (CheckOption.APPS,),
     Check.NOTIFICATIONS: (),
     Check.TRUNCATE_PROTECTION: (CheckOption.APPS,),
+    Check.LABELS: (),
+    Check.FEATURES: (),
 }
 
 DEFAULTS = {
@@ -463,6 +469,23 @@ def every_table_refusing_a_delete_refuses_a_truncate(options, **kwargs):
     return [
         Error(problem, hint=hint, id="isik.E015") for problem in truncate_protection_problems(_project_configs(options))
     ]
+
+
+@isik_check(Check.LABELS)
+def every_declaration_says_what_it_is(options, **kwargs):
+    """A kind, feature or setting a client can only show by its name - an API that needs the project's code to read."""
+    # Each app's own, read only where it's installed - importing one that isn't would load its models.
+    problems = [
+        problem
+        for app, find in (
+            ("isik.django.apps.notifications", "isik.django.apps.notifications.checks.kind_text_problems"),
+            ("isik.django.apps.features", "isik.django.apps.features.checks.text_problems"),
+        )
+        if apps.is_installed(app)
+        for problem in import_string(find)()
+    ]
+    hint = _("Declare a label (and a message, for a kind sent to the inbox) - see KindText.")
+    return [Error(problem, hint=hint, id="isik.E016") for problem in problems]
 
 
 @isik_check(Check.EXEMPTIONS)

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "isik.django.apps.idempotency.with_body",
     "isik.django.apps.notifications",
     "isik.django.apps.notifications.audience",
+    "isik.django.apps.features",
     "tests.testapp",
 ]
 
@@ -106,3 +107,9 @@ ISIK_NOTIFICATIONS = {
     "NOTICE_CONTEXT_KEYS": ("user", "schema"),
     "FAN_OUT_BY": ScheduledElsewhere(reason="each test runs the fan-out it needs itself, with no beat or worker"),
 }
+
+ISIK_FEATURES = {
+    "SETTINGS": "tests.testapp.feature_settings",
+    "GRANT_SOURCES": ("manual", "trial", "subscription"),
+}
+ISIK_FEATURES_OVERRIDES_MODEL = "testapp.UserOverrides"

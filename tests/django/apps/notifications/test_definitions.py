@@ -134,6 +134,29 @@ class TestDeclaring:
         assert kind.declared_in == model._meta.label
 
     @isolate_apps("tests.testapp")
+    def test_what_a_kind_says_declared_where_it_notifies(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+        monkeypatch.setattr(kinds, "vocabulary", [])
+        name = f"Said{uuid.uuid4().hex[:8]}"
+        texts = {"label": "Said", "description": "What it says.", "message": "It said.", "title": "Saying"}
+
+        notifies(name.lower(), audience=Subscribers(), policy=Policy.DEFAULT_ON, on=pgtrigger.Delete, **texts)(
+            type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
+        )
+
+        assert kinds.text_of(name.lower()) == kinds.KindText(**texts)
+
+    def test_what_a_kind_says_declared_in_the_vocabulary(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+        monkeypatch.setattr(kinds, "vocabulary", [])
+        texts = {"label": "Said", "description": "What it says.", "message": "It said.", "title": "Saying"}
+
+        made = kinds.declare_kind("said", variants=("loud",), **texts)
+
+        assert (made, made.variants, made.text) == ("said", ("loud",), kinds.KindText(**texts))
+        assert kinds.text_of("said") == kinds.KindText(**texts)
+
+    @isolate_apps("tests.testapp")
     def test_notifies_defaults(self, monkeypatch):
         monkeypatch.setattr(kinds, "declared", [])
         name = f"Plain{uuid.uuid4().hex[:8]}"

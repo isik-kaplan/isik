@@ -25,12 +25,14 @@ from isik._internal.translation import gettext as _
 from isik.django.apps.common.checks import Check, CheckOption, isik_check
 from isik.django.apps.notifications import bases, conf, exemptions, hooks, swapping
 from isik.django.apps.notifications import kinds as declarations
+from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audience.swapping import DEFAULTS as AUDIENCE_DEFAULTS
 from isik.django.apps.notifications.audience.swapping import (
     ENDPOINT_KIND_MODEL,
     INBOX_ITEM_MODEL,
     SUBSCRIPTION_MODEL,
     get_endpoint_model,
+    get_subscription_model,
 )
 from isik.django.apps.notifications.channels import get_channel, registered
 from isik.django.apps.notifications.channels.email import send_from_mjml_templates, send_from_templates
@@ -116,6 +118,7 @@ def setting_problems():
         alone, missing = (AUDIENCE_APP, LEDGER_APP) if apps.is_installed(AUDIENCE_APP) else (LEDGER_APP, AUDIENCE_APP)
         problems.append(_("%(alone)s is installed without %(missing)s.") % {"alone": alone, "missing": missing})
     problems += _kept_guard_problems()
+    problems += _untracked_force_problems()
     allowed = conf.setting("ALLOW_PRIVATE_TARGETS")
     if allowed not in (True, False):
         try:
@@ -146,6 +149,22 @@ def setting_problems():
             problems.append(str(refused))
     problems += _template_problems()
     return problems
+
+
+def _untracked_force_problems():
+    """A forceable subscription model with no history - who forced it, when and why would be lost on release."""
+    if not apps.is_installed(AUDIENCE_APP):
+        return []
+    model = get_subscription_model()
+    if not issubclass(model, AbstractForceableSubscription) or "pgh_event_model" in dir(model):
+        return []
+    return [
+        _(
+            "%(model)s can be forced, and has no history - who forced it, when and why is gone once it's released. "
+            "Track it with @track_events()."
+        )
+        % {"model": model._meta.label}
+    ]
 
 
 def _kept_guard_problems():
@@ -440,6 +459,29 @@ def shared_endpoint_warnings():
         )
         % {"model": endpoint._meta.label, "keys": ", ".join(keys)}
     ]
+
+
+def kind_text_problems():
+    """
+    Each kind that can't say what it is to people: one without a label - which a client listing kinds would
+    show as its bare name - and one sent to the inbox without a message, which its items would show as data.
+    """
+    names = dict.fromkeys([*map(str, declarations.vocabulary), *declarations.kinds()])
+    problems = []
+    for name in names:
+        text = declarations.text_of(name)
+        kind = declarations.get_kind(name)
+        if text.label is None:
+            problems.append(
+                _("%(kind)s has no label - a client listing kinds can only show its name. Give it label=.")
+                % {"kind": name}
+            )
+        if kind is not None and "inbox" in kind.enabled_channels and text.message is None:
+            problems.append(
+                _("%(kind)s is sent to the inbox with no message - its items read as data. Give it message=.")
+                % {"kind": name}
+            )
+    return problems
 
 
 def endpoint_owner_problems(urlconf=None):

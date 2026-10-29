@@ -32,9 +32,8 @@ def keyed(**headers):
 
 
 def item(user, **fields):
-    return get_inbox_item_model().objects.create(
-        user=user, kind_id="parcel_shipped", delivery_id=uuid.uuid4(), payload={"data": {"n": 1}}, **fields
-    )
+    made = {"kind_id": "parcel_shipped", "payload": {"data": {"n": 1}}, **fields}
+    return get_inbox_item_model().objects.create(user=user, delivery_id=uuid.uuid4(), **made)
 
 
 class TestTheInbox:
@@ -49,12 +48,36 @@ class TestTheInbox:
             "id": first.pk,
             "kind": "parcel_shipped",
             "variant": None,
+            # Its data lacks what parcel_shipped's message names: an item older than its text reads unfilled.
+            "title": None,
+            "message": None,
             "subject_label": None,
             "subject_id": None,
             "payload": {"data": {"n": 1}},
             "read_at": None,
             "created_at": listed[1]["created_at"],
         }
+
+    def test_an_item_reads_as_its_kinds_sentence(self, alice):
+        flagged = item(alice, kind_id="parcel_flagged", variant="lost", payload={"data": {"status": "lost"}})
+
+        shown = client_for(alice).get(f"/inbox/{flagged.pk}/").json()
+
+        assert (shown["title"], shown["message"]) == ("A parcel was lost", "A parcel you sent is lost.")
+
+    def test_an_item_without_its_data_reads_as_no_sentence(self, alice):
+        bare = item(alice, kind_id="parcel_flagged", variant="lost", payload={})
+
+        shown = client_for(alice).get(f"/inbox/{bare.pk}/").json()
+
+        assert (shown["title"], shown["message"]) == (None, None)
+
+    def test_a_callable_message_reads_the_data_and_the_variant(self, alice):
+        reminded = item(alice, kind_id="parcel_reminder", variant="daily", payload={"data": {"name": "Box"}})
+
+        shown = client_for(alice).get(f"/inbox/{reminded.pk}/").json()
+
+        assert (shown["title"], shown["message"]) == ("Daily reminder", "Your daily reminder: Box.")
 
     @pytest.mark.parametrize("flag", ["true", "1"])
     def test_unread_only(self, alice, flag):
@@ -102,7 +125,15 @@ class TestSubscriptions:
 
         assert answered.status_code == 201
         row = get_subscription_model().objects.get(user=alice)
-        assert answered.json() == {"id": row.pk, "kind": "parcel_flagged", "variant": "lost", "enabled": True}
+        assert answered.json() == {
+            "id": row.pk,
+            "kind": "parcel_flagged",
+            "variant": "lost",
+            "enabled": True,
+            "forced": False,
+            "forced_enabled": None,
+            "forced_reason": None,
+        }
 
     def test_setting_every_variant_replaces_the_named_ones(self, alice):
         client = client_for(alice)
@@ -146,8 +177,12 @@ class TestSubscriptions:
 
         NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(policy="mandatory")
 
-        assert client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json").json() == {
-            "kind": ["parcel_flagged is mandatory - it can't be turned on or off."]
+        answered = client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json")
+
+        assert answered.status_code == 409
+        assert answered.json() == {
+            "detail": "parcel_flagged is mandatory - it reaches everyone it's for.",
+            "code": "kind_mandatory",
         }
 
     def test_listing_and_forgetting_the_callers_own(self, alice, bob):
@@ -166,7 +201,7 @@ class TestSubscriptions:
         assert client_for(alice).delete(f"/subscriptions/{theirs.pk}/").status_code == 404
         assert get_subscription_model().objects.filter(user=alice).count() == 1
 
-    def test_the_kinds_a_caller_can_choose_about(self, alice):
+    def test_every_kind_a_caller_may_get_mandatory_ones_too(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
         NoticeKindPolicy.objects.create(
@@ -174,10 +209,39 @@ class TestSubscriptions:
         )
         NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(policy="mandatory")
 
-        assert client_for(alice).get("/subscriptions/kinds/").json() == [
-            {"kind": "parcel_flagged", "policy": "default_off", "variants": ["lost", "damaged"]},
-            {"kind": "parcel_shipped", "policy": "default_on", "variants": []},
+        listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
+
+        assert sorted(listed) == [
+            "parcel_flagged",
+            "parcel_receipt",
+            "parcel_reminder",
+            "parcel_routed",
+            "parcel_shipped",
+            "subscription_forced",
         ]
+        assert listed["parcel_flagged"] == {
+            "kind": "parcel_flagged",
+            "label": "Parcel flagged",
+            "description": None,
+            "policy": "default_off",
+            "variants": ["lost", "damaged"],
+            "channels": ["inbox", "email", "webhook"],
+            "may_change": True,
+            "enabled": False,
+            "enabled_variants": {"lost": False, "damaged": False},
+            "forced": False,
+            "forced_enabled": None,
+            "forced_variants": [],
+            "forced_reason": None,
+        }
+        assert (listed["parcel_reminder"]["policy"], listed["parcel_reminder"]["may_change"]) == ("mandatory", False)
+        assert listed["parcel_reminder"]["enabled"] is True
+
+    def test_one_kind_by_its_name(self, alice):
+        assert client_for(alice).get("/kinds/parcel_shipped/").json()["description"] == (
+            "A parcel you sent or will receive is on its way."
+        )
+        assert client_for(alice).get("/kinds/nothing/").status_code == 404
 
 
 @pytest.fixture
@@ -386,9 +450,9 @@ class TestTheDetails:
 
         NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(retired_at=timezone.now())
 
-        offered = [each["kind"] for each in client_for(alice).get("/subscriptions/kinds/").json()]
+        offered = [each["kind"] for each in client_for(alice).get("/kinds/").json()]
 
-        assert offered == ["parcel_reminder", "parcel_shipped"]
+        assert "parcel_flagged" not in offered
 
     def test_an_endpoint_wanting_nothing_yet(self, alice):
         answered = client_for(alice).post(

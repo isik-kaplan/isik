@@ -56,6 +56,49 @@ class AbstractSubscription(models.Model):
         return f"{self.kind_id}:{self.variant or '*'}"
 
 
+class AbstractForceableSubscription(AbstractSubscription):
+    """
+    A subscription staff can force on or off for one person - which that person can't then change. The
+    person's own choice is kept beside the forced one, so lifting the force brings it back: forced off, then
+    released, and they have it on again if they'd chosen that. Opt in by subclassing this for the project's
+    subscription model; the default, `AbstractSubscription`, carries none of it. Written by
+    `force_subscription()` and `release_subscription()`, and history-tracked (a check holds it to that).
+    """
+
+    chosen = models.BooleanField(
+        default=True,
+        help_text=gettext_lazy("Whether the person chose this themselves, or only staff forced it."),
+        db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).",
+    )
+    forced = models.BooleanField(
+        default=False,
+        help_text=gettext_lazy("Whether staff forced it, so the person can't change it."),
+        db_comment="Whether the subscription is forced - forced_enabled then decides, whatever enabled says.",
+    )
+    forced_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("What it's forced to, while it's forced."),
+        db_comment="The forced value while forced, else null.",
+    )
+    forced_source = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text=gettext_lazy("The force source that forced it, while it's forced."),
+        db_comment="The declared force source that forced it while forced, else empty.",
+    )
+    forced_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text=gettext_lazy("Why it was forced, while it's forced."),
+        db_comment="Why it was forced, while forced, else empty.",
+    )
+
+    class Meta:
+        abstract = True
+
+
 class AbstractInboxItem(models.Model):
     """One notification in a user's in-app inbox - a copy of what its delivery carried, read or not."""
 
@@ -212,9 +255,25 @@ def _guard(sender, **kwargs):
                     nulls_distinct=False,
                     name=f"{sender._meta.db_table}_once",
                 ),
+                # A forceable subscription's force is whole, or absent.
+                *(_force_constraints(sender) if issubclass(sender, AbstractForceableSubscription) else ()),
             ]
             # What a migration's state is built from - a constraint only in _meta.constraints never reaches it.
             sender._meta.original_attrs["constraints"] = sender._meta.constraints
+
+
+def _force_constraints(model):
+    table = model._meta.db_table
+    unforced = models.Q(forced=False, forced_enabled__isnull=True, forced_source="", forced_reason="")
+    forced = models.Q(forced=True, forced_enabled__isnull=False) & ~models.Q(forced_source="")
+    return [
+        # Forced, with what it's forced to and by whom - or none of it.
+        models.CheckConstraint(condition=unforced | forced, name=f"{table}_forced_exactly"),
+        # A row is the person's choice, or a force's - never neither.
+        models.CheckConstraint(
+            condition=models.Q(chosen=True) | models.Q(forced=True), name=f"{table}_chosen_or_forced"
+        ),
+    ]
 
 
 class_prepared.connect(_guard, dispatch_uid="isik_notifications_audience_guard")

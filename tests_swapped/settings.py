@@ -1,4 +1,4 @@
-"""Settings for the swapped project - its own database, and every notifications model the project's."""
+"""Settings for the swapped project - its own database, and every notifications and features model the project's."""
 
 import getpass
 import os
@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "isik.django.apps.common",
     "isik.django.apps.notifications",
     "isik.django.apps.notifications.audience",
+    "isik.django.apps.features",
     "tests_swapped.owned",
 ]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -51,3 +52,14 @@ ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL = "owned.Subscription"
 ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL = "owned.InboxItem"
 ISIK_NOTIFICATIONS_ENDPOINT_MODEL = "owned.Endpoint"
 ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL = "owned.EndpointKind"
+
+ISIK_FEATURES_HOLDER_MODEL = "owned.Organization"
+ISIK_FEATURES_FEATURE_MODEL = "owned.Feature"
+ISIK_FEATURES_GRANT_MODEL = "owned.FeatureGrant"
+ISIK_FEATURES_SWEEP_MODEL = "owned.SweepCursor"
+ISIK_FEATURES_OVERRIDES_MODEL = "owned.OrganizationOverrides"
+ISIK_FEATURES = {
+    "SETTINGS": "tests_swapped.owned.feature_settings",
+    "GRANT_SOURCES": ("manual", "subscription"),
+    "PEOPLE": "tests_swapped.owned.people.of",
+}
