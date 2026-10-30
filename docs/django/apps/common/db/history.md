@@ -27,7 +27,10 @@ class Widget(BaseModel):
 - Generates a `WidgetEvent` history model with a `pgh_label` (`"insert"`/`"update"`/`"delete"`)
   and `pgh_obj`/`pgh_obj_id` columns, populated by real Postgres triggers on `Widget` — requires
   `pghistory` and a Postgres backend; nothing fires without a real database.
-- Gives the event table a `(pgh_obj, -pgh_id)` index (`object_stream_index()`) unless
+- Names the event table after its table, `<table>_event` - pghistory's own name is the model's, the app
+  label repeated, and stays put when the table it records is renamed. `meta={"db_table": ...}` names it
+  otherwise.
+- Gives the event table a `(pgh_obj, -pgh_id)` index (`object_stream_index(table)`, named `<table>_stream`) unless
   `obj_field=None` leaves it without a `pgh_obj`. Reading one object's history finds each event's
   predecessor with `pgh_obj_id = X AND pgh_id < N`, and on pghistory's own single-column `pgh_obj`
   index a page of history costs the square of the object's event count. Indexes passed in

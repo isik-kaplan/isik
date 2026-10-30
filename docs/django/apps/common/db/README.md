@@ -2,10 +2,11 @@
 
 - [concurrency](concurrency.md) — `ConcurrencyToken`, `concurrency_relations`, `with_concurrency_etags`, `concurrency_token_problems`, `assert_concurrency_field_changes`, `concurrency_etag` - the field a row's version is read from
 - [conditions](conditions.md) — `AnyChange`, `AnyDontChange`, `AllChange`, `AllDontChange`, `kept_field_condition_problems` - trigger conditions leaving `version` and `updated_at` out
-- [constraints](constraints.md) — `as_condition`, `no_database_form`, `python_only_validator` - a validator's rule at the column
+- [constraints](constraints.md) — `as_condition`, `no_database_form`, `python_only_validator` - a validator's rule at the column; `fitted_name`, `identifier_problems`, `declared_name_problems`
 - [history](history.md) — `track_events`, `ContextField`, `context_fields_trigger`, `event_model_for`, `history_index_problems`, `history_middleware_installed`, `open_history_context` - pghistory-backed model history
 - [lookups](lookups.md) — registers the `length` field lookup
-- [models](models.md) — `BaseModel`, `VersionedModel`, `database_kept_fields`, `touch_rows`, `new_primary_key`, `uuid7`
+- [models](models.md) — `BaseModel`, `VersionedModel`, `database_kept_fields`, `touch_rows`, `new_primary_key`, `uuid7`, `meta_inheritance_problems`
 - [orm](orm.md) — `starts_with`, `get_object_or_none`, `with_python_defaults`
 - `triggers.py` — `ProtectTruncate` (a BEFORE TRUNCATE trigger refusing every `TRUNCATE`, `pgtrigger.ignore()` aside), `allow_truncate()`, and `flushing_through_truncate_protection()` for a test's flush (see [notifications' operations](../../notifications/operations.md#tests)). A table whose rows a `pgtrigger.Protect` keeps from a DELETE wants one beside it - `isik.E015` holds a project's to it. Its twin can't carry the delete protection's condition: a TRUNCATE fires one statement trigger with no row to read, so it refuses the whole table
 - `documentation.py` — `documentation_problems(app_configs, exemption_types)`: fields without `help_text` or `db_comment`, what the system check `isik.E010` reports (see [checks](../checks.md))
+- `renaming.py` — `RenamedTables(tables, names)`: the migration operation in each isik app's `0002_isik_names`. It brings a database migrated before 0.43.0 onto 0.43.0's table names: the tables are renamed along with their constraints and indexes, any table that database never had is made, and the app's triggers are installed again. A database migrated afresh is left as it is. It reads the migration state without rendering it, because a project that swaps isik's models keys its own app, which the state may not hold yet. An app of yours whose migrations start again can use it the same way.

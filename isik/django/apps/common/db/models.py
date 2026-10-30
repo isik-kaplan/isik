@@ -11,6 +11,7 @@ from django.apps import apps as django_apps
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models, transaction
+from django.db.models import options as model_options
 from django.db.models.fields.related import lazy_related_operation
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
@@ -299,6 +300,44 @@ class BaseModel(UUIDPrimaryKeyModel, DatabaseTimestampsModel, FullCleanOnSaveMod
 
     class Meta:
         abstract = True
+
+
+# What a concrete model's Meta loses by not inheriting its abstract base's: every option but the ones naming
+# the model itself, which each model declares for its own.
+OWN_OPTIONS = {"abstract", "app_label", "apps", "db_table", "proxy", "swappable", "verbose_name", "verbose_name_plural"}
+
+
+def meta_inheritance_problems(app_configs):
+    """
+    Each model of `app_configs` whose own `Meta` drops options an abstract base's Meta declares - Django takes
+    a model's Meta whole, so unless it inherits the base's, the base's constraints, indexes, ordering and the
+    rest are silently gone. An option the model declares again itself is its own choice, and asks nothing.
+    The system check `isik.E020` reports them.
+    """
+    return [
+        _("%(model)s's Meta drops %(options)s, which %(base)s.Meta declares - write class Meta(%(base)s.Meta).")
+        % {"model": model._meta.label, "base": base.__name__, "options": ", ".join(dropped)}
+        for config in app_configs
+        for model in config.get_models()
+        for base, dropped in _dropped_options(model)
+    ]
+
+
+def _dropped_options(model):
+    for base in model.__mro__[1:]:
+        # A model's own _meta, not one inherited - a mixin has none, and a concrete parent's isn't abstract.
+        own = base.__dict__.get("_meta")
+        if own is None or not own.abstract:
+            continue
+        dropped = sorted(
+            name
+            for name in base.Meta.__dict__
+            if name in model_options.DEFAULT_NAMES
+            and name not in OWN_OPTIONS
+            and name not in model._meta.original_attrs
+        )
+        if dropped:
+            yield base, dropped
 
 
 def database_kept_fields(model):

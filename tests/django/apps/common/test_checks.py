@@ -19,6 +19,7 @@ from isik.django.apps.common.checks import (
 )
 from isik.django.apps.common.db import conditions, constraints, documentation
 from isik.django.apps.common.db import history as db_history
+from isik.django.apps.common.db import models as db_models
 from isik.django.apps.common.db import triggers as db_triggers
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.project import project_app_configs
@@ -149,6 +150,8 @@ class TestTheSettings:
             "labels",
             "features",
             "identifiers",
+            "declared_names",
+            "meta_inheritance",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -215,7 +218,7 @@ class TestTheSettingsCheck:
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
-            "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS."
+            "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -403,7 +406,7 @@ class TestTheHistoryIndexCheck:
         (error,) = checks.every_event_model_indexes_its_streams(app_configs=None)
 
         assert (error.id, error.msg) == ("isik.E008", "one")
-        assert error.hint == "See object_stream_index() (isik.django.apps.common.db.history)."
+        assert error.hint == "See object_stream_index(table) (isik.django.apps.common.db.history)."
         assert [config.label for config in seen[0]] == ["testapp"]
 
     def test_reads_the_apps_it_is_told(self, settings, monkeypatch):
@@ -754,5 +757,198 @@ class TestIdentifiers:
 
         assert [(error.id, error.msg, error.hint) for error in errors] == [
             ("isik.E018", "one", "See fitted_name() (isik.django.apps.common.db).")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]
+
+
+class TestDeclaredNames:
+    @staticmethod
+    def problems(*models):
+        return constraints.declared_name_problems([types.SimpleNamespace(get_models=lambda: list(models))])
+
+    @staticmethod
+    def build(name, meta, **fields):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        with isolate_apps("tests.testapp"):
+            return type(
+                name,
+                (models.Model,),
+                {
+                    "__module__": "tests.testapp.models",
+                    "Meta": type("Meta", (), {"app_label": "testapp", **meta}),
+                    **fields,
+                },
+            )
+
+    def test_a_table_django_named(self):
+        model = self.build("Plain", {})
+
+        assert self.problems(model) == [
+            "testapp.Plain's table is named by Django, testapp_plain - declare its Meta.db_table."
+        ]
+
+    def test_a_declared_table_and_index(self):
+        from django.db import models
+
+        model = self.build(
+            "Named",
+            {"db_table": "named", "indexes": [models.Index(fields=["size"], name="named_size")]},
+            size=models.IntegerField(),
+        )
+
+        assert self.problems(model) == []
+
+    def test_an_index_django_named(self):
+        from django.db import models
+
+        model = self.build(
+            "Sized", {"db_table": "sized", "indexes": [models.Index(fields=["size"])]}, size=models.IntegerField()
+        )
+
+        assert self.problems(model) == [
+            f"testapp.Sized's index {model._meta.indexes[0].name} is named by Django - give it a name."
+        ]
+
+    def test_a_table_migrate_never_makes_asks_nothing(self):
+        unmanaged = self.build("Elsewhere", {"managed": False})
+        proxy = types.SimpleNamespace(_meta=types.SimpleNamespace(managed=True, proxy=True))
+
+        assert self.problems(unmanaged, proxy, self.build("Plain", {})) == [
+            "testapp.Plain's table is named by Django, testapp_plain - declare its Meta.db_table."
+        ]
+
+    def test_off_unless_asked(self, settings, monkeypatch):
+        monkeypatch.setattr(constraints, "declared_name_problems", lambda configs: ["one"])
+
+        assert checks.every_name_is_declared(app_configs=None) == []
+        seen = []
+        monkeypatch.setattr(constraints, "declared_name_problems", lambda configs: seen.append(configs) or ["one"])
+        settings.ISIK_CHECKS = {Check.DECLARED_NAMES: {CheckOption.ENABLED: True}}
+        errors = checks.every_name_is_declared(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E019", "one", "Declare Meta.db_table, and a name for each Meta.indexes entry.")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]
+        assert checks.check_options(Check.IDENTIFIERS)[CheckOption.ENABLED] is True
+
+    def test_isiks_own_models_declare_theirs(self):
+        isiks = [config for config in apps.get_app_configs() if config.name.startswith("isik.")]
+
+        assert len(isiks) > 4
+        assert constraints.declared_name_problems(isiks) == []
+
+
+class TestMetaInheritance:
+    @staticmethod
+    def problems(*models):
+        return db_models.meta_inheritance_problems([types.SimpleNamespace(get_models=lambda: list(models))])
+
+    @staticmethod
+    def build(meta_bases, base=None):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        with isolate_apps("tests.testapp"):
+            if base is None:
+
+                class Ordered(models.Model):
+                    made = models.IntegerField()
+
+                    class Meta:
+                        abstract = True
+                        ordering = ["-made"]
+                        get_latest_by = "made"
+                        verbose_name = "ordered thing"
+
+                base = Ordered
+            meta = type("Meta", meta_bases(base), {"app_label": "testapp"})
+            return type("Thing", (base,), {"__module__": "tests.testapp.models", "Meta": meta})
+
+    def test_a_meta_dropping_its_bases(self):
+        assert self.problems(self.build(lambda base: ())) == [
+            "testapp.Thing's Meta drops get_latest_by, ordering, which Ordered.Meta declares - write class "
+            "Meta(Ordered.Meta)."
+        ]
+
+    def test_a_meta_inheriting_its_bases(self):
+        assert self.problems(self.build(lambda base: (base.Meta,))) == []
+
+    def test_an_option_declared_again_is_the_models_own(self):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        with isolate_apps("tests.testapp"):
+
+            class Ordered(models.Model):
+                made = models.IntegerField()
+
+                class Meta:
+                    abstract = True
+                    ordering = ["-made"]
+
+            class Thing(Ordered):
+                class Meta:
+                    app_label = "testapp"
+                    ordering = ["made"]
+
+        assert self.problems(Thing) == []
+
+    def test_a_base_declaring_only_its_own_naming_asks_nothing(self):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        with isolate_apps("tests.testapp"):
+
+            class Named(models.Model):
+                class Meta:
+                    abstract = True
+                    verbose_name = "named"
+
+            class Thing(Named):
+                class Meta:
+                    app_label = "testapp"
+
+        assert self.problems(Thing) == []
+
+    def test_a_concrete_parent_isnt_a_base_to_inherit(self):
+        assert self.problems(Widget) == []
+
+    def test_a_mixin_before_the_base_hides_nothing(self):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        class Mixin:
+            pass
+
+        with isolate_apps("tests.testapp"):
+
+            class Ordered(models.Model):
+                class Meta:
+                    abstract = True
+                    ordering = ["id"]
+
+            class Thing(Mixin, Ordered):
+                class Meta:
+                    app_label = "testapp"
+
+        assert self.problems(Thing) == [
+            "testapp.Thing's Meta drops ordering, which Ordered.Meta declares - write class Meta(Ordered.Meta)."
+        ]
+
+    def test_the_test_project_and_isik_have_none(self):
+        assert db_models.meta_inheritance_problems(apps.get_app_configs()) == []
+        assert checks.every_meta_inherits_its_bases(app_configs=None) == []
+
+    def test_the_check_reports_them(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(db_models, "meta_inheritance_problems", lambda configs: seen.append(configs) or ["one"])
+
+        errors = checks.every_meta_inherits_its_bases(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E020", "one", "See meta_inheritance_problems() (isik.django.apps.common.db.models).")
         ]
         assert [config.label for config in seen[0]] == ["testapp"]

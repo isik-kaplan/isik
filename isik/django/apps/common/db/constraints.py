@@ -21,6 +21,7 @@ Anything else fails `isik.E001`. The validator nobody thought about is the one t
 the direction to be wrong in.
 """
 
+import copy
 import hashlib
 import inspect
 from contextlib import contextmanager
@@ -198,9 +199,10 @@ def condition_for(validator, field):
     return build(field, validator) if build is not None else None
 
 
-def fitted_name(table, rule):
+def fitted_name(table, rule, limit=IDENTIFIER_LIMIT):
     """
-    `<table>_<rule>` - a constraint's name, unique across every model and inside Postgres's identifier limit.
+    `<table>_<rule>` - a constraint's name, unique across every model and inside Postgres's identifier limit,
+    or inside `limit` - an index's name, which Django holds to `models.Index.max_name_length`.
 
     Django wants constraint names unique project-wide rather than per table, so the table has to be in the
     name - several models have a `status`. A long table overruns the limit, and Postgres cuts the name
@@ -209,13 +211,13 @@ def fitted_name(table, rule):
     to keep whole keeps its front, the digest after it.
     """
     full = f"{table}_{rule}"
-    if len(full) <= IDENTIFIER_LIMIT:
+    if len(full) <= limit:
         return full
     digest = hashlib.blake2b(full.encode(), digest_size=4).hexdigest()
-    room = IDENTIFIER_LIMIT - len(digest) - len(rule) - 2
+    room = limit - len(digest) - len(rule) - 2
     if room > 0:
         return f"{table[:room]}_{digest}_{rule}"
-    return f"{full[: IDENTIFIER_LIMIT - len(digest) - 1]}_{digest}"
+    return f"{full[: limit - len(digest) - 1]}_{digest}"
 
 
 def identifier_problems(app_configs):
@@ -233,6 +235,37 @@ def identifier_problems(app_configs):
         for what, name in _identifiers(model)
         if len(name) > IDENTIFIER_LIMIT
     ]
+
+
+def declared_name_problems(app_configs):
+    """
+    Each model of `app_configs` whose table is named by Django rather than declared - `<app_label>_<model>`,
+    the label repeated in the model's name as often as not - and each of its `Meta.indexes` whose name Django
+    generated. The system check `isik.E019`, off unless `ISIK_CHECKS` turns it on, reports them.
+    """
+    problems = []
+    for config in app_configs:
+        for model in config.get_models():
+            if not model._meta.managed or model._meta.proxy:
+                continue
+            if "db_table" not in model._meta.original_attrs:
+                problems.append(
+                    _("%(model)s's table is named by Django, %(table)s - declare its Meta.db_table.")
+                    % {"model": model._meta.label, "table": model._meta.db_table}
+                )
+            problems.extend(
+                _("%(model)s's index %(name)s is named by Django - give it a name.")
+                % {"model": model._meta.label, "name": index.name}
+                for index in model._meta.indexes
+                if index.fields and index.name == _generated_index_name(model, index)
+            )
+    return problems
+
+
+def _generated_index_name(model, index):
+    unnamed = copy.copy(index)
+    unnamed.set_name_with_model(model)
+    return unnamed.name
 
 
 def _identifiers(model):

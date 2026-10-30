@@ -92,12 +92,12 @@ class TestTheNoticeTrigger:
     def test_before_the_ledger_exists_a_write_goes_through(self, parcel):
         # A migration writing a watched row before the ledger's own has run.
         with connection.cursor() as cursor:
-            cursor.execute('ALTER TABLE "isik_notifications_noticekindpolicy" RENAME TO "not_yet"')
+            cursor.execute('ALTER TABLE "isik_notice_kind_policy" RENAME TO "not_yet"')
             try:
                 parcel.status = "shipped"
                 parcel.save()
             finally:
-                cursor.execute('ALTER TABLE "not_yet" RENAME TO "isik_notifications_noticekindpolicy"')
+                cursor.execute('ALTER TABLE "not_yet" RENAME TO "isik_notice_kind_policy"')
 
         assert notices("parcel_shipped") == []
 
@@ -184,7 +184,7 @@ class TestTheNoticeIsFrozen:
             Notice.objects.filter(pk=notice.pk).delete()
 
 
-@pytest.mark.parametrize("table", ["isik_notifications_notice", "isik_notifications_deliveryattempt"])
+@pytest.mark.parametrize("table", ["isik_notice", "isik_delivery_attempt"])
 def test_a_ledger_table_cant_be_truncated(table):
     with pytest.raises(ProgrammingError, match=f"Cannot truncate {table}"), connection.cursor() as cursor:
         cursor.execute(f"TRUNCATE {table} CASCADE")
@@ -342,7 +342,7 @@ def test_two_concurrent_writers_cant_both_pass_the_guard():
 
 
 # Nothing is written - or planned - until the policy table is there.
-GUARD = "IF to_regclass('\"isik_notifications_noticekindpolicy\"') IS NOT NULL THEN "
+GUARD = "IF to_regclass('\"isik_notice_kind_policy\"') IS NOT NULL THEN "
 
 
 class TestTheCompiledSql:
@@ -368,13 +368,11 @@ class TestTheCompiledSql:
         func = trigger.get_func(Parcel)
 
         assert func.count("INSERT INTO") == 1
-        assert func.startswith(
-            f'{GUARD}INSERT INTO "isik_notifications_notice" ("kind_id", "variant", "subject_label", '
-        )
+        assert func.startswith(f'{GUARD}INSERT INTO "isik_notice" ("kind_id", "variant", "subject_label", ')
         assert "SELECT 'parcel_shipped', NULL, 'testapp.Parcel', " in func
         assert "CASE WHEN TG_OP = 'UPDATE' THEN jsonb_build_object('status', OLD.\"status\", " in func
         assert func.endswith(
-            '_pgh_attach_context() WHERE EXISTS (SELECT 1 FROM "isik_notifications_noticekindpolicy" '
+            '_pgh_attach_context() WHERE EXISTS (SELECT 1 FROM "isik_notice_kind_policy" '
             'WHERE "kind" = \'parcel_shipped\' AND "retired_at" IS NULL); END IF; RETURN NULL;'
         )
 
@@ -400,7 +398,7 @@ class TestTheCompiledSql:
     def test_the_guard_reads_its_columns_off_the_model(self):
         func = VariantGuard(name="g", owner="user").get_func(get_subscription_model())
 
-        lookup = 'SELECT 1 FROM "isik_notifications_noticekindpolicy" WHERE "kind" = NEW."kind_id"'
+        lookup = 'SELECT 1 FROM "isik_notice_kind_policy" WHERE "kind" = NEW."kind_id"'
         assert func.startswith(
             f"IF NOT EXISTS ({lookup}) THEN RAISE EXCEPTION 'isik_notifications_audience.Subscription: no kind is "
             "called that.' USING ERRCODE = 'check_violation'; END IF; "
@@ -408,7 +406,7 @@ class TestTheCompiledSql:
             'jsonb_build_array(NEW."variant")) THEN RAISE EXCEPTION '
         )
         assert (
-            "PERFORM pg_advisory_xact_lock(hashtext('isik_notifications_audience_subscription'), "
+            "PERFORM pg_advisory_xact_lock(hashtext('isik_subscription'), "
             'hashtext(NEW."user_id"::text || \':\' || NEW."kind_id"::text)); '
         ) in func
         assert 'AND "id" IS DISTINCT FROM NEW."id" AND ("variant" IS NULL) <> (NEW."variant" IS NULL)) THEN' in func

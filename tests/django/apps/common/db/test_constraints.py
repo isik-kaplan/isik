@@ -859,3 +859,11 @@ def test_a_rule_leaving_the_table_no_room_keeps_its_front():
 
     assert len(name) == 63
     assert name.startswith("t" * 40 + "_rrr")
+
+
+def test_an_index_name_fits_djangos_shorter_limit():
+    name = fitted_name("notifications_fanoutshard", "unfinished", limit=30)
+
+    assert len(name) == 30
+    assert name.endswith("_unfinished")
+    assert fitted_name("isik_fan_out_shard", "unfinished", limit=30) == "isik_fan_out_shard_unfinished"

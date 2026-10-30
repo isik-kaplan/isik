@@ -13,6 +13,7 @@ from pghistory.middleware import HistoryMiddleware
 
 from isik._internal.translation import gettext as _
 from isik.common.utils.sentinel import Sentinel
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.generated import mark_generated
 
 
@@ -155,14 +156,17 @@ def context_fields_trigger(context_fields):
     return attrs, trigger
 
 
-def object_stream_index():
+def object_stream_index(table):
     """
     `(pgh_obj, -pgh_id)` - what reading one object's history needs. Each event's predecessor is found
     with `pgh_obj_id = X AND pgh_id < N`; on pghistory's own single-column `pgh_obj` index, a page of a
     stream costs the square of the stream's length. `track_events()` adds it to every event table
-    that has a stream. A new instance each call, since Django names an index after the model it joins.
+    that has a stream. Named after `table`, the event table's: `<table>_stream`, fitted inside Django's
+    30 characters an index name may have.
     """
-    return models.Index(fields=["pgh_obj", "-pgh_id"])
+    return models.Index(
+        fields=["pgh_obj", "-pgh_id"], name=fitted_name(table, "stream", limit=models.Index.max_name_length)
+    )
 
 
 def _context_field_names(context_field):
@@ -221,7 +225,9 @@ def track_events(*, trackers=None, condition=None, context_fields=(), append_onl
     def track_model_history(cls):
         _refuse_colliding_context_fields(cls, context_fields, kwargs.get("fields"), kwargs.get("exclude"))
         options = dict(kwargs)
-        meta = dict(options.get("meta", {}))
+        # The event table follows the name its table was given - pghistory's own is the model's name, the
+        # app label repeated, and stays put when the table it records is renamed.
+        meta = {"db_table": f"{cls._meta.db_table}_event", **options.get("meta", {})}
         attrs, trigger = context_fields_trigger(context_fields)
         if attrs:
             options["attrs"] = {**attrs, **options.get("attrs", {})}
@@ -229,7 +235,7 @@ def track_events(*, trackers=None, condition=None, context_fields=(), append_onl
             meta["triggers"] = [*meta.get("triggers", []), trigger]
         # obj_field=None is an event table with no pgh_obj, so no stream to index.
         if options.get("obj_field", _NOT_GIVEN) is not None:
-            meta["indexes"] = [*meta.get("indexes", []), object_stream_index()]
+            meta["indexes"] = [*meta.get("indexes", []), object_stream_index(meta["db_table"])]
         options["meta"] = meta
         if append_only is not None:
             options["append_only"] = append_only
@@ -309,8 +315,8 @@ def history_index_problems(app_configs):
                 problems.append(
                     _(
                         "%(model)s has no (pgh_obj, -pgh_id) index - a page of one object's history costs the "
-                        "square of its length. Track it with track_events(), or add object_stream_index() to "
-                        "its meta's indexes."
+                        "square of its length. Track it with track_events(), or add object_stream_index(<its table>) "
+                        "to its meta's indexes."
                     )
                     % {"model": model._meta.label}
                 )

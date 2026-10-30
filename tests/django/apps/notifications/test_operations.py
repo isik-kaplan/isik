@@ -191,13 +191,13 @@ class TestTruncateProtection:
     @pytest.mark.django_db
     def test_allowing_it_lets_one_through(self):
         with allow_truncate(), connection.cursor() as cursor:
-            cursor.execute("TRUNCATE isik_notifications_deliveryattempt")
+            cursor.execute("TRUNCATE isik_delivery_attempt")
 
     @pytest.mark.django_db
     def test_the_flush_goes_through_while_its_open(self, monkeypatch):
         def flush(self):
             with connection.cursor() as cursor:
-                cursor.execute("TRUNCATE isik_notifications_deliveryattempt")
+                cursor.execute("TRUNCATE isik_delivery_attempt")
 
         monkeypatch.setattr(TransactionTestCase, "_fixture_teardown", flush)
 

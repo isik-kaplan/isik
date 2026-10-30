@@ -11,15 +11,15 @@ by the enums here rather than by strings:
         Check.HISTORY_INDEXES: {CheckOption.ENABLED: False},
     }
 
-Every check takes `CheckOption.ENABLED` (default True) and `CheckOption.SEVERITY` (a `Severity`,
-default the check's own). A check over routed views takes `CheckOption.URLCONFS` - every urlconf the
-project serves by default (`project_urlconfs()`), and a warning, `isik.W003`, names each served one
-it is told to skip. A check over models takes `CheckOption.APPS`, app labels - the project's own apps
-by default (`project_app_configs()`). `Check.DOCUMENTATION` also takes `CheckOption.EXEMPTION_TYPES`,
-the `Exemption` types (or their dotted paths) that answer for a field, and
-`CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False leaves out the fields a model inherits
-unchanged from a library's abstract base. Anything else in `ISIK_CHECKS` - a string where an enum
-belongs included - is an error, `isik.E012`.
+Every check takes `CheckOption.ENABLED` (default True, but False for `Check.DECLARED_NAMES` - a policy,
+not a fault) and `CheckOption.SEVERITY` (a `Severity`, default the check's own). A check over routed
+views takes `CheckOption.URLCONFS` - every urlconf the project serves by default (`project_urlconfs()`),
+and a warning, `isik.W003`, names each served one it is told to skip. A check over models takes
+`CheckOption.APPS`, app labels - the project's own apps by default (`project_app_configs()`).
+`Check.DOCUMENTATION` also takes `CheckOption.EXEMPTION_TYPES`, the `Exemption` types (or their dotted
+paths) that answer for a field, and `CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False
+leaves out the fields a model inherits unchanged from a library's abstract base. Anything else in
+`ISIK_CHECKS` - a string where an enum belongs included - is an error, `isik.E012`.
 
 | check                      | id                     | what it refuses                                              |
 |----------------------------|------------------------|--------------------------------------------------------------|
@@ -41,6 +41,8 @@ belongs included - is an error, `isik.E012`.
 | Check.LABELS               | isik.E016              | a notice kind, feature or setting that can't say what it is  |
 | Check.FEATURES             | isik.E017              | a features setting or declaration that can't work            |
 | Check.IDENTIFIERS          | isik.E018              | a table, column, constraint or index name Postgres would cut |
+| Check.DECLARED_NAMES       | isik.E019 (off)        | a table or index the project's models leave Django to name   |
+| Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
 """
 
 import functools
@@ -77,6 +79,8 @@ class Check(Enum):
     LABELS = "labels"
     FEATURES = "features"
     IDENTIFIERS = "identifiers"
+    DECLARED_NAMES = "declared_names"
+    META_INHERITANCE = "meta_inheritance"
 
 
 class CheckOption(Enum):
@@ -119,7 +123,12 @@ CHECKS = {
     Check.LABELS: (),
     Check.FEATURES: (),
     Check.IDENTIFIERS: (CheckOption.APPS,),
+    Check.DECLARED_NAMES: (CheckOption.APPS,),
+    Check.META_INHERITANCE: (CheckOption.APPS,),
 }
+
+# Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
+OFF_UNLESS_ASKED = {Check.DECLARED_NAMES}
 
 DEFAULTS = {
     CheckOption.ENABLED: True,
@@ -137,8 +146,9 @@ def _configured():
 
 def check_options(check):
     """The options `check` runs with: its `ISIK_CHECKS` entry over the defaults."""
+    defaults = {**DEFAULTS, CheckOption.ENABLED: check not in OFF_UNLESS_ASKED}
     given = _configured().get(check)
-    return {**DEFAULTS, **given} if isinstance(given, dict) else dict(DEFAULTS)
+    return {**defaults, **given} if isinstance(given, dict) else defaults
 
 
 def isik_check(check, *tags):
@@ -459,7 +469,7 @@ def every_event_model_indexes_its_streams(options, **kwargs):
         return []
     from isik.django.apps.common.db.history import history_index_problems
 
-    hint = _("See object_stream_index() (isik.django.apps.common.db.history).")
+    hint = _("See object_stream_index(table) (isik.django.apps.common.db.history).")
     return [Error(problem, hint=hint, id="isik.E008") for problem in history_index_problems(_project_configs(options))]
 
 
@@ -481,6 +491,26 @@ def every_name_fits_postgres(options, **kwargs):
 
     hint = _("See fitted_name() (isik.django.apps.common.db).")
     return [Error(problem, hint=hint, id="isik.E018") for problem in identifier_problems(_project_configs(options))]
+
+
+@isik_check(Check.DECLARED_NAMES, Tags.models)
+def every_name_is_declared(options, **kwargs):
+    """A project naming its own tables and indexes holds every model to it - the next one added included."""
+    from isik.django.apps.common.db.constraints import declared_name_problems
+
+    hint = _("Declare Meta.db_table, and a name for each Meta.indexes entry.")
+    return [Error(problem, hint=hint, id="isik.E019") for problem in declared_name_problems(_project_configs(options))]
+
+
+@isik_check(Check.META_INHERITANCE, Tags.models)
+def every_meta_inherits_its_bases(options, **kwargs):
+    """A model's own Meta replaces an abstract base's whole, unless it inherits it."""
+    from isik.django.apps.common.db.models import meta_inheritance_problems
+
+    hint = _("See meta_inheritance_problems() (isik.django.apps.common.db.models).")
+    return [
+        Error(problem, hint=hint, id="isik.E020") for problem in meta_inheritance_problems(_project_configs(options))
+    ]
 
 
 @isik_check(Check.LABELS)

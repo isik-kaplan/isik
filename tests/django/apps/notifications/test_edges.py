@@ -259,11 +259,7 @@ class TestRetryDetails:
         with CaptureQueriesContext(connection) as queries:
             retry_delivery(abandoned)
 
-        held = [
-            query["sql"]
-            for query in queries
-            if "isik_notifications_notice" in query["sql"] and "FOR UPDATE" in query["sql"]
-        ]
+        held = [query["sql"] for query in queries if "isik_notice" in query["sql"] and "FOR UPDATE" in query["sql"]]
         assert len(held) == 1
         assert str(abandoned.notice_id) in held[0]
 

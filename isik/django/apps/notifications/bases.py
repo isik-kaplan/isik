@@ -20,8 +20,6 @@ Not one key to a user between them - the rows naming people are the audience app
 tracked by pghistory: the ledger is a record already, and its protections are its own triggers.
 """
 
-import hashlib
-
 import pgtrigger
 from django.db import models
 from django.db.models.functions import Now
@@ -516,11 +514,6 @@ class AbstractDeliveryAttempt(models.Model):
         abstract = True
 
 
-def _index_name(model, what):
-    # An index name has 30 characters at most: what it's for, and a digest of the table it's on.
-    return f"{what}_{hashlib.sha1(model._meta.db_table.encode()).hexdigest()[:8]}"
-
-
 def _rules(model):
     """(triggers, constraints, indexes) the ledger holds `model`'s table to - by the base it subclasses."""
     table = model._meta.db_table
@@ -558,7 +551,7 @@ def _rules(model):
                 models.Index(
                     fields=["occurred_at"],
                     condition=models.Q(fanned_out_at__isnull=True),
-                    name=_index_name(model, "notice_unfanned"),
+                    name=fitted_name(table, "unfanned", limit=models.Index.max_name_length),
                 )
             ],
         )
@@ -570,7 +563,7 @@ def _rules(model):
                 models.Index(
                     fields=["next_attempt_at"],
                     condition=models.Q(finished_at__isnull=True),
-                    name=_index_name(model, "shard_unfinished"),
+                    name=fitted_name(table, "unfinished", limit=models.Index.max_name_length),
                 )
             ],
         )
@@ -582,7 +575,7 @@ def _rules(model):
                 models.Index(
                     fields=["next_attempt_at"],
                     condition=models.Q(state=DeliveryState.PENDING),
-                    name=_index_name(model, "delivery_due"),
+                    name=fitted_name(table, "due", limit=models.Index.max_name_length),
                 )
             ],
         )

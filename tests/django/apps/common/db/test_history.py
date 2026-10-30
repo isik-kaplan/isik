@@ -364,9 +364,23 @@ class TestObjectStreamIndex:
         assert _index_fields(first) == [("name",), ("pgh_obj", "-pgh_id")]
         assert _index_fields(second) == [("name",), ("pgh_obj", "-pgh_id")]
 
-    def test_each_call_is_a_new_unnamed_index(self):
-        assert object_stream_index() is not object_stream_index()
-        assert object_stream_index().name == ""
+    def test_it_is_named_after_its_table(self):
+        assert object_stream_index("testapp_widget_event").name == "testapp_widget_event_stream"
+        assert len(object_stream_index("organizations_organizationoverrides_event").name) == 30
+        assert object_stream_index("t") is not object_stream_index("t")
+
+    def test_an_event_table_follows_its_tables_name(self):
+        tracked = event_model_for(Widget)
+
+        assert tracked._meta.db_table == f"{Widget._meta.db_table}_event"
+        assert f"{tracked._meta.db_table}_stream" in {index.name for index in tracked._meta.indexes}
+
+    @isolate_apps("tests.testapp")
+    def test_a_table_given_is_kept(self):
+        event = event_model_for(track_events(meta={"db_table": "fresh_history"})(_fresh_model("FreshNamedHistory")))
+
+        assert event._meta.db_table == "fresh_history"
+        assert [index.name for index in event._meta.indexes] == ["fresh_history_stream"]
 
     def test_the_database_has_it(self):
         table = event_model_for(Widget)._meta.db_table
@@ -525,7 +539,8 @@ class TestHistoryIndexProblems:
 
         assert self.problems(made) == [
             f"testapp.{made.__name__} has no (pgh_obj, -pgh_id) index - a page of one object's history costs the "
-            "square of its length. Track it with track_events(), or add object_stream_index() to its meta's indexes."
+            "square of its length. Track it with track_events(), or add object_stream_index(<its table>) to its meta's "
+            "indexes."
         ]
 
     @pytest.mark.parametrize("fields", [["pgh_obj", "-pgh_id"], ["pgh_obj_id", "-pgh_id"]])

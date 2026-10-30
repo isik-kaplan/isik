@@ -21,60 +21,69 @@ from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope,
 
 
 class NoticeKindPolicy(AbstractNoticeKindPolicy):
-    class Meta:
+    class Meta(AbstractNoticeKindPolicy.Meta):
+        db_table = "isik_notice_kind_policy"
         swappable = "ISIK_NOTIFICATIONS_KIND_POLICY_MODEL"
         verbose_name = gettext_lazy("notice kind")
 
 
 class Notice(AbstractNotice):
-    class Meta:
+    class Meta(AbstractNotice.Meta):
+        db_table = "isik_notice"
         swappable = "ISIK_NOTIFICATIONS_NOTICE_MODEL"
         verbose_name = gettext_lazy("notice")
 
 
 class FanOutShard(AbstractFanOutShard):
-    class Meta:
+    class Meta(AbstractFanOutShard.Meta):
+        db_table = "isik_fan_out_shard"
         swappable = "ISIK_NOTIFICATIONS_FAN_OUT_SHARD_MODEL"
         verbose_name = gettext_lazy("fan-out shard")
 
 
 class Delivery(AbstractDelivery):
-    class Meta:
+    class Meta(AbstractDelivery.Meta):
+        db_table = "isik_delivery"
         swappable = "ISIK_NOTIFICATIONS_DELIVERY_MODEL"
         verbose_name = gettext_lazy("delivery")
         verbose_name_plural = gettext_lazy("deliveries")
 
 
 class WebhookDelivery(AbstractWebhookDelivery):
-    class Meta:
+    class Meta(AbstractWebhookDelivery.Meta):
+        db_table = "isik_webhook_delivery"
         swappable = "ISIK_NOTIFICATIONS_WEBHOOK_DELIVERY_MODEL"
         verbose_name = gettext_lazy("webhook delivery")
         verbose_name_plural = gettext_lazy("webhook deliveries")
 
 
 class EmailDelivery(AbstractEmailDelivery):
-    class Meta:
+    class Meta(AbstractEmailDelivery.Meta):
+        db_table = "isik_email_delivery"
         swappable = "ISIK_NOTIFICATIONS_EMAIL_DELIVERY_MODEL"
         verbose_name = gettext_lazy("email delivery")
         verbose_name_plural = gettext_lazy("email deliveries")
 
 
 class InboxDelivery(AbstractInboxDelivery):
-    class Meta:
+    class Meta(AbstractInboxDelivery.Meta):
+        db_table = "isik_inbox_delivery"
         swappable = "ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL"
         verbose_name = gettext_lazy("inbox delivery")
         verbose_name_plural = gettext_lazy("inbox deliveries")
 
 
 class PushDelivery(AbstractPushDelivery):
-    class Meta:
+    class Meta(AbstractPushDelivery.Meta):
+        db_table = "isik_push_delivery"
         swappable = "ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL"
         verbose_name = gettext_lazy("push delivery")
         verbose_name_plural = gettext_lazy("push deliveries")
 
 
 class DeliveryAttempt(AbstractDeliveryAttempt):
-    class Meta:
+    class Meta(AbstractDeliveryAttempt.Meta):
+        db_table = "isik_delivery_attempt"
         swappable = "ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL"
         verbose_name = gettext_lazy("delivery attempt")
 

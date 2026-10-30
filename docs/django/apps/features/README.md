@@ -277,7 +277,8 @@ delete it means. Only the keys declared `ERASE` are erased.
 
 Each model is swappable - `ISIK_FEATURES_FEATURE_MODEL`, `_GRANT_MODEL`, `_SWEEP_MODEL` - on
 `AbstractFeature`, `AbstractFeatureGrant` and `AbstractSweepCursor`, with `get_feature_model()` and so on.
-The overrides model is always yours.
+The overrides model is always yours. isik's own tables are `isik_feature`, `isik_feature_grant` and
+`isik_sweep_cursor`.
 
 **A holder that isn't the user needs a grant model of yours.** isik's own `FeatureGrant` is keyed to
 `AUTH_USER_MODEL` - its migration can only name a holder fixed when it was written - and `isik.E017`

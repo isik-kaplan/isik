@@ -247,5 +247,24 @@ def test_a_key_is_unique_per_caller():
 
     assert (constraint.fields, constraint.name) == (
         ("claimed_by", "key"),
-        "idempotency_by_reference_idempotencyclaim_key",
+        "isik_idempotency_claim_key",
     )
+
+
+def test_a_claim_whose_meta_inherits_nothing_still_holds_its_key():
+    """The constraint comes from the claim's base, not its Meta - a Meta not inheriting the base's can't drop it."""
+    from django.db import models
+    from django.test.utils import isolate_apps
+
+    from isik.django.apps.idempotency.claims import AbstractIdempotencyClaim
+
+    with isolate_apps("tests.testapp"):
+
+        class Bare(AbstractIdempotencyClaim):
+            class Meta:
+                app_label = "testapp"
+                db_table = "bare_claim"
+
+    assert [(c.fields, c.name) for c in Bare._meta.constraints] == [(("claimed_by", "key"), "bare_claim_key")]
+    assert Bare._meta.original_attrs["constraints"] == Bare._meta.constraints
+    assert isinstance(Bare._meta.constraints[0], models.UniqueConstraint)

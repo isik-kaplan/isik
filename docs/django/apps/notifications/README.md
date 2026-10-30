@@ -68,7 +68,11 @@ splitting its data by tenant installs the ledger once and the audience per tenan
 
 isik ships a working model for each of the fourteen, and every one is swappable: subclass its abstract base,
 point its setting at your subclass, and isik's table is never made - yours is, in your app, with your
-migrations and your admin, and isik's mechanism runs over it.
+migrations and your admin, and isik's mechanism runs over it. isik's own tables are named `isik_` and the
+model's name - `isik_notice`, `isik_delivery_attempt`, `isik_inbox_item` - and its constraints and indexes
+after their table: `isik_delivery_once`, `isik_notice_unfanned`. Yours are named after yours. Declare your
+model's `Meta` inheriting its base's (`class Meta(bases.AbstractNotice.Meta)`), so it keeps what the base
+declares - `isik.E020` refuses one that drops it.
 
 | model | abstract base | setting |
 |---|---|---|

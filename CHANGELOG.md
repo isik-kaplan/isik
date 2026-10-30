@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-10-30
+
+### Added
+
+- `Check.META_INHERITANCE` (`isik.E020`): a model of the project's apps whose own `Meta` drops options an
+  abstract base's `Meta` declares - ordering, constraints, indexes, triggers, `get_latest_by` - because it
+  doesn't inherit it. Django takes a model's `Meta` whole and says nothing.
+- `Check.DECLARED_NAMES` (`isik.E019`), off unless `ISIK_CHECKS` turns it on: a model of the project's apps
+  with no `Meta.db_table`, or a `Meta.indexes` entry Django named - for a project naming every table and
+  index itself. `OFF_UNLESS_ASKED` lists the checks a project turns on rather than off.
+- `fitted_name(table, rule, limit=...)`: `limit=` fits an index's name inside Django's 30 characters.
+
+### Breaking
+
+- isik's own tables are named `isik_` and the model's name, the words spaced, the app label not repeated:
+  `isik_feature`, `isik_feature_grant`, `isik_sweep_cursor`, `isik_notice_kind_policy`, `isik_notice`,
+  `isik_fan_out_shard`, `isik_delivery`, `isik_webhook_delivery`, `isik_email_delivery`,
+  `isik_inbox_delivery`, `isik_push_delivery`, `isik_delivery_attempt`, `isik_subscription`,
+  `isik_inbox_item`, `isik_endpoint`, `isik_endpoint_kind`, `isik_device`, `isik_idempotency_claim`,
+  `isik_idempotency_claim_with_body`. Constraints and indexes are named after their table:
+  `isik_delivery_once`, `isik_notice_unfanned`, `isik_idempotency_claim_key`.
+- **Every isik migration starts again**, at `0001_initial` and `0002_isik_names`, one pair per app. A
+  database migrated afresh makes the tables under their new names and `0002` does nothing. A database
+  migrated by an earlier isik already recorded an `0001_initial` - the old one, of the same name - so Django
+  takes the new one as applied, and `0002_isik_names` (`RenamedTables`, in
+  `isik.django.apps.common.db.renaming`) brings it over: isik's old tables renamed, their constraints and
+  indexes with them, the tables of a version it never ran made (0.42.0's devices and push deliveries, say),
+  and the app's triggers installed again, since a trigger's function names the tables it reads. Rows are
+  kept. Postgres's own names for a primary key and the like keep the old table's, as whenever Django renames
+  a table. A model you own keeps its table; its index names follow its table now (`<table>_unfanned`,
+  `<table>_unfinished`, `<table>_due`), and `makemigrations` writes the rename.
+- An idempotency claim's `UNIQUE (claimed_by, key)` is added to every concrete claim when it's prepared,
+  named `<table>_key`, rather than declared in the abstract base's `Meta` as
+  `%(app_label)s_%(class)s_key` - a claim whose `Meta` doesn't inherit the base's can no longer lose it.
+  A claim you own gets a migration renaming it.
+- isik's concrete models declare `class Meta(<base>.Meta)`.
+- `track_events()` names a model's event table after its table, `<table>_event`, unless `meta={"db_table": ...}`
+  names it - pghistory's own name was the model's, the app label repeated (`organizations_organizationoverridesevent`),
+  and stayed put when the table it records was renamed. `object_stream_index(table)` takes the event table and
+  names the index `<table>_stream`, fitted inside Django's 30 characters, where Django named it before.
+  `makemigrations` writes a table rename and an index rename for every tracked model - and orders the table
+  renames **after** the trigger operations, so the context-field trigger is created on a table not yet renamed
+  and `migrate` fails. Move the `AlterModelTable` operations to the top of the migration.
+
 ## [0.42.0] - 2026-10-30
 
 ### Added

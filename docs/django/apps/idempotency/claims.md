@@ -22,7 +22,10 @@ filling it. A missing column is a decision.
   other transaction can see.
 - `claimed_at` - when the claim was made. Useful for deleting old claims. Nothing expires on its own.
 
-`UNIQUE (claimed_by, key)` is the whole mechanism - see [README.md](README.md#how-it-works).
+`UNIQUE (claimed_by, key)` is the whole mechanism - see [README.md](README.md#how-it-works). It's added to
+every concrete claim when the class is prepared, named `<table>_key`, rather than declared in the base's
+`Meta` - a claim of yours whose `Meta` doesn't inherit the base's can't drop it. isik's tables are
+`isik_idempotency_claim` and `isik_idempotency_claim_with_body`.
 
 ### By reference: `IdempotencyClaim`
 

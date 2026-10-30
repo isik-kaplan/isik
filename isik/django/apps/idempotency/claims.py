@@ -10,6 +10,7 @@ from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, OperationalError, connections, models, router, transaction
+from django.db.models.signals import class_prepared
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from rest_framework.response import Response
@@ -17,6 +18,7 @@ from rest_framework.utils.encoders import JSONEncoder
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyInFlight, IdempotentReplayGone
 
 
@@ -78,7 +80,6 @@ class AbstractBaseIdempotencyClaim(models.Model):
 
     class Meta:
         abstract = True
-        constraints = [models.UniqueConstraint(fields=["claimed_by", "key"], name="%(app_label)s_%(class)s_key")]
 
     def record(self, view, response, replayable=True):
         """Records `response` as what this claim's request was answered with. An action that can't be
@@ -263,3 +264,19 @@ def claim_idempotency_key(model, claimed_by, key, fingerprint, lock_timeout=None
         if getattr(error.__cause__, "sqlstate", None) == LOCK_NOT_AVAILABLE:
             raise IdempotencyKeyInFlight() from error
         raise
+
+
+def _hold_one_claim_a_key(sender, **kwargs):
+    # On every concrete claim, rather than in the abstract Meta: a subclass whose Meta doesn't inherit the
+    # base's would drop it - and with it the one thing that makes a key spendable once.
+    if sender._meta.abstract or sender._meta.proxy or not issubclass(sender, AbstractBaseIdempotencyClaim):
+        return
+    sender._meta.constraints = [
+        *sender._meta.constraints,
+        models.UniqueConstraint(fields=["claimed_by", "key"], name=fitted_name(sender._meta.db_table, "key")),
+    ]
+    # What a migration's state is built from - a constraint only in _meta.constraints never reaches it.
+    sender._meta.original_attrs["constraints"] = sender._meta.constraints
+
+
+class_prepared.connect(_hold_one_claim_a_key, dispatch_uid="isik_idempotency_key")

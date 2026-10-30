@@ -11,7 +11,8 @@ from isik.django.apps.features.swapping import FEATURE_MODEL, GRANT_MODEL, SWEEP
 
 
 class Feature(AbstractFeature):
-    class Meta:
+    class Meta(AbstractFeature.Meta):
+        db_table = "isik_feature"
         swappable = FEATURE_MODEL
         verbose_name = gettext_lazy("feature")
 
@@ -25,12 +26,14 @@ class FeatureGrant(AbstractFeatureGrant):
         db_comment="The holder the feature is granted to. Erased with the holder.",
     )
 
-    class Meta:
+    class Meta(AbstractFeatureGrant.Meta):
+        db_table = "isik_feature_grant"
         swappable = GRANT_MODEL
         verbose_name = gettext_lazy("feature grant")
 
 
 class SweepCursor(AbstractSweepCursor):
-    class Meta:
+    class Meta(AbstractSweepCursor.Meta):
+        db_table = "isik_sweep_cursor"
         swappable = SWEEP_MODEL
         verbose_name = gettext_lazy("sweep cursor")

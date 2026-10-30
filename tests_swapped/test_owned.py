@@ -8,6 +8,7 @@ from datetime import timedelta
 
 import pgtrigger
 import pytest
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
@@ -63,20 +64,29 @@ def test_every_getter_gives_the_projects_model():
     assert {getter: getter() for getter in GETTERS} == GETTERS
 
 
+# Every table isik's own models would make, were they not the project's.
+ISIKS_TABLES = [
+    model._meta.db_table
+    for app in ("isik_notifications", "isik_notifications_audience")
+    for model in apps.get_app_config(app).get_models(include_swapped=True)
+]
+
+
 def test_isiks_own_tables_were_never_made():
     with connection.cursor() as cursor:
-        cursor.execute("SELECT tablename FROM pg_tables WHERE tablename LIKE 'isik_notifications%'")
+        cursor.execute("SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)", [ISIKS_TABLES])
         assert cursor.fetchall() == []
 
 
 def test_nothing_installed_names_isiks_tables():
     # Every trigger function and index in the database, read back from Postgres itself.
+    pattern = "|".join(ISIKS_TABLES)
     with connection.cursor() as cursor:
-        cursor.execute("SELECT proname FROM pg_proc WHERE prosrc LIKE '%isik_notifications%'")
+        cursor.execute("SELECT proname FROM pg_proc WHERE prosrc ~ %s", [rf"\m({pattern})\M"])
         functions = cursor.fetchall()
-        cursor.execute("SELECT indexname FROM pg_indexes WHERE indexdef LIKE '%isik_notifications%'")
+        cursor.execute("SELECT indexname FROM pg_indexes WHERE indexdef ~ %s", [rf"\m({pattern})\M"])
         indexes = cursor.fetchall()
-    assert (functions, indexes) == ([], [])
+    assert (len(ISIKS_TABLES), functions, indexes) == (14, [], [])
 
 
 def test_the_checks_have_nothing_to_say():
@@ -240,3 +250,19 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
     assert isinstance(device, owned.Device)
     assert pipeline.send(delivery.pk).state == DeliveryState.SENT
     assert json.loads(sent[0].content)["aps"]["alert"] == {"title": "Package lost", "body": "Bob's & <box> is lost."}
+
+
+@pytest.mark.parametrize("app_label", ["isik_notifications", "isik_notifications_audience", "isik_features"])
+def test_isiks_upgrade_runs_before_the_projects_app_is_in_the_state(app_label):
+    # What migrating from empty meets when the project's app comes after isik's in the plan: the state up to
+    # isik's 0001 holds isik's swapped models keying an app it doesn't hold yet. Rendering it raises.
+    from django.db.migrations.loader import MigrationLoader
+
+    loader = MigrationLoader(connection)
+    (operation,) = loader.get_migration(app_label, "0002_isik_names").operations
+    state = loader.project_state((app_label, "0001_initial"))
+
+    with connection.schema_editor() as editor:
+        operation.database_forwards(app_label, editor, state, state)
+
+    assert "apps" not in state.__dict__

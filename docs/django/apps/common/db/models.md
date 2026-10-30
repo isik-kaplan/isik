@@ -147,3 +147,12 @@ class Document(VersionedModel, BaseModel):
 
 Django doesn't read back what the trigger set, so `instance.version` after a `save()` is the value
 before it until `refresh_from_db()`. `PreconditionMixin` reads it back for its responses.
+
+## A Meta that inherits its base's
+
+Django takes a model's `Meta` whole: a concrete model declaring `class Meta:` over an abstract base keeps
+none of the base's `Meta` - its ordering, constraints, indexes, triggers, `get_latest_by` - unless it inherits
+it, `class Meta(Base.Meta):`. Nothing says so; the options are just gone. `meta_inheritance_problems(app_configs)`
+names each model of the project's apps dropping one, and the system check `isik.E020` reports them. An option
+the model declares again itself is its own choice, and passes; so do the options naming the model alone -
+`db_table`, `verbose_name`, `swappable` and the like.

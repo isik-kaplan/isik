@@ -39,7 +39,8 @@ class Subscription(AbstractSubscription):
     user = _user()
     kind = _kind()
 
-    class Meta:
+    class Meta(AbstractSubscription.Meta):
+        db_table = "isik_subscription"
         swappable = "ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL"
         verbose_name = gettext_lazy("subscription")
 
@@ -49,12 +50,14 @@ class InboxItem(AbstractInboxItem):
     kind = _kind()
 
     class Meta(AbstractInboxItem.Meta):
+        db_table = "isik_inbox_item"
         swappable = "ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL"
         verbose_name = gettext_lazy("inbox item")
 
 
 class Endpoint(AbstractEndpoint):
-    class Meta:
+    class Meta(AbstractEndpoint.Meta):
+        db_table = "isik_endpoint"
         swappable = ENDPOINT_MODEL
         verbose_name = gettext_lazy("endpoint")
 
@@ -69,7 +72,8 @@ class EndpointKind(AbstractEndpointKind):
     )
     kind = _kind()
 
-    class Meta:
+    class Meta(AbstractEndpointKind.Meta):
+        db_table = "isik_endpoint_kind"
         swappable = "ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL"
         verbose_name = gettext_lazy("endpoint kind")
 
@@ -83,6 +87,7 @@ class Device(AbstractDevice):
         db_comment="The user signed in on the device.",
     )
 
-    class Meta:
+    class Meta(AbstractDevice.Meta):
+        db_table = "isik_device"
         swappable = "ISIK_NOTIFICATIONS_DEVICE_MODEL"
         verbose_name = gettext_lazy("device")
