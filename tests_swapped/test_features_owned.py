@@ -152,3 +152,45 @@ def test_erasing_the_organization(acme):
 
     assert not owned.FeatureGrant.objects.exists()
     assert not owned.OrganizationOverrides.pgh_event_model.objects.exists()
+
+
+def test_grants_loaded_with_the_organizations_are_used(monkeypatch, django_assert_num_queries):
+    now = timezone.now()
+    held = {
+        "starts now": dict(starts_at=now),
+        "ends later": dict(starts_at=now - timedelta(days=1), expires_at=now + timedelta(days=1)),
+        "starts later": dict(starts_at=now + timedelta(days=1)),
+        "ended now": dict(starts_at=now - timedelta(days=1), expires_at=now),
+        "revoked now": dict(starts_at=now - timedelta(days=1), revoked_at=now),
+        "revoked later": dict(starts_at=now - timedelta(days=1), revoked_at=now + timedelta(days=1)),
+    }
+    for name, terms in held.items():
+        owned.FeatureGrant.objects.create(
+            holder=owned.Organization.objects.create(name=name), feature_id="webhooks", source="manual", **terms
+        )
+    owned.Organization.objects.create(name="none")
+    monkeypatch.setattr(timezone, "now", lambda: now)
+
+    with django_assert_num_queries(2):
+        loaded = owned.Organization.objects.prefetch_related("feature_grants")
+        holding = {organization.name: has_feature(organization, "webhooks") for organization in loaded}
+
+    assert holding == {
+        "starts now": True,
+        "ends later": True,
+        "starts later": False,
+        "ended now": False,
+        "revoked now": False,
+        "revoked later": True,
+        "none": False,
+    }
+
+
+def test_a_write_forgets_the_grants_loaded_with_the_organization(acme):
+    (loaded,) = owned.Organization.objects.prefetch_related("feature_grants")
+    assert has_feature(loaded, "webhooks") is False
+
+    grant(loaded, "webhooks", source="manual")
+
+    assert has_feature(loaded, "webhooks") is True
+    assert "feature_grants" not in loaded._prefetched_objects_cache

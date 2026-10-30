@@ -40,6 +40,7 @@ belongs included - is an error, `isik.E012`.
 | Check.TRUNCATE_PROTECTION  | isik.E015              | a table refusing a row's DELETE and not a TRUNCATE           |
 | Check.LABELS               | isik.E016              | a notice kind, feature or setting that can't say what it is  |
 | Check.FEATURES             | isik.E017              | a features setting or declaration that can't work            |
+| Check.IDENTIFIERS          | isik.E018              | a table, column, constraint or index name Postgres would cut |
 """
 
 import functools
@@ -75,6 +76,7 @@ class Check(Enum):
     TRUNCATE_PROTECTION = "truncate_protection"
     LABELS = "labels"
     FEATURES = "features"
+    IDENTIFIERS = "identifiers"
 
 
 class CheckOption(Enum):
@@ -116,6 +118,7 @@ CHECKS = {
     Check.TRUNCATE_PROTECTION: (CheckOption.APPS,),
     Check.LABELS: (),
     Check.FEATURES: (),
+    Check.IDENTIFIERS: (CheckOption.APPS,),
 }
 
 DEFAULTS = {
@@ -469,6 +472,15 @@ def every_table_refusing_a_delete_refuses_a_truncate(options, **kwargs):
     return [
         Error(problem, hint=hint, id="isik.E015") for problem in truncate_protection_problems(_project_configs(options))
     ]
+
+
+@isik_check(Check.IDENTIFIERS, Tags.models)
+def every_name_fits_postgres(options, **kwargs):
+    """Postgres cuts a name past 63 characters without a word, so what it holds isn't what was declared."""
+    from isik.django.apps.common.db.constraints import identifier_problems
+
+    hint = _("See fitted_name() (isik.django.apps.common.db).")
+    return [Error(problem, hint=hint, id="isik.E018") for problem in identifier_problems(_project_configs(options))]
 
 
 @isik_check(Check.LABELS)

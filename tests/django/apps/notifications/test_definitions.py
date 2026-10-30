@@ -7,6 +7,7 @@ import pgtrigger
 import pytest
 from django.apps import apps
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.signals import post_migrate
 from django.test.utils import isolate_apps
@@ -252,6 +253,12 @@ class TestTheExemptionsTheViewsMake:
             "forget": (NoPrecondition, "forgets the caller's own preference, which has no version to name"),
             "forget_key": (NoIdempotencyKey, "forgets a preference, and a retry finds it forgotten"),
             "secret": (NoReplay, "answers with a new secret, shown once and never stored to be shown again"),
+            "register": (
+                NoIdempotencyKey,
+                "registers the token as the caller's device, and a retry finds it registered already",
+            ),
+            "forget_device": (NoPrecondition, "forgets the caller's own device - a sign-out, not an edit to race"),
+            "forget_device_key": (NoIdempotencyKey, "forgets a device, and a retry finds it forgotten"),
             "retry": (
                 NoPrecondition,
                 "retries a delivery, which only an abandoned one may be - its state is the guard",
@@ -277,6 +284,87 @@ class TestTheSerializers:
             "updated_at",
         }
         assert fields["kinds"].required is False
+
+    def test_a_devices_state_is_read_only(self):
+        fields = drf.device_serializer(swapping.get_device_model())().fields
+
+        assert {name for name, field in fields.items() if field.read_only} == {"id", "is_active", "last_seen_at"}
+
+
+class TestDeclaringAPush:
+    REASON = "the status opens the right tab in the app, and says nothing private"
+
+    def test_what_it_carries(self):
+        content = kinds.PushContent()
+
+        assert (content.private, content.data, content.collapse, content.ttl, content.badge) == (
+            False,
+            {},
+            None,
+            None,
+            False,
+        )
+
+    @isolate_apps("tests.testapp")
+    def test_notifies_keeps_it(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+        name = f"Pushed{uuid.uuid4().hex[:8]}"
+        content = kinds.PushContent(private=True, data={"state": kinds.PushDataField(reason=self.REASON)})
+
+        notifies(name.lower(), audience=Subscribers(), policy=Policy.DEFAULT_ON, on=pgtrigger.Delete, push=content)(
+            type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
+        )
+
+        assert kinds.declared[0].push == content
+
+    def test_notifies_names_the_kind_it_refuses(self):
+        with pytest.raises(ImproperlyConfigured, match="^loud's push collapses by 'id'"):
+            notifies(
+                "loud",
+                audience=Subscribers(),
+                policy=Policy.DEFAULT_ON,
+                on=pgtrigger.Delete,
+                push=kinds.PushContent(collapse="id"),
+            )
+
+    def test_declare_kind_keeps_it(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+        monkeypatch.setattr(kinds, "vocabulary", [])
+        content = kinds.PushContent(collapse="subject", badge=True)
+
+        declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=content)
+        declare_kind("plain", audience=Subscribers(), policy=Policy.MANDATORY)
+
+        assert (kinds.get_kind("k").push, kinds.get_kind("plain").push) == (content, kinds.PushContent())
+
+    def test_a_field_it_carries_says_why(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+
+        with pytest.raises(ImproperlyConfigured, match=r"^k\.push\.data takes"):
+            declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=kinds.PushContent(data=["x"]))
+
+    def test_it_collapses_by_kind_or_subject_alone(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+
+        with pytest.raises(
+            ImproperlyConfigured, match=r"^k's push collapses by 'id' - it takes kind, subject or None\.$"
+        ):
+            declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=kinds.PushContent(collapse="id"))
+        assert kinds.declared == []
+
+    def test_a_recorded_kind_has_none(self, monkeypatch):
+        with pytest.raises(ImproperlyConfigured, match="^r is recorded"):
+            declare_kind("r", source=Source.RECORDED, push=kinds.PushContent())
+
+    def test_one_with_no_behavior_here_takes_it_on_notifies(self, monkeypatch):
+        monkeypatch.setattr(kinds, "vocabulary", [])
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match="^v's push= goes on the notifies\\(\\) writing it, beside its other behavior\\.$",
+        ):
+            declare_kind("v", push=kinds.PushContent())
+        assert kinds.vocabulary == []
 
 
 class TestTheCommandsOptions:

@@ -1,6 +1,6 @@
 """
 The ledger's abstract bases - `AbstractNoticeKindPolicy`, `AbstractNotice`, `AbstractFanOutShard`,
-`AbstractDelivery`, its three channel children and `AbstractDeliveryAttempt` - for a project to own the
+`AbstractDelivery`, its four channel children and `AbstractDeliveryAttempt` - for a project to own the
 ledger's tables: subclass one, and point its `ISIK_NOTIFICATIONS_*_MODEL` setting (see `swapping.py`) at
 the subclass.
 
@@ -30,6 +30,7 @@ from django.utils import timezone
 
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.conditions import AnyChange
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
@@ -429,6 +430,25 @@ class AbstractInboxDelivery(models.Model):
         abstract = True
 
 
+class AbstractPushDelivery(models.Model):
+    """A delivery's device - one of a user's phones - and the user it's theirs."""
+
+    delivery = _delivery_key("push")
+    device_id = models.CharField(
+        max_length=255,
+        help_text=gettext_lazy("The device's primary key."),
+        db_comment="The device's primary key, as text, in the delivery's partition. Not a key: it may be forgotten.",
+    )
+    user_id = models.CharField(
+        max_length=255,
+        help_text=gettext_lazy("The user the device is theirs."),
+        db_comment="The primary key of the user whose device it is, as text, in the delivery's partition.",
+    )
+
+    class Meta:
+        abstract = True
+
+
 class AbstractDeliveryAttempt(models.Model):
     """One try at a delivery, and what came back. Append-only; pruned by age, being a log and not history."""
 
@@ -545,7 +565,7 @@ def _rules(model):
     if issubclass(model, AbstractFanOutShard):
         return (
             [],
-            [models.UniqueConstraint(fields=["notice", "partition"], name=f"{table}_once")],
+            [models.UniqueConstraint(fields=["notice", "partition"], name=fitted_name(table, "once"))],
             [
                 models.Index(
                     fields=["next_attempt_at"],
@@ -557,7 +577,7 @@ def _rules(model):
     if issubclass(model, AbstractDelivery):
         return (
             [],
-            [models.UniqueConstraint(fields=["notice", "channel", "target_key"], name=f"{table}_once")],
+            [models.UniqueConstraint(fields=["notice", "channel", "target_key"], name=fitted_name(table, "once"))],
             [
                 models.Index(
                     fields=["next_attempt_at"],
@@ -572,7 +592,7 @@ def _rules(model):
                 pgtrigger.Protect(name="append_only", operation=pgtrigger.Update | pgtrigger.Delete),
                 ProtectTruncate(name="protect_attempt_truncate"),
             ],
-            [models.UniqueConstraint(fields=["delivery", "attempt_no"], name=f"{table}_once")],
+            [models.UniqueConstraint(fields=["delivery", "attempt_no"], name=fitted_name(table, "once"))],
             [],
         )
     return None

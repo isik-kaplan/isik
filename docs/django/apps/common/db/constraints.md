@@ -122,9 +122,16 @@ and the rollback restores the column.
   other: a model building its own columns from a `class_prepared` receiver is raced by a second
   receiver, and a test using `isolate_apps` prepares models long after `ready()`. The work is
   idempotent.
-- Names carry the table, because Django wants them unique across models rather than per table, and
-  are hashed past 63 characters — Postgres truncates an identifier rather than refusing it, so two
-  names differing only in their tail would silently become one constraint.
+- Names carry the table, because Django wants them unique across models rather than per table. Past
+  63 characters Postgres cuts an identifier rather than refusing it, taking the end that says which
+  rule it is, and two names differing only there become one constraint. So `fitted_name(table, rule)`
+  (exported from `isik.django.apps.common.db`) shortens the table instead, to a digest of the whole
+  name: `organizations_orga_0c73f618_allow_platform_login_forced_exactly`. Every constraint name isik
+  generates goes through it - these, the features overrides' and the notifications ledger's - and a
+  project generating its own can use it too.
+- `Check.IDENTIFIERS` (`isik.E018`) refuses any table, column, constraint or index name of the
+  project's models longer than 63 characters, at startup, rather than letting `migrate` write one
+  Postgres will cut.
 - A `CHECK` evaluating to `NULL` is satisfied, so a nullable column needs no special arm.
 - The check reads `field._validators` — what a model actually passed. Django appends its own from
   `max_length` and from a field's range, and nobody can wrap what they did not write.

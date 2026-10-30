@@ -1,4 +1,5 @@
 from isik.django.apps.common.db import lookups  # noqa: F401
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.history import (
     ContextField,
     context_fields_trigger,
@@ -40,6 +41,7 @@ __all__ = [
     "UUIDPrimaryKeyModel",
     "VersionedModel",
     "event_model_for",
+    "fitted_name",
     "flushing_through_truncate_protection",
     "get_object_or_none",
     "history_middleware_installed",

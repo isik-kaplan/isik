@@ -32,11 +32,13 @@ GETTERS = {
     swapping.get_webhook_delivery_model: owned.WebhookDelivery,
     swapping.get_email_delivery_model: owned.EmailDelivery,
     swapping.get_inbox_delivery_model: owned.InboxDelivery,
+    swapping.get_push_delivery_model: owned.PushDelivery,
     swapping.get_delivery_attempt_model: owned.DeliveryAttempt,
     audience_swapping.get_subscription_model: owned.Subscription,
     audience_swapping.get_inbox_item_model: owned.InboxItem,
     audience_swapping.get_endpoint_model: owned.Endpoint,
     audience_swapping.get_endpoint_kind_model: owned.EndpointKind,
+    audience_swapping.get_device_model: owned.Device,
 }
 
 
@@ -200,3 +202,41 @@ def test_a_webhook_endpoint_is_the_projects(alice):
 def test_isiks_migrations_match_the_models_it_ships():
     # isik's own models are swapped out here, and their migrations stay the ones isik shipped.
     call_command("makemigrations", check=True, dry_run=True, skip_checks=True, verbosity=0)
+
+
+def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settings, monkeypatch):
+    import json
+
+    import httpx
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from isik.django.apps.notifications.audience.helpers import register_device
+    from isik.django.apps.notifications.channels import push
+
+    key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    settings.ISIK_NOTIFICATIONS = {
+        **settings.ISIK_NOTIFICATIONS,
+        "CHANNELS": ("inbox", "email", "webhook", "push"),
+        "PUSH": {"APNS": {"TEAM_ID": "T", "KEY_ID": "K", "KEY": key.decode(), "TOPIC": "com.owned.app"}},
+    }
+    sent = []
+    monkeypatch.setattr(
+        push,
+        "client",
+        lambda: httpx.Client(
+            transport=httpx.MockTransport(lambda request: sent.append(request) or httpx.Response(200))
+        ),
+    )
+    device = register_device(alice, "apns", "b" * 64)
+    notice = lose(alice)
+
+    pipeline.fan_out()
+    delivery = owned.Delivery.objects.get(notice=notice, channel="push")
+
+    assert owned.PushDelivery.objects.get().device_id == str(device.pk)
+    assert isinstance(device, owned.Device)
+    assert pipeline.send(delivery.pk).state == DeliveryState.SENT
+    assert json.loads(sent[0].content)["aps"]["alert"] == {"title": "Package lost", "body": "Bob's & <box> is lost."}

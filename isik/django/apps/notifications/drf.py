@@ -1,14 +1,15 @@
 """
-REST views over the audience and its deliveries - `InboxViewSet`, `SubscriptionViewSet`, `EndpointViewSet`
-and `DeliveryViewSet` - for a project to route, or ignore:
+REST views over the audience and its deliveries - `InboxViewSet`, `SubscriptionViewSet`, `DeviceViewSet`,
+`EndpointViewSet` and `DeliveryViewSet` - for a project to route, or ignore:
 
     router.register("notifications/inbox", InboxViewSet, basename="inbox")
     router.register("notifications/subscriptions", SubscriptionViewSet, basename="subscription")
+    router.register("notifications/devices", DeviceViewSet, basename="device")
     router.register("notifications/endpoints", AcmeEndpointViewSet, basename="endpoint")
     router.register("notifications/deliveries", AcmeDeliveryViewSet, basename="delivery")
 
 Each is held to isik's write guards (an `Idempotency-Key`, and `If-Match` on a write to one object), with
-the exemptions its own writes earn. The inbox and subscriptions are always the caller's own. Whose
+the exemptions its own writes earn. The inbox, subscriptions and devices are always the caller's own. Whose
 endpoints a caller sees, and so whose deliveries, is the project's to say: set `owner_field` - the
 endpoint's field naming its owner - and `owner(request)` when the owner isn't the caller, or override
 `get_queryset()` (and `perform_create()`).
@@ -41,8 +42,14 @@ from isik.django.apps.common.db.models import touch_rows
 from isik.django.apps.common.forcing import force_sources
 from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
 from isik.django.apps.notifications import conf
-from isik.django.apps.notifications.audience.helpers import SubscriptionRefused, mark_read, subscribe
+from isik.django.apps.notifications.audience.helpers import (
+    SubscriptionRefused,
+    mark_read,
+    register_device,
+    subscribe,
+)
 from isik.django.apps.notifications.audience.swapping import (
+    get_device_model,
     get_endpoint_kind_model,
     get_endpoint_model,
     get_inbox_item_model,
@@ -74,6 +81,11 @@ def _own_exemptions():
         "forget": NoPrecondition(reason="forgets the caller's own preference, which has no version to name"),
         "forget_key": NoIdempotencyKey(reason="forgets a preference, and a retry finds it forgotten"),
         "secret": NoReplay(reason="answers with a new secret, shown once and never stored to be shown again"),
+        "register": NoIdempotencyKey(
+            reason="registers the token as the caller's device, and a retry finds it registered already"
+        ),
+        "forget_device": NoPrecondition(reason="forgets the caller's own device - a sign-out, not an edit to race"),
+        "forget_device_key": NoIdempotencyKey(reason="forgets a device, and a retry finds it forgotten"),
         "retry": NoPrecondition(
             reason="retries a delivery, which only an abandoned one may be - its state is the guard"
         ),
@@ -503,6 +515,58 @@ class NoticeKindViewSet(BaseViewSet):
 
 def _text(text):
     return str(text) if text is not None else None
+
+
+@cache
+def device_serializer(model):
+    """The serializer of a device of `model`."""
+
+    class DeviceSerializer(serializers.ModelSerializer):
+        class Meta:
+            fields = ["id", "platform", "token", "environment", "app_id", "is_active", "last_seen_at"]
+            read_only_fields = ["is_active", "last_seen_at"]
+            # A token registered before is registered again - moved to the caller - not refused as taken.
+            validators = []
+
+    DeviceSerializer.Meta.model = model
+    return DeviceSerializer
+
+
+# The caller's devices. `POST` registers one through `register_device()` - made, or moved to the caller and
+# active again - so an app registers its token at every start, with no key and no version.
+@extend_schema_view(
+    create=extend_schema(
+        description="Registers this app install's push token as yours - made, or, registered before by anyone, "
+        "made yours and active again. Send it whenever the app starts or its token changes."
+    )
+)
+class DeviceViewSet(
+    IdempotencyMixin,
+    PreconditionMixin,
+    BaseViewSet,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+):
+    """
+    Your devices that push notifications go to. Delete one when you sign out on it, so it gets no more. A
+    device whose token its push service says is dead is inactive, and gets none.
+    """
+
+    model = SwappedModel(get_device_model)
+    permission_classes = [IsAuthenticated]
+    precondition_exempt_actions = {"destroy": _EXEMPT["forget_device"]}
+    idempotency_exempt_actions = {"create": _EXEMPT["register"], "destroy": _EXEMPT["forget_device_key"]}
+
+    @none_during_schema_generation
+    def get_queryset(self):
+        return get_device_model()._default_manager.filter(user=self.request.user).order_by("pk")
+
+    def get_serializer_class(self):
+        return device_serializer(get_device_model())
+
+    def perform_create(self, serializer):
+        serializer.instance = register_device(self.request.user, **serializer.validated_data)
 
 
 class OwnedByCaller:

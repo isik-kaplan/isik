@@ -113,6 +113,7 @@ def memoized():
     from isik.django.apps.common.db import models
     from isik.django.apps.feedback.comments import tiptap
     from isik.django.apps.notifications import drf as notifications
+    from isik.django.apps.notifications.channels import push
     from isik.django.apps.templated_fields import engine
     from isik.django.apps.templated_fields.policy import TemplatePolicy
 
@@ -124,6 +125,8 @@ def memoized():
         notifications.subscription_serializer,
         notifications.endpoint_serializer,
         notifications.delivery_serializer,
+        notifications.device_serializer,
+        push.client,
         engine._build_environment,
         engine._compile,
         TemplatePolicy.VARIABLES_ONLY.__func__,

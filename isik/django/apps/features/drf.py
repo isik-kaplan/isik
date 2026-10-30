@@ -77,7 +77,7 @@ def HasFeature(feature):  # noqa: N802 - it makes a permission class, read as on
         code = "feature_missing"
 
         def has_permission(self, request, view):
-            return bool(request.user and request.user.is_authenticated) and has_feature(holder_of(request), name)
+            return request.user.is_authenticated and has_feature(holder_of(request), name)
 
     HasFeature.__qualname__ = HasFeature.__name__ = f"HasFeature_{name}"
     return HasFeature

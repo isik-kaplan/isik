@@ -112,6 +112,43 @@ class TestTheSettings:
 
         assert setting_problems() == []
 
+    @pytest.mark.parametrize(
+        ("push", "problems"),
+        [
+            ({}, ["A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials."]),
+            ({"APNS": {}, "GCM": {}, "WNS": {}}, ["ISIK_NOTIFICATIONS' PUSH has keys it doesn't know: GCM, WNS."]),
+            (
+                {"APNS": {"TEAM_ID": "T", "KEY": ""}, "FCM": {}},
+                [
+                    "ISIK_NOTIFICATIONS' PUSH['APNS'] is missing KEY_ID, KEY, TOPIC.",
+                    "ISIK_NOTIFICATIONS' PUSH['FCM'] is missing CREDENTIALS.",
+                ],
+            ),
+            ({"APNS": {"TEAM_ID": "T", "KEY_ID": "K", "KEY": "pem", "TOPIC": "com.acme"}}, []),
+            ({"FCM": {"CREDENTIALS": {"client_email": "x"}}}, []),
+        ],
+    )
+    def test_push_needs_a_services_credentials(self, settings, declaring, push, problems):
+        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": push}
+        declaring(shipped(channels=("inbox", "push")))
+
+        assert setting_problems() == problems
+
+    def test_push_problems_are_told_beside_the_rest(self, settings, declaring):
+        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "RECORD_ATTEMPTS": "some"}
+        declaring(shipped(channels=("inbox", "push")))
+
+        assert setting_problems() == [
+            "ISIK_NOTIFICATIONS' RECORD_ATTEMPTS is one of all, failures or none.",
+            "A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials.",
+        ]
+
+    def test_no_kind_sent_by_push_needs_no_credentials(self, settings, declaring):
+        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": {"GCM": {}}}
+        declaring(shipped(channels=("inbox",)))
+
+        assert setting_problems() == []
+
     def test_the_audience_without_the_ledger(self, monkeypatch):
         installed = {checks.AUDIENCE_APP}
         monkeypatch.setattr(apps, "is_installed", lambda name: name in installed)
@@ -143,6 +180,13 @@ class TestTheKinds:
         declaring(shipped(policy="sometimes"))
 
         assert kind_problems() == ["parcel_shipped's policy is a Policy, not 'sometimes'."]
+
+    def test_a_push_carrying_what_the_snapshot_doesnt(self, declaring):
+        reason = kinds.PushDataField(reason="the status opens the right tab in the app, and says nothing private")
+        content = kinds.PushContent(data={"status": reason, "tracking_secret": reason, "weight": reason})
+        declaring(shipped(push=content), dataclasses.replace(kinds.get_kind("parcel_reminder"), push=content))
+
+        assert kind_problems() == ["parcel_shipped's push carries tracking_secret, weight, which its snapshot doesn't."]
 
     def test_a_single_partition_kind_whose_audience_spans_them(self, declaring):
         declaring(shipped(audience=Spanning()))

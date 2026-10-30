@@ -37,6 +37,7 @@ imports nothing of a project's, so a settings file can import it.
 | `Check.TRUNCATE_PROTECTION` | `isik.E015` | a table whose rows a `pgtrigger.Protect` keeps from a DELETE, and that nothing keeps from a TRUNCATE ([ProtectTruncate](db/README.md)) |
 | `Check.NOTIFICATIONS` | `isik.E014`, `isik.W004`-`isik.W009` | a notifications setting or kind declaration that can't work; a declared kind the database retired; a snapshot field that looks secret; nothing starting a fan-out; a webhook sent inside the writing request; endpoints keyed to a user with no owner field; a declared kind with no policy row ([notifications](../notifications/kinds.md)) |
 | `Check.LABELS` | `isik.E016` | a notification kind, feature or setting with no `label`, which a client listing them could only show by its name; an inbox kind with no `message` ([labels and messages](../notifications/kinds.md#what-a-person-reads-labels-and-messages)) |
+| `Check.IDENTIFIERS` | `isik.E018` | a table, column, constraint or index name of the project's models longer than the 63 characters Postgres keeps - it cuts one without a word ([constraints](db/constraints.md#notes)) |
 | `Check.FEATURES` | `isik.E017` | a features setting or declaration that can't work: unknown `ISIK_FEATURES` keys, settings with no overrides model or an untracked one, a holder key that cascades, an `OnHolder` field the holder lacks, a feature nothing reads ([features](../features/README.md)) |
 
 ## Options

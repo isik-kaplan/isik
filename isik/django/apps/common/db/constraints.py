@@ -198,18 +198,55 @@ def condition_for(validator, field):
     return build(field, validator) if build is not None else None
 
 
-def _name(field, kind):
-    """Unique across every model, and inside Postgres's identifier limit.
-
-    Django wants constraint names unique project-wide rather than per table, so the table has to be
-    in the name - several models have a `status`. That overruns the limit on the longest of them,
-    and Postgres truncates rather than refusing, so the hash goes where it cannot be cut off.
+def fitted_name(table, rule):
     """
-    full = f"{field.model._meta.db_table}_{field.column}_{kind}"
+    `<table>_<rule>` - a constraint's name, unique across every model and inside Postgres's identifier limit.
+
+    Django wants constraint names unique project-wide rather than per table, so the table has to be in the
+    name - several models have a `status`. A long table overruns the limit, and Postgres cuts the name
+    rather than refusing it, taking the rule's end - the one part saying what the constraint is. So the
+    table gives way instead, to a digest of the whole name that keeps two such names apart; a rule too long
+    to keep whole keeps its front, the digest after it.
+    """
+    full = f"{table}_{rule}"
     if len(full) <= IDENTIFIER_LIMIT:
         return full
     digest = hashlib.blake2b(full.encode(), digest_size=4).hexdigest()
+    room = IDENTIFIER_LIMIT - len(digest) - len(rule) - 2
+    if room > 0:
+        return f"{table[:room]}_{digest}_{rule}"
     return f"{full[: IDENTIFIER_LIMIT - len(digest) - 1]}_{digest}"
+
+
+def identifier_problems(app_configs):
+    """
+    Each table, column, constraint and index name of `app_configs`' models longer than Postgres keeps - it
+    cuts one at 63 characters without a word, so the name the database holds isn't the one declared, and two
+    differing only past the cut become one. The system check `isik.E018` reports them.
+    """
+    return [
+        _("%(model)s's %(what)s %(name)s is %(length)s characters long, and Postgres keeps %(limit)s - shorten it.")
+        % {"model": model._meta.label, "what": what, "name": name, "length": len(name), "limit": IDENTIFIER_LIMIT}
+        for config in app_configs
+        for model in config.get_models()
+        if model._meta.managed and not model._meta.proxy
+        for what, name in _identifiers(model)
+        if len(name) > IDENTIFIER_LIMIT
+    ]
+
+
+def _identifiers(model):
+    yield _("table"), model._meta.db_table
+    for field in model._meta.local_fields:
+        yield _("column"), field.column
+    for constraint in model._meta.constraints:
+        yield _("constraint"), constraint.name
+    for index in model._meta.indexes:
+        yield _("index"), index.name
+
+
+def _name(field, kind):
+    return fitted_name(field.model._meta.db_table, f"{field.column}_{kind}")
 
 
 def _choices_condition(field):

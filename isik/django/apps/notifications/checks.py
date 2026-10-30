@@ -114,6 +114,8 @@ def setting_problems():
                 )
                 % {"name": name}
             )
+    if _sent_on("push"):
+        problems += _push_problems()
     if apps.is_installed(AUDIENCE_APP) != apps.is_installed(LEDGER_APP):
         alone, missing = (AUDIENCE_APP, LEDGER_APP) if apps.is_installed(AUDIENCE_APP) else (LEDGER_APP, AUDIENCE_APP)
         problems.append(_("%(alone)s is installed without %(missing)s.") % {"alone": alone, "missing": missing})
@@ -316,6 +318,29 @@ def _undeclared_problems():
     ]
 
 
+# {service: the keys its credentials need} - FCM's PROJECT_ID is optional, its service account naming one.
+PUSH_CREDENTIALS = {"APNS": ("TEAM_ID", "KEY_ID", "KEY", "TOPIC"), "FCM": ("CREDENTIALS",)}
+
+
+def _push_problems():
+    """The problems with `PUSH`, which the push channel's kinds need."""
+    push = conf.setting("PUSH")
+    unknown = sorted(set(push) - set(PUSH_CREDENTIALS))
+    if unknown:
+        return [_("ISIK_NOTIFICATIONS' PUSH has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)}]
+    if not push:
+        return [_("A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials.")]
+    problems = []
+    for service, needed in PUSH_CREDENTIALS.items():
+        missing = [key for key in needed if service in push and not push[service].get(key)]
+        if missing:
+            problems.append(
+                _("ISIK_NOTIFICATIONS' PUSH['%(service)s'] is missing %(keys)s.")
+                % {"service": service, "keys": ", ".join(missing)}
+            )
+    return problems
+
+
 def kind_problems():
     """The problems with each declared kind."""
     problems = _vocabulary_problems() + _undeclared_problems()
@@ -347,6 +372,12 @@ def kind_problems():
             )
         if kind.source == Source.TRIGGER:
             problems += _trigger_problems(kind)
+            unsnapshotted = [name for name in kind.push.data if name not in kind.snapshot]
+            if unsnapshotted:
+                problems.append(
+                    _("%(kind)s's push carries %(fields)s, which its snapshot doesn't.")
+                    % {"kind": kind.name, "fields": ", ".join(unsnapshotted)}
+                )
     return problems
 
 

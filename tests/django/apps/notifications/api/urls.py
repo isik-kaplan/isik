@@ -3,6 +3,7 @@ from rest_framework.routers import SimpleRouter
 from isik.django.apps.notifications.audience.swapping import get_endpoint_model
 from isik.django.apps.notifications.drf import (
     DeliveryViewSet,
+    DeviceViewSet,
     EndpointViewSet,
     InboxViewSet,
     NoticeKindViewSet,
@@ -37,6 +38,7 @@ router = SimpleRouter()
 router.register("inbox", InboxViewSet, basename="inbox")
 router.register("subscriptions", SubscriptionViewSet, basename="subscription")
 router.register("kinds", NoticeKindViewSet, basename="kind")
+router.register("devices", DeviceViewSet, basename="device")
 router.register("endpoints", EveryEndpointViewSet, basename="endpoint")
 router.register("owned-endpoints", OwnedEndpointViewSet, basename="owned-endpoint")
 router.register("deliveries", OwnedDeliveryViewSet, basename="delivery")

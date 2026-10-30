@@ -19,6 +19,7 @@ from django.db.models.signals import class_prepared
 from django.utils import timezone
 
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import DatabaseTimestampsModel, new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.features import conf
@@ -247,7 +248,9 @@ def _overrides_columns(model):
         if not setting.field.null:
             # Forcing a setting that can't be null to null isn't a value - it's a force of nothing.
             forced &= models.Q(**{f"{name}_forced_value__isnull": False})
-        constraints.append(models.CheckConstraint(condition=unforced | forced, name=f"{table}_{name}_forced_exactly"))
+        constraints.append(
+            models.CheckConstraint(condition=unforced | forced, name=fitted_name(table, f"{name}_forced_exactly"))
+        )
     # A new list: one inherited from a parent Meta is that Meta's own; and original_attrs is what a migration's
     # state is built from.
     model._meta.constraints = [*model._meta.constraints, *constraints]

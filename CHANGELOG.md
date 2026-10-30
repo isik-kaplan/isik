@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-10-30
+
+### Added
+
+- A push channel in `isik.django.apps.notifications` (`isik[push]`): each active device of each user a notice
+  reaches gets a delivery, sent straight to APNs or FCM over HTTP/2 - no middleman, no SDK. `PUSH` holds each
+  service's credentials; the provider and access tokens are kept per worker, and one HTTP/2 client serves it.
+  - `Device` (audience app, `ISIK_NOTIFICATIONS_DEVICE_MODEL`, base `AbstractDevice`) - platform, token,
+    environment, app id; one row a token. `PushDelivery` (`ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL`).
+  - `register_device()` - made, or moved to whoever registers it and woken - and `forget_devices(user)`.
+  - `DeviceViewSet`: list, register (no key), forget (no `If-Match`).
+  - A kind's `push=PushContent(private=, data=, collapse=, ttl=, badge=)`, each data field with a
+    `PushDataField(reason=...)`.
+  - A dead token (APNs 410, `BadDeviceToken`, `DeviceTokenNotForTopic`; FCM `UNREGISTERED`, an invalid
+    token) deactivates its device; a refusal of the credentials never does.
+  - `isik.E014` refuses a kind sent on push with no credentials, and a push carrying what the snapshot doesn't.
+- `Check.IDENTIFIERS` (`isik.E018`): a table, column, constraint or index name of the project's models longer
+  than the 63 characters Postgres keeps is refused at startup, rather than cut by Postgres without a word.
+- `fitted_name(table, rule)` in `isik.django.apps.common.db` - the name every generated constraint now takes.
+
+### Fixed
+
+- A generated constraint name past 63 characters - a features overrides' `<table>_<setting>_forced_exactly` on a
+  long table, a ledger or audience `<table>_once` - was cut by Postgres, losing the setting and the rule. The
+  table gives way instead, to a digest: `organizations_orga_0c73f618_allow_platform_login_forced_exactly`.
+
+### Changed
+
+- A holder's features and overrides are asked for only when a read needs them, and not at all when the holder
+  was loaded with them: an overrides row by `select_related`, grants by `prefetch_related` (counting only those
+  in force). `forget()` drops those too. An unsaved holder asks nothing.
+- A force refusal names its source's label, where it has one.
+
+### Breaking
+
+- A `ForceSource` is a `str` subclass, as a `FeatureName` is, rather than a dataclass: a force's stored source
+  compares equal to its declaration. Its attributes are unchanged; two sources compare by name alone.
+- A generated constraint name longer than 63 characters is a new name - the overrides', the ledger's and the
+  audience's, and a column's validators and choices constraints, which kept their front and hashed their end.
+  `makemigrations` writes the rename; a name that already fit is unchanged.
+
 ## [0.41.0] - 2026-10-29
 
 ### Added

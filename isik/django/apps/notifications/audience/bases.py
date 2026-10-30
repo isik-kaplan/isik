@@ -1,6 +1,6 @@
 """
 The audience's abstract bases - the rows naming people: `AbstractSubscription`, `AbstractInboxItem`,
-`AbstractEndpoint` and `AbstractEndpointKind`.
+`AbstractEndpoint`, `AbstractEndpointKind` and `AbstractDevice`.
 
 None declares `user` or `kind`: the concrete model does, so a project can key them however its database
 needs (a plain foreign key, or one reaching across schemas). Each concrete subclass gets its constraints
@@ -19,7 +19,9 @@ from django.db import models
 from django.db.models.signals import class_prepared
 
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import DatabaseTimestampsModel
+from isik.django.apps.notifications.choices import Platform, PushEnvironment
 from isik.django.apps.notifications.triggers import VariantGuard
 
 
@@ -228,6 +230,57 @@ class AbstractEndpointKind(models.Model):
         return f"{self.kind_id}:{self.variant or '*'}"
 
 
+class AbstractDevice(DatabaseTimestampsModel):
+    """
+    One of a user's phones (or other app installs), as its push service knows it. A token belongs to one
+    install, so registering one already known moves it to whoever registers it - the person signed in on
+    that phone now. The concrete model declares `user`.
+    """
+
+    platform = models.CharField(
+        max_length=16,
+        choices=Platform.choices,
+        help_text=gettext_lazy("The service its pushes go through - apns or fcm."),
+        db_comment="The push service its token is for: apns or fcm.",
+    )
+    token = models.CharField(
+        max_length=4096,
+        help_text=gettext_lazy("The token its push service gave the app on it."),
+        db_comment="The push service's token for the install - unique with platform.",
+    )
+    environment = models.CharField(
+        max_length=16,
+        choices=PushEnvironment.choices,
+        default=PushEnvironment.PRODUCTION,
+        help_text=gettext_lazy("Which APNs issued its token - sandbox for a development build."),
+        db_comment="production or sandbox: which APNs host its pushes go to. FCM ignores it.",
+    )
+    app_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=gettext_lazy("The app's bundle identifier, where it isn't the project's one."),
+        db_comment="The APNs topic - the app's bundle id - or empty for PUSH['APNS']['TOPIC'].",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=gettext_lazy("Whether pushes are sent to it."),
+        db_comment="Whether pushes are sent to it - false once its push service said the token is dead.",
+    )
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("When the app on it last registered."),
+        db_comment="When the app last registered its token, or null.",
+    )
+
+    class Meta:
+        abstract = True
+
+    def __str__(self):
+        return f"{self.platform}:{self.token[:12]}"
+
+
 # {base: (the field owning a row, beside "kind" and "variant", or None)} - the owner makes the
 # no-variant row exclusive with the rest of its owner's rows for a kind.
 GUARDED = {
@@ -242,6 +295,11 @@ def _guard(sender, **kwargs):
     # on the abstract base would reach only a subclass whose Meta inherits the base's.
     if sender._meta.abstract or sender._meta.proxy:
         return
+    if issubclass(sender, AbstractDevice):
+        # One row a token: registering it again finds this one, and moves it. Left to Django to name: the
+        # name reaches nothing but an error, and a schema copied whole renames a unique over two columns anyway.
+        sender._meta.unique_together = (*sender._meta.unique_together, ("platform", "token"))
+        sender._meta.original_attrs["unique_together"] = sender._meta.unique_together
     for base, owner in GUARDED.items():
         if not issubclass(sender, base):
             continue
@@ -253,7 +311,7 @@ def _guard(sender, **kwargs):
                 models.UniqueConstraint(
                     fields=[owner, "kind", "variant"],
                     nulls_distinct=False,
-                    name=f"{sender._meta.db_table}_once",
+                    name=fitted_name(sender._meta.db_table, "once"),
                 ),
                 # A forceable subscription's force is whole, or absent.
                 *(_force_constraints(sender) if issubclass(sender, AbstractForceableSubscription) else ()),
@@ -268,10 +326,10 @@ def _force_constraints(model):
     forced = models.Q(forced=True, forced_enabled__isnull=False) & ~models.Q(forced_source="")
     return [
         # Forced, with what it's forced to and by whom - or none of it.
-        models.CheckConstraint(condition=unforced | forced, name=f"{table}_forced_exactly"),
+        models.CheckConstraint(condition=unforced | forced, name=fitted_name(table, "forced_exactly")),
         # A row is the person's choice, or a force's - never neither.
         models.CheckConstraint(
-            condition=models.Q(chosen=True) | models.Q(forced=True), name=f"{table}_chosen_or_forced"
+            condition=models.Q(chosen=True) | models.Q(forced=True), name=fitted_name(table, "chosen_or_forced")
         ),
     ]
 

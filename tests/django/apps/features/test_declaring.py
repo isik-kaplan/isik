@@ -109,10 +109,27 @@ class TestDeclaringAForceSource:
         )
 
         assert forcing.get_force_source("billing") is made
-        assert made == ForceSource("billing", "Billing", False, 3, True)
+        assert (made, made.name, type(made.name)) == ("billing", "billing", str)
+        assert (made.label, made.operator_may_release, made.reason_floor, made.shows_reason_to_holder) == (
+            "Billing",
+            False,
+            3,
+            True,
+        )
 
     def test_its_defaults(self, declaring):
-        assert declare_force_source("plain") == ForceSource("plain", None, True, 40, False)
+        made = declare_force_source("plain")
+
+        assert (made.label, made.operator_may_release, made.reason_floor, made.shows_reason_to_holder) == (
+            None,
+            True,
+            40,
+            False,
+        )
+
+    def test_a_forced_rows_source_compares_equal_to_its_declaration(self, declaring):
+        assert declare_force_source("billing") == "billing"
+        assert isinstance(declare_force_source("support"), ForceSource)
 
 
 class TestConfiguring:

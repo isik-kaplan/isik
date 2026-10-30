@@ -60,6 +60,10 @@ class InboxDelivery(bases.AbstractInboxDelivery):
     Meta = table("inbox_delivery")
 
 
+class PushDelivery(bases.AbstractPushDelivery):
+    Meta = table("push_delivery")
+
+
 class DeliveryAttempt(bases.AbstractDeliveryAttempt):
     Meta = table("delivery_attempt")
 
@@ -102,6 +106,11 @@ class EndpointKind(audience.AbstractEndpointKind):
     Meta = table("endpoint_kind")
 
 
+class Device(audience.AbstractDevice):
+    user = _user()
+    Meta = table("device")
+
+
 PACKAGE_LOST = declare_kind(
     "package_lost", variants=("stolen", "misplaced"), label="Package lost", message="%(label)s is lost."
 )
@@ -139,6 +148,14 @@ class Feature(features.AbstractFeature):
 
 
 class FeatureGrant(features.AbstractFeatureGrant):
+    holder = models.ForeignKey(
+        Organization,
+        on_delete=features.ERASE,
+        related_name="feature_grants",
+        help_text="Who the feature is granted to.",
+        db_comment="The holder the feature is granted to. Erased with the holder.",
+    )
+
     Meta = table("feature_grant")
 
 

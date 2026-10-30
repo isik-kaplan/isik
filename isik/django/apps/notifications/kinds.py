@@ -31,7 +31,8 @@ unless a declaration names it - and one that looks secret is named only with a r
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import timedelta
 
 import pgtrigger
 from django.core.exceptions import ImproperlyConfigured
@@ -53,6 +54,51 @@ class SensitiveSnapshotField(
     why="A notice's snapshot is copied into the ledger, read by every channel, and kept after the row is gone.",
 ):
     """Why a kind's snapshot carries a field that looks secret - one per field, in `notifies(sensitive=...)`."""
+
+
+class PushDataField(
+    Exemption,
+    rule="isik.notifications.push-data",
+    why="A push's data passes through Apple's or Google's servers and sits on the device, outside the project.",
+):
+    """Why a kind's push carries a snapshot field - one per field, in `PushContent(data=...)`."""
+
+
+# What a push may collapse by: one kind's pushes into one, or each subject's.
+COLLAPSE = ("kind", "subject")
+
+
+@dataclass(frozen=True)
+class PushContent:
+    """
+    What a kind's push carries, on the push channel:
+
+    - `private` - True sends its label alone, as the title: nothing of the notice reaches a lock screen,
+      or Apple's or Google's servers, beyond what kind of thing happened.
+    - `data` - `{snapshot field: PushDataField(reason=...)}`, the fields the app gets beside the notice's
+      kind, variant and subject - each with why it may leave the project.
+    - `collapse` - `"kind"` or `"subject"`: a later push of the kind (about the same subject) replaces an
+      earlier one not yet seen, rather than stacking. None stacks them.
+    - `ttl` - how long the service keeps trying a phone that's off, or None for its own default.
+    - `badge` - True sets the app's badge to the user's unread inbox items.
+    """
+
+    private: bool = False
+    data: dict = field(default_factory=dict)
+    collapse: str = None
+    ttl: timedelta = None
+    badge: bool = False
+
+
+def _push(name, push):
+    """`push` (a `PushContent`, or None for the default) once its data fields each say why they're carried."""
+    push = push or PushContent()
+    if push.collapse not in (None, *COLLAPSE):
+        raise ImproperlyConfigured(
+            _("%(kind)s's push collapses by %(collapse)r - it takes kind, subject or None.")
+            % {"kind": name, "collapse": push.collapse}
+        )
+    return replace(push, data=require_exemptions(name, "push.data", push.data, PushDataField))
 
 
 @dataclass(frozen=True)
@@ -126,6 +172,7 @@ class Kind:
     # {field: SensitiveSnapshotField} - the snapshot fields that look secret, each with why it's carried.
     sensitive: dict = field(default_factory=dict)
     text: KindText = field(default_factory=KindText)
+    push: PushContent = field(default_factory=PushContent)
     declared_in: str = field(default="", compare=False)
 
     @property
@@ -189,6 +236,7 @@ def notifies(
     description=None,
     message=None,
     title=None,
+    push=None,
 ):
     """
     Declares the trigger-sourced kind `name` on the decorated model: a trigger writing a notice whenever
@@ -209,9 +257,11 @@ def notifies(
     - `sensitive`: `{field: SensitiveSnapshotField(reason=...)}`, for each snapshot field that looks secret.
     - `label`, `description`, `message`, `title`: what it says to people (see `KindText`) - over what its
       `declare_kind()` said.
+    - `push`: what its push carries - a `PushContent`.
     """
     sensitive = require_exemptions(name, "sensitive", sensitive or {}, SensitiveSnapshotField)
     text = KindText(label=label, description=description, message=message, title=title)
+    push = _push(name, push)
 
     def declare(model):
         kind = Kind(
@@ -229,6 +279,7 @@ def notifies(
             partition=partition,
             sensitive=sensitive,
             text=text,
+            push=push,
             declared_in=model._meta.label,
         )
         from isik.django.apps.notifications.triggers import NoticeTrigger
@@ -252,6 +303,7 @@ def declare_kind(
     description=None,
     message=None,
     title=None,
+    push=None,
 ):
     """
     Declares the kind `name`, and the `variants` it may have - its place in the vocabulary - and returns its
@@ -262,13 +314,14 @@ def declare_kind(
     `source=Source.RECORDED` declares a kind of email its caller sends itself and `record_email()` records -
     mandatory, on email alone, with no audience: it takes none of those.
 
-    `label`, `description`, `message` and `title` are what it says to people - see `KindText`.
+    `label`, `description`, `message` and `title` are what it says to people - see `KindText`; `push`, what
+    its push carries - a `PushContent`.
     """
     text = KindText(label=label, description=description, message=message, title=title)
     declared_name = KindName(name, variants, text)
     # Built before anything is registered, so a declaration that fails leaves the registry as it was.
     if source == Source.RECORDED:
-        if audience is not None or policy is not None or channels is not None:
+        if audience is not None or policy is not None or channels is not None or push is not None:
             raise ImproperlyConfigured(
                 _("%(kind)s is recorded - mandatory, on email alone, and for whoever its caller sent it to.")
                 % {"kind": name}
@@ -290,6 +343,11 @@ def declare_kind(
             source=Source.APPLICATION,
             variants=tuple(variants),
             channels=tuple(channels) if channels is not None else None,
+            push=_push(name, push),
+        )
+    elif push is not None:
+        raise ImproperlyConfigured(
+            _("%(kind)s's push= goes on the notifies() writing it, beside its other behavior.") % {"kind": name}
         )
     else:
         behavior = None
@@ -378,6 +436,8 @@ __all__ = [
     "KindName",
     "KindText",
     "Policy",
+    "PushContent",
+    "PushDataField",
     "SensitiveSnapshotField",
     "Scope",
     "Source",

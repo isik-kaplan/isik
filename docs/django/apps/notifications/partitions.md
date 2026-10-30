@@ -116,3 +116,13 @@ The ledger has to live in exactly one place every partition can reach. A notice'
 audience's `VariantGuard` name the ledger's tables unqualified, so they find the one copy through the
 search path. A ledger installed in every partition would have each partition writing, and checking
 against, its own copy - silently.
+
+## A partition made by copying another
+
+A tool that makes a partition by copying an existing schema - django-tenants' `clone_schema`, say - keeps
+the names of CHECK constraints, primary keys and foreign keys, but rebuilds a UNIQUE constraint over several
+columns with `ALTER TABLE ... ADD UNIQUE`, letting Postgres name it - whatever the model named it, by hand or
+by Django's generated name. The audience has three: the subscription's and the endpoint kind's `<table>_once`,
+and the device's `(platform, token)`. In a copied partition each holds just the same under another name, so
+an `IntegrityError`'s message, and anything that shows it, differs between a partition migrated into being and
+one copied. Don't match on a unique constraint's name; index names aren't kept either.

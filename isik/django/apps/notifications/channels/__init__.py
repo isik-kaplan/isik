@@ -1,7 +1,7 @@
 """
 Channels - how a delivery goes out. Each one says who a notice reaches on it (`targets()`, called inside
-the partition being delivered to) and sends one delivery (`send()`). Three ship - `inbox`, `email` and
-`webhook` - and a project registers its own:
+the partition being delivered to) and sends one delivery (`send()`). Four ship - `inbox`, `email`,
+`webhook` and `push` (its extra, `isik[push]`, installed) - and a project registers its own:
 
     register_channel("sms", "acme.notifications.SmsChannel")
 
@@ -70,6 +70,7 @@ registered = {
     "inbox": "isik.django.apps.notifications.channels.inbox.InboxChannel",
     "email": "isik.django.apps.notifications.channels.email.EmailChannel",
     "webhook": "isik.django.apps.notifications.channels.webhook.WebhookChannel",
+    "push": "isik.django.apps.notifications.channels.push.PushChannel",
 }
 
 

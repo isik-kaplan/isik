@@ -20,6 +20,7 @@ DELIVERY_MODEL = "ISIK_NOTIFICATIONS_DELIVERY_MODEL"
 WEBHOOK_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_WEBHOOK_DELIVERY_MODEL"
 EMAIL_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_EMAIL_DELIVERY_MODEL"
 INBOX_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL"
+PUSH_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL"
 DELIVERY_ATTEMPT_MODEL = "ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL"
 
 DEFAULTS = {
@@ -30,6 +31,7 @@ DEFAULTS = {
     WEBHOOK_DELIVERY_MODEL: "isik_notifications.WebhookDelivery",
     EMAIL_DELIVERY_MODEL: "isik_notifications.EmailDelivery",
     INBOX_DELIVERY_MODEL: "isik_notifications.InboxDelivery",
+    PUSH_DELIVERY_MODEL: "isik_notifications.PushDelivery",
     DELIVERY_ATTEMPT_MODEL: "isik_notifications.DeliveryAttempt",
 }
 
@@ -84,6 +86,11 @@ def get_email_delivery_model():
 def get_inbox_delivery_model():
     """The inbox delivery model: `ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL`'s, else isik's."""
     return _model(INBOX_DELIVERY_MODEL)
+
+
+def get_push_delivery_model():
+    """The push delivery model: `ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL`'s, else isik's."""
+    return _model(PUSH_DELIVERY_MODEL)
 
 
 def get_delivery_attempt_model():

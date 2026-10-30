@@ -49,6 +49,9 @@ DEFAULTS = {
     "ALLOW_PRIVATE_TARGETS": False,
     # The proxy webhooks go out through, or None to connect directly. The environment's is never used.
     "WEBHOOK_PROXY": None,
+    # The push channel's credentials: {"APNS": {"TEAM_ID", "KEY_ID", "KEY", "TOPIC"}, "FCM": {"CREDENTIALS",
+    # optionally "PROJECT_ID"}} - either or both, by the platforms a project's apps use. See channels/push.py.
+    "PUSH": {},
     # f(dict) -> dict, applied to an attempt's request and response before they're written.
     "REDACTOR": None,
     # f(delivery, notice, address) sending one email - by default from templates named by the kind.

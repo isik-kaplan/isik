@@ -46,7 +46,17 @@ has_feature(org, WEBHOOKS)                # in force now: started, not expired, 
 Grants are a ledger. A database trigger refuses a delete, a TRUNCATE and every update except setting
 `revoked_at` where it was null - a revoke is written once, never undone or redated; a grant after it is a
 new row. `has_feature()` and `effective()` cache what a holder holds on the holder object, so a list view
-pays one lookup; `forget(holder)` drops it, as every write here does.
+pays one lookup; `forget(holder)` drops it, as every write here does. Each half is asked for only when a
+read needs it - a setting with no feature never asks for the grants - and not at all when the caller
+loaded it with the holder:
+
+```python
+Organization.objects.select_related("setting_overrides").prefetch_related("feature_grants")
+```
+
+That needs a `related_name` on the holder key - redeclare it on your own model; isik's is `"+"`. Only the
+grants in force are counted, and `forget()` drops what was loaded too, so a write is never answered from
+rows read before it. An unsaved holder holds nothing and asks nothing.
 
 ### Checking one
 
@@ -219,6 +229,10 @@ AUTOMATED = declare_force_source("automated", reason_floor=5)
 - `reason_floor` - how long a reason has to be (40 by default: one worth reading).
 - `operator_may_release` - False: only the source lifts it - `release_setting(..., by_operator=False)`.
 - `shows_reason_to_holder` - whether the holder may read the reason; an internal one stays with staff.
+
+A declared source is its name, as a declared feature is: a force's row stores the name, so
+`overrides.theme_forced_source == STAFF` holds. Two sources compare by name alone, so make one only with
+`declare_force_source()`, which refuses a name declared twice - never `ForceSource(...)` by hand.
 
 ## Signals
 

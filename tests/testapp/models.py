@@ -36,7 +36,7 @@ from isik.django.apps.common.db.concurrency import ConcurrencyParts, Concurrency
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.common.forcing import declare_force_source
-from isik.django.apps.features.bases import AbstractOverrides
+from isik.django.apps.features.bases import ERASE, AbstractOverrides
 from isik.django.apps.feedback.bookmarks import UserBookmarkMixin, bookmarks
 from isik.django.apps.feedback.comments import UserCommentMixin, comments
 from isik.django.apps.feedback.notes import UserNoteMixin, notes
@@ -787,4 +787,12 @@ class ForceableSubscription(AbstractForceableSubscription):
 
 @track_events()
 class UserOverrides(AbstractOverrides):
-    """A user's settings - the overrides model a project owns, tracked as it must be."""
+    """A user's settings - the overrides model a project owns, tracked as it must be, reachable from the user."""
+
+    holder = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=ERASE,
+        related_name="setting_overrides",
+        help_text="Whose settings these are.",
+        db_comment="The holder these settings are of. Erased with the holder.",
+    )

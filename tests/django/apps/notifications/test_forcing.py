@@ -42,7 +42,7 @@ class TestForceSources:
 
     def test_a_reason_reaches_its_sources_floor(self):
         assert checked_force("automated", "fixed").name == "automated"
-        with pytest.raises(ForceRefused, match="^A force by staff needs a reason of at least 40 characters.$"):
+        with pytest.raises(ForceRefused, match="^A force by Staff needs a reason of at least 40 characters.$"):
             checked_force("staff", "short")
         with pytest.raises(ForceRefused):
             checked_force("staff", None)
@@ -50,8 +50,16 @@ class TestForceSources:
     def test_staff_lift_only_what_a_source_lets_them(self):
         assert checked_release("staff", by_operator=True).name == "staff"
         assert checked_release("account_review", by_operator=False).name == "account_review"
-        with pytest.raises(ForceRefused, match="^What account_review forced can only be lifted by it, not by staff.$"):
+        with pytest.raises(ForceRefused, match="^What Account review forced can only be lifted by it, not by staff.$"):
             checked_release("account_review", by_operator=True)
+
+    def test_a_source_with_no_label_is_named(self, monkeypatch):
+        monkeypatch.setitem(forcing._declared, "unnamed", forcing.ForceSource("unnamed", operator_may_release=False))
+
+        with pytest.raises(ForceRefused, match="^A force by unnamed needs a reason of at least 40 characters.$"):
+            checked_force("unnamed", "short")
+        with pytest.raises(ForceRefused, match="^What unnamed forced can only be lifted by it, not by staff.$"):
+            checked_release("unnamed", by_operator=True)
 
     def test_every_source_is_listed(self):
         assert list(forcing.force_sources())[:3] == ["staff", "account_review", "automated"]

@@ -169,6 +169,47 @@ writing a watched row, before the ledger's tables exist or the mirror has writte
 dependency on the ledger, such a migration runs in any order. Because a missing row is otherwise silent,
 `isik.W009` reports a declared kind the database has none for - shown once by the `migrate` that writes it.
 
+## A kind's push
+
+What a kind's push carries, on the [push channel](channels.md#push), is its `push=PushContent(...)` - on
+`notifies()` for a trigger-sourced kind, on `declare_kind()` for an application one:
+
+```python
+from isik.django.apps.notifications.kinds import PushContent, PushDataField
+
+@notifies(
+    INVOICE_VOIDED,
+    ...,
+    push=PushContent(
+        data={"number": PushDataField(reason="the app opens the invoice by its number, which names no one")},
+        collapse="subject",
+        ttl=timedelta(hours=6),
+    ),
+)
+```
+
+- `private=True` - its label alone, as the title: nothing of the notice reaches a lock screen, or Apple's or
+  Google's servers, beyond what kind of thing happened.
+- `data` - snapshot fields the app gets beside the notice's kind, variant and subject, each with a
+  `PushDataField(reason=...)`: what's in a push leaves the project. A field the snapshot doesn't carry is
+  refused at startup.
+- `collapse` - `"kind"` or `"subject"`: a later push of the kind (about the same subject) replaces one not
+  yet seen, rather than stacking.
+- `ttl` - how long the service keeps trying a phone that's off; None leaves it to the service.
+- `badge=True` - the app's badge, set to the user's unread inbox items.
+
+**Push turned on by deployment.** A kind leaving `channels` out is sent on every channel `CHANNELS` turns
+on, push among them where it is - so it needs nothing. A kind naming its channels names push only where
+`CHANNELS` has it, since naming a channel that isn't on is refused at startup:
+
+```python
+from isik.django.apps.notifications import conf
+
+PUSH = ("push",) if "push" in conf.setting("CHANNELS") else ()
+
+@notifies(TOKEN_CREATED, ..., channels=("inbox", *PUSH), push=PushContent(private=True))
+```
+
 ## What the checks refuse
 
 `isik.E014`, at startup:
@@ -185,3 +226,4 @@ dependency on the ledger, such a migration runs in any order. Because a missing 
 - a partition resolver that doesn't fit the model, or none at all once partitions are configured
 - an email kind without its templates, while one of isik's senders sends the email
 - a trigger-sourced kind with no trigger registered
+- a push carrying a field the snapshot doesn't, or a kind sent on push with no `PUSH` credentials

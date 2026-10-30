@@ -15,12 +15,14 @@ SUBSCRIPTION_MODEL = "ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL"
 INBOX_ITEM_MODEL = "ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL"
 ENDPOINT_MODEL = "ISIK_NOTIFICATIONS_ENDPOINT_MODEL"
 ENDPOINT_KIND_MODEL = "ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL"
+DEVICE_MODEL = "ISIK_NOTIFICATIONS_DEVICE_MODEL"
 
 DEFAULTS = {
     SUBSCRIPTION_MODEL: "isik_notifications_audience.Subscription",
     INBOX_ITEM_MODEL: "isik_notifications_audience.InboxItem",
     ENDPOINT_MODEL: "isik_notifications_audience.Endpoint",
     ENDPOINT_KIND_MODEL: "isik_notifications_audience.EndpointKind",
+    DEVICE_MODEL: "isik_notifications_audience.Device",
 }
 
 
@@ -58,3 +60,8 @@ def get_endpoint_model():
 def get_endpoint_kind_model():
     """The endpoint kind model: `ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL`'s, else isik's."""
     return _model(ENDPOINT_KIND_MODEL)
+
+
+def get_device_model():
+    """The device model: `ISIK_NOTIFICATIONS_DEVICE_MODEL`'s, else isik's."""
+    return _model(DEVICE_MODEL)

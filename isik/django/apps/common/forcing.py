@@ -17,23 +17,25 @@ row - a source that forced three things never wants one releasable and the other
 Notifications' forceable subscriptions and the features app's overrideable settings both take these.
 """
 
-from dataclasses import dataclass
-
 from isik._internal.translation import gettext as _
 
 
-@dataclass(frozen=True)
-class ForceSource:
-    """A declared force source - see the module's docstring. Made by `declare_force_source()`."""
+class ForceSource(str):
+    """
+    A declared force source's name - what `declare_force_source()` returns - carrying its policy (see the module's
+    docstring). A force's row stores the name, so the row's column compares equal to the declaration. Two compare
+    by name alone, so one is only ever made by `declare_force_source()`, which refuses a name declared twice.
+    """
 
-    name: str
-    label: object = None
-    operator_may_release: bool = True
-    reason_floor: int = 40
-    shows_reason_to_holder: bool = False
+    def __new__(cls, name, *, label=None, operator_may_release=True, reason_floor=40, shows_reason_to_holder=False):
+        declared = super().__new__(cls, name)
+        declared.label, declared.operator_may_release = label, operator_may_release
+        declared.reason_floor, declared.shows_reason_to_holder = reason_floor, shows_reason_to_holder
+        return declared
 
-    def __str__(self):
-        return self.name
+    @property
+    def name(self):
+        return str.__str__(self)
 
 
 class ForceRefused(ValueError):
@@ -49,7 +51,7 @@ def declare_force_source(name, *, label=None, operator_may_release=True, reason_
     if name in _declared:
         raise ValueError(_("A force source called %(name)s is declared already.") % {"name": name})
     source = ForceSource(
-        name=name,
+        name,
         label=label,
         operator_may_release=operator_may_release,
         reason_floor=reason_floor,
@@ -79,7 +81,7 @@ def checked_force(source, reason):
     if len((reason or "").strip()) < declared.reason_floor:
         raise ForceRefused(
             _("A force by %(source)s needs a reason of at least %(floor)s characters.")
-            % {"source": declared.name, "floor": declared.reason_floor}
+            % {"source": _shown(declared), "floor": declared.reason_floor}
         )
     return declared
 
@@ -89,6 +91,11 @@ def checked_release(source, *, by_operator):
     declared = get_force_source(source)
     if by_operator and not declared.operator_may_release:
         raise ForceRefused(
-            _("What %(source)s forced can only be lifted by it, not by staff.") % {"source": declared.name}
+            _("What %(source)s forced can only be lifted by it, not by staff.") % {"source": _shown(declared)}
         )
     return declared
+
+
+def _shown(declared):
+    """What a refusal calls `declared`: its label, where it has one."""
+    return declared.label or declared.name

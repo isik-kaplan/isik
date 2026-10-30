@@ -2,7 +2,7 @@
 
 A delivery goes out on one channel. Each says who a notice reaches on it and sends one delivery. A
 delivery's target lives in the channel's own child row (`InboxDelivery`, `EmailDelivery`,
-`WebhookDelivery`), never in a nullable column of `Delivery`.
+`WebhookDelivery`, `PushDelivery`), never in a nullable column of `Delivery`.
 
 ## inbox
 
@@ -125,6 +125,55 @@ of your own. A success clears the count.
 
 **Secrets.** `Endpoint.secret` is a plain field on the base; override it (and `secret_previous`) with an
 encrypted field of your own.
+
+## push
+
+`pip install isik[push]`, then add `"push"` to `CHANNELS`. Each active device of each user a notice
+reaches gets a delivery of its own, sent straight to its platform's service over HTTP/2 - APNs for an iOS
+token, FCM for a Firebase one. No middleman, no SDK: the extra is `httpx[http2]` and `pyjwt[crypto]`.
+
+```python
+ISIK_NOTIFICATIONS = {
+    "CHANNELS": ("inbox", "email", "push"),
+    "PUSH": {
+        "APNS": {"TEAM_ID": "...", "KEY_ID": "...", "KEY": os.environ["APNS_KEY"], "TOPIC": "com.acme.app"},
+        "FCM": {"CREDENTIALS": json.loads(os.environ["FCM_SERVICE_ACCOUNT"])},
+    },
+}
+```
+
+Either service, or both. `KEY` is the `.p8` key's PEM; `TOPIC` the app's bundle id, which a device's own
+`app_id` overrides. `CREDENTIALS` is the Firebase service account's JSON (parsed, or as a string), its
+project named by `project_id` unless `PROJECT_ID` says otherwise. A kind sent on push with neither set is
+refused at startup.
+
+**Devices.** `Device` (in the audience app, swappable as `ISIK_NOTIFICATIONS_DEVICE_MODEL`) is one app
+install: `platform` (`apns` or `fcm`), `token`, `environment` (`production`, or `sandbox` for a development
+build's APNs token - the two hosts refuse each other's), `app_id`, `is_active` and `last_seen_at`. A token
+is unique on its platform: `register_device(user, platform, token, environment=..., app_id=...)` makes the
+device, or - registered before, by anyone - moves it to `user` and wakes it, since whoever registers a token
+is signed in on that phone now. Call it whenever the app starts or its token changes, or route
+[`DeviceViewSet`](rest.md#deviceviewset). `forget_devices(user)` forgets them all - at a sign-out
+everywhere, say. A user with no device gets no push; the inbox is the record.
+
+**What a push says.** The kind's `title`, else its `label`, over its `message` - in the recipient's language
+(`RECIPIENT_LANGUAGE`). Its data, for the app to open the right screen: `notice`, `kind`, `variant`,
+`subject_label` and `subject_id`, each as text. The kind's `push=PushContent(...)` says the rest
+([kinds.md](kinds.md#a-kinds-push)): `private=True` for the label alone, `data=` for snapshot fields beside
+those - each with its reason - `collapse=`, `ttl=` and `badge=True`, the user's unread inbox count.
+
+**A dead token.** APNs answering 410, `BadDeviceToken`, `DeviceTokenNotForTopic` or `Unregistered`, or FCM
+`UNREGISTERED` or an `INVALID_ARGUMENT` on the token, deactivates the device: its delivery is abandoned,
+and it gets no more until the app registers it again. Nothing else deactivates one - a refusal of isik's
+credentials (`InvalidProviderToken`, `SENDER_ID_MISMATCH`, Google refusing the service account) is
+permanent for the delivery and leaves every device be, since it's yours to fix, not the phone's. An expired
+token, isik's own, is made again on the next try. A busy service (`RETRYABLE_STATUSES`) is tried again.
+
+**Credentials kept.** One HTTP/2 client a worker - APNs wants its connection reused - and one token per
+service: APNs's provider token for 50 minutes (Apple refuses one older than an hour, or made afresh more
+often than every twenty minutes), FCM's access token until five minutes before Google says it expires. A
+push takes `ENDPOINT_TIMEOUT` at most. Its attempt records the request without its credentials, and its
+`apns-id` is the delivery's, so a support question finds it.
 
 ## Your own
 

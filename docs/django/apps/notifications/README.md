@@ -5,14 +5,14 @@
 A notice is written by **the database**, inside the transaction that made the change it describes: a
 trigger compiled from the kind's declaration inserts it. A raw `UPDATE` in psql writes one too, so
 nothing can forget to notify. A Celery task then fans each notice out into deliveries on the in-app
-inbox, email and webhook channels, and each delivery is tried until it's sent.
+inbox, email, webhook and push channels, and each delivery is tried until it's sent.
 
 - [kinds.md](kinds.md) - declaring a kind: `notifies()`, `declare_kind()`, `raise_notice()`, variants
 - [audiences.md](audiences.md) - who a kind reaches, its policy, and subscriptions
-- [channels.md](channels.md) - inbox, email, webhooks (the wire format and signing), your own channel
+- [channels.md](channels.md) - inbox, email, webhooks (the wire format and signing), push to phones, your own channel
 - [partitions.md](partitions.md) - tenants, schemas, or any other split of your data
 - [operations.md](operations.md) - the tasks, the beat schedule, retries, pruning, health, `manage.py notices`, tests
-- [rest.md](rest.md) - the optional REST views: the inbox, subscriptions and endpoints
+- [rest.md](rest.md) - the optional REST views: the inbox, subscriptions, devices and endpoints
 
 ## Setup
 
@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     "pghistory",
     "isik.django.apps.common",
     "isik.django.apps.notifications",           # the ledger: notices, deliveries, attempts
-    "isik.django.apps.notifications.audience",  # the rows naming people: subscriptions, inbox, endpoints
+    "isik.django.apps.notifications.audience",  # the rows naming people: subscriptions, inbox, endpoints, devices
 ]
 
 ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Acme"}   # only needed once a kind is sent by webhook
@@ -66,7 +66,7 @@ splitting its data by tenant installs the ledger once and the audience per tenan
 
 ## Owning every model
 
-isik ships a working model for each of the twelve, and every one is swappable: subclass its abstract base,
+isik ships a working model for each of the fourteen, and every one is swappable: subclass its abstract base,
 point its setting at your subclass, and isik's table is never made - yours is, in your app, with your
 migrations and your admin, and isik's mechanism runs over it.
 
@@ -79,11 +79,13 @@ migrations and your admin, and isik's mechanism runs over it.
 | `WebhookDelivery` | `bases.AbstractWebhookDelivery` | `ISIK_NOTIFICATIONS_WEBHOOK_DELIVERY_MODEL` |
 | `EmailDelivery` | `bases.AbstractEmailDelivery` | `ISIK_NOTIFICATIONS_EMAIL_DELIVERY_MODEL` |
 | `InboxDelivery` | `bases.AbstractInboxDelivery` | `ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL` |
+| `PushDelivery` | `bases.AbstractPushDelivery` | `ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL` |
 | `DeliveryAttempt` | `bases.AbstractDeliveryAttempt` | `ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL` |
 | `Subscription` | `audience.bases.AbstractSubscription` | `ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL` |
 | `InboxItem` | `audience.bases.AbstractInboxItem` | `ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL` |
 | `Endpoint` | `audience.bases.AbstractEndpoint` | `ISIK_NOTIFICATIONS_ENDPOINT_MODEL` |
 | `EndpointKind` | `audience.bases.AbstractEndpointKind` | `ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL` |
+| `Device` | `audience.bases.AbstractDevice` | `ISIK_NOTIFICATIONS_DEVICE_MODEL` |
 
 ```python
 # notifications/models.py - your app
@@ -163,12 +165,13 @@ superuser turning triggers off - it narrows accidents, not attackers.
 | `REQUIRE_DECLARED_KINDS` | False | refuse a bare name given to `notifies()` - every kind declared with `declare_kind()` |
 | `PROJECT_NAME` | None | names the webhook signature header, `X-<PROJECT_NAME>-Signature` - required once a kind is sent by webhook, unless `SIGNATURE["header"]` is set |
 | `SIGNATURE` | `{}` | `{"header": ...}` names the signature header outright |
-| `CHANNELS` | `("inbox", "email", "webhook")` | the channels a kind may be sent on |
+| `CHANNELS` | `("inbox", "email", "webhook")` | the channels a kind may be sent on - `"push"` too, with `isik[push]` |
+| `PUSH` | `{}` | `{"APNS": {...}, "FCM": {...}}` - the push services' credentials ([push](channels.md#push)) |
 | `RECORD_ATTEMPTS` | `"failures"` | which attempts get a `DeliveryAttempt` row: `"all"`, `"failures"`, `"none"` |
 | `MAX_ATTEMPTS` | 5 | tries before a delivery (or shard) is abandoned - in each run, a manual retry starting one |
 | `BACKOFF` | `(60, 300, 1800, 7200, 21600)` | seconds to wait after each failure, the last repeating, plus up to a tenth of jitter |
 | `RETRYABLE_STATUSES` | 5xx, 408, 425, 429 | the webhook answers worth trying again; any other is permanent |
-| `ENDPOINT_TIMEOUT` | 10 | seconds a webhook's whole answer may take |
+| `ENDPOINT_TIMEOUT` | 10 | seconds a webhook's whole answer may take - and a push's |
 | `DISABLE_AFTER` | 10 | failures in a row that park a webhook endpoint |
 | `ALLOW_PRIVATE_TARGETS` | False | whether a webhook may reach a non-public address: `True`, or the networks it may |
 | `WEBHOOK_PROXY` | None | the egress proxy webhooks go out through - the environment's is never used |

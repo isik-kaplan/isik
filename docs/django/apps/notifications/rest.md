@@ -61,6 +61,19 @@ Each view and action's docstring is what drf-spectacular shows your API's caller
 them; each documents what it takes and answers exactly - `?unread=` on the inbox, no body on the `POST`
 actions, `{marked}` from `read-all/`.
 
+## `DeviceViewSet`
+
+The caller's own devices - where pushes go.
+
+| route | |
+|---|---|
+| `GET /` | them, with `is_active` false for one whose token its service said is dead |
+| `POST /` | `{platform, token, environment, app_id}` - registers it, with `register_device()`: made, or, registered before by anyone, made the caller's and active again - `201` either way; no key needed |
+| `DELETE /{id}/` | forgets one - at sign-out on that phone; no `If-Match` needed |
+
+An app posts its token whenever it starts or the token changes: registering is idempotent, so neither a key
+nor a version is asked for.
+
 ## Whose endpoints, and whose deliveries
 
 Whose endpoints a caller sees - and so whose deliveries - is yours to say, and both views refuse to

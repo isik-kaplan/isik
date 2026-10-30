@@ -148,6 +148,7 @@ class TestTheSettings:
             "truncate_protection",
             "labels",
             "features",
+            "identifiers",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -214,7 +215,7 @@ class TestTheSettingsCheck:
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
-            "Check.LABELS, Check.FEATURES."
+            "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -703,3 +704,55 @@ def test_the_label_check_reads_nothing_without_notifications(monkeypatch):
     monkeypatch.setattr(apps, "is_installed", lambda name: False)
 
     assert checks.every_declaration_says_what_it_is(app_configs=None) == []
+
+
+class TestIdentifiers:
+    @staticmethod
+    def model(table="t", columns=(), constraints=(), indexes=(), *, managed=True, proxy=False):
+        meta = types.SimpleNamespace(
+            label="testapp.Long",
+            db_table=table,
+            managed=managed,
+            proxy=proxy,
+            local_fields=[types.SimpleNamespace(column=column) for column in columns],
+            constraints=[types.SimpleNamespace(name=name) for name in constraints],
+            indexes=[types.SimpleNamespace(name=name) for name in indexes],
+        )
+        return types.SimpleNamespace(_meta=meta)
+
+    @staticmethod
+    def problems(*models):
+        return constraints.identifier_problems([types.SimpleNamespace(get_models=lambda: list(models))])
+
+    def test_each_name_too_long_is_named(self):
+        long = "n" * 64
+
+        assert self.problems(self.model(long, [long], [long], [long])) == [
+            f"testapp.Long's {what} {long} is 64 characters long, and Postgres keeps 63 - shorten it."
+            for what in ("table", "column", "constraint", "index")
+        ]
+
+    def test_a_name_exactly_at_the_limit_is_kept_whole(self):
+        fits = "n" * 63
+
+        assert self.problems(self.model(fits, [fits], [fits], [fits])) == []
+
+    def test_a_table_migrate_never_makes_asks_nothing(self):
+        long = "n" * 64
+
+        assert self.problems(self.model(long, managed=False), self.model(long, proxy=True)) == []
+
+    def test_the_test_project_and_isik_have_none(self):
+        assert constraints.identifier_problems(apps.get_app_configs()) == []
+        assert checks.every_name_fits_postgres(app_configs=None) == []
+
+    def test_the_check_reports_them(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(constraints, "identifier_problems", lambda configs: seen.append(configs) or ["one"])
+
+        errors = checks.every_name_fits_postgres(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E018", "one", "See fitted_name() (isik.django.apps.common.db).")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]

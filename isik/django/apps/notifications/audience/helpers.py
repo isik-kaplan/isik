@@ -1,6 +1,6 @@
 """
 Changing a user's subscriptions - their own choices, and, on a forceable subscription model, what staff force -
-and reading and marking their inbox.
+reading and marking their inbox, and registering and forgetting the devices pushes go to.
 """
 
 from django.core.exceptions import ImproperlyConfigured
@@ -11,8 +11,12 @@ from isik._internal.translation import gettext as _
 from isik.django.apps.common.forcing import checked_force, checked_release
 from isik.django.apps.notifications import conf
 from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
-from isik.django.apps.notifications.audience.swapping import get_inbox_item_model, get_subscription_model
-from isik.django.apps.notifications.choices import Policy
+from isik.django.apps.notifications.audience.swapping import (
+    get_device_model,
+    get_inbox_item_model,
+    get_subscription_model,
+)
+from isik.django.apps.notifications.choices import Policy, PushEnvironment
 from isik.django.apps.notifications.swapping import get_kind_policy_model
 
 
@@ -190,3 +194,28 @@ def unread(user):
 def mark_read(items):
     """Marks every unread item of the `items` queryset read now. Returns how many it marked."""
     return items.filter(read_at__isnull=True).update(read_at=timezone.now())
+
+
+def register_device(user, platform, token, *, environment=PushEnvironment.PRODUCTION, app_id=""):
+    """
+    Registers `token` - an app install's, on `platform` - as `user`'s device: made, or, already known, moved
+    to `user` and active again, since a token is one install and whoever registers it is signed in on it now.
+    Returns the device.
+    """
+    device, _made = get_device_model()._default_manager.update_or_create(
+        platform=platform,
+        token=token,
+        defaults={
+            "user": user,
+            "environment": environment,
+            "app_id": app_id,
+            "is_active": True,
+            "last_seen_at": timezone.now(),
+        },
+    )
+    return device
+
+
+def forget_devices(user):
+    """Forgets every device of `user`, so no push reaches them - at signing out everywhere, say. Returns how many."""
+    return get_device_model()._default_manager.filter(user=user).delete()[0]

@@ -25,6 +25,7 @@ from isik.django.apps.common.db.constraints import (
     classified,
     condition_for,
     constrain,
+    fitted_name,
     install,
     lifted_constraint,
     no_database_form,
@@ -824,3 +825,37 @@ class TestLiftedConstraint:
         assert CleanedNote._meta.constraints is before
         with pytest.raises(IntegrityError), transaction.atomic():
             CleanedNote.objects.filter(pk=CleanedNote.objects.create(count=1).pk).update(kind="nonsense")
+
+
+def test_a_name_that_fits_is_left_as_it_is():
+    assert fitted_name("testapp_x", "once") == "testapp_x_once"
+
+
+def test_a_long_table_gives_way_to_the_rule():
+    """The rule is what says which constraint refused - Postgres cutting the name would take it first."""
+    name = fitted_name("organizations_organizationoverrides", "allow_platform_login_forced_exactly")
+
+    assert len(name) == 63
+    assert name.startswith("organizations_org")
+    assert name.endswith("_allow_platform_login_forced_exactly")
+    assert name == fitted_name("organizations_organizationoverrides", "allow_platform_login_forced_exactly")
+
+
+def test_two_long_tables_alike_in_front_do_not_collide():
+    assert fitted_name("a" * 60 + "x", "once") != fitted_name("a" * 60 + "y", "once")
+
+
+def test_the_table_keeps_one_character_while_it_can():
+    rule = "r" * (63 - 8 - 3)
+
+    assert fitted_name("t" * 40, rule)[:2] == "t_"
+    assert len(fitted_name("t" * 40, rule)) == 63
+
+
+def test_a_rule_leaving_the_table_no_room_keeps_its_front():
+    rule = "r" * (63 - 8 - 2)
+
+    name = fitted_name("t" * 40, rule)
+
+    assert len(name) == 63
+    assert name.startswith("t" * 40 + "_rrr")

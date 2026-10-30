@@ -31,7 +31,7 @@ from isik.django.apps.features.operations import (
     set_setting,
     sweep_boundaries,
 )
-from isik.django.apps.features.resolution import Effective, effective, effective_expression, has_feature
+from isik.django.apps.features.resolution import Effective, effective, effective_expression, has_feature, held_features
 from tests.testapp.models import EmailUser, UserOverrides
 
 
@@ -137,13 +137,97 @@ class TestResolving:
         assert effective(fresh(alice), "display_name").value == "Al"
 
     def test_a_holders_reads_are_cached_until_forgotten(self, alice, django_assert_num_queries):
-        effective(alice, "theme")
+        effective(alice, "max_endpoints")
 
         with django_assert_num_queries(0):
             assert has_feature(alice, "webhooks") is False
+            effective(alice, "theme")
         resolution.forget(alice)
         with django_assert_num_queries(2):
-            effective(alice, "theme")
+            effective(alice, "max_endpoints")
+
+    def test_a_setting_needing_no_feature_asks_nothing_of_the_grants(self, alice, django_assert_num_queries):
+        with django_assert_num_queries(1):
+            assert effective(alice, "theme") == Effective("light", "default")
+        with django_assert_num_queries(1):
+            assert has_feature(alice, "webhooks") is False
+
+    def test_a_forced_setting_asks_nothing_of_the_grants(self, alice, fresh, django_assert_num_queries):
+        force_setting(alice, "max_endpoints", 2, source="staff", reason=REASON)
+        alice = fresh(alice)
+
+        with django_assert_num_queries(1):
+            assert effective(alice, "max_endpoints").value == 2
+
+    def test_an_overrides_row_loaded_with_the_holder_is_used(self, alice, bob, django_assert_num_queries):
+        set_setting(alice, "theme", "dark")
+
+        with django_assert_num_queries(1):
+            loaded = {user.pk: user for user in EmailUser.objects.select_related("setting_overrides")}
+            assert effective(loaded[alice.pk], "theme") == Effective("dark", "own")
+            assert effective(loaded[bob.pk], "theme") == Effective("light", "default")
+
+    def test_grants_loaded_with_some_other_relation_are_asked_for(self, alice, django_assert_num_queries):
+        grant(alice, "webhooks", source="manual")
+        (loaded,) = EmailUser.objects.prefetch_related("groups")
+
+        with django_assert_num_queries(1):
+            assert has_feature(loaded, "webhooks") is True
+
+    def test_grants_loaded_with_the_holder_are_used_in_force_alone(self, monkeypatch, django_assert_num_queries):
+        now = timezone.now()
+        terms = {
+            "starts_now": dict(starts_at=now),
+            "ends_later": dict(starts_at=now - timedelta(days=1), expires_at=now + timedelta(days=1)),
+            "starts_later": dict(starts_at=now + timedelta(days=1)),
+            "ended_now": dict(starts_at=now - timedelta(days=1), expires_at=now),
+            "revoked_now": dict(starts_at=now - timedelta(days=1), revoked_at=now),
+            "revoked_later": dict(starts_at=now - timedelta(days=1), revoked_at=now + timedelta(days=1)),
+        }
+        holders = {}
+        for name, made in terms.items():
+            holders[name] = EmailUser.objects.create(username=name, email=f"{name}@example.com")
+            FeatureGrant.objects.create(holder=holders[name], feature_id="webhooks", source="manual", **made)
+        loaded = {name: with_grants_loaded(EmailUser.objects.get(pk=holder.pk)) for name, holder in holders.items()}
+        monkeypatch.setattr(timezone, "now", lambda: now)
+
+        with django_assert_num_queries(0):
+            holding = {name: has_feature(holder, "webhooks") for name, holder in loaded.items()}
+
+        assert holding == {
+            "starts_now": True,
+            "ends_later": True,
+            "starts_later": False,
+            "ended_now": False,
+            "revoked_now": False,
+            "revoked_later": True,
+        }
+
+    def test_a_write_forgets_what_was_loaded_with_the_holder(self, alice):
+        set_setting(alice, "theme", "dark")
+        (loaded,) = EmailUser.objects.filter(pk=alice.pk).select_related("setting_overrides")
+        with_grants_loaded(loaded)
+        assert (has_feature(loaded, "webhooks"), effective(loaded, "theme").value) == (False, "dark")
+
+        grant(loaded, "webhooks", source="manual")
+        set_setting(loaded, "theme", "light")
+
+        assert (has_feature(loaded, "webhooks"), effective(loaded, "theme").value) == (True, "light")
+        assert list(loaded._prefetched_objects_cache) == ["groups"]
+
+    def test_an_unsaved_holder_holds_nothing_and_has_no_overrides(self, django_assert_num_queries):
+        unsaved = EmailUser(first_name="Una")
+
+        with django_assert_num_queries(0):
+            assert effective(unsaved, "display_name") == Effective("Una", "own")
+            assert effective(unsaved, "token_lifetime_days") == Effective(30, "default")
+            assert held_features(unsaved) == set()
+
+    def test_with_no_overrides_model_nothing_is_asked_for_them(self, alice, settings, django_assert_num_queries):
+        settings.ISIK_FEATURES_OVERRIDES_MODEL = None
+
+        with django_assert_num_queries(0):
+            assert effective(alice, "theme") == Effective("light", "default")
 
     def test_only_grants_in_force(self, alice, fresh):
         now = timezone.now()
@@ -466,6 +550,15 @@ class TestTheGrantLedger:
                 max_endpoints_forced_source="staff",
                 max_endpoints_forced_reason="x",
             )
+
+
+def with_grants_loaded(holder):
+    """`holder` as `prefetch_related` of its grants leaves it - beside another relation loaded first."""
+    grants = FeatureGrant.objects.filter(holder=holder)
+    groups = holder.groups.all()
+    list(grants), list(groups)
+    holder._prefetched_objects_cache = {"groups": groups, "grants": grants}
+    return holder
 
 
 class TestErasing:

@@ -27,11 +27,13 @@ drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"
 celery = ["isik[django]", "celery"]
 # isik.django.apps.notifications fans notices out in celery tasks and POSTs webhooks with httpx.
 notifications = ["isik[django,celery]", "httpx"]
+# Its push channel speaks HTTP/2 to APNs and FCM itself, signing each service's token with pyjwt - no middleman.
+push = ["isik[notifications]", "httpx[http2]", "pyjwt[crypto]"]
 tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
 # Ranges, not pins: an app pins its own click and questionary, and isik.cli must not fight that.
 cli = ["click>=8.1", "questionary>=2.1.1"]
-all = ["isik[sentry,django,drf,celery,notifications,tiptap,templated_fields,cli]"]
+all = ["isik[sentry,django,drf,celery,notifications,push,tiptap,templated_fields,cli]"]
 
 [project.entry-points.pytest11]
 # Lets a transaction=True test's flush through the notifications ledger's TRUNCATE protection - a no-op

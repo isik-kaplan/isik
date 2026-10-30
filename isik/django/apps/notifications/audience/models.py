@@ -5,6 +5,7 @@ from django.db import models
 
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.notifications.audience.bases import (
+    AbstractDevice,
     AbstractEndpoint,
     AbstractEndpointKind,
     AbstractInboxItem,
@@ -71,3 +72,17 @@ class EndpointKind(AbstractEndpointKind):
     class Meta:
         swappable = "ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL"
         verbose_name = gettext_lazy("endpoint kind")
+
+
+class Device(AbstractDevice):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=gettext_lazy("Whose device it is."),
+        db_comment="The user signed in on the device.",
+    )
+
+    class Meta:
+        swappable = "ISIK_NOTIFICATIONS_DEVICE_MODEL"
+        verbose_name = gettext_lazy("device")

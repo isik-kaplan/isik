@@ -14,6 +14,7 @@ from isik.django.apps.notifications.bases import (
     AbstractInboxDelivery,
     AbstractNotice,
     AbstractNoticeKindPolicy,
+    AbstractPushDelivery,
     AbstractWebhookDelivery,
 )
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
@@ -63,6 +64,13 @@ class InboxDelivery(AbstractInboxDelivery):
         swappable = "ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL"
         verbose_name = gettext_lazy("inbox delivery")
         verbose_name_plural = gettext_lazy("inbox deliveries")
+
+
+class PushDelivery(AbstractPushDelivery):
+    class Meta:
+        swappable = "ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL"
+        verbose_name = gettext_lazy("push delivery")
+        verbose_name_plural = gettext_lazy("push deliveries")
 
 
 class DeliveryAttempt(AbstractDeliveryAttempt):

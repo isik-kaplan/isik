@@ -43,3 +43,17 @@ class ShardState(models.TextChoices):
     CLAIMED = "claimed", gettext_lazy("Claimed")
     FINISHED = "finished", gettext_lazy("Finished")
     ABANDONED = "abandoned", gettext_lazy("Abandoned")
+
+
+class Platform(models.TextChoices):
+    """The service a device's pushes go through - Apple's for an iOS token, Firebase's for an FCM one."""
+
+    APNS = "apns", gettext_lazy("Apple Push Notification service")
+    FCM = "fcm", gettext_lazy("Firebase Cloud Messaging")
+
+
+class PushEnvironment(models.TextChoices):
+    """Which APNs a device's token was issued by: a development build's sandbox, or production."""
+
+    PRODUCTION = "production", gettext_lazy("Production")
+    SANDBOX = "sandbox", gettext_lazy("Sandbox")
