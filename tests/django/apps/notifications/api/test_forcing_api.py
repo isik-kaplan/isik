@@ -94,8 +94,8 @@ class TestTheApi:
         )
 
     def test_a_variant_a_kind_gives_by_default(self, alice):
-        NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(policy="default_on")
-        NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="default_on")
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(policy="mandatory")
 
         listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
 

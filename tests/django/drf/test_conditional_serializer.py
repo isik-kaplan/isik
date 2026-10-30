@@ -140,7 +140,7 @@ class TestConditionalSerializerMixin:
     def test_relational_field_is_included_when_requested(self, widget, make_request):
         request = make_request("/", {"include": "owner"})
         serializer = WidgetSerializer(widget, context={"request": request})
-        assert serializer.data["owner"] == {"id": widget.owner_id, "username": "alice"}
+        assert serializer.data["owner"] == {"id": str(widget.owner_id), "username": "alice"}
 
     def test_comma_separated_include_values_are_split(self, widget, make_request):
         request = make_request("/", {"include": "owner,some_other_field"})
@@ -211,7 +211,7 @@ class TestDottedIncludes:
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
         request = make_request("/", {"include": "owner.manager"})
         serializer = WidgetSerializer(widget, context={"request": request})
-        assert serializer.data["owner"]["manager"] == {"id": bob.id, "username": "bob"}
+        assert serializer.data["owner"]["manager"] == {"id": str(bob.id), "username": "bob"}
 
     def test_requesting_only_the_leaf_path_still_includes_its_ancestor(self, management_chain, make_request):
         alice, _bob, _carol = management_chain
@@ -232,7 +232,7 @@ class TestDottedIncludes:
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
         request = make_request("/", {"include": "owner.manager.manager"})
         serializer = WidgetSerializer(widget, context={"request": request})
-        assert serializer.data["owner"]["manager"]["manager"] == {"id": carol.id, "username": "carol"}
+        assert serializer.data["owner"]["manager"]["manager"] == {"id": str(carol.id), "username": "carol"}
 
     def test_dotted_includes_work_through_a_many_true_field(self, management_chain, make_request):
         alice, bob, _carol = management_chain
@@ -240,8 +240,8 @@ class TestDottedIncludes:
         request = make_request("/", {"include": "owner.reports,owner.reports.manager"})
         serializer = WidgetSerializer(widget, context={"request": request})
         [report] = serializer.data["owner"]["reports"]
-        assert report["id"] == alice.id
-        assert report["manager"] == {"id": bob.id, "username": "bob"}
+        assert report["id"] == str(alice.id)
+        assert report["manager"] == {"id": str(bob.id), "username": "bob"}
 
     def test_a_many_true_field_is_excluded_by_default_like_any_other(self, management_chain, make_request):
         _alice, bob, _carol = management_chain
@@ -319,7 +319,7 @@ class TestExcludeFilter:
     def test_nested_exclude_drops_a_field_from_the_included_nested_serializer(self, widget, make_request):
         request = make_request("/", {"include": "owner", "exclude": "owner.username"})
         serializer = WidgetSerializer(widget, context={"request": request})
-        assert serializer.data["owner"] == {"id": widget.owner_id}
+        assert serializer.data["owner"] == {"id": str(widget.owner_id)}
 
     def test_a_field_literally_named_with_a_dot_is_never_treated_as_its_own_to_exclude(self, make_request):
         # A dot always means "reach past me into a nested field" - a top-level field whose own
@@ -342,7 +342,7 @@ class TestSerializerMethodInclude:
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
         request = make_request("/", {"include": "owner_detail.manager"})
         serializer = WidgetSerializerWithMethodField(widget, context={"request": request})
-        assert serializer.data["owner_detail"]["manager"] == {"id": bob.id, "username": "bob"}
+        assert serializer.data["owner_detail"]["manager"] == {"id": str(bob.id), "username": "bob"}
 
     def test_the_nested_field_is_excluded_by_default(self, management_chain, make_request):
         alice, _bob, _carol = management_chain
@@ -356,7 +356,7 @@ class TestSerializerMethodInclude:
     ):
         request = make_request("/", {"exclude": "owner_detail.username"})
         serializer = WidgetSerializerWithMethodField(widget, context={"request": request})
-        assert serializer.data["owner_detail"] == {"id": widget.owner_id}
+        assert serializer.data["owner_detail"] == {"id": str(widget.owner_id)}
 
     def test_only_narrows_the_ad_hoc_nested_serializer_without_needing_include(self, widget, make_request):
         request = make_request("/", {"only": "owner_detail.username"})

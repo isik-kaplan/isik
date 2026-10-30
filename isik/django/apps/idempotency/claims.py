@@ -19,6 +19,7 @@ from rest_framework.utils.encoders import JSONEncoder
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.constraints import fitted_name
+from isik.django.apps.common.db.models import new_primary_key
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyInFlight, IdempotentReplayGone
 
 
@@ -46,8 +47,10 @@ class AbstractBaseIdempotencyClaim(models.Model):
     `AbstractIdempotencyClaim` and `AbstractIdempotencyClaimWithBody` are the two shipped ways.
     """
 
-    id = models.BigAutoField(
+    id = models.UUIDField(
         primary_key=True,
+        editable=False,
+        default=new_primary_key,
         help_text=gettext_lazy("The claim's own identifier."),
         db_comment="The claim's own identifier.",
     )

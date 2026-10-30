@@ -1,6 +1,7 @@
 """The notice trigger, the ledger's protections, and VariantGuard - each against the real database."""
 
 import threading
+import uuid
 
 import pghistory
 import pgtrigger
@@ -13,6 +14,7 @@ from isik.django.apps.notifications.audience.swapping import get_endpoint_kind_m
 from isik.django.apps.notifications.models import DeliveryAttempt, Notice, NoticeKindPolicy
 from isik.django.apps.notifications.partitions import Column, Connection
 from isik.django.apps.notifications.triggers import NoticeTrigger, VariantGuard, literal
+from tests.django.apps.notifications import kind_named
 from tests.testapp.models import EmailUser, Parcel
 
 
@@ -21,7 +23,7 @@ pytestmark = pytest.mark.django_db
 
 def notices(kind=None):
     queryset = Notice.objects.order_by("pk")
-    return list(queryset.filter(kind_id=kind) if kind else queryset)
+    return list(queryset.filter(kind__name=kind) if kind else queryset)
 
 
 class TestTheNoticeTrigger:
@@ -34,8 +36,8 @@ class TestTheNoticeTrigger:
         assert notice.subject_label == "testapp.Parcel"
         assert notice.subject_id == str(parcel.pk)
         assert notice.subject_partition is None
-        assert notice.snapshot == {"status": "shipped", "recipient": bob.pk, "sender": alice.pk}
-        assert notice.previous == {"status": "packed", "recipient": bob.pk, "sender": alice.pk}
+        assert notice.snapshot == {"status": "shipped", "recipient": str(bob.pk), "sender": str(alice.pk)}
+        assert notice.previous == {"status": "packed", "recipient": str(bob.pk), "sender": str(alice.pk)}
         assert notice.fanned_out_at is None
         assert notice.occurred_at is not None
 
@@ -82,7 +84,7 @@ class TestTheNoticeTrigger:
     def test_a_kind_with_no_policy_row_yet_writes_nothing(self, parcel):
         # A data migration, before the mirror wrote the kind's row: nothing happened worth telling.
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
-            NoticeKindPolicy.objects.filter(pk="parcel_shipped").delete()
+            NoticeKindPolicy.objects.filter(name="parcel_shipped").delete()
 
         parcel.status = "shipped"
         parcel.save()
@@ -102,7 +104,7 @@ class TestTheNoticeTrigger:
         assert notices("parcel_shipped") == []
 
     def test_a_retired_kind_writes_nothing(self, parcel):
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
 
         parcel.status = "shipped"
         parcel.save()
@@ -193,11 +195,11 @@ def test_a_ledger_table_cant_be_truncated(table):
 class TestThePolicyRow:
     def test_its_kind_cant_change(self):
         with pytest.raises(ProgrammingError, match="protect_kind"):
-            NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(kind="renamed")
+            NoticeKindPolicy.objects.filter(name="parcel_shipped").update(name="renamed")
 
     def test_it_cant_be_deleted(self):
         with pytest.raises(ProgrammingError, match="protect_policy_delete"):
-            NoticeKindPolicy.objects.filter(pk="parcel_reminder").delete()
+            NoticeKindPolicy.objects.filter(name="parcel_reminder").delete()
 
 
 class TestAttemptsAreAppendOnly:
@@ -228,7 +230,7 @@ class TestAttemptsAreAppendOnly:
 
 class TestTheVariantGuard:
     def subscribe(self, user, variant, kind="parcel_flagged"):
-        return get_subscription_model().objects.create(user=user, kind_id=kind, variant=variant)
+        return get_subscription_model().objects.create(user=user, kind=kind_named(kind), variant=variant)
 
     def test_a_declared_variant_or_none_is_taken(self, alice, bob):
         self.subscribe(alice, "lost")
@@ -239,7 +241,7 @@ class TestTheVariantGuard:
     def test_a_kind_that_doesnt_exist_is_refused(self, alice, variant):
         # Before the foreign key, which is deferred - and which a key reaching across schemas doesn't have.
         with pytest.raises(IntegrityError, match="no kind is called that"):
-            self.subscribe(alice, variant, kind="typoed_kind")
+            get_subscription_model().objects.create(user=alice, kind_id=uuid.uuid4(), variant=variant)
 
     def test_an_undeclared_variant_is_refused(self, alice):
         with pytest.raises(IntegrityError, match="declares no such variant"):
@@ -289,10 +291,10 @@ class TestTheVariantGuard:
         from isik.django.apps.notifications.audience.swapping import get_endpoint_model
 
         endpoint = get_endpoint_model().objects.create(url="https://example.com/hook", secret="s")
-        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged", variant="lost")
+        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"), variant="lost")
 
         with pytest.raises(IntegrityError, match="for the same endpoint"):
-            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged")
+            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
 
     def test_inbox_items_are_held_to_declared_variants_only(self, alice):
         import uuid
@@ -300,10 +302,10 @@ class TestTheVariantGuard:
         from isik.django.apps.notifications.audience.swapping import get_inbox_item_model
 
         items = get_inbox_item_model().objects
-        items.create(user=alice, kind_id="parcel_flagged", variant="lost", delivery_id=uuid.uuid4())
-        items.create(user=alice, kind_id="parcel_flagged", delivery_id=uuid.uuid4())
+        items.create(user=alice, kind=kind_named("parcel_flagged"), variant="lost", delivery_id=uuid.uuid4())
+        items.create(user=alice, kind=kind_named("parcel_flagged"), delivery_id=uuid.uuid4())
         with pytest.raises(IntegrityError, match="declares no such variant"):
-            items.create(user=alice, kind_id="parcel_flagged", variant="stolen", delivery_id=uuid.uuid4())
+            items.create(user=alice, kind=kind_named("parcel_flagged"), variant="stolen", delivery_id=uuid.uuid4())
 
     def test_only_an_owned_guard_locks(self):
         assert "pg_advisory_xact_lock" not in VariantGuard(name="g").get_func(get_subscription_model())
@@ -319,7 +321,7 @@ def test_two_concurrent_writers_cant_both_pass_the_guard():
     def write(variant, wait):
         try:
             with transaction.atomic():
-                get_subscription_model().objects.create(user=alice, kind_id="parcel_flagged", variant=variant)
+                get_subscription_model().objects.create(user=alice, kind=kind_named("parcel_flagged"), variant=variant)
                 first_in.set()
                 if wait:
                     # Hold the lock until the other writer is blocked on it.
@@ -369,11 +371,11 @@ class TestTheCompiledSql:
 
         assert func.count("INSERT INTO") == 1
         assert func.startswith(f'{GUARD}INSERT INTO "isik_notice" ("kind_id", "variant", "subject_label", ')
-        assert "SELECT 'parcel_shipped', NULL, 'testapp.Parcel', " in func
+        assert """SELECT "isik_notice_kind_policy"."id", NULL, 'testapp.Parcel', """ in func
         assert "CASE WHEN TG_OP = 'UPDATE' THEN jsonb_build_object('status', OLD.\"status\", " in func
         assert func.endswith(
-            '_pgh_attach_context() WHERE EXISTS (SELECT 1 FROM "isik_notice_kind_policy" '
-            'WHERE "kind" = \'parcel_shipped\' AND "retired_at" IS NULL); END IF; RETURN NULL;'
+            '_pgh_attach_context() FROM "isik_notice_kind_policy" '
+            'WHERE "name" = \'parcel_shipped\' AND "retired_at" IS NULL; END IF; RETURN NULL;'
         )
 
     def test_a_kind_with_variants_writes_one_per_condition_holding(self):
@@ -383,7 +385,7 @@ class TestTheCompiledSql:
 
         assert func.startswith(f"{GUARD}IF NEW.\"status\" = 'lost' THEN INSERT INTO ")
         assert "END IF; IF NEW.\"status\" = 'damaged' THEN INSERT INTO " in func
-        assert "SELECT 'parcel_flagged', 'damaged', " in func
+        assert """SELECT "isik_notice_kind_policy"."id", 'damaged', """ in func
         assert f", NULL, {triggers.actor()}, {triggers.context()}, _pgh_attach_context()" in func
 
     def test_a_variant_without_a_condition_is_always_written(self):
@@ -398,7 +400,7 @@ class TestTheCompiledSql:
     def test_the_guard_reads_its_columns_off_the_model(self):
         func = VariantGuard(name="g", owner="user").get_func(get_subscription_model())
 
-        lookup = 'SELECT 1 FROM "isik_notice_kind_policy" WHERE "kind" = NEW."kind_id"'
+        lookup = 'SELECT 1 FROM "isik_notice_kind_policy" WHERE "id" = NEW."kind_id"'
         assert func.startswith(
             f"IF NOT EXISTS ({lookup}) THEN RAISE EXCEPTION 'isik_notifications_audience.Subscription: no kind is "
             "called that.' USING ERRCODE = 'check_violation'; END IF; "

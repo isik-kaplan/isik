@@ -29,7 +29,7 @@ from django.utils import timezone
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.conditions import AnyChange
 from isik.django.apps.common.db.constraints import fitted_name
-from isik.django.apps.common.db.models import new_primary_key
+from isik.django.apps.common.db.models import DatabaseUUID7, UUIDPrimaryKeyModel, new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
 from isik.django.apps.notifications.swapping import (
@@ -40,15 +40,15 @@ from isik.django.apps.notifications.swapping import (
 )
 
 
-class AbstractNoticeKindPolicy(models.Model):
+class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
     """
     One declared kind, mirrored from its declaration after every migrate - the row its notices and the
-    audience's subscriptions and endpoint kinds key to. The declaration is the source of truth; a row is
-    never deleted, only retired, since notices outlive their kind.
+    audience's subscriptions and endpoint kinds key to, by its id. The declaration is the source of truth;
+    a row is never deleted, only retired, since notices outlive their kind.
     """
 
-    kind = models.CharField(
-        primary_key=True,
+    name = models.CharField(
+        unique=True,
         max_length=100,
         help_text=gettext_lazy("The kind's name, as its declaration gives it."),
         db_comment="The kind's name, as its declaration gives it. Never changes.",
@@ -91,7 +91,7 @@ class AbstractNoticeKindPolicy(models.Model):
         abstract = True
 
     def __str__(self):
-        return self.kind
+        return self.name
 
 
 class AbstractNotice(models.Model):
@@ -101,12 +101,15 @@ class AbstractNotice(models.Model):
     `fanned_out_at` aside, which is stamped once: a null `fanned_out_at` is the queue `fan_out` takes from.
     """
 
-    # A sequence, not new_primary_key(): the notice trigger writes notices in SQL, which no Python key
-    # function reaches. A project keying them otherwise gives its own id a db_default.
-    id = models.BigAutoField(
+    # new_primary_key()'s for a notice written in Python; the notice trigger writes them in SQL, which no
+    # Python function reaches, and the database's uuid7 keys those.
+    id = models.UUIDField(
         primary_key=True,
+        editable=False,
+        default=new_primary_key,
+        db_default=DatabaseUUID7(),
         help_text=gettext_lazy("The notice's own identifier."),
-        db_comment="The notice's own identifier.",
+        db_comment="The notice's own identifier - a uuid7 the database makes, for a notice its trigger writes.",
     )
     kind = models.ForeignKey(
         model_name(KIND_POLICY_MODEL),
@@ -361,9 +364,9 @@ class AbstractDelivery(models.Model):
 
 
 def _delivery_key(related_name):
+    # A key of its own, as every row has, beside the delivery it's the target of.
     return models.OneToOneField(
         model_name(DELIVERY_MODEL),
-        primary_key=True,
         on_delete=models.CASCADE,
         related_name=related_name,
         help_text=gettext_lazy("The delivery this is the target of."),
@@ -371,7 +374,7 @@ def _delivery_key(related_name):
     )
 
 
-class AbstractWebhookDelivery(models.Model):
+class AbstractWebhookDelivery(UUIDPrimaryKeyModel):
     """A delivery's endpoint - its key in the partition the delivery names."""
 
     delivery = _delivery_key("webhook")
@@ -385,7 +388,7 @@ class AbstractWebhookDelivery(models.Model):
         abstract = True
 
 
-class AbstractEmailDelivery(models.Model):
+class AbstractEmailDelivery(UUIDPrimaryKeyModel):
     """A delivery's address, and the user it belongs to when it's a user's."""
 
     delivery = _delivery_key("email")
@@ -414,7 +417,7 @@ class AbstractEmailDelivery(models.Model):
         abstract = True
 
 
-class AbstractInboxDelivery(models.Model):
+class AbstractInboxDelivery(UUIDPrimaryKeyModel):
     """A delivery's user - whose inbox it lands in."""
 
     delivery = _delivery_key("inbox")
@@ -428,7 +431,7 @@ class AbstractInboxDelivery(models.Model):
         abstract = True
 
 
-class AbstractPushDelivery(models.Model):
+class AbstractPushDelivery(UUIDPrimaryKeyModel):
     """A delivery's device - one of a user's phones - and the user it's theirs."""
 
     delivery = _delivery_key("push")
@@ -520,7 +523,7 @@ def _rules(model):
     if issubclass(model, AbstractNoticeKindPolicy):
         return (
             [
-                pgtrigger.ReadOnly(name="protect_kind", fields=["kind"]),
+                pgtrigger.ReadOnly(name="protect_kind", fields=["id", "name"]),
                 pgtrigger.Protect(name="protect_policy_delete", operation=pgtrigger.Delete),
                 # A notice outlives its kind: emptying the table would orphan every one, as deleting a row does.
                 ProtectTruncate(name="protect_policy_truncate"),

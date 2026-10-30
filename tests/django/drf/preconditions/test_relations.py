@@ -43,7 +43,7 @@ def test_a_write_made_before_a_member_joined_is_refused(client, team, bob):
     response = patch(client, f"/teams/{team.pk}/", read)
 
     assert response.status_code == status.HTTP_412_PRECONDITION_FAILED
-    assert response.json()["current"]["members"] == [bob.pk]
+    assert response.json()["current"]["members"] == [str(bob.pk)]
     assert response["ETag"] == etag(team)
 
 

@@ -43,7 +43,6 @@ class TestTheFieldsBuiltForEachModel:
             (),
             {
                 "to": "isik_notifications.delivery",
-                "primary_key": True,
                 "on_delete": models.CASCADE,
                 "related_name": "webhook",
                 "help_text": "The delivery this is the target of.",
@@ -271,7 +270,7 @@ class TestTheSerializers:
         fields = drf.inbox_item_serializer(swapping.get_inbox_item_model())().fields
 
         assert all(field.read_only for field in fields.values())
-        assert fields["kind"].source == "kind_id"
+        assert fields["kind"].source == "kind.name"
 
     def test_an_endpoints_counters_are_read_only(self):
         fields = drf.endpoint_serializer(swapping.get_endpoint_model())().fields
@@ -395,7 +394,7 @@ def test_an_unset_isik_notifications_reads_as_empty(settings):
 @pytest.mark.django_db
 def test_a_kind_is_named_by_a_kind_a_policy_row_or_a_string():
     assert _kind_name(kinds.get_kind("parcel_shipped")) == "parcel_shipped"
-    assert _kind_name(NoticeKindPolicy.objects.get(pk="parcel_shipped")) == "parcel_shipped"
+    assert _kind_name(NoticeKindPolicy.objects.get(name="parcel_shipped")) == "parcel_shipped"
     assert _kind_name("parcel_shipped") == "parcel_shipped"
 
 

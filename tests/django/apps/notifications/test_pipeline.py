@@ -37,6 +37,7 @@ from isik.django.apps.notifications.models import (
     ShardState,
 )
 from isik.django.apps.notifications.signals import endpoint_parked
+from tests.django.apps.notifications import kind_named
 from tests.testapp.models import EmailUser, Parcel
 
 
@@ -51,12 +52,12 @@ def _no_jitter(monkeypatch):
 def ship(parcel):
     parcel.status = "shipped"
     parcel.save()
-    return Notice.objects.get(kind_id="parcel_shipped", subject_id=str(parcel.pk))
+    return Notice.objects.get(kind__name="parcel_shipped", subject_id=str(parcel.pk))
 
 
 def flag(sender, status="lost"):
     parcel = Parcel.objects.create(sender=sender, status=status)
-    return Notice.objects.get(kind_id="parcel_flagged", subject_id=str(parcel.pk))
+    return Notice.objects.get(kind__name="parcel_flagged", subject_id=str(parcel.pk))
 
 
 def fan_out(django_capture_on_commit_callbacks):
@@ -197,9 +198,9 @@ class TestFanningOut:
         every = endpoints.create(url="https://b.example/hook", secret="s")
         inactive = endpoints.create(url="https://c.example/hook", secret="s", is_active=False)
         parked = endpoints.create(url="https://d.example/hook", secret="s", parked_at=timezone.now())
-        wanted.create(endpoint=lost_only, kind_id="parcel_flagged", variant="lost")
+        wanted.create(endpoint=lost_only, kind=kind_named("parcel_flagged"), variant="lost")
         for endpoint in (every, inactive, parked):
-            wanted.create(endpoint=endpoint, kind_id="parcel_flagged")
+            wanted.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
         lost, damaged = flag(alice, "lost"), flag(alice, "damaged")
 
         fan_out(django_capture_on_commit_callbacks)
@@ -219,9 +220,9 @@ class TestFanningOut:
         endpoints, wanted = get_endpoint_model().objects, get_endpoint_kind_model().objects
         mine = endpoints.create(url="https://lost.example/hook", secret="s")
         theirs = endpoints.create(url="https://damaged.example/hook", secret="s")
-        # Keyed apart from the endpoints, so a target is named by its endpoint, never by the row wanting it.
-        for offset, endpoint in enumerate((mine, theirs), start=1000):
-            wanted.create(pk=endpoint.pk + offset, endpoint=endpoint, kind_id="parcel_flagged")
+        # Each keyed apart from its endpoint, so a target is named by its endpoint, never by the row wanting it.
+        for endpoint in (mine, theirs):
+            wanted.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
 
         class ToAlicesHook(Audience):
             def recipients(self, notice):
@@ -470,7 +471,7 @@ class TestSendingToTheInbox:
         assert sent.state == DeliveryState.SENT
         assert (sent.attempt_count, sent.sent_at is not None) == (1, True)
         [item] = get_inbox_item_model().objects.filter(user=bob)
-        assert (item.kind_id, item.variant, item.subject_label, item.subject_id) == (
+        assert (item.kind.name, item.variant, item.subject_label, item.subject_id) == (
             "parcel_shipped",
             None,
             "testapp.Parcel",
@@ -584,7 +585,7 @@ def receiver(monkeypatch):
 @pytest.fixture
 def hooked(alice, dispatched, django_capture_on_commit_callbacks):
     endpoint = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="current")
-    get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged")
+    get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
     notice = flag(alice)
     fan_out(django_capture_on_commit_callbacks)
     dispatched.clear()

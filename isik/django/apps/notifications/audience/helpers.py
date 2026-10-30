@@ -39,13 +39,22 @@ class SubscriptionForced(SubscriptionRefused):
 
 
 def _kind_name(kind):
-    # A Kind's name, or a policy row's - whose str() is its kind - or the name itself.
+    # A Kind's name, or a policy row's, or the name itself.
     return str(getattr(kind, "name", kind))
 
 
-def _refuse_mandatory(name):
-    if get_kind_policy_model()._default_manager.filter(pk=name, policy=Policy.MANDATORY).exists():
-        raise KindIsMandatory(_("%(kind)s is mandatory - it reaches everyone it's for.") % {"kind": name})
+def _choosable_kind(kind):
+    """
+    The policy row of `kind` - a row, as given, or read by its name - refused when there's none, or it's
+    MANDATORY.
+    """
+    model = get_kind_policy_model()
+    row = kind if isinstance(kind, model) else model._default_manager.filter(name=_kind_name(kind)).first()
+    if row is None:
+        raise ValueError(_("No kind is called %(kind)s.") % {"kind": _kind_name(kind)})
+    if row.policy == Policy.MANDATORY:
+        raise KindIsMandatory(_("%(kind)s is mandatory - it reaches everyone it's for.") % {"kind": row.name})
+    return row
 
 
 def _forceable():
@@ -65,10 +74,10 @@ def subscribe(user, kind, variant=None, *, enabled=True):
     kind first. Returns the subscription.
     """
     model = get_subscription_model()
-    name = _kind_name(kind)
-    _refuse_mandatory(name)
+    policy = _choosable_kind(kind)
+    name = policy.name
     with transaction.atomic():
-        rows = model._default_manager.filter(user=user, kind_id=name)
+        rows = model._default_manager.filter(user=user, kind=policy)
         _refuse_forced(rows if variant is None else rows.filter(variant=variant))
         if variant is None:
             rows.filter(variant__isnull=False).delete()
@@ -81,8 +90,10 @@ def subscribe(user, kind, variant=None, *, enabled=True):
             with transaction.atomic():
                 # A row not of their choosing is a forced one, refused above - so this one is chosen, as made.
                 subscription, _created = model._default_manager.update_or_create(
-                    user=user, kind_id=name, variant=variant, defaults={"enabled": enabled}
+                    user=user, kind=policy, variant=variant, defaults={"enabled": enabled}
                 )
+                # Its kind as read already - a row it updated comes back without it.
+                subscription.kind = policy
         except IntegrityError as error:
             # Another subscribe() of the same user to the same kind, one naming a variant and one naming
             # none, got there first - the database's guard refused this one.
@@ -98,7 +109,7 @@ def unsubscribe(user, kind, variant=None):
     Forgets `user`'s choice about `kind` - every variant's, or only `variant`'s - so the kind's policy
     decides again. Returns how many subscriptions went.
     """
-    rows = get_subscription_model()._default_manager.filter(user=user, kind_id=_kind_name(kind))
+    rows = get_subscription_model()._default_manager.filter(user=user, kind__name=_kind_name(kind))
     if variant is not None:
         rows = rows.filter(variant=variant)
     _refuse_forced(rows)
@@ -119,11 +130,11 @@ def force_subscription(user, kind, variant=None, *, enabled, source, reason):
         raise ImproperlyConfigured(
             _("%(model)s can't be forced - base it on AbstractForceableSubscription.") % {"model": model._meta.label}
         )
-    name = _kind_name(kind)
-    _refuse_mandatory(name)
+    policy = _choosable_kind(kind)
+    name = policy.name
     declared = checked_force(source, reason)
     with transaction.atomic():
-        rows = model._default_manager.filter(user=user, kind_id=name)
+        rows = model._default_manager.filter(user=user, kind=policy)
         if variant is None:
             _refuse_forced(rows.filter(variant__isnull=False))
             rows.filter(variant__isnull=False).delete()
@@ -135,9 +146,7 @@ def force_subscription(user, kind, variant=None, *, enabled, source, reason):
         force = {"forced": True, "forced_enabled": enabled, "forced_source": declared.name, "forced_reason": reason}
         subscription = rows.filter(variant=variant).first()
         if subscription is None:
-            subscription = model._default_manager.create(
-                user=user, kind_id=name, variant=variant, chosen=False, **force
-            )
+            subscription = model._default_manager.create(user=user, kind=policy, variant=variant, chosen=False, **force)
         else:
             for field, value in force.items():
                 setattr(subscription, field, value)
@@ -158,7 +167,7 @@ def release_subscription(user, kind, variant=None, *, by_operator=True):
         subscription = (
             get_subscription_model()
             ._default_manager.select_for_update()
-            .filter(user=user, kind_id=name, variant=variant, forced=True)
+            .filter(user=user, kind__name=name, variant=variant, forced=True)
             .first()
         )
         if subscription is None:

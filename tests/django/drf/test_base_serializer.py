@@ -98,7 +98,7 @@ class TestBaseModelSerializer:
         widget = Widget.objects.create(name="bolt", count=1, owner=owner)
         request = Request(APIRequestFactory().get("/", {"include": "owner", "only": "name,owner", "exclude": "count"}))
         serializer = WidgetSerializerWithOwnerInclude(widget, context={"request": request})
-        assert serializer.data == {"name": "bolt", "owner": {"id": owner.id, "username": "alice"}}
+        assert serializer.data == {"name": "bolt", "owner": {"id": str(owner.id), "username": "alice"}}
 
 
 class TestBaseSerializer:

@@ -26,6 +26,7 @@ from isik.django.apps.notifications.kinds import Kind, declare_kind, get_kind, m
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import PartitionGone, in_partition
 from isik.django.apps.notifications.sync import mirror_kinds
+from tests.django.apps.notifications import kind_named
 from tests.testapp.models import PARCEL_REMINDER, Parcel
 
 
@@ -112,7 +113,7 @@ class TestRaisingANotice:
         notice = raise_notice("parcel_reminder", variant="daily", subject=alice, snapshot={"n": 1}, partition="p")
 
         assert Notice.objects.get() == notice
-        assert (notice.kind_id, notice.variant, notice.subject_label, notice.subject_id) == (
+        assert (notice.kind.name, notice.variant, notice.subject_label, notice.subject_id) == (
             "parcel_reminder",
             "daily",
             "testapp.EmailUser",
@@ -150,7 +151,7 @@ class TestRaisingANotice:
             raise_notice("parcel_reminder", variant="hourly")
 
     def test_not_a_retired_kind(self):
-        NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=timezone.now())
 
         with pytest.raises(ImproperlyConfigured, match="^parcel_reminder is retired.$"):
             raise_notice("parcel_reminder")
@@ -160,9 +161,9 @@ class TestRaisingANotice:
 @pytest.mark.django_db
 def test_matching_a_variant_takes_rows_naming_it_or_none(alice, bob):
     model = get_subscription_model()
-    every = model.objects.create(user=alice, kind_id="parcel_flagged")
-    lost = model.objects.create(user=bob, kind_id="parcel_flagged", variant="lost")
-    model.objects.create(user=bob, kind_id="parcel_flagged", variant="damaged")
+    every = model.objects.create(user=alice, kind=kind_named("parcel_flagged"))
+    lost = model.objects.create(user=bob, kind=kind_named("parcel_flagged"), variant="lost")
+    model.objects.create(user=bob, kind=kind_named("parcel_flagged"), variant="damaged")
 
     assert set(matching_variant(model.objects.all(), "lost")) == {every, lost}
     assert set(matching_variant(model.objects.all(), None)) == {every}
@@ -172,7 +173,7 @@ def test_matching_a_variant_takes_rows_naming_it_or_none(alice, bob):
 class TestAudiences:
     def notice(self, parcel):
         Parcel.objects.filter(pk=parcel.pk).update(status="shipped")
-        return Notice.objects.get(kind_id="parcel_shipped")
+        return Notice.objects.get(kind__name="parcel_shipped")
 
     def test_field_reads_the_snapshot(self, parcel, alice, bob):
         notice = self.notice(parcel)
@@ -236,7 +237,7 @@ class TestAudiences:
 class TestSubscribing:
     def rows(self, user):
         return sorted(
-            get_subscription_model().objects.filter(user=user).values_list("kind_id", "variant", "enabled"),
+            get_subscription_model().objects.filter(user=user).values_list("kind__name", "variant", "enabled"),
             key=str,
         )
 
@@ -268,7 +269,7 @@ class TestSubscribing:
             subscribe(alice, "parcel_flagged", "lost")
 
     def test_a_kind_by_its_policy_row(self, alice):
-        subscribe(alice, NoticeKindPolicy.objects.get(pk="parcel_shipped"), enabled=False)
+        subscribe(alice, NoticeKindPolicy.objects.get(name="parcel_shipped"), enabled=False)
 
         assert self.rows(alice) == [("parcel_shipped", None, False)]
 
@@ -287,9 +288,9 @@ class TestSubscribing:
 @pytest.mark.django_db
 def test_the_inbox_unread_and_marked_read(alice, bob):
     items = get_inbox_item_model().objects
-    first = items.create(user=alice, kind_id="parcel_shipped", delivery_id=uuid.uuid4())
-    second = items.create(user=alice, kind_id="parcel_shipped", delivery_id=uuid.uuid4())
-    items.create(user=bob, kind_id="parcel_shipped", delivery_id=uuid.uuid4())
+    first = items.create(user=alice, kind=kind_named("parcel_shipped"), delivery_id=uuid.uuid4())
+    second = items.create(user=alice, kind=kind_named("parcel_shipped"), delivery_id=uuid.uuid4())
+    items.create(user=bob, kind=kind_named("parcel_shipped"), delivery_id=uuid.uuid4())
 
     assert list(unread(alice)) == [second, first]
     assert mark_read(items.filter(pk=first.pk)) == 1
@@ -371,25 +372,26 @@ class TestSwapping:
         assert (ChoiceProxy._meta.constraints, getattr(ChoiceProxy._meta, "triggers", [])) == ([], [])
 
     @pytest.mark.django_db
-    def test_each_audience_row_reads_as_its_kind(self, alice):
+    def test_each_audience_row_reads_as_its_kinds_key(self, alice):
         subscription = subscribe(alice, "parcel_flagged", "lost")
         every = subscribe(alice, "parcel_shipped")
         endpoint = get_endpoint_model().objects.create(url="https://x.example/", secret="s")
-        wanted = get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_shipped")
+        wanted = get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_shipped"))
         item = get_inbox_item_model().objects.create(
             user=alice,
-            kind_id="parcel_shipped",
+            kind=kind_named("parcel_shipped"),
             subject_label="testapp.Parcel",
             subject_id="7",
             delivery_id=uuid.uuid4(),
         )
 
+        flagged, shipped = kind_named("parcel_flagged").pk, kind_named("parcel_shipped").pk
         assert [str(row) for row in (subscription, every, endpoint, wanted, item)] == [
-            "parcel_flagged:lost",
-            "parcel_shipped:*",
+            f"{flagged}:lost",
+            f"{shipped}:*",
             "https://x.example/",
-            "parcel_shipped:*",
-            "parcel_shipped:testapp.Parcel:7",
+            f"{shipped}:*",
+            f"{shipped}:testapp.Parcel:7",
         ]
 
 
@@ -510,33 +512,33 @@ class TestEnteringAPartition:
 @pytest.mark.django_db
 class TestTheMirror:
     def test_each_declared_kind_has_its_row(self):
-        rows = {row.kind: row for row in NoticeKindPolicy.objects.all()}
+        rows = {row.name: row for row in NoticeKindPolicy.objects.all()}
 
         assert (rows["parcel_flagged"].policy, rows["parcel_flagged"].variants) == ("default_off", ["lost", "damaged"])
         assert (rows["parcel_reminder"].source, rows["parcel_reminder"].scope) == ("application", "single_partition")
 
     def test_it_brings_a_row_up_to_date_and_deletes_none(self, monkeypatch):
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(policy="mandatory", variants=["x"])
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(policy="mandatory", variants=["x"])
         retired_at = timezone.now() - timedelta(days=1)
-        NoticeKindPolicy.objects.create(kind="gone", policy="mandatory", scope="single_partition", source="trigger")
-        NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(retired_at=retired_at)
+        NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=retired_at)
 
         rows = mirror_kinds()
 
-        assert {row.kind for row in rows} == set(kinds.kinds())
-        shipped = NoticeKindPolicy.objects.get(pk="parcel_shipped")
+        assert {row.name for row in rows} == set(kinds.kinds())
+        shipped = NoticeKindPolicy.objects.get(name="parcel_shipped")
         assert (shipped.policy, shipped.variants) == ("default_on", [])
-        assert NoticeKindPolicy.objects.filter(pk="gone").exists()
-        assert NoticeKindPolicy.objects.get(pk="parcel_reminder").retired_at == retired_at
+        assert NoticeKindPolicy.objects.filter(name="gone").exists()
+        assert NoticeKindPolicy.objects.get(name="parcel_reminder").retired_at == retired_at
         assert str(shipped) == "parcel_shipped"
 
 
 @pytest.mark.django_db
-def test_a_notice_reads_as_its_kind_and_number(parcel):
+def test_a_notice_reads_as_its_kinds_key_and_its_own(parcel):
     Parcel.objects.filter(pk=parcel.pk).update(status="shipped")
     notice = Notice.objects.get()
 
-    assert str(notice) == f"parcel_shipped#{notice.pk}"
+    assert str(notice) == f"{kind_named('parcel_shipped').pk}#{notice.pk}"
 
 
 def test_the_kind_dataclass_defaults():

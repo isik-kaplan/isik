@@ -128,7 +128,8 @@ class FeatureViewSet(BaseViewSet):
         with in_holder_schema():
             grants = list(
                 get_grant_model()
-                ._default_manager.filter(holder=holder, revoked_at__isnull=True)
+                ._default_manager.select_related("feature")
+                .filter(holder=holder, revoked_at__isnull=True)
                 .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now()))
                 .order_by("starts_at")
             )
@@ -146,7 +147,7 @@ class FeatureViewSet(BaseViewSet):
                         "reference": grant.reference if shows_source else None,
                     }
                     for grant in grants
-                    if grant.feature_id == name
+                    if grant.feature.name == name
                 ],
             }
             for name in names

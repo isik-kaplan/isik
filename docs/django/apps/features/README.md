@@ -16,7 +16,8 @@ ISIK_FEATURES = {
 ```
 
 Then `migrate`. Every declared feature is mirrored into its catalog row after each `migrate`, like a
-notification kind.
+notification kind. A catalog row is keyed by its `id`, with its `name` unique, and a grant stores that `id`.
+Everything here takes and answers with names, and finds the row by a join.
 
 ## Features
 
@@ -51,10 +52,17 @@ read needs it - a setting with no feature never asks for the grants - and not at
 loaded it with the holder:
 
 ```python
-Organization.objects.select_related("setting_overrides").prefetch_related("feature_grants")
+from django.db.models import Prefetch
+from isik.django.apps.features.swapping import get_grant_model
+
+Organization.objects.select_related("setting_overrides").prefetch_related(
+    Prefetch("feature_grants", queryset=get_grant_model().objects.select_related("feature"))
+)
 ```
 
-That needs a `related_name` on the holder key - redeclare it on your own model; isik's is `"+"`. Only the
+That needs a `related_name` on the holder key - redeclare it on your own model; isik's is `"+"`. Load each
+grant's feature with it: a grant keys its feature by id, and the names are what a check asks about - grants
+loaded without their features are read again, one query per holder, as if none were loaded. Only the
 grants in force are counted, and `forget()` drops what was loaded too, so a write is never answered from
 rows read before it. An unsaved holder holds nothing and asks nothing.
 

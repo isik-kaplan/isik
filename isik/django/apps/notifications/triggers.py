@@ -96,7 +96,7 @@ class NoticeTrigger(pgtrigger.Trigger):
         previous = f"CASE WHEN TG_OP = 'UPDATE' THEN {self._object(model, 'OLD')} END" if self.kind.previous else "NULL"
         values = ", ".join(
             [
-                literal(self.kind.name),
+                f"{_quote(policy.db_table)}.{_column(NoticeKindPolicy, 'id')}",
                 literal(variant) if variant is not None else "NULL",
                 literal(model._meta.label),
                 f"({self._value(model, model._meta.pk.name)})::text",
@@ -108,11 +108,12 @@ class NoticeTrigger(pgtrigger.Trigger):
                 "_pgh_attach_context()",
             ]
         )
-        active = (
-            f"SELECT 1 FROM {_quote(policy.db_table)} WHERE {_column(NoticeKindPolicy, 'kind')} = "
-            f"{literal(self.kind.name)} AND {_column(NoticeKindPolicy, 'retired_at')} IS NULL"
+        # The kind's key read off its policy row in the INSERT itself - and no row, no notice, for a retired kind.
+        return (
+            f"INSERT INTO {_quote(notice.db_table)} ({columns}) SELECT {values} FROM {_quote(policy.db_table)} "
+            f"WHERE {_column(NoticeKindPolicy, 'name')} = {literal(self.kind.name)} "
+            f"AND {_column(NoticeKindPolicy, 'retired_at')} IS NULL;"
         )
-        return f"INSERT INTO {_quote(notice.db_table)} ({columns}) SELECT {values} WHERE EXISTS ({active});"
 
     def get_func(self, model):
         """
@@ -164,7 +165,7 @@ class VariantGuard(pgtrigger.Trigger):
         # Every row, not only one naming a variant: a kind key without a database constraint - one
         # reaching across schemas - would otherwise take a kind that doesn't exist.
         policy = _quote(NoticeKindPolicy._meta.db_table)
-        lookup = f"SELECT 1 FROM {policy} WHERE {_column(NoticeKindPolicy, 'kind')} = NEW.{kind}"
+        lookup = f"SELECT 1 FROM {policy} WHERE {_column(NoticeKindPolicy, 'id')} = NEW.{kind}"
         return (
             f"IF NOT EXISTS ({lookup}) THEN {self._refuse(f'{model._meta.label}: no kind is called that.')} END IF; "
             f"IF NEW.{variant} IS NOT NULL AND NOT EXISTS ({lookup} AND "

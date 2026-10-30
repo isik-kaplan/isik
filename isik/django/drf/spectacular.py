@@ -53,6 +53,8 @@ def _openapi_type_for_filter(filter_):
         return OpenApiTypes.NUMBER
     if issubclass(field_class, forms.IntegerField):
         return OpenApiTypes.INT
+    if issubclass(field_class, forms.UUIDField):
+        return OpenApiTypes.UUID
     return OpenApiTypes.STR
 
 

@@ -20,7 +20,7 @@ class TestDevices:
         assert answer.status_code == 201
         device = Device.objects.get()
         assert answer.json() == {
-            "id": device.pk,
+            "id": str(device.pk),
             "platform": "apns",
             "token": "abc",
             "environment": "sandbox",
@@ -37,7 +37,7 @@ class TestDevices:
         answer = client_for(alice).post("/devices/", {"platform": "fcm", "token": "abc"}, format="json")
 
         assert answer.status_code == 201
-        assert answer.json()["id"] == before.pk
+        assert answer.json()["id"] == str(before.pk)
         assert list(Device.objects.values_list("user", "is_active")) == [(alice.pk, True)]
 
     def test_what_it_refuses(self, alice):
@@ -50,7 +50,7 @@ class TestDevices:
         mine = register_device(alice, Platform.APNS, "mine")
         register_device(bob, Platform.APNS, "theirs")
 
-        assert [device["id"] for device in client_for(alice).get("/devices/").json()] == [mine.pk]
+        assert [device["id"] for device in client_for(alice).get("/devices/").json()] == [str(mine.pk)]
 
     def test_forgetting_one(self, alice, bob):
         mine, theirs = register_device(alice, Platform.APNS, "mine"), register_device(bob, Platform.APNS, "theirs")

@@ -188,7 +188,10 @@ def test_every_column_isik_generates_is_described(host, bounded_host):
 
 def test_the_base_models_fields_say_what_they_hold():
     assert described(Widget, "id", "created_at", "updated_at") == {
-        "id": both("A random identifier, assigned when the row is created."),
+        "id": (
+            "The row's identifier, assigned when it's created.",
+            "The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
+        ),
         "created_at": (
             "When the row was created, by the database's clock. Never changes.",
             "When the row was created, by the database's clock. A trigger refuses any change to it.",

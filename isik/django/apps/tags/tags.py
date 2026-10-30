@@ -19,6 +19,7 @@ from isik.django.apps.common._model_makers import (
     resolve_field,
     when_registered,
 )
+from isik.django.apps.common.db.models import UUIDPrimaryKeyModel
 
 
 TAG_NAME_REGEX = r"^[a-zA-Z0-9_.-]+$"
@@ -68,7 +69,7 @@ class TagManager(models.Manager.from_queryset(TagQuerySet)):
         return self.filter(pk__in=tag_ids)
 
 
-class AbstractTag(models.Model):
+class AbstractTag(UUIDPrimaryKeyModel):
     """
     A base for a tag model a project writes itself - `tags(tag_model=...)` - with what the pool reads:
     a unique `name`, validated as `tags()` validates its own, and `TagManager` as `objects`.

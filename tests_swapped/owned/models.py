@@ -3,13 +3,12 @@ Every notifications and features model, the project's own - empty subclasses of 
 their own.
 """
 
-import uuid
-
 import pgtrigger
 from django.conf import settings
 from django.db import models
 
 from isik.django.apps.common.db.history import track_events
+from isik.django.apps.common.db.models import UUIDPrimaryKeyModel
 from isik.django.apps.features import bases as features
 from isik.django.apps.features.audiences import HolderPeople
 from isik.django.apps.notifications import bases
@@ -28,15 +27,6 @@ class KindPolicy(bases.AbstractNoticeKindPolicy):
 
 
 class Notice(bases.AbstractNotice):
-    # Keyed by a UUID, as a project keying every table so would: its db_default is what a trigger-written
-    # notice gets, and the Python default what one written from Python does.
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        db_default=models.Func(function="gen_random_uuid"),
-        help_text="The notice's own identifier.",
-    )
-
     Meta = table("notice")
 
 
@@ -124,7 +114,7 @@ PACKAGE_LOST = declare_kind(
     audience=Field("owner"),
     policy=Policy.DEFAULT_ON,
 )
-class Package(models.Model):
+class Package(UUIDPrimaryKeyModel):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     label = models.CharField(max_length=50)
     state = models.CharField(max_length=20, default="moving")
@@ -133,12 +123,12 @@ class Package(models.Model):
 # The features app with an organization as the holder, and every model of it the project's own.
 
 
-class Organization(models.Model):
+class Organization(UUIDPrimaryKeyModel):
     name = models.CharField(max_length=50)
     seat_limit = models.PositiveIntegerField(default=5)
 
 
-class Membership(models.Model):
+class Membership(UUIDPrimaryKeyModel):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
 

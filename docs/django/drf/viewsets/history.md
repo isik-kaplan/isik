@@ -99,10 +99,11 @@ GET /widgets/history/?object_id=3&action=update
       if self.request.user.is_staff:
           return events
       # only what happened while the caller owned it - a snapshot is the row after the change,
-      # so the event that hands an object over belongs to its new owner
-      return events.filter(pgh_data__owner_id=self.request.user.pk)
+      # so the event that hands an object over belongs to its new owner; a snapshot holds a UUID as
+      # its text
+      return events.filter(pgh_data__owner_id=str(self.request.user.pk))
       # or only what the caller did (needs HistoryMiddleware):
-      # return events.filter(pgh_context__user=self.request.user.pk)
+      # return events.filter(pgh_context__user=str(self.request.user.pk))
   ```
 
 - `history_list_scoped_to_queryset = True` restricts `GET <endpoint>/history/` to events for

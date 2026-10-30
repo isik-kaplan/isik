@@ -1,3 +1,5 @@
+import uuid
+
 import pghistory
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -9,13 +11,14 @@ from rest_framework.permissions import BasePermission
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
 
+from isik.django.apps.common.db import UUIDPrimaryKeyModel
 from isik.django.apps.common.db.history import event_model_for
 from isik.django.drf.pagination import PageNumberPagination
 from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets import history as history_viewset_module
 from isik.django.drf.viewsets.base import BaseModelViewSet
 from isik.django.drf.viewsets.history import HistoryMixin, context_field_filter, context_filter
-from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, Widget
+from tests.testapp.models import Comment, ContextTrackedWidget, EmailUser, TimestampedNote, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -166,14 +169,15 @@ class TestHistoryMixin:
 
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             widget = Widget.objects.create(name="bolt", count=1)
-            with pghistory.context(user=7):
+            actor = uuid.uuid4()
+            with pghistory.context(user=actor):
                 widget.update(count=2)
 
             response = call_history(ActorWidgetViewSet, widget)
             actor_by_action = {event["action"]: event["actor_id"] for event in response.data}
-            assert actor_by_action == {"insert": None, "update": "7"}
+            assert actor_by_action == {"insert": None, "update": str(actor)}
 
-            filtered = call_history(ActorWidgetViewSet, widget, actor=7)
+            filtered = call_history(ActorWidgetViewSet, widget, actor=actor)
             assert [event["action"] for event in filtered.data] == ["update"]
 
     def test_extra_history_filters_adds_without_dropping_the_built_ins(self):
@@ -426,7 +430,7 @@ class OwnedWhileTheCallerOwnedItViewSet(WidgetViewSet):
     def scope_history(self, events):
         if self.request.user.is_staff:
             return events
-        return events.filter(pgh_data__owner_id=self.request.user.pk)
+        return events.filter(pgh_data__owner_id=str(self.request.user.pk))
 
 
 class TestScopeHistory:
@@ -564,7 +568,7 @@ class TestHistoryList:
 
             response = call_history(ContextTrackedWidgetViewSet, widget)
 
-        assert response.data[0]["actor_id"] == alice.pk
+        assert response.data[0]["actor_id"] == str(alice.pk)
 
     def test_history_base_queryset_omits_the_actor_id_annotation_when_a_context_field_covers_it(self):
         class ContextTrackedWidgetSerializer(serializers.ModelSerializer):
@@ -774,11 +778,8 @@ class TestContextFieldFilter:
 
 
 class TestAContextFieldFilterIsTypedAfterItsColumn:
-    @pytest.fixture
-    def uuid_actor_events(self):
-        """An event model whose `actor` column is a key to a UUID-keyed model, and `note` is text."""
-        import uuid
-
+    def events_keyed_to(self, target, cast):
+        """An event model whose `actor` column is a key to `target`, and `note` is text."""
         from django.db import models
         from django.test.utils import isolate_apps
 
@@ -786,20 +787,28 @@ class TestAContextFieldFilterIsTypedAfterItsColumn:
 
         with isolate_apps("tests.testapp"):
             meta = type("Meta", (), {"app_label": "testapp"})
-            tracked = track_events(
+            yield track_events(
                 context_fields=[
                     ContextField(
                         "actor",
                         context_key="user",
-                        cast="uuid",
+                        cast=cast,
                         field=models.ForeignKey(
-                            Widget, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+                            target, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
                         ),
                     ),
                     ContextField("note", cast="text", field=models.TextField(null=True)),
                 ]
-            )(type(f"UuidActor{uuid.uuid4().hex[:8]}", (models.Model,), {"__module__": __name__, "Meta": meta}))
-            yield tracked
+            )(type(f"Actor{uuid.uuid4().hex[:8]}", (UUIDPrimaryKeyModel,), {"__module__": __name__, "Meta": meta}))
+
+    @pytest.fixture
+    def uuid_actor_events(self):
+        yield from self.events_keyed_to(Widget, "uuid")
+
+    @pytest.fixture
+    def integer_actor_events(self):
+        # A key to a model of a project's own keyed by an integer - which isik's own models never are.
+        yield from self.events_keyed_to(TimestampedNote, "bigint")
 
     def test_a_key_to_a_uuid_pk_takes_a_uuid(self, uuid_actor_events):
         from django_filters import UUIDFilter
@@ -809,10 +818,10 @@ class TestAContextFieldFilterIsTypedAfterItsColumn:
         assert isinstance(built, UUIDFilter)
         assert built.field_name == "actor"
 
-    def test_a_key_to_an_integer_pk_takes_a_number(self):
+    def test_a_key_to_an_integer_pk_takes_a_number(self, integer_actor_events):
         from django_filters import NumberFilter
 
-        assert isinstance(context_field_filter(event_model_for(ContextTrackedWidget), "actor"), NumberFilter)
+        assert isinstance(context_field_filter(event_model_for(integer_actor_events), "actor"), NumberFilter)
 
     def test_a_text_column_takes_text(self, uuid_actor_events):
         assert isinstance(context_field_filter(event_model_for(uuid_actor_events), "note"), CharFilter)

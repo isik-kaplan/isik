@@ -67,6 +67,11 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 - [naming.md](naming.md) - the rules isik's names follow: words spelled out, acronyms in capitals,
   American spelling, purpose over construction
 
+## Primary keys
+
+- [primary-keys.md](primary-keys.md) - every key isik has is a UUID called `id` from `new_primary_key()`
+  (uuid7 unless `ISIK_PRIMARY_KEY` says otherwise), and a key to a row stores its UUID
+
 ## Translations
 
 - [translations.md](translations.md) - every user-facing string is translatable, through Django's

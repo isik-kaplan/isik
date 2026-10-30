@@ -26,6 +26,7 @@ from isik.django.apps.notifications.choices import Platform, PushEnvironment
 from isik.django.apps.notifications.kinds import PushContent, PushDataField, raise_notice
 from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState, PushDelivery
 from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
+from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_pipeline import fan_out, redeclared
 from tests.testapp.models import EmailUser
 
@@ -472,7 +473,7 @@ class TestWhatItSays:
     def test_in_the_sites_language_for_a_user_gone(self, remind, phone, services, monkeypatch, settings):
         settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECIPIENT_LANGUAGE": BY_USER}
         delivery = remind(phone)
-        PushDelivery.objects.filter(delivery=delivery).update(user_id="0")
+        PushDelivery.objects.filter(delivery=delivery).update(user_id=str(uuid.uuid4()))
         with redeclared(monkeypatch, "parcel_reminder", text=_titled(lambda data, variant: translation.get_language())):
             pipeline.send(delivery.pk)
 
@@ -559,7 +560,9 @@ class TestWhatItSays:
 
     def test_the_badge_counts_the_unread(self, remind, alice, bob, phone, android, services, monkeypatch):
         for user, read_at in ((alice, None), (alice, None), (alice, timezone.now()), (bob, None)):
-            InboxItem.objects.create(user=user, kind_id="parcel_reminder", delivery_id=uuid.uuid4(), read_at=read_at)
+            InboxItem.objects.create(
+                user=user, kind=kind_named("parcel_reminder"), delivery_id=uuid.uuid4(), read_at=read_at
+            )
         with pushing(monkeypatch, badge=True):
             pipeline.send(remind(phone).pk)
             pipeline.send(remind(android).pk)
@@ -571,7 +574,7 @@ class TestWhatItSays:
     def test_no_badge_for_a_user_gone(self, remind, phone, services, monkeypatch):
         with pushing(monkeypatch, badge=True):
             delivery = remind(phone)
-            PushDelivery.objects.filter(delivery=delivery).update(user_id="0")
+            PushDelivery.objects.filter(delivery=delivery).update(user_id=str(uuid.uuid4()))
             pipeline.send(delivery.pk)
 
         assert "badge" not in json.loads(services.sent()[0].content)["aps"]

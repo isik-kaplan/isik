@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-10-30
+
+### Added
+
+- `DatabaseUUID7()`: a uuid7 the database makes, for a key a row written in SQL gets - a trigger's - as a
+  `db_default`. The 12 bits after the version are the fraction of its millisecond, as PostgreSQL 18's
+  `uuidv7()` has them, so keys made later sort later. It's one expression and needs nothing installed
+  (PostgreSQL 13 and later).
+- `new_primary_key`, `uuid7` and `DatabaseUUID7` are exported from `isik.django.apps.common.db`.
+- The history schema types a filter whose form field is a `UUIDField` as `format: uuid`, the actor filter
+  among them when the user model is keyed by a UUID.
+- [docs/primary-keys.md](docs/primary-keys.md): every key isik has is a UUID called `id` from
+  `new_primary_key()`, and `tests/test_primary_keys.py` holds it.
+
+### Fixed
+
+- Each isik migration waits for the swappable models its keys name, so a project's app holding a
+  swapped-in model migrates first. Before, a trigger's operation could render a state naming a model that
+  wasn't there yet, depending on the order the plan happened to take.
+- A holder that isn't saved yet holds no features and has no overrides row whatever its key - judged by
+  `_state.adding`, not by a missing key, which a UUID default never leaves missing.
+
+### Breaking
+
+- **Every primary key is a uuid7 called `id`.** `ISIK_PRIMARY_KEY` replaces `ISIK_PRIMARY_KEY_DEFAULT` and
+  defaults to isik's `uuid7` - set `ISIK_PRIMARY_KEY = "uuid.uuid4"` for the old random keys. It now keys
+  everything:
+  - the notices, policies, subscriptions, inbox items, endpoints, endpoint kinds, devices, idempotency claims
+    and sweep cursor, which were sequences;
+  - every model a maker generates (`votes()`, `bookmarks()`, `notes()`, `comments()`, `tags()`) whose base
+    declares no key, where it was the app's `DEFAULT_AUTO_FIELD`;
+  - every abstract base a project subclasses (`AbstractTag`, `AbstractOverrides`, the audience bases, the
+    channel deliveries).
+- `uuid7()` counts up within a millisecond (RFC 9562's method 1): 48 bits of milliseconds, a 42-bit
+  counter started at random each millisecond, then 32 random bits. In one process each key sorts after the
+  one before.
+- `Feature` and `NoticeKindPolicy` are keyed by `id`, their names unique: `Feature.name`, and
+  `NoticeKindPolicy.name` - its `kind` column is renamed. Every key to them stores the uuid, so
+  `notice.kind_id`, `subscription.kind_id` and `grant.feature_id` are uuids. Look a row up by name with a join
+  (`kind__name="..."`, `feature__name="..."`). `notice.kind.name` is the name - isik's own queries load it
+  with `select_related`. A trigger's snapshot of a grant's `feature` carries its uuid. The uuid is made
+  by each database's mirror, so it names nothing in another: an export, an archive, a queued message or a
+  warehouse carries the name, and resolves it again where it lands.
+- Grants prefetched with their holder are answered from only when each grant's feature was loaded with it -
+  `Prefetch("feature_grants", queryset=get_grant_model().objects.select_related("feature"))`. Without the
+  features, they're read again, one query per holder.
+- `subscribe()` and `force_subscription()` refuse a kind with no policy row (`ValueError`), and take a
+  policy row as it is.
+- A delivery's channel row (webhook, email, inbox, push) has an `id` of its own beside its one-to-one key
+  to the delivery, which was its primary key.
+- The `__str__` of a notice, subscription, inbox item and endpoint kind starts with the kind's id rather
+  than its name, so it reads no row.
+- **Every isik migration starts again**, with no upgrade: `0002_isik_names` and `RenamedTables` are gone.
+  A database migrated by an earlier isik drops isik's tables and their `django_migrations` rows before it
+  migrates - the new `0001_initial` has the old one's name, so Django would take it as applied.
+
 ## [0.43.0] - 2026-10-30
 
 ### Added

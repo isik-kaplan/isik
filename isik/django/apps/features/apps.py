@@ -13,8 +13,6 @@ class FeaturesConfig(AppConfig):
     name = "isik.django.apps.features"
     label = "isik_features"
     verbose_name = gettext_lazy("Features")
-    # Fixed here rather than taken from DEFAULT_AUTO_FIELD, so the shipped migration matches every project.
-    default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
         from isik.django.apps.features import checks  # noqa: F401 - registers the checks

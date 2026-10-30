@@ -190,7 +190,7 @@ class TestTheChecksAboutPartitions:
 def test_a_notice_stores_the_partition_its_resolver_read(alice):
     Parcel.objects.create(sender=alice, status="routed")
 
-    notice = Notice.objects.get(kind_id="parcel_routed")
+    notice = Notice.objects.get(kind__name="parcel_routed")
 
     assert notice.subject_partition == alice.username
 

@@ -144,7 +144,7 @@ def test_the_worker_writes_inside_the_cause_it_was_sent():
 
     widget_pk = make_widget.apply(("bolt",), headers={"isik_history_context": cause}).get()
 
-    assert context_of(widget_pk) == {"user": user.pk, "caused_by": "request", "task": "widgets.make"}
+    assert context_of(widget_pk) == {"user": str(user.pk), "caused_by": "request", "task": "widgets.make"}
 
 
 @pytest.mark.django_db
@@ -178,7 +178,7 @@ def test_from_a_request_to_the_rows_the_worker_writes(sent):
 
     widget_pk = make_widget.apply(("bolt",), headers=sent[0]["headers"]).get()
 
-    assert context_of(widget_pk) == {"user": user.pk, "caused_by": "request", "task": "widgets.make"}
+    assert context_of(widget_pk) == {"user": str(user.pk), "caused_by": "request", "task": "widgets.make"}
 
 
 def test_a_task_run_inside_a_request_leaves_its_context_alone():

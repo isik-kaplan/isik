@@ -13,8 +13,6 @@ class NotificationsConfig(AppConfig):
     name = "isik.django.apps.notifications"
     label = "isik_notifications"
     verbose_name = gettext_lazy("Notifications")
-    # Fixed here rather than taken from DEFAULT_AUTO_FIELD, so the shipped migration matches every project.
-    default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
         from celery.signals import task_postrun

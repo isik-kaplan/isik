@@ -28,7 +28,7 @@ from isik.django.apps.features.resolution import (
     resolved,
 )
 from isik.django.apps.features.signals import feature_changed, setting_changed
-from isik.django.apps.features.swapping import get_grant_model, get_overrides_model, get_sweep_model
+from isik.django.apps.features.swapping import get_feature_model, get_grant_model, get_overrides_model, get_sweep_model
 
 
 class SettingRefused(ValueError):
@@ -105,7 +105,8 @@ def grant(holder, feature, *, source, reference="", starts_at=None, expires_at=N
     with in_holder_schema(), transaction.atomic():
         made = get_grant_model()._default_manager.create(
             holder=holder,
-            feature_id=name,
+            # The feature's key, read in the INSERT itself - no query of its own.
+            feature_id=models.Subquery(get_feature_model()._default_manager.filter(name=name).values("pk")),
             source=source,
             reference=reference,
             # The database's clock, as created_at's: a grant starting as it's written starts at its writing.
@@ -117,14 +118,14 @@ def grant(holder, feature, *, source, reference="", starts_at=None, expires_at=N
             # In force as it's written: told now. A start still to come is the sweep's.
             forget(holder)
             held = held_features(holder)
-            _tell_crossing(holder, name, held - _held_only_by(made), held)
+            _tell_crossing(holder, name, held - _held_only_by(made, name), held)
     return made
 
 
-def _held_only_by(made):
-    """{made's feature} where no grant but `made` holds it now - else nothing."""
+def _held_only_by(made, name):
+    """{name}, made's feature, where no grant but `made` holds it now - else nothing."""
     others = live_grants().filter(holder=made.holder_id, feature=made.feature_id).exclude(pk=made.pk)
-    return set() if others.exists() else {made.feature_id}
+    return set() if others.exists() else {name}
 
 
 def revoke(holder, feature):
@@ -135,7 +136,7 @@ def revoke(holder, feature):
         before = held_features(holder)
         revoked = (
             get_grant_model()
-            ._default_manager.filter(holder=holder, feature=name, revoked_at__isnull=True)
+            ._default_manager.filter(holder=holder, feature__name=name, revoked_at__isnull=True)
             .update(revoked_at=timezone.now())
         )
         forget(holder)
@@ -250,7 +251,8 @@ def sweep_boundaries(now=None):
             (getattr(grant, field), grant)
             for field in ("starts_at", "expires_at")
             for grant in get_grant_model()
-            ._default_manager.filter(
+            ._default_manager.select_related("feature")
+            .filter(
                 models.Q(revoked_at__isnull=True) | models.Q(revoked_at__gt=models.F(field)),
                 **{f"{field}__gt": since, f"{field}__lte": now},
             )
@@ -259,7 +261,7 @@ def sweep_boundaries(now=None):
         crossings.sort(key=lambda crossing: crossing[0])
         for at, grant in crossings:
             before, after = features_at(grant.holder, at - JUST_BEFORE), features_at(grant.holder, at)
-            _tell_crossing(grant.holder, grant.feature_id, before, after)
+            _tell_crossing(grant.holder, grant.feature.name, before, after)
     return len(crossings)
 
 

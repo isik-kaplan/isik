@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.db import connections, models
+from django.db import connection, connections, models
 from django.db.models import F
 from django.db.models.functions import Upper
 from django.test.utils import isolate_apps
@@ -527,29 +527,88 @@ class TestBypassHooksFor:
 
 
 class TestPrimaryKeys:
-    def test_a_version_7_uuid_is_laid_out_as_rfc_9562_has_it(self, monkeypatch):
-        monkeypatch.setattr(base_models.time, "time_ns", lambda: 0x0123456789AB * 1_000_000 + 999_999)
+    @pytest.fixture
+    def fresh(self, monkeypatch):
+        """uuid7() as a new process has it: no key made before."""
+        monkeypatch.setattr(base_models, "_last_milliseconds", 0)
+        monkeypatch.setattr(base_models, "_last_counter", 0)
+
+    def counter(self, made):
+        """`made`'s counter - its first 12 bits in rand_a, its other 30 after the variant."""
+        return (made.int >> 64 & 0xFFF) << 30 | made.int >> 32 & (1 << 30) - 1
+
+    def at(self, monkeypatch, milliseconds):
+        monkeypatch.setattr(base_models.time, "time_ns", lambda: milliseconds * 1_000_000 + 999_999)
+
+    def test_a_version_7_uuid_is_laid_out_as_rfc_9562_has_it(self, fresh, monkeypatch):
+        self.at(monkeypatch, 0x0123456789AB)
         monkeypatch.setattr(base_models.os, "urandom", lambda size: bytes(range(1, size + 1)))
-        random = int.from_bytes(bytes(range(1, 11)), "big")
+        counter = int.from_bytes(bytes(range(1, 7))) >> 7
 
         made = base_models.uuid7()
 
         assert made.int >> 80 == 0x0123456789AB
         assert made.version == 7
         assert made.variant == uuid.RFC_4122
-        assert made.int >> 64 & 0xFFF == random >> 62 & 0xFFF
-        assert made.int & (1 << 62) - 1 == random & (1 << 62) - 1
+        assert made.int >> 64 & 0xFFF == counter >> 30
+        assert made.int >> 32 & (1 << 30) - 1 == counter & (1 << 30) - 1
+        assert made.int & 0xFFFFFFFF == int.from_bytes(bytes(range(1, 5)))
 
-    def test_every_random_bit_is_used(self, monkeypatch):
-        monkeypatch.setattr(base_models.time, "time_ns", lambda: 0)
+    def test_every_bit_is_used(self, fresh, monkeypatch):
+        self.at(monkeypatch, 1)
         monkeypatch.setattr(base_models.os, "urandom", lambda size: b"\xff" * size)
+        counter = (1 << 41) - 1
 
-        assert base_models.uuid7().int == 7 << 76 | 0xFFF << 64 | 0b10 << 62 | (1 << 62) - 1
+        assert base_models.uuid7().int == (
+            1 << 80 | 7 << 76 | (counter >> 30) << 64 | 0b10 << 62 | (counter & (1 << 30) - 1) << 32 | 0xFFFFFFFF
+        )
 
-    def test_its_time_is_only_48_bits(self, monkeypatch):
-        monkeypatch.setattr(base_models.time, "time_ns", lambda: ((1 << 48) + 5) * 1_000_000)
+    def test_its_time_is_only_48_bits(self, fresh, monkeypatch):
+        self.at(monkeypatch, (1 << 48) + 5)
 
         assert base_models.uuid7().int >> 80 == 5
+
+    def test_within_a_millisecond_the_counter_counts_up(self, fresh, monkeypatch):
+        self.at(monkeypatch, 1000)
+        first, second = base_models.uuid7(), base_models.uuid7()
+
+        assert (second.int >> 80, self.counter(second)) == (1000, self.counter(first) + 1)
+
+    def test_a_clock_stepping_back_keeps_counting(self, fresh, monkeypatch):
+        monkeypatch.setattr(base_models, "_last_milliseconds", 2000)
+        monkeypatch.setattr(base_models, "_last_counter", 41)
+        self.at(monkeypatch, 1000)
+
+        made = base_models.uuid7()
+
+        assert (made.int >> 80, self.counter(made)) == (2000, 42)
+
+    def test_a_millisecond_counted_out_takes_the_next(self, fresh, monkeypatch):
+        monkeypatch.setattr(base_models, "_last_milliseconds", 2000)
+        monkeypatch.setattr(base_models, "_last_counter", (1 << 42) - 1)
+        monkeypatch.setattr(base_models.os, "urandom", lambda size: b"\x00" * size)
+        self.at(monkeypatch, 2000)
+
+        made = base_models.uuid7()
+
+        assert (made.int >> 80, self.counter(made)) == (2001, 0)
+        assert (base_models._last_milliseconds, base_models._last_counter) == (2001, 0)
+
+    def test_a_new_millisecond_starts_the_counter_afresh(self, fresh, monkeypatch):
+        monkeypatch.setattr(base_models, "_last_milliseconds", 2000)
+        monkeypatch.setattr(base_models, "_last_counter", 41)
+        monkeypatch.setattr(base_models.os, "urandom", lambda size: b"\x00" * size)
+        self.at(monkeypatch, 2001)
+
+        made = base_models.uuid7()
+
+        assert (made.int >> 80, self.counter(made)) == (2001, 0)
+
+    def test_each_sorts_after_the_one_before(self):
+        made = [base_models.uuid7() for _ in range(2000)]
+
+        assert made == sorted(made)
+        assert len(set(made)) == len(made)
 
     def test_later_ones_sort_later(self):
         first = base_models.uuid7()
@@ -557,28 +616,60 @@ class TestPrimaryKeys:
 
         assert base_models.uuid7() > first
 
-    def test_two_made_at_once_differ(self):
-        assert base_models.uuid7() != base_models.uuid7()
-
-    def test_the_default_is_random(self, settings):
-        if hasattr(settings, "ISIK_PRIMARY_KEY_DEFAULT"):
-            del settings.ISIK_PRIMARY_KEY_DEFAULT
-
-        assert base_models.new_primary_key().version == 4
-
-    def test_the_setting_picks_another(self, settings):
-        settings.ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+    def test_the_default_is_a_uuid7(self, settings):
+        if hasattr(settings, "ISIK_PRIMARY_KEY"):
+            del settings.ISIK_PRIMARY_KEY
 
         assert base_models.new_primary_key().version == 7
 
-    @pytest.mark.django_db
-    def test_is_what_a_new_row_gets(self, settings):
-        settings.ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+    def test_the_setting_picks_another(self, settings):
+        settings.ISIK_PRIMARY_KEY = "uuid.uuid4"
 
+        assert base_models.new_primary_key().version == 4
+
+    @pytest.mark.django_db
+    def test_is_what_a_new_row_gets(self):
         assert Widget.objects.create(name="bolt").pk.version == 7
 
     def test_the_field_names_the_function_not_a_kind_of_key(self):
         assert UUIDPrimaryKeyModel._meta.get_field("id").default is base_models.new_primary_key
+
+    @pytest.mark.django_db
+    def test_the_database_makes_one_too(self):
+        before = time.time_ns() // 1_000_000
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT {base_models.DatabaseUUID7().as_sql(None, connection)[0]}")
+            [made] = cursor.fetchone()
+        after = time.time_ns() // 1_000_000
+
+        assert (made.version, made.variant) == (7, uuid.RFC_4122)
+        assert before <= made.int >> 80 <= after
+
+    @pytest.mark.django_db
+    def test_the_databases_sort_in_the_order_theyre_made(self):
+        made = base_models.DatabaseUUID7().as_sql(None, connection)[0]
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT {made} FROM generate_series(1, 2000) ORDER BY generate_series")
+            keys = [key for (key,) in cursor.fetchall()]
+
+        assert keys == sorted(keys)
+        assert len(set(keys)) == len(keys)
+
+    @pytest.mark.django_db
+    def test_the_databases_carry_the_fraction_of_their_millisecond(self):
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL TIME ZONE 'UTC'")
+            sql = (
+                base_models.DatabaseUUID7()
+                .as_sql(None, connection)[0]
+                .replace("clock_timestamp()", "'2026-10-30 06:51:48.123750+00'::timestamptz")
+            )
+            cursor.execute(f"SELECT {sql}")
+            [made] = cursor.fetchone()
+
+        assert made.int >> 80 == 1793343108123
+        # 750 microseconds into the millisecond, in 4096ths of it.
+        assert made.int >> 64 & 0xFFF == 3072
 
 
 def test_the_app_is_labelled_so_a_projects_common_can_be_common():

@@ -95,7 +95,7 @@ def _own_exemptions():
 _EXEMPT = _own_exemptions()
 
 # How a caller's subscriptions, and an endpoint's kinds, are listed.
-BY_KIND = ("kind_id", "variant")
+BY_KIND = ("kind__name", "variant")
 
 
 # A kind's name - typed here, for a serializer with no model to type it by.
@@ -104,7 +104,7 @@ class KindField(serializers.SlugRelatedField):
     """A kind, by its name - one of the configured policy model's rows that isn't retired."""
 
     def __init__(self, **kwargs):
-        super().__init__(slug_field="kind", **kwargs)
+        super().__init__(slug_field="name", **kwargs)
 
     def get_queryset(self):
         return get_kind_policy_model()._default_manager.filter(retired_at=None)
@@ -120,7 +120,7 @@ def inbox_item_serializer(model):
     """The serializer of an inbox item of `model`."""
 
     class InboxItemSerializer(serializers.ModelSerializer):
-        kind = serializers.CharField(source="kind_id", read_only=True)
+        kind = serializers.CharField(source="kind.name", read_only=True)
         title = serializers.SerializerMethodField()
         message = serializers.SerializerMethodField()
 
@@ -141,11 +141,11 @@ def inbox_item_serializer(model):
 
         def get_title(self, item) -> str | None:
             """The item's heading, in the request's language - its kind's `title` filled from its data."""
-            return rendered(text_of(item.kind_id).title, _data(item), item.variant)
+            return rendered(text_of(item.kind.name).title, _data(item), item.variant)
 
         def get_message(self, item) -> str | None:
             """The item as a sentence, in the request's language - its kind's `message` filled from its data."""
-            return rendered(text_of(item.kind_id).message, _data(item), item.variant)
+            return rendered(text_of(item.kind.name).message, _data(item), item.variant)
 
     InboxItemSerializer.Meta.model = model
     return InboxItemSerializer
@@ -183,7 +183,7 @@ def subscription_serializer(model):
                 raise ValidationError(
                     {
                         "variant": _("%(kind)s declares no variant %(variant)r.")
-                        % {"kind": policy.kind, "variant": variant}
+                        % {"kind": policy.name, "variant": variant}
                     }
                 )
             return data
@@ -200,7 +200,7 @@ class EndpointKindSerializer(serializers.Serializer):
         policy, variant = data["kind"], data.get("variant")
         if variant is not None and variant not in policy.variants:
             raise ValidationError(
-                {"variant": _("%(kind)s declares no variant %(variant)r.") % {"kind": policy.kind, "variant": variant}}
+                {"variant": _("%(kind)s declares no variant %(variant)r.") % {"kind": policy.name, "variant": variant}}
             )
         return data
 
@@ -209,7 +209,7 @@ def kinds_problem(wanted):
     """Why the endpoint can't want `wanted` together, or None - what the database would refuse, said first."""
     seen = {}
     for each in wanted:
-        kind, variant = each["kind"].kind, each.get("variant")
+        kind, variant = each["kind"].name, each.get("variant")
         if variant in seen.get(kind, ()):
             return _("%(kind)s is named twice.") % {"kind": kind}
         seen.setdefault(kind, set()).add(variant)
@@ -241,7 +241,7 @@ def endpoint_serializer(model):
             data = super().to_representation(endpoint)
             wanted = get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint).order_by(*BY_KIND)
             data["kinds"] = [
-                {"kind": kind, "variant": variant} for kind, variant in wanted.values_list("kind_id", "variant")
+                {"kind": kind, "variant": variant} for kind, variant in wanted.values_list("kind__name", "variant")
             ]
             return data
 
@@ -312,7 +312,7 @@ class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.List
 
     @none_during_schema_generation
     def get_queryset(self):
-        items = get_inbox_item_model()._default_manager.filter(user=self.request.user)
+        items = get_inbox_item_model()._default_manager.select_related("kind").filter(user=self.request.user)
         if self.action == "list" and self.request.query_params.get("unread") in ("true", "1"):
             items = items.filter(read_at__isnull=True)
         return items
@@ -326,7 +326,8 @@ class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.List
         """Marks this notification read."""
         item = self.get_object()
         mark_read(self.get_queryset().filter(pk=item.pk))
-        item.refresh_from_db()
+        # Read again with its kind, as refresh_from_db() wouldn't keep it.
+        item = self.get_queryset().get(pk=item.pk)
         return Response(self.get_serializer(item).data)
 
     @extend_schema(request=None, responses=inline_serializer("Marked", {"marked": serializers.IntegerField()}))
@@ -365,7 +366,12 @@ class SubscriptionViewSet(
 
     @none_during_schema_generation
     def get_queryset(self):
-        return get_subscription_model()._default_manager.filter(user=self.request.user).order_by(*BY_KIND)
+        return (
+            get_subscription_model()
+            ._default_manager.select_related("kind")
+            .filter(user=self.request.user)
+            .order_by(*BY_KIND)
+        )
 
     def get_serializer_class(self):
         return subscription_serializer(get_subscription_model())
@@ -375,7 +381,7 @@ class SubscriptionViewSet(
         data = serializer.validated_data
         try:
             serializer.instance = subscribe(
-                self.request.user, data["kind"].kind, data.get("variant"), enabled=data.get("enabled", True)
+                self.request.user, data["kind"], data.get("variant"), enabled=data.get("enabled", True)
             )
         except SubscriptionRefused as refused:
             raise refusal(str(refused), code=refused.code) from refused
@@ -403,16 +409,16 @@ def kind_states(user, names):
     change it and whether it's forced for them, so two lists can't disagree, nor either with the fan-out.
     """
     policies = {
-        kind: (policy, variants)
-        for kind, policy, variants in get_kind_policy_model()
-        ._default_manager.filter(kind__in=names)
-        .values_list("kind", "policy", "variants")
+        name: (kind_id, policy, variants)
+        for kind_id, name, policy, variants in get_kind_policy_model()
+        ._default_manager.filter(name__in=names)
+        .values_list("pk", "name", "policy", "variants")
     }
     rows = list(get_subscription_model()._default_manager.filter(user=user))
     states = {}
     for name in names:
-        policy, variants = policies[name]
-        mine = {row.variant: row for row in rows if row.kind_id == name}
+        kind_id, policy, variants = policies[name]
+        mine = {row.variant: row for row in rows if row.kind_id == kind_id}
         whole = mine.get(None)
         forced = whole if is_forced(whole) else None
         states[name] = {
@@ -470,7 +476,8 @@ class NoticeKindViewSet(BaseViewSet):
 
     # Which kinds a person sees is KINDS_VISIBLE's to say; the fields published, NOTICE_KIND_FIELDS'.
     permission_classes = [IsAuthenticated]
-    lookup_field = "kind"
+    lookup_field = "name"
+    lookup_url_kwarg = "kind"
     lookup_value_regex = "[^/]+"
     pagination_class = None
 
@@ -478,11 +485,11 @@ class NoticeKindViewSet(BaseViewSet):
 
     def get_queryset(self):
         """The kinds declared and not retired - what a schema types the `{kind}` path by, and `visible()` reads."""
-        return get_kind_policy_model()._default_manager.filter(retired_at=None, kind__in=list(kinds()))
+        return get_kind_policy_model()._default_manager.filter(retired_at=None, name__in=list(kinds()))
 
     def visible(self):
         declared = kinds()
-        active = self.get_queryset().order_by("kind").values_list("kind", "policy", "variants")
+        active = self.get_queryset().order_by("name").values_list("name", "policy", "variants")
         hook = conf.setting("KINDS_VISIBLE")
         shown = None if hook is None else set(hook(self.request))
         rows = [row for row in active if shown is None or row[0] in shown]
@@ -507,7 +514,7 @@ class NoticeKindViewSet(BaseViewSet):
     @extend_schema(responses=NoticeKindSerializer)
     def retrieve(self, request, *args, **kwargs):
         """One kind of notification, by its name."""
-        shown = self.visible().get(kwargs[self.lookup_field])
+        shown = self.visible().get(kwargs[self.lookup_url_kwarg])
         if shown is None:
             raise NotFound()
         return Response(NoticeKindSerializer(shown).data)
@@ -679,7 +686,7 @@ def delivery_serializer(model, attempt_model):
             read_only_fields = fields
 
     class DeliverySerializer(serializers.ModelSerializer):
-        kind = serializers.CharField(source="notice.kind_id", read_only=True)
+        kind = serializers.CharField(source="notice.kind.name", read_only=True)
         variant = serializers.CharField(source="notice.variant", read_only=True)
         attempts = DeliveryAttemptSerializer(many=True, read_only=True)
 
@@ -725,7 +732,7 @@ class DeliveryViewSet(
         return (
             get_delivery_model()
             ._default_manager.filter(webhook__endpoint_id__in=endpoints)
-            .select_related("notice")
+            .select_related("notice__kind")
             .prefetch_related("attempts")
             .order_by("-created_at")
         )

@@ -20,7 +20,7 @@ from django.db.models.signals import class_prepared
 
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.constraints import fitted_name
-from isik.django.apps.common.db.models import DatabaseTimestampsModel
+from isik.django.apps.common.db.models import DatabaseTimestampsModel, UUIDPrimaryKeyModel
 from isik.django.apps.notifications.choices import Platform, PushEnvironment
 from isik.django.apps.notifications.triggers import VariantGuard
 
@@ -38,7 +38,7 @@ def _variant():
     )
 
 
-class AbstractSubscription(models.Model):
+class AbstractSubscription(UUIDPrimaryKeyModel):
     """
     A user's deviation from a kind's policy: turning a default-on kind off, or a default-off kind on - for
     every variant, or one. A user with none gets the kind's default.
@@ -101,7 +101,7 @@ class AbstractForceableSubscription(AbstractSubscription):
         abstract = True
 
 
-class AbstractInboxItem(models.Model):
+class AbstractInboxItem(UUIDPrimaryKeyModel):
     """One notification in a user's in-app inbox - a copy of what its delivery carried, read or not."""
 
     variant = _variant()
@@ -163,7 +163,7 @@ class AbstractInboxItem(models.Model):
         return f"{self.kind_id}:{self.subject_label}:{self.subject_id}"
 
 
-class AbstractEndpoint(DatabaseTimestampsModel):
+class AbstractEndpoint(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
     """
     A URL that kinds are POSTed to, signed with its secret. Override `secret` (and `secret_previous`) with
     an encrypted field of your own - a field declared on a subclass replaces an abstract base's. Its
@@ -218,7 +218,7 @@ class AbstractEndpoint(DatabaseTimestampsModel):
         self.save()
 
 
-class AbstractEndpointKind(models.Model):
+class AbstractEndpointKind(UUIDPrimaryKeyModel):
     """A kind (and variant, or every variant) an endpoint wants POSTed."""
 
     variant = _variant()
@@ -230,7 +230,7 @@ class AbstractEndpointKind(models.Model):
         return f"{self.kind_id}:{self.variant or '*'}"
 
 
-class AbstractDevice(DatabaseTimestampsModel):
+class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
     """
     One of a user's phones (or other app installs), as its push service knows it. A token belongs to one
     install, so registering one already known moves it to whoever registers it - the person signed in on

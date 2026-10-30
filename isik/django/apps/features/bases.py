@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.constraints import fitted_name
-from isik.django.apps.common.db.models import DatabaseTimestampsModel, new_primary_key
+from isik.django.apps.common.db.models import DatabaseTimestampsModel, UUIDPrimaryKeyModel, new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.features import conf
 from isik.django.apps.features import declarations as declared
@@ -35,12 +35,12 @@ def ERASE(collector, field, sub_objs, using):
     """
 
 
-class AbstractFeature(models.Model):
+class AbstractFeature(UUIDPrimaryKeyModel):
     """A declared feature, kept as a row: what a grant names, outliving its declaration."""
 
     name = models.CharField(
         max_length=100,
-        primary_key=True,
+        unique=True,
         help_text=gettext_lazy("The feature's name, as its declaration gives it."),
         db_comment="The feature's name, as its declaration gives it. Never changes.",
     )
@@ -125,7 +125,7 @@ class AbstractFeatureGrant(models.Model):
         return f"{self.feature_id} for {self.holder_id}"
 
 
-class AbstractOverrides(DatabaseTimestampsModel):
+class AbstractOverrides(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
     """
     The project's row of a holder's settings: per declared setting, whether it's forced, to what, by which source
     and why - and the holder's own value, where it lives here. Created on its first write; until then each
@@ -147,7 +147,7 @@ class AbstractOverrides(DatabaseTimestampsModel):
         return f"settings of {self.holder_id}"
 
 
-class AbstractSweepCursor(models.Model):
+class AbstractSweepCursor(UUIDPrimaryKeyModel):
     """Where the boundary sweep got to: grants starting or ending since `swept_at` are told when it next runs."""
 
     swept_at = models.DateTimeField(

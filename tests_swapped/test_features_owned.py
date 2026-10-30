@@ -9,6 +9,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import ProgrammingError, connection, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from isik.django.apps.features import swapping
@@ -166,13 +167,18 @@ def test_grants_loaded_with_the_organizations_are_used(monkeypatch, django_asser
     }
     for name, terms in held.items():
         owned.FeatureGrant.objects.create(
-            holder=owned.Organization.objects.create(name=name), feature_id="webhooks", source="manual", **terms
+            holder=owned.Organization.objects.create(name=name),
+            feature=owned.Feature.objects.get(name="webhooks"),
+            source="manual",
+            **terms,
         )
     owned.Organization.objects.create(name="none")
     monkeypatch.setattr(timezone, "now", lambda: now)
 
     with django_assert_num_queries(2):
-        loaded = owned.Organization.objects.prefetch_related("feature_grants")
+        loaded = owned.Organization.objects.prefetch_related(
+            Prefetch("feature_grants", queryset=owned.FeatureGrant.objects.select_related("feature"))
+        )
         holding = {organization.name: has_feature(organization, "webhooks") for organization in loaded}
 
     assert holding == {

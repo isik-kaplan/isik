@@ -31,6 +31,7 @@ from isik.django.apps.notifications.models import (
 )
 from isik.django.apps.notifications.partitions import Column, Expression, Follow
 from isik.django.apps.notifications.pipeline import retry_delivery
+from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_pipeline import delivery_on, fan_out, ship
 from tests.django.apps.notifications.test_pipeline_details import hooked, receiver, shipped  # noqa: F401
 from tests.testapp.models import EmailUser, Parcel, Team
@@ -105,7 +106,7 @@ class TestDeclaringDetails:
         from tests.testapp.models import PARCEL_REMINDER
 
         assert isinstance(PARCEL_REMINDER, KindName)
-        assert kinds.raise_notice(PARCEL_REMINDER).kind_id == "parcel_reminder"
+        assert kinds.raise_notice(PARCEL_REMINDER).kind.name == "parcel_reminder"
 
 
 class TestCheckDetails:
@@ -165,7 +166,7 @@ class TestASetAsideNotice:
                 raise RuntimeError("down")
 
         Parcel.objects.create(sender=alice, status="routed")
-        notice = Notice.objects.get(kind_id="parcel_routed")
+        notice = Notice.objects.get(kind__name="parcel_routed")
 
         with redeclared(monkeypatch, "parcel_routed", audience=Down(notice.subject_partition)):
             fan_out(django_capture_on_commit_callbacks)
@@ -261,7 +262,7 @@ class TestRetryDetails:
 
         held = [query["sql"] for query in queries if "isik_notice" in query["sql"] and "FOR UPDATE" in query["sql"]]
         assert len(held) == 1
-        assert str(abandoned.notice_id) in held[0]
+        assert abandoned.notice_id.hex in held[0]
 
     def test_a_parked_endpoint_in_a_partition_says_so(self, abandoned, settings):
         @contextmanager
@@ -313,7 +314,7 @@ class TestDeliveriesListedInFewQueries:
         from tests.django.apps.notifications.test_pipeline import flag
 
         endpoint = get_endpoint_model().objects.create(url="https://alice.example/hook", secret="s")
-        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged")
+        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
         subscribe(alice, "parcel_flagged")
         client = APIClient()
         client.force_authenticate(alice)

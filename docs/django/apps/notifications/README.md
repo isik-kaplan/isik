@@ -119,20 +119,12 @@ the getters - `get_notice_model()` and its siblings in `isik.django.apps.notific
 included: `from isik.django.apps.notifications.models import Notice` names isik's default, which stops
 being there the moment it's swapped.
 
-**Keys.** `Delivery`, `FanOutShard` and `DeliveryAttempt` are keyed by `new_primary_key()`, so
-`ISIK_PRIMARY_KEY_DEFAULT` governs them like every other isik model - random `uuid4` unless it's set, so a
-project keying its own tables by `uuid7` sets it, or these three, its busiest append-only tables, get
-random keys. `Notice` is the exception - its trigger
-writes it in SQL, which no Python key function reaches, so it's a sequence. To key notices otherwise, give
-your `Notice` an `id` the database can fill:
-
-```python
-class Notice(bases.AbstractNotice):
-    id = models.UUIDField(primary_key=True, default=uuid7, db_default=models.Func(function="uuidv7"))
-```
-
-`uuidv7()` is Postgres 18 and later; before it, use `gen_random_uuid()` or a function of your own. No check
-can see a function the database lacks - the first notice its trigger writes fails.
+**Keys.** Every model here is keyed by `new_primary_key()`, a uuid7 unless `ISIK_PRIMARY_KEY` says
+otherwise - see [primary keys](../../../primary-keys.md). A kind's policy row is keyed by its `id` too, its
+`name` unique, and a notice, subscription, inbox item or endpoint kind stores that `id`. A notice written by
+its trigger gets its key from the database, `DatabaseUUID7()`, as no Python function reaches a trigger. One
+written from Python still gets `ISIK_PRIMARY_KEY`'s. A delivery's channel row has an `id` of its own beside
+its one-to-one key to the delivery.
 
 Own the policy model, and own the three models its guard reads it from too - `Subscription`, `InboxItem`
 and `EndpointKind`: isik's shipped migration guards its own against isik's policy table. `isik.E014`

@@ -184,10 +184,10 @@ class TestResolving:
             "revoked_now": dict(starts_at=now - timedelta(days=1), revoked_at=now),
             "revoked_later": dict(starts_at=now - timedelta(days=1), revoked_at=now + timedelta(days=1)),
         }
-        holders = {}
+        holders, webhooks = {}, Feature.objects.get(name="webhooks")
         for name, made in terms.items():
             holders[name] = EmailUser.objects.create(username=name, email=f"{name}@example.com")
-            FeatureGrant.objects.create(holder=holders[name], feature_id="webhooks", source="manual", **made)
+            FeatureGrant.objects.create(holder=holders[name], feature=webhooks, source="manual", **made)
         loaded = {name: with_grants_loaded(EmailUser.objects.get(pk=holder.pk)) for name, holder in holders.items()}
         monkeypatch.setattr(timezone, "now", lambda: now)
 
@@ -202,6 +202,17 @@ class TestResolving:
             "revoked_now": False,
             "revoked_later": True,
         }
+
+    def test_grants_loaded_without_their_features_are_read_again_once(self, alice, django_assert_num_queries):
+        grant(alice, "webhooks", source="manual")
+        loaded = EmailUser.objects.get(pk=alice.pk)
+        grants = FeatureGrant.objects.filter(holder=alice)
+        list(grants)
+        loaded._prefetched_objects_cache = {"grants": grants}
+
+        # A grant's feature one at a time would be a query each: the grants are read again with theirs.
+        with django_assert_num_queries(1):
+            assert has_feature(loaded, "webhooks")
 
     def test_a_write_forgets_what_was_loaded_with_the_holder(self, alice):
         set_setting(alice, "theme", "dark")
@@ -287,7 +298,7 @@ class TestWriting:
     def test_a_grant_records_its_terms(self, alice):
         made = grant(alice, "webhooks", source="subscription", reference="inv-7")
 
-        assert (made.feature_id, made.source, made.reference, made.revoked_at) == (
+        assert (made.feature.name, made.source, made.reference, made.revoked_at) == (
             "webhooks",
             "subscription",
             "inv-7",
@@ -538,7 +549,7 @@ class TestTheGrantLedger:
     def test_a_feature_row_outlives_its_declaration(self):
         assert set(Feature.objects.values_list("name", flat=True)) >= set(declarations.features)
         with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot delete"):
-            Feature.objects.filter(pk="beta").delete()
+            Feature.objects.filter(name="beta").delete()
 
     def test_a_force_is_whole_or_absent(self, alice):
         with transaction.atomic(), pytest.raises(IntegrityError, match="theme_forced_exactly"):
@@ -553,8 +564,9 @@ class TestTheGrantLedger:
 
 
 def with_grants_loaded(holder):
-    """`holder` as `prefetch_related` of its grants leaves it - beside another relation loaded first."""
-    grants = FeatureGrant.objects.filter(holder=holder)
+    """`holder` as `prefetch_related` of its grants, each with its feature, leaves it - beside another relation
+    loaded first."""
+    grants = FeatureGrant.objects.select_related("feature").filter(holder=holder)
     groups = holder.groups.all()
     list(grants), list(groups)
     holder._prefetched_objects_cache = {"groups": groups, "grants": grants}
@@ -856,3 +868,18 @@ class TestWhatAGrantOrARevokeTouches:
         swapping.set_defaults()
 
         assert settings.ISIK_FEATURES_HOLDER_MODEL == "testapp.Tag"
+
+
+def test_the_sweep_reads_each_grants_feature_with_it(alice):
+    now = timezone.now()
+    sweep_boundaries(now)
+    grant(alice, "webhooks", source="trial", starts_at=now + timedelta(hours=1))
+
+    with CaptureQueriesContext(connection) as queries:
+        assert sweep_boundaries(now + timedelta(days=1)) == 1
+
+    assert [
+        query["sql"]
+        for query in queries
+        if 'FROM "isik_feature_grant"' in query["sql"] and '"isik_feature"."created_at"' in query["sql"]
+    ] != []

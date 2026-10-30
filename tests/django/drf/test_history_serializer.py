@@ -100,11 +100,11 @@ class TestWhatItShows:
 
     def test_a_relation_by_its_column_renders_its_primary_key(self, alice):
         class OwnerIdSerializer(serializers.Serializer):
-            owner_id = serializers.IntegerField()
+            owner_id = serializers.UUIDField()
 
         widget = Widget.objects.create(name="bolt", count=1, owner=alice)
 
-        assert rendered(widget_history(OwnerIdSerializer), widget)[0]["owner_id"] == alice.pk
+        assert rendered(widget_history(OwnerIdSerializer), widget)[0]["owner_id"] == str(alice.pk)
 
     def test_fields_that_dont_render_one_column_are_left_out(self):
         class UserSerializer(serializers.ModelSerializer):
@@ -136,12 +136,12 @@ class TestWhatItShows:
 
     def test_a_relation_by_its_column_renders_a_change_from_null(self, alice):
         class OwnerIdSerializer(serializers.Serializer):
-            owner_id = serializers.IntegerField()
+            owner_id = serializers.UUIDField()
 
         widget = Widget.objects.create(name="bolt", count=1)
         widget.update(owner=alice)
 
-        assert rendered(widget_history(OwnerIdSerializer), widget)[1]["changes"] == {"owner_id": [None, alice.pk]}
+        assert rendered(widget_history(OwnerIdSerializer), widget)[1]["changes"] == {"owner_id": [None, str(alice.pk)]}
 
     def test_a_field_built_with_positional_arguments_is_rebuilt_with_them(self):
         class ChoiceSerializer(serializers.Serializer):
@@ -396,11 +396,11 @@ class TestContextFieldsAndActorIdCompose:
             widget = ContextTrackedWidget.objects.create(name="bolt")
 
         Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
-        # actor_id is typed off the real FK column (an IntegerField), not the CharField the JSON
-        # annotation would otherwise use - a plain int, not "<alice.pk>" as a string.
-        assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)
+        # actor_id is typed off the real FK column (a UUIDField), not the CharField the JSON
+        # annotation would otherwise use.
+        assert isinstance(Serializer().fields["actor_id"], serializers.UUIDField)
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
-        assert data[0]["actor_id"] == alice.pk
+        assert data[0]["actor_id"] == str(alice.pk)
 
     def test_other_context_fields_serialize_from_their_own_columns(self):
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
@@ -413,7 +413,7 @@ class TestContextFieldsAndActorIdCompose:
         data = Serializer(history_for(ContextTrackedWidget, widget), many=True).data
 
         assert data[0]["actor_schema"] == "tenant_1"
-        assert data[0]["tenant_id"] == org.pk
+        assert data[0]["tenant_id"] == str(org.pk)
 
     def test_context_fields_are_null_outside_any_pghistory_context(self):
         widget = ContextTrackedWidget.objects.create(name="bolt")
@@ -464,7 +464,7 @@ class TestContextFieldsAndActorIdCompose:
     def test_a_context_actor_id_wins_over_the_middlewares_even_with_it_installed(self):
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             Serializer = generic_history_serializer(ContextTrackedWidget, ContextTrackedWidgetSerializer)
-        assert isinstance(Serializer().fields["actor_id"], serializers.IntegerField)
+        assert isinstance(Serializer().fields["actor_id"], serializers.UUIDField)
 
 
 class TestAFeedOverSeveralEventModels:

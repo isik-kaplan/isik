@@ -19,14 +19,14 @@ pytestmark = pytest.mark.django_db
 def ship(parcel):
     parcel.status = "shipped"
     parcel.save()
-    return Notice.objects.get(kind_id="parcel_shipped")
+    return Notice.objects.get(kind__name="parcel_shipped")
 
 
 def test_a_trigger_records_who_acted_and_where(parcel, alice):
     with pghistory.context(user=alice.pk, schema="acme", why="testing"):
         notice = ship(parcel)
 
-    assert (notice.actor_id, notice.context) == (str(alice.pk), {"user": alice.pk, "schema": "acme"})
+    assert (notice.actor_id, notice.context) == (str(alice.pk), {"user": str(alice.pk), "schema": "acme"})
 
 
 def test_outside_a_context_nobody_acted(parcel):
@@ -54,14 +54,14 @@ def test_a_raised_notice_records_them_alike(alice):
     with pghistory.context(user=alice.pk, schema="acme"):
         notice = raise_notice(PARCEL_REMINDER, variant="daily")
 
-    assert (notice.actor_id, notice.context) == (str(alice.pk), {"user": alice.pk, "schema": "acme"})
+    assert (notice.actor_id, notice.context) == (str(alice.pk), {"user": str(alice.pk), "schema": "acme"})
 
 
 def test_a_recorded_email_records_them_alike(alice, dispatched):
     with pghistory.context(user=alice.pk):
         delivery = record_email(PARCEL_RECEIPT, address="a@example.com", send=lambda: None)
 
-    assert (delivery.notice.actor_id, delivery.notice.context) == (str(alice.pk), {"user": alice.pk})
+    assert (delivery.notice.actor_id, delivery.notice.context) == (str(alice.pk), {"user": str(alice.pk)})
 
 
 def test_the_inbox_item_carries_them_and_doesnt_show_them(parcel, alice, bob, dispatched):
@@ -71,7 +71,7 @@ def test_the_inbox_item_carries_them_and_doesnt_show_them(parcel, alice, bob, di
     pipeline.send(Delivery.objects.get(channel="inbox").pk)
 
     item = InboxItem.objects.get()
-    assert (item.actor_id, item.context) == (str(alice.pk), {"user": alice.pk, "schema": "acme"})
+    assert (item.actor_id, item.context) == (str(alice.pk), {"user": str(alice.pk), "schema": "acme"})
     shown = inbox_item_serializer(InboxItem)(item).data
     assert "actor_id" not in shown
     assert "context" not in shown

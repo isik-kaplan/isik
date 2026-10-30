@@ -8,8 +8,8 @@ What a setting is for a holder, and why - `effective(holder, name)`:
 
 `has_feature(holder, feature)` answers from the same cache, kept on the holder instance for as long as it lives -
 one request, say - so a list of rows asks the database once per holder, and not at all for what the caller loaded
-with it: its overrides row by `select_related`, its grants by `prefetch_related`. `effective_expression(name)`
-gives the same answer in SQL, for annotating and filtering holders.
+with it: its overrides row by `select_related`, its grants by `prefetch_related` - each with its feature.
+`effective_expression(name)` gives the same answer in SQL, for annotating and filtering holders.
 """
 
 from contextlib import nullcontext
@@ -60,7 +60,7 @@ def live_grants(now=None):
 def features_at(holder, when=None):
     """The names of the features in force for `holder` at `when` (now, unless given) - past or to come, as the
     grants now say."""
-    return set(live_grants(when).filter(holder=holder).values_list("feature", flat=True))
+    return set(live_grants(when).filter(holder=holder).values_list("feature__name", flat=True))
 
 
 def _cache(holder):
@@ -80,15 +80,18 @@ def _held(holder):
 
 def _prefetched_features(holder):
     """
-    The features in force for `holder` from the grants the caller loaded - `prefetch_related` of its grants - or,
-    where none were loaded, None. An unsaved holder holds none.
+    The features in force for `holder` from the grants the caller loaded - `prefetch_related` of its grants, each
+    with its feature (`select_related("feature")` in the `Prefetch`'s queryset) - or, where none were loaded so,
+    None: a grant's feature read one at a time would be a query each. An unsaved holder holds none.
     """
-    if holder.pk is None:
+    if holder._state.adding:
         return set()
     for loaded in getattr(holder, "_prefetched_objects_cache", {}).values():
         if loaded.model is get_grant_model():
+            if not all("feature" in grant._state.fields_cache for grant in loaded):
+                return None
             now = timezone.now()
-            return {grant.feature_id for grant in loaded if _in_force(grant, now)}
+            return {grant.feature.name for grant in loaded if _in_force(grant, now)}
     return None
 
 
@@ -116,7 +119,7 @@ def _loaded_overrides(holder):
     row - or `_UNLOADED`. None, too, where there's no overrides model or the holder isn't saved.
     """
     overrides_model = get_overrides_model()
-    if overrides_model is None or holder.pk is None:
+    if overrides_model is None or holder._state.adding:
         return None
     for relation in _overrides_relations(holder):
         if relation.cache_name in holder._state.fields_cache:
@@ -250,7 +253,10 @@ def effective_expression(name):
         grants = (
             get_grant_model()
             ._default_manager.filter(
-                holder=models.OuterRef("pk"), feature=setting.feature, revoked_at__isnull=True, starts_at__lte=Now()
+                holder=models.OuterRef("pk"),
+                feature__name=setting.feature,
+                revoked_at__isnull=True,
+                starts_at__lte=Now(),
             )
             .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=Now()))
         )

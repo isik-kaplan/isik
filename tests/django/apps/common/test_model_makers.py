@@ -261,6 +261,52 @@ class TestBuildModel:
         assert generated._meta.abstract is False
 
 
+class TestTheGeneratedKey:
+    def host(self):
+        class Host(models.Model):
+            class Meta:
+                app_label = "testapp"
+
+        return Host
+
+    @isolate_apps("tests.testapp")
+    def test_a_base_declaring_none_gets_new_primary_keys(self):
+        from isik.django.apps.common.db.models import UUIDPrimaryKeyModel
+
+        # A value that isn't a field - a manager - says nothing about the key.
+        generated = _model_makers.build_model(
+            "HostThing", self.host(), fields={"objects": models.Manager()}, base_model=_model_makers.DefaultMakerBase
+        )
+
+        made, declared = generated._meta.pk.deconstruct(), UUIDPrimaryKeyModel._meta.get_field("id").deconstruct()
+        declared[3].pop("db_index")
+        assert (made[0], made[1], made[3]) == (declared[0], declared[1], declared[3])
+
+    @isolate_apps("tests.testapp")
+    def test_a_key_among_the_fields_is_the_key(self):
+        generated = _model_makers.build_model(
+            "HostThing",
+            self.host(),
+            fields={"code": models.CharField(max_length=8, primary_key=True)},
+            base_model=_model_makers.DefaultMakerBase,
+        )
+
+        assert generated._meta.pk.name == "code"
+        assert "id" not in [field.name for field in generated._meta.concrete_fields]
+
+    @isolate_apps("tests.testapp")
+    def test_the_bases_key_is_the_key(self):
+        class Coded(models.Model):
+            code = models.CharField(max_length=8, primary_key=True)
+
+            class Meta:
+                abstract = True
+
+        generated = _model_makers.build_model("HostThing", self.host(), fields={}, base_model=Coded)
+
+        assert [field.name for field in generated._meta.concrete_fields] == ["code"]
+
+
 class TestHelpers:
     def test_keyword_list(self):
         assert _model_makers.keyword_list(["a", "b"]) == "a=, b="

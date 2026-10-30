@@ -29,6 +29,7 @@ from isik.django.apps.common.db import (
     DatabaseTimestampsModel,
     FullCleanOnSaveModel,
     ReprModel,
+    UUIDPrimaryKeyModel,
     VersionedModel,
     track_events,
 )
@@ -65,7 +66,7 @@ def not_in_the_future(value):
         raise ValidationError("Must not be in the future.")
 
 
-class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixin, AbstractUser):
+class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixin, UUIDPrimaryKeyModel, AbstractUser):
     """A real AUTH_USER_MODEL with USERNAME_FIELD != "username"."""
 
     USERNAME_FIELD = "email"
@@ -105,7 +106,7 @@ class Widget(BaseModel):
         ContextField(
             "actor",
             context_key="user",
-            cast="bigint",
+            cast="uuid",
             field=models.ForeignKey(
                 settings.AUTH_USER_MODEL, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
             ),
@@ -116,7 +117,7 @@ class Widget(BaseModel):
         ContextField(
             "tenant",
             context_key="organization",
-            cast="bigint",
+            cast="uuid",
             field=models.ForeignKey(
                 settings.AUTH_USER_MODEL, null=True, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
             ),
@@ -172,7 +173,7 @@ class Tag(BaseModel):
         app_label = "testapp"
 
 
-class WidgetTag(models.Model):
+class WidgetTag(UUIDPrimaryKeyModel):
     """Explicit through model - not auto_created, unlike a plain ManyToManyField's default."""
 
     widget = models.ForeignKey(Widget, on_delete=models.CASCADE)
@@ -369,7 +370,7 @@ class SharedTag(AbstractTag):
         app_label = "testapp"
 
 
-class ThreadTopic(models.Model):
+class ThreadTopic(UUIDPrimaryKeyModel):
     tag = models.ForeignKey(SharedTag, on_delete=models.CASCADE)
     thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="topic_links")
 
@@ -416,7 +417,7 @@ class TimestampedNote(DatabaseTimestampsModel):
         app_label = "testapp"
 
 
-class ModifiedColumnNote(DatabaseTimestampsModel):
+class ModifiedColumnNote(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
     """The timestamps with `updated_at` stored in a column named otherwise - the trigger must follow it."""
 
     text = models.CharField(max_length=50, blank=True)
@@ -426,7 +427,7 @@ class ModifiedColumnNote(DatabaseTimestampsModel):
         app_label = "testapp"
 
 
-class ExemptedNote(models.Model):
+class ExemptedNote(UUIDPrimaryKeyModel):
     """A field skipping two documentation rules - its migration writes each exemption as the call that made it."""
 
     text = models.CharField(
@@ -480,7 +481,7 @@ class VersionedNote(VersionedModel):
         app_label = "testapp"
 
 
-class RevisionedNote(models.Model):
+class RevisionedNote(UUIDPrimaryKeyModel):
     """A token isik doesn't keep, declared - kept by a trigger of the model's own."""
 
     text = models.CharField(max_length=50, blank=True)
@@ -499,7 +500,7 @@ class RevisionedNote(models.Model):
         ]
 
 
-class StuckNote(models.Model):
+class StuckNote(UUIDPrimaryKeyModel):
     """A token declared but kept by nothing - what assert_concurrency_field_changes() is there to catch."""
 
     text = models.CharField(max_length=50, blank=True)
@@ -524,7 +525,7 @@ class Team(BaseModel):
         app_label = "testapp"
 
 
-class TeamNote(models.Model):
+class TeamNote(UUIDPrimaryKeyModel):
     """Rows pointing at a team - a reverse foreign key its version covers."""
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="notes")
@@ -552,7 +553,7 @@ class WidgetProxy(Widget):
         app_label = "testapp"
 
 
-class TeamCharter(models.Model):
+class TeamCharter(UUIDPrimaryKeyModel):
     """At most one per team - a reverse one-to-one its version covers."""
 
     team = models.OneToOneField(Team, on_delete=models.CASCADE, related_name="charter")
@@ -562,7 +563,7 @@ class TeamCharter(models.Model):
         app_label = "testapp"
 
 
-class TeamLabel(models.Model):
+class TeamLabel(UUIDPrimaryKeyModel):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     # No default - an add() must say it, through_defaults.
@@ -584,7 +585,7 @@ class Squad(VersionedModel, BaseModel):
         app_label = "testapp"
 
 
-class SquadPost(models.Model):
+class SquadPost(UUIDPrimaryKeyModel):
     squad = models.ForeignKey(Squad, on_delete=models.CASCADE, related_name="posts")
     text = models.CharField(max_length=50)
 
@@ -624,7 +625,7 @@ class Shelf(BaseModel):
 
 
 @track_events()
-class ShelfItem(models.Model):
+class ShelfItem(UUIDPrimaryKeyModel):
     shelf = models.ForeignKey(Shelf, on_delete=models.CASCADE, related_name="items")
     # Named like the shelf's own column, and a secret its shelf's readers mustn't see.
     name = models.CharField(max_length=50)
@@ -636,7 +637,7 @@ class ShelfItem(models.Model):
 
 
 @track_events()
-class ShelfLabel(models.Model):
+class ShelfLabel(UUIDPrimaryKeyModel):
     shelf = models.ForeignKey(Shelf, on_delete=models.CASCADE, related_name="labels")
     # A second key to the same model - references() would match it as well as the declared path.
     moved_from = models.ForeignKey(Shelf, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -657,7 +658,7 @@ class Box(BaseModel):
 
 
 @track_events()
-class BoxItem(models.Model):
+class BoxItem(UUIDPrimaryKeyModel):
     box = models.ForeignKey(Box, on_delete=models.CASCADE, related_name="items")
     name = models.CharField(max_length=50)
 

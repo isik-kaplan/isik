@@ -27,7 +27,7 @@ from isik.django.drf.spectacular import (
 )
 from isik.django.drf.viewsets import ViewSetRegistryExemption
 from isik.django.drf.viewsets.base import BaseModelViewSet
-from isik.django.drf.viewsets.history import HistoryMixin
+from isik.django.drf.viewsets.history import HistoryMixin, context_filter
 from tests.testapp.models import Widget
 
 
@@ -155,12 +155,23 @@ class TestHistoryMixinSchema:
         created_after_param = next(param for param in params if param["name"] == "created_after")
         assert created_after_param["schema"] == {"type": "string", "format": "date-time"}
 
-    def test_an_integer_field_filter_is_typed_as_an_integer(self):
+    def test_the_actor_filter_is_typed_as_the_users_key(self):
         with override_settings(MIDDLEWARE=["pghistory.middleware.HistoryMiddleware"]):
             schema = generate_schema((WidgetViewSet, "widget"))
         params = schema["paths"]["/widgets/history/"]["get"]["parameters"]
         actor_param = next(param for param in params if param["name"] == "actor")
-        assert actor_param["schema"]["type"] == "integer"
+        assert actor_param["schema"] == {"type": "string", "format": "uuid"}
+
+    def test_an_integer_field_filter_is_typed_as_an_integer(self):
+        class IntegerFilterWidgetViewSet(WidgetViewSet):
+            endpoint = "integer-filter-widgets"
+            exempt_from_registry = ViewSetRegistryExemption(reason="a test's own class, defined again on every run")
+            extra_history_filters = {"by_number": context_filter("number")}
+
+        schema = generate_schema((IntegerFilterWidgetViewSet, "integer-filter-widget"))
+        params = schema["paths"]["/integer-filter-widgets/history/"]["get"]["parameters"]
+        number_param = next(param for param in params if param["name"] == "by_number")
+        assert number_param["schema"]["type"] == "integer"
 
     def test_a_plain_number_filter_is_typed_as_a_number(self):
         class NumberFilterWidgetViewSet(WidgetViewSet):

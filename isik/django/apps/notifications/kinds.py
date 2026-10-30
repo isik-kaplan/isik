@@ -387,8 +387,10 @@ def write_notice(name, *, variant, subject, snapshot, partition, **fields):
     """Writes a notice of the kind `name`, about `subject` if any, and returns it as written."""
     from isik.django.apps.notifications.triggers import actor, context
 
+    policy = swapping.get_kind_policy_model()._default_manager.filter(name=name)
     notice = swapping.get_notice_model()._default_manager.create(
-        kind_id=name,
+        # The kind's key, read in the INSERT itself - no query of its own.
+        kind_id=models.Subquery(policy.values("pk")),
         variant=variant,
         subject_label=subject._meta.label if subject is not None else None,
         subject_id=str(subject.pk) if subject is not None else None,
@@ -416,7 +418,7 @@ def _retired(name):
         connection.ops.quote_name(identifier)
         for identifier in (
             policy._meta.db_table,
-            policy._meta.get_field("kind").column,
+            policy._meta.get_field("name").column,
             policy._meta.get_field("retired_at").column,
         )
     )

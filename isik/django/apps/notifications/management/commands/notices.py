@@ -30,7 +30,7 @@ def describe(kind):
 def drift():
     """{"unmirrored": [...], "undeclared": [...], "retired": [...]} - where the declarations and the mirror differ."""
     declared = set(kinds())
-    rows = dict(get_kind_policy_model().objects.values_list("kind", "retired_at"))
+    rows = dict(get_kind_policy_model().objects.values_list("name", "retired_at"))
     return {
         "unmirrored": sorted(declared - set(rows)),
         "undeclared": sorted(name for name, retired_at in rows.items() if name not in declared and retired_at is None),
@@ -116,7 +116,7 @@ class Command(BaseCommand):
 
     def _retire(self, name):
         policies = get_kind_policy_model().objects
-        retired = policies.filter(kind=name, retired_at__isnull=True).update(retired_at=timezone.now())
+        retired = policies.filter(name=name, retired_at__isnull=True).update(retired_at=timezone.now())
         if not retired:
             raise CommandError(_("No unretired kind is called %(kind)s.") % {"kind": name})
         self.stdout.write(_("Retired %(kind)s.") % {"kind": name})

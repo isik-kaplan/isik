@@ -54,9 +54,9 @@ class TestTheNoticesCommand:
 
     def test_it_shows_where_the_mirror_differs(self):
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
-            NoticeKindPolicy.objects.filter(pk="parcel_reminder").delete()
-        NoticeKindPolicy.objects.create(kind="gone", policy="mandatory", scope="single_partition", source="trigger")
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(retired_at=timezone.now())
+            NoticeKindPolicy.objects.filter(name="parcel_reminder").delete()
+        NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
 
         listed = notices()
 
@@ -67,7 +67,7 @@ class TestTheNoticesCommand:
     def test_it_retires_a_kind(self):
         assert notices("--retire", "parcel_shipped") == "Retired parcel_shipped.\n"
 
-        assert NoticeKindPolicy.objects.get(pk="parcel_shipped").retired_at is not None
+        assert NoticeKindPolicy.objects.get(name="parcel_shipped").retired_at is not None
         with pytest.raises(CommandError, match="^No unretired kind is called parcel_shipped.$"):
             notices("--retire", "parcel_shipped")
 

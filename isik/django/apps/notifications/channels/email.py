@@ -67,7 +67,7 @@ def _send(delivery, notice, address, html):
         "data": notice.snapshot,
         "previous": notice.previous,
     }
-    base = f"notifications/{notice.kind_id}"
+    base = f"notifications/{notice.kind.name}"
     message = EmailMultiAlternatives(
         " ".join(plain(f"{base}/subject.txt", context).split()),
         plain(f"{base}/body.txt", context),

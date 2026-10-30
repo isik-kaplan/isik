@@ -16,6 +16,7 @@ from isik.django.apps.notifications.hooks import FanOutAfterWritesMiddleware, fa
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.management.commands.notices import Command as NoticesCommand
 from isik.django.apps.notifications.models import Notice, Policy, Source
+from tests.django.apps.notifications import kind_named
 from tests.testapp.models import Parcel
 
 
@@ -68,7 +69,7 @@ def test_a_task_asks_while_the_setting_is_on(waiting, dispatched, settings, on, 
 
 def test_the_command_fans_out_everything_waiting(waiting, dispatched, settings):
     settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "BATCH_SIZE": 1}
-    Notice.objects.create(kind_id="parcel_reminder", variant="daily", snapshot={})
+    Notice.objects.create(kind=kind_named("parcel_reminder"), variant="daily", snapshot={})
     out = StringIO()
 
     call_command("notices", "--fan-out", stdout=out)

@@ -12,6 +12,7 @@ import pytest
 from django.core import mail
 from django.db import DatabaseError, connection, transaction
 from django.test import TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from isik.django.apps.common.db import flushing_through_truncate_protection
@@ -40,6 +41,7 @@ from isik.django.apps.notifications.models import (
     ShardState,
 )
 from isik.django.apps.notifications.signals import endpoint_parked
+from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_operations import notices as run_notices
 from tests.django.apps.notifications.test_pipeline import (
     Receiver,
@@ -96,7 +98,7 @@ class TestTheMirrorsDatabase:
 
         class Rows:
             def update_or_create(self, **kwargs):
-                return NoticeKindPolicy(kind=kwargs["kind"]), True
+                return NoticeKindPolicy(name=kwargs["name"]), True
 
         monkeypatch.setattr(sync.transaction, "atomic", atomic)
         monkeypatch.setattr(NoticeKindPolicy.objects, "using", lambda alias: used.append(("using", alias)) or Rows())
@@ -110,7 +112,7 @@ class TestTheMirrorsDatabase:
 
 class TestReadingRetiredKindsFromEachDatabase:
     def test_each_database_is_read_and_a_broken_one_skipped(self, monkeypatch):
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
         real = NoticeKindPolicy.objects.using
 
         def using(alias):
@@ -236,7 +238,7 @@ class TestWritingDeliveries:
 class TestFanningOutEveryNotice:
     def test_oldest_first_then_by_number(self, alice, dispatched, django_capture_on_commit_callbacks):
         now = timezone.now()
-        policy = NoticeKindPolicy.objects.get(pk="parcel_reminder")
+        policy = NoticeKindPolicy.objects.get(name="parcel_reminder")
         later = Notice.objects.create(id=900, kind=policy, occurred_at=now)
         earlier = Notice.objects.create(id=901, kind=policy, occurred_at=now - timedelta(hours=1))
         tied_high = Notice.objects.create(id=950, kind=policy, occurred_at=now + timedelta(hours=1))
@@ -456,9 +458,9 @@ def receiver(monkeypatch):
 @pytest.fixture
 def hooked(alice, dispatched, django_capture_on_commit_callbacks):
     endpoint = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="current")
-    get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged")
+    get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
     other = get_endpoint_model().objects.create(url="https://other.example/in", secret="s")
-    get_endpoint_kind_model().objects.create(endpoint=other, kind_id="parcel_shipped")
+    get_endpoint_kind_model().objects.create(endpoint=other, kind=kind_named("parcel_shipped"))
     notice = flag(alice)
     fan_out(django_capture_on_commit_callbacks)
     dispatched.clear()
@@ -594,7 +596,7 @@ class TestTheCommandExactly:
 
     def test_text_names_each_kind_once_and_joins_drift(self):
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
-            NoticeKindPolicy.objects.filter(pk__in=["parcel_reminder", "parcel_flagged"]).delete()
+            NoticeKindPolicy.objects.filter(name__in=["parcel_reminder", "parcel_flagged"]).delete()
 
         listed = run_notices()
 
@@ -604,7 +606,7 @@ class TestTheCommandExactly:
     def test_retiring_one_retires_it_alone(self):
         run_notices("--retire", "parcel_shipped")
 
-        assert list(NoticeKindPolicy.objects.filter(retired_at__isnull=False).values_list("kind", flat=True)) == [
+        assert list(NoticeKindPolicy.objects.filter(retired_at__isnull=False).values_list("name", flat=True)) == [
             "parcel_shipped"
         ]
 
@@ -615,7 +617,7 @@ def test_unsubscribing_from_a_kind_leaves_the_others(alice):
 
     unsubscribe(alice, "parcel_flagged")
 
-    assert list(get_subscription_model().objects.values_list("kind_id", flat=True)) == ["parcel_shipped"]
+    assert list(get_subscription_model().objects.values_list("kind__name", flat=True)) == ["parcel_shipped"]
 
 
 def test_the_flush_is_handed_the_test_it_ends(monkeypatch):
@@ -627,3 +629,34 @@ def test_the_flush_is_handed_the_test_it_ends(monkeypatch):
         test._fixture_teardown()
 
     assert given == [test]
+
+
+class TestWhatAClaimReadsAndHolds:
+    """Each claim reads the rows its work needs in its own query, and holds only the row it claims - a kind's
+    policy row held as well would make a retire skip every notice of it, and a send skip every delivery."""
+
+    def claiming(self, queries, table):
+        [sql] = [
+            query["sql"] for query in queries if f'FROM "{table}"' in query["sql"] and "SKIP LOCKED" in query["sql"]
+        ]
+        return sql
+
+    def test_a_fan_out(self, parcel, dispatched):
+        ship(parcel)
+
+        with CaptureQueriesContext(connection) as queries:
+            pipeline.fan_out()
+
+        sql = self.claiming(queries, "isik_notice")
+        assert 'JOIN "isik_notice_kind_policy"' in sql
+        assert sql.endswith('FOR UPDATE OF "isik_notice" SKIP LOCKED')
+
+    def test_a_send(self, shipped):
+        delivery = delivery_on(shipped, "inbox")
+
+        with CaptureQueriesContext(connection) as queries:
+            pipeline.send(delivery.pk)
+
+        sql = self.claiming(queries, "isik_delivery")
+        assert ('JOIN "isik_notice"' in sql, 'JOIN "isik_notice_kind_policy"' in sql) == (True, True)
+        assert sql.endswith('FOR UPDATE OF "isik_delivery" SKIP LOCKED')

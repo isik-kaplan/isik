@@ -292,10 +292,10 @@ class TestTheHooks:
 
 
 class TestTheActorFilter:
-    def test_follows_an_integer_user_pk(self):
-        from tests.testapp.models import EmailUser
+    def test_follows_an_integer_pk(self):
+        from tests.testapp.models import TimestampedNote
 
-        assert _pk_filter_class(EmailUser).__name__ == "_JSONContextNumberFilter"
+        assert _pk_filter_class(TimestampedNote).__name__ == "_JSONContextNumberFilter"
 
     def test_follows_a_uuid_pk(self):
         assert _pk_filter_class(Widget).__name__ == "_JSONContextUUIDFilter"

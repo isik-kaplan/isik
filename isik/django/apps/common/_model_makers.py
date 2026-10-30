@@ -14,6 +14,7 @@ from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.models import new_primary_key
 from isik.django.apps.common.generated import mark_generated
 
 
@@ -149,7 +150,8 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     """
     Builds the generated model via `type()` against `base_model`'s real `ModelBase` metaclass, so
     any `contribute_to_class`-having value in `fields` (e.g. another maker via `extra_fields=`)
-    wires up exactly like a hand-written field, with no special-casing needed here.
+    wires up exactly like a hand-written field, with no special-casing needed here. Keyed by
+    `new_primary_key()` unless the base or `fields` declares a key of its own.
     """
 
     # The base's own Meta - every abstract model has one - so its options reach the generated model,
@@ -163,6 +165,18 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
     for option, value in meta_attrs.items():
         setattr(Meta, option, value)
     attrs = {**fields, **(extra_attrs or {}), "Meta": Meta, "__module__": host_cls.__module__}
+    if base_model._meta.pk is None and not any(
+        isinstance(value, models.Field) and value.primary_key for value in fields.values()
+    ):
+        # A key of new_primary_key()'s, as every model isik keys has - not the app's DEFAULT_AUTO_FIELD.
+        attrs["id"] = models.UUIDField(
+            primary_key=True,
+            editable=False,
+            default=new_primary_key,
+            verbose_name=gettext_lazy("ID"),
+            help_text=gettext_lazy("The row's identifier, assigned when it's created."),
+            db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
+        )
     return mark_generated(type(model_name, (base_model,), attrs), "maker")
 
 

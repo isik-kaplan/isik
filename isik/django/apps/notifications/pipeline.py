@@ -147,7 +147,7 @@ def _stamp(notice):
 
 def _fan_out_one(notice):
     """Fans one notice out - returning the deliveries to send and the shards to run - and stamps it."""
-    kind = get_kind(notice.kind_id)
+    kind = get_kind(notice.kind.name)
     deliveries, shards = [], []
     # A kind no longer declared has nobody to reach; its notice is stamped all the same.
     if kind is not None and kind.scope == Scope.CROSS_PARTITION:
@@ -186,7 +186,9 @@ def fan_out(batch_size=None):
     with transaction.atomic():
         notices = list(
             get_notice_model()
-            ._default_manager.select_for_update(skip_locked=True)
+            ._default_manager.select_related("kind")
+            # The notice's row alone: its kind's is read, never held.
+            .select_for_update(skip_locked=True, of=("self",))
             .filter(fanned_out_at__isnull=True)
             .order_by("occurred_at", "pk")[: batch_size or conf.setting("BATCH_SIZE")]
         )
@@ -216,7 +218,13 @@ def _dispatch(deliveries, shards):
 
 
 def _claim(queryset, now):
-    return queryset.select_for_update(skip_locked=True).filter(next_attempt_at__lte=now).first()
+    # With its notice and the notice's kind, which its work reads - held is only its own row.
+    return (
+        queryset.select_related("notice__kind")
+        .select_for_update(skip_locked=True, of=("self",))
+        .filter(next_attempt_at__lte=now)
+        .first()
+    )
 
 
 def _shard_work(shard, kind):
@@ -249,7 +257,7 @@ def run_shard(shard_id, claimed_by=""):
     mine = get_fan_out_shard_model()._default_manager.filter(pk=shard.pk, state=ShardState.CLAIMED, claimed_at=now)
     try:
         with transaction.atomic():
-            deliveries, shards = _shard_work(shard, get_kind(shard.notice.kind_id))
+            deliveries, shards = _shard_work(shard, get_kind(shard.notice.kind.name))
             finished = {"state": ShardState.FINISHED, "finished_at": timezone.now(), "last_error": ""}
             if not mine.update(**finished):
                 raise _Superseded

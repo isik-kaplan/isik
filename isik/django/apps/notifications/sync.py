@@ -20,7 +20,7 @@ def mirror_kinds(using=DEFAULT_DB_ALIAS, **kwargs):
                 get_kind_policy_model()
                 .objects.using(using)
                 .update_or_create(
-                    kind=kind.name,
+                    name=kind.name,
                     defaults={
                         "policy": kind.policy,
                         "scope": kind.scope,

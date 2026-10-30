@@ -73,8 +73,8 @@ def test_the_schema_types_each_id():
 
     uuid = {"type": "string", "format": "uuid"}
     assert id_of("/unscoped-deliveries/{id}/") == uuid
-    assert id_of("/inbox/{id}/") == {"type": "integer"}
-    assert id_of("/unscoped-endpoints/{id}/") == {"type": "integer"}
+    assert id_of("/inbox/{id}/") == uuid
+    assert id_of("/unscoped-endpoints/{id}/") == uuid
 
 
 def test_a_swapped_model_is_read_when_asked_for():

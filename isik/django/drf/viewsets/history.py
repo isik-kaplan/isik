@@ -335,7 +335,8 @@ class HistoryMixin:
         def scope_history(self, events):
             if self.request.user.is_staff:
                 return events
-            return events.filter(pgh_data__owner_id=self.request.user.pk)
+            # A snapshot holds a UUID as its text.
+            return events.filter(pgh_data__owner_id=str(self.request.user.pk))
 
     `history_list_scoped_to_queryset` (default `False`, preserving today's behavior) restricts
     `GET <endpoint>/history/` to events for objects `self.get_queryset()` would return, instead of

@@ -23,6 +23,10 @@ from isik.django.apps.notifications.models import DeliveryState
 from tests_swapped.owned import models as owned
 
 
+def kind_named(name):
+    return owned.KindPolicy.objects.get(name=name)
+
+
 pytestmark = pytest.mark.django_db
 
 GETTERS = {
@@ -99,12 +103,12 @@ def test_a_change_writes_its_notice_to_the_projects_table(alice):
     # The trigger's insert takes the project's own key, from its db_default.
     assert isinstance(notice.pk, uuid.UUID)
 
-    assert (notice.kind_id, notice.variant, notice.snapshot) == (
+    assert (notice.kind.name, notice.variant, notice.snapshot) == (
         "package_lost",
         "stolen",
         {"label": "Bob's & <box>", "owner": alice.pk},
     )
-    assert owned.KindPolicy.objects.get(pk="package_lost").variants == ["stolen", "misplaced"]
+    assert owned.KindPolicy.objects.get(name="package_lost").variants == ["stolen", "misplaced"]
 
 
 def test_a_notice_fans_out_and_is_sent_into_the_projects_tables(alice):
@@ -118,7 +122,7 @@ def test_a_notice_fans_out_and_is_sent_into_the_projects_tables(alice):
     assert owned.EmailDelivery.objects.get().address == "alice@example.com"
     for delivery in deliveries:
         assert pipeline.send(delivery.pk).state == DeliveryState.SENT
-    assert owned.InboxItem.objects.get().kind_id == "package_lost"
+    assert owned.InboxItem.objects.get().kind.name == "package_lost"
     assert mail.outbox[0].body == "Bob's & <box> is lost\n"
 
 
@@ -126,9 +130,9 @@ def test_a_subscription_is_guarded_in_the_projects_table(alice):
     subscribe(alice, "package_lost", "stolen")
 
     with transaction.atomic(), pytest.raises(IntegrityError, match="declares no such variant"):
-        owned.Subscription.objects.create(user=alice, kind_id="package_lost", variant="burnt")
+        owned.Subscription.objects.create(user=alice, kind=kind_named("package_lost"), variant="burnt")
     with transaction.atomic(), pytest.raises(IntegrityError, match="no kind is called that"):
-        owned.Subscription.objects.create(user=alice, kind_id="nothing")
+        owned.Subscription.objects.create(user=alice, kind_id=uuid.uuid4())
 
 
 def test_opting_out_reaches_nobody(alice):
@@ -192,7 +196,7 @@ def test_an_endpoint_hears_only_its_owners_notices(alice):
     bob = get_user_model().objects.create(username="bob", email="bob@example.com")
     for owner in (alice, bob):
         endpoint = owned.Endpoint.objects.create(url=f"https://{owner.username}.example/in", secret="s", owner=owner)
-        owned.EndpointKind.objects.create(endpoint=endpoint, kind_id="package_lost")
+        owned.EndpointKind.objects.create(endpoint=endpoint, kind=kind_named("package_lost"))
 
     notice = lose(alice)
     pipeline.fan_out()
@@ -203,7 +207,7 @@ def test_an_endpoint_hears_only_its_owners_notices(alice):
 
 def test_a_webhook_endpoint_is_the_projects(alice):
     endpoint = owned.Endpoint.objects.create(url="https://hooks.example/in", secret=uuid.uuid4().hex)
-    owned.EndpointKind.objects.create(endpoint=endpoint, kind_id="package_lost")
+    owned.EndpointKind.objects.create(endpoint=endpoint, kind=kind_named("package_lost"))
 
     with pgtrigger.ignore():
         assert owned.EndpointKind.objects.get().endpoint == endpoint
@@ -250,19 +254,3 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
     assert isinstance(device, owned.Device)
     assert pipeline.send(delivery.pk).state == DeliveryState.SENT
     assert json.loads(sent[0].content)["aps"]["alert"] == {"title": "Package lost", "body": "Bob's & <box> is lost."}
-
-
-@pytest.mark.parametrize("app_label", ["isik_notifications", "isik_notifications_audience", "isik_features"])
-def test_isiks_upgrade_runs_before_the_projects_app_is_in_the_state(app_label):
-    # What migrating from empty meets when the project's app comes after isik's in the plan: the state up to
-    # isik's 0001 holds isik's swapped models keying an app it doesn't hold yet. Rendering it raises.
-    from django.db.migrations.loader import MigrationLoader
-
-    loader = MigrationLoader(connection)
-    (operation,) = loader.get_migration(app_label, "0002_isik_names").operations
-    state = loader.project_state((app_label, "0001_initial"))
-
-    with connection.schema_editor() as editor:
-        operation.database_forwards(app_label, editor, state, state)
-
-    assert "apps" not in state.__dict__

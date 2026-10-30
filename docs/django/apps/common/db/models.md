@@ -4,7 +4,7 @@
 
 | Model | Adds |
 |---|---|
-| `UUIDPrimaryKeyModel` | a UUID primary key - `uuid4` by default, see [primary keys](#primary-keys) |
+| `UUIDPrimaryKeyModel` | a UUID primary key - a `uuid7` by default, see [primary keys](#primary-keys) |
 | `DatabaseTimestampsModel` | `created_at`/`updated_at` kept by the database (needs `pgtrigger`) |
 | `FullCleanOnSaveModel` | `full_clean()` and `django-lifecycle` hooks on every `save()`, skippable validators, `update()`, `skip_full_clean()` |
 | `ReprModel` | `STR`/`REPR` format strings for `str()`/`repr()` |
@@ -112,22 +112,24 @@ with widget.skip_full_clean():
 ## Primary keys
 
 `UUIDPrimaryKeyModel.id` defaults to `new_primary_key()`, which calls the function the
-`ISIK_PRIMARY_KEY_DEFAULT` setting names - `"uuid.uuid4"` when it's unset. isik ships `uuid7()`, a
-time-ordered UUID (RFC 9562: 48 bits of Unix milliseconds, then random bits), whose new rows land at
-the end of the primary key's index rather than all over it:
+`ISIK_PRIMARY_KEY` setting names - isik's `uuid7()` when it's unset. Every key isik has comes from it: its
+own apps' models, every model it makes for a project, and every base a project subclasses - see
+[primary keys](../../../../primary-keys.md). A uuid7 is a time-ordered UUID (RFC 9562): 48 bits of Unix
+milliseconds, then a 42-bit counter, then 32 random bits. New rows land at the end of the key's index
+rather than all over it, and in one process each key sorts after the one made before it. The counter
+starts at random each millisecond and counts up within it. A clock stepping back keeps counting from where
+it was. A project with another key convention names its own function:
 
 ```python
-ISIK_PRIMARY_KEY_DEFAULT = "isik.django.apps.common.db.models.uuid7"
+ISIK_PRIMARY_KEY = "uuid.uuid4"
 ```
 
-**A project with a key convention of its own sets it.** Nothing fails when it doesn't: every model
-isik keys - its own apps' among them - quietly gets random `uuid4` keys beside the project's, the wrong
-shape for good on exactly the append-heavy tables read by recency, where a key that doesn't sort by time
-spreads every insert across the index.
+A model's migration names `new_primary_key`, not the setting, so changing it needs no migration.
 
-The setting is read once per process. A model's migration names `new_primary_key`, not the setting,
-so changing it needs no migration - a project upgrading from 0.29 gets one `AlterField` per model,
-from `uuid.uuid4` to `new_primary_key`.
+`DatabaseUUID7()` is the same kind of key made by the database, for a row written in SQL, which no Python
+function reaches: a trigger's notice, say. Give it as the key's `db_default`. Its 12 bits after the version
+are the fraction of the millisecond, so keys made later sort later in a session too. It needs PostgreSQL
+13 or later and nothing installed.
 
 ## VersionedModel
 

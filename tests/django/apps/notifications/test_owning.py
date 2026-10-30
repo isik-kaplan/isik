@@ -79,7 +79,7 @@ def test_a_swapped_out_guard_stays_as_shipped(settings, monkeypatch):
     settings.ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL = "testapp.Parcel"
     guard = next(trigger for trigger in Subscription._meta.triggers if trigger.name == "guard_variant")
 
-    assert 'FROM "isik_notice_kind_policy" WHERE "kind" = NEW."kind_id"' in guard.get_func(Subscription)
+    assert 'FROM "isik_notice_kind_policy" WHERE "id" = NEW."kind_id"' in guard.get_func(Subscription)
 
 
 def test_a_kept_guard_reads_the_configured_policy(monkeypatch):
@@ -94,4 +94,4 @@ def test_a_kept_guard_reads_the_configured_policy(monkeypatch):
     monkeypatch.setattr(swapping, "get_kind_policy_model", lambda: Policy)
     guard = next(trigger for trigger in Subscription._meta.triggers if trigger.name == "guard_variant")
 
-    assert 'FROM "owned_policy" WHERE "owned_kind" = NEW."kind_id"' in guard.get_func(Subscription)
+    assert 'FROM "owned_policy" WHERE "owned_id" = NEW."kind_id"' in guard.get_func(Subscription)

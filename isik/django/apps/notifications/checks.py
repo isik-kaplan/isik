@@ -390,8 +390,8 @@ def _mirrored(databases):
                 dict(
                     swapping.get_kind_policy_model()
                     .objects.using(alias)
-                    .filter(kind__in=list(declarations.kinds()))
-                    .values_list("kind", "retired_at")
+                    .filter(name__in=list(declarations.kinds()))
+                    .values_list("name", "retired_at")
                 )
             )
         except DatabaseError:

@@ -1,5 +1,6 @@
 """The features app's checks, its audience and its configuration - each problem it reports, and each way to set it."""
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -171,7 +172,7 @@ class TestHolderPeople:
         assert HolderPeople("owner").recipients(self.notice(alice.pk, "owner")) == [alice]
 
     def test_a_holder_gone_reaches_nobody(self):
-        assert HolderPeople().recipients(self.notice(-1)) == []
+        assert HolderPeople().recipients(self.notice(str(uuid.uuid4()))) == []
 
     def test_the_project_says_who_a_holders_people_are(self, settings):
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
@@ -211,7 +212,9 @@ def test_each_model_says_what_it_is():
     alice = EmailUser.objects.create(username="alice", email="alice@example.com")
 
     assert str(Feature(name="beta")) == "beta"
-    assert str(FeatureGrant(feature_id="beta", holder_id=alice.pk)) == f"beta for {alice.pk}"
+    feature = uuid.uuid4()
+
+    assert str(FeatureGrant(feature_id=feature, holder_id=alice.pk)) == f"{feature} for {alice.pk}"
     assert str(UserOverrides(holder_id=alice.pk)) == f"settings of {alice.pk}"
 
 

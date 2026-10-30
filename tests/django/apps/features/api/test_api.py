@@ -3,8 +3,9 @@
 from datetime import timedelta
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from drf_spectacular.drainage import GENERATOR_STATS
@@ -432,3 +433,18 @@ class TestTheHeadersAndBodies:
         )
 
         assert refused.json() == {"detail": "Prove who you are first.", "code": "reauthentication_required"}
+
+
+def test_the_features_list_reads_each_grants_feature_with_it(alice):
+    grant(alice, "webhooks", source="manual")
+    grant(alice, "beta", source="manual")
+
+    with CaptureQueriesContext(connection) as queries:
+        client_for(alice).get("/features/")
+
+    # The grants' query selects their features' columns - each grant's name read with it, not after.
+    assert [
+        query["sql"]
+        for query in queries
+        if 'FROM "isik_feature_grant"' in query["sql"] and '"isik_feature"."created_at"' in query["sql"]
+    ] != []

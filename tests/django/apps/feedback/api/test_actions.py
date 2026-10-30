@@ -1,6 +1,7 @@
 """The feedback actions on a host's viewset - each run on posts (built by the makers) and threads (bound)."""
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -150,7 +151,7 @@ class TestComments:
 
         assert response.status_code == 201
         assert response.json()["body"] == "first"
-        assert response.json()["user"] == alice.pk
+        assert response.json()["user"] == str(alice.pk)
         assert response.json()["parent"] is None
         assert response.json()["reply_count"] == 0
 
@@ -354,6 +355,21 @@ class TestRowDetails:
         response = client.get(f"/articles/{article.pk}/comments/?only=body")
 
         assert response.json() == [{"body": DOC}]
+
+    def test_the_oldest_first_whatever_their_keys(self, alice):
+        thread = Thread.objects.create(title="hello")
+        model = Thread.comments.model
+        ids = sorted(uuid.uuid4() for _each in range(3))
+        start = timezone.now()
+        # The oldest keyed last, so a key's order and a time's can't agree.
+        for minutes, pk in enumerate(reversed(ids)):
+            model.objects.create(
+                id=pk, thread=thread, user=alice, body=str(pk), created_at=start + timedelta(minutes=minutes)
+            )
+
+        rows = client_for(alice).get(f"/threads/{thread.pk}/comments/?only=id").json()["results"]
+
+        assert [row["id"] for row in rows] == [str(pk) for pk in reversed(ids)][:2]
 
     def test_ties_go_by_primary_key(self, alice):
         thread = Thread.objects.create(title="hello")

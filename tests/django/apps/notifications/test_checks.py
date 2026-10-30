@@ -269,10 +269,10 @@ class TestUnmirroredKinds:
     @pytest.fixture
     def unmirrored(self):
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
-            NoticeKindPolicy.objects.filter(pk__in=["parcel_shipped", "parcel_flagged"]).delete()
+            NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).delete()
 
     def test_a_declared_kind_with_no_row(self, unmirrored):
-        NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=timezone.now())
 
         assert checks.unmirrored_problems(["default"]) == [
             self.MESSAGE.format(kind="parcel_flagged"),
@@ -306,9 +306,9 @@ class TestUnmirroredKinds:
 @pytest.mark.django_db
 class TestRetiredKinds:
     def test_a_declared_kind_the_database_retired(self):
-        NoticeKindPolicy.objects.filter(pk__in=["parcel_shipped", "parcel_flagged"]).update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).update(retired_at=timezone.now())
         NoticeKindPolicy.objects.create(
-            kind="undeclared", policy="mandatory", scope="single_partition", source="trigger", retired_at=timezone.now()
+            name="undeclared", policy="mandatory", scope="single_partition", source="trigger", retired_at=timezone.now()
         )
 
         assert retired_problems(["default"]) == [
@@ -317,7 +317,7 @@ class TestRetiredKinds:
         ]
 
     def test_without_databases_nothing_is_read(self):
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
 
         assert retired_problems(None) == []
 
@@ -330,7 +330,7 @@ class TestRetiredKinds:
         assert retired_problems(["default"]) == []
 
     def test_the_check_reports_them_as_warnings(self, settings):
-        NoticeKindPolicy.objects.filter(pk="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
         settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "COLOR": "red"}
 
         messages = checks.notifications_can_work(app_configs=None, databases=["default"])

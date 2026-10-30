@@ -1,5 +1,6 @@
 import functools
 import os
+import threading
 import time
 from contextlib import contextmanager
 from datetime import timedelta
@@ -54,20 +55,60 @@ def _check_pgtrigger_installed():
 _check_pgtrigger_installed()
 
 
+# The last uuid7()'s milliseconds and counter - each one made sorts after it.
+_last_milliseconds = 0
+_last_counter = 0
+_uuid7_lock = threading.Lock()
+
+
+def _counter_seed():
+    # 41 random bits: the counter starts in the lower half of its 42, so a millisecond has room to count up.
+    return int.from_bytes(os.urandom(6)) >> 7
+
+
 def uuid7():
     """
     A version 7 UUID (RFC 9562): the time it was made, in milliseconds since the epoch, in its first 48
-    bits, then 74 random ones - so keys made later sort later, which an index's pages fill in order. The
-    standard library has one only from Python 3.14.
+    bits, then a 42-bit counter, then 32 random bits - so keys made later sort later, which an index's
+    pages fill in order. The counter starts at random each millisecond and counts up within one, so in a
+    process every key sorts after the one made before it, however close together; a clock stepping back
+    keeps counting from where it was. The standard library has one only from Python 3.14.
     """
-    milliseconds = time.time_ns() // 1_000_000
-    random = int.from_bytes(os.urandom(10))
+    global _last_milliseconds, _last_counter
+    with _uuid7_lock:
+        milliseconds = time.time_ns() // 1_000_000
+        if milliseconds > _last_milliseconds:
+            counter = _counter_seed()
+        else:
+            milliseconds, counter = _last_milliseconds, _last_counter + 1
+            if counter >> 42:
+                # The millisecond counted out: the next one's, early.
+                milliseconds, counter = _last_milliseconds + 1, _counter_seed()
+        _last_milliseconds, _last_counter = milliseconds, counter
     value = (milliseconds & (1 << 48) - 1) << 80  # unix_ts_ms
     value |= 7 << 76  # version
-    value |= (random >> 62 & 0xFFF) << 64  # rand_a
+    value |= (counter >> 30) << 64  # rand_a: the counter's first 12 bits
     value |= 0b10 << 62  # variant
-    value |= random & (1 << 62) - 1  # rand_b
+    value |= (counter & (1 << 30) - 1) << 32  # rand_b: the counter's other 30 bits,
+    value |= int.from_bytes(os.urandom(4))  # then random ones
     return UUID(int=value)
+
+
+class DatabaseUUID7(models.Func):
+    """
+    A version 7 UUID the database makes - for a key a row written in SQL gets, which no Python function
+    reaches: a trigger's, say. Its first 48 bits are milliseconds since the epoch, as `uuid7()`'s are; the
+    12 after the version are the fraction of the millisecond, to a quarter of a microsecond - as
+    PostgreSQL 18's own `uuidv7()` has them - so keys made later sort later, and two made in one statement
+    or one transaction keep their order. The rest are random. One expression, from the clock read once -
+    PostgreSQL 13 and later, nothing installed.
+    """
+
+    template = (
+        "(regexp_replace(lpad(to_hex(floor(extract(epoch FROM clock_timestamp()) * 4096000)::bigint), 15, '0'), "
+        "'^(.{12})', '\\17') || substr(replace(gen_random_uuid()::text, '-', ''), 17))::uuid"
+    )
+    output_field = models.UUIDField()
 
 
 @functools.cache
@@ -77,18 +118,18 @@ def _primary_key_function(path):
 
 def new_primary_key():
     """
-    A new primary key for a `UUIDPrimaryKeyModel` - `ISIK_PRIMARY_KEY_DEFAULT`'s, a dotted path to a
-    function returning a UUID (`"isik.django.apps.common.db.models.uuid7"`, say), `uuid.uuid4` unless
-    set. Read when a key is made rather than written into each model's migration, so switching from one
-    to the other is a setting, not a migration of every model.
+    A new primary key - for every model isik keys, and every model it makes: `ISIK_PRIMARY_KEY`'s, a
+    dotted path to a function returning a UUID, isik's `uuid7` unless set. Read when a key is made
+    rather than written into each model's migration, so changing it is a setting, not a migration of
+    every model.
     """
-    return _primary_key_function(getattr(settings, "ISIK_PRIMARY_KEY_DEFAULT", "uuid.uuid4"))()
+    return _primary_key_function(getattr(settings, "ISIK_PRIMARY_KEY", "isik.django.apps.common.db.models.uuid7"))()
 
 
 class UUIDPrimaryKeyModel(models.Model):
     """
-    A UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share. Random by
-    default; `ISIK_PRIMARY_KEY_DEFAULT` picks another kind, see `new_primary_key()`.
+    A UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share. A `uuid7`
+    unless `ISIK_PRIMARY_KEY` picks another kind, see `new_primary_key()`.
     """
 
     id = models.UUIDField(
@@ -97,8 +138,8 @@ class UUIDPrimaryKeyModel(models.Model):
         editable=False,
         default=new_primary_key,
         verbose_name=gettext_lazy("ID"),
-        help_text=gettext_lazy("A random identifier, assigned when the row is created."),
-        db_comment="A random identifier, assigned when the row is created.",
+        help_text=gettext_lazy("The row's identifier, assigned when it's created."),
+        db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
     )
 
     class Meta:

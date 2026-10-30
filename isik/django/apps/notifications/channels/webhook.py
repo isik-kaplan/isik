@@ -58,7 +58,7 @@ def payload(delivery):
     notice = delivery.notice
     return {
         "id": str(delivery.id),
-        "kind": notice.kind_id,
+        "kind": notice.kind.name,
         "variant": notice.variant,
         "occurred_at": notice.occurred_at,
         "subject": {"label": notice.subject_label, "id": notice.subject_id, "partition": notice.subject_partition},

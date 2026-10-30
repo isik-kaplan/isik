@@ -4,10 +4,13 @@ import uuid
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from isik.django.apps.idempotency.coverage import idempotency_coverage
+from isik.django.apps.notifications.audience.helpers import subscribe
 from isik.django.apps.notifications.audience.swapping import (
     get_endpoint_kind_model,
     get_endpoint_model,
@@ -15,6 +18,7 @@ from isik.django.apps.notifications.audience.swapping import (
     get_subscription_model,
 )
 from isik.django.drf.coverage import CoverageStatus, precondition_coverage
+from tests.django.apps.notifications import kind_named
 
 
 pytestmark = pytest.mark.django_db
@@ -31,9 +35,9 @@ def keyed(**headers):
     return {"HTTP_IDEMPOTENCY_KEY": str(uuid.uuid4()), **headers}
 
 
-def item(user, **fields):
-    made = {"kind_id": "parcel_shipped", "payload": {"data": {"n": 1}}, **fields}
-    return get_inbox_item_model().objects.create(user=user, delivery_id=uuid.uuid4(), **made)
+def item(user, kind="parcel_shipped", **fields):
+    made = {"payload": {"data": {"n": 1}}, **fields}
+    return get_inbox_item_model().objects.create(user=user, kind=kind_named(kind), delivery_id=uuid.uuid4(), **made)
 
 
 class TestTheInbox:
@@ -43,9 +47,9 @@ class TestTheInbox:
 
         listed = client_for(alice).get("/inbox/").json()
 
-        assert [each["id"] for each in listed] == [second.pk, first.pk]
+        assert [each["id"] for each in listed] == [str(second.pk), str(first.pk)]
         assert listed[1] == {
-            "id": first.pk,
+            "id": str(first.pk),
             "kind": "parcel_shipped",
             "variant": None,
             # Its data lacks what parcel_shipped's message names: an item older than its text reads unfilled.
@@ -59,21 +63,21 @@ class TestTheInbox:
         }
 
     def test_an_item_reads_as_its_kinds_sentence(self, alice):
-        flagged = item(alice, kind_id="parcel_flagged", variant="lost", payload={"data": {"status": "lost"}})
+        flagged = item(alice, kind="parcel_flagged", variant="lost", payload={"data": {"status": "lost"}})
 
         shown = client_for(alice).get(f"/inbox/{flagged.pk}/").json()
 
         assert (shown["title"], shown["message"]) == ("A parcel was lost", "A parcel you sent is lost.")
 
     def test_an_item_without_its_data_reads_as_no_sentence(self, alice):
-        bare = item(alice, kind_id="parcel_flagged", variant="lost", payload={})
+        bare = item(alice, kind="parcel_flagged", variant="lost", payload={})
 
         shown = client_for(alice).get(f"/inbox/{bare.pk}/").json()
 
         assert (shown["title"], shown["message"]) == (None, None)
 
     def test_a_callable_message_reads_the_data_and_the_variant(self, alice):
-        reminded = item(alice, kind_id="parcel_reminder", variant="daily", payload={"data": {"name": "Box"}})
+        reminded = item(alice, kind="parcel_reminder", variant="daily", payload={"data": {"name": "Box"}})
 
         shown = client_for(alice).get(f"/inbox/{reminded.pk}/").json()
 
@@ -83,13 +87,13 @@ class TestTheInbox:
     def test_unread_only(self, alice, flag):
         unread, _read = item(alice), item(alice, read_at=timezone.now())
 
-        assert [each["id"] for each in client_for(alice).get(f"/inbox/?unread={flag}").json()] == [unread.pk]
+        assert [each["id"] for each in client_for(alice).get(f"/inbox/?unread={flag}").json()] == [str(unread.pk)]
         assert len(client_for(alice).get("/inbox/?unread=no").json()) == 2
 
     def test_one_item(self, alice, bob):
         mine = item(alice)
 
-        assert client_for(alice).get(f"/inbox/{mine.pk}/").json()["id"] == mine.pk
+        assert client_for(alice).get(f"/inbox/{mine.pk}/").json()["id"] == str(mine.pk)
         assert client_for(bob).get(f"/inbox/{mine.pk}/").status_code == 404
 
     def test_marking_one_read_needs_no_key_or_version(self, alice):
@@ -126,7 +130,7 @@ class TestSubscriptions:
         assert answered.status_code == 201
         row = get_subscription_model().objects.get(user=alice)
         assert answered.json() == {
-            "id": row.pk,
+            "id": str(row.pk),
             "kind": "parcel_flagged",
             "variant": "lost",
             "enabled": True,
@@ -168,14 +172,14 @@ class TestSubscriptions:
     def test_a_retired_kind_is_refused(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(retired_at=timezone.now())
 
         assert client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json").status_code == 400
 
     def test_a_mandatory_kind_cant_be_chosen(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="mandatory")
 
         answered = client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json")
 
@@ -205,9 +209,9 @@ class TestSubscriptions:
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
         NoticeKindPolicy.objects.create(
-            kind="undeclared", policy="default_on", scope="single_partition", source="trigger"
+            name="undeclared", policy="default_on", scope="single_partition", source="trigger"
         )
-        NoticeKindPolicy.objects.filter(pk="parcel_reminder").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(policy="mandatory")
 
         listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
 
@@ -247,7 +251,7 @@ class TestSubscriptions:
 @pytest.fixture
 def endpoint():
     found = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="old")
-    get_endpoint_kind_model().objects.create(endpoint=found, kind_id="parcel_flagged", variant="lost")
+    get_endpoint_kind_model().objects.create(endpoint=found, kind=kind_named("parcel_flagged"), variant="lost")
     return found
 
 
@@ -435,7 +439,7 @@ class TestTheDetails:
     def test_subscriptions_are_listed_by_kind_then_variant(self, alice):
         rows = get_subscription_model().objects
         for kind, variant in [("parcel_reminder", "daily"), ("parcel_flagged", "lost"), ("parcel_flagged", "damaged")]:
-            rows.create(user=alice, kind_id=kind, variant=variant)
+            rows.create(user=alice, kind=kind_named(kind), variant=variant)
 
         listed = client_for(alice).get("/subscriptions/").json()
 
@@ -448,7 +452,7 @@ class TestTheDetails:
     def test_a_retired_kind_isnt_offered(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(retired_at=timezone.now())
 
         offered = [each["kind"] for each in client_for(alice).get("/kinds/").json()]
 
@@ -476,7 +480,7 @@ class TestTheDetails:
     def test_an_endpoints_kinds_are_listed_by_kind_then_variant(self, alice):
         endpoint = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="s")
         for kind, variant in [("parcel_reminder", "daily"), ("parcel_flagged", "lost"), ("parcel_flagged", "damaged")]:
-            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id=kind, variant=variant)
+            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named(kind), variant=variant)
 
         listed = client_for(alice).get(f"/endpoints/{endpoint.pk}/").json()["kinds"]
 
@@ -505,7 +509,7 @@ class TestOwnedEndpoints:
         mine = endpoints.create(url="https://alice.example/hook", secret="s")
         endpoints.create(url="https://bob.example/hook", secret="s")
 
-        assert [each["id"] for each in client_for(alice).get("/owned-endpoints/").json()] == [mine.pk]
+        assert [each["id"] for each in client_for(alice).get("/owned-endpoints/").json()] == [str(mine.pk)]
         created = client_for(bob).post(
             "/owned-endpoints/", {"url": "https://anything.example/"}, format="json", **keyed()
         )
@@ -525,7 +529,7 @@ def hooked_delivery(alice, bob, dispatched, django_capture_on_commit_callbacks):
 
     for owner in ("alice", "bob"):
         endpoint = get_endpoint_model().objects.create(url=f"https://{owner}.example/hook", secret="s")
-        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind_id="parcel_flagged")
+        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
     notice = flag(alice)
     fan_out(django_capture_on_commit_callbacks)
     mine = Delivery.objects.get(
@@ -615,3 +619,24 @@ def test_the_owner_is_the_caller_by_default():
     from isik.django.apps.notifications.drf import OwnedByCaller
 
     assert OwnedByCaller().owner(SimpleNamespace(user="alice")) == "alice"
+
+
+class TestAListReadsEachRowsKindWithIt:
+    def listed_with_the_kind(self, client, path, table):
+        with CaptureQueriesContext(connection) as queries:
+            assert client.get(path).status_code == 200
+        return [
+            query["sql"]
+            for query in queries
+            if f'FROM "{table}"' in query["sql"] and '"isik_notice_kind_policy"."retired_at"' in query["sql"]
+        ]
+
+    def test_the_inbox(self, alice):
+        item(alice)
+
+        assert self.listed_with_the_kind(client_for(alice), "/inbox/", "isik_inbox_item") != []
+
+    def test_the_subscriptions(self, alice):
+        subscribe(alice, "parcel_shipped", enabled=False)
+
+        assert self.listed_with_the_kind(client_for(alice), "/subscriptions/", "isik_subscription") != []

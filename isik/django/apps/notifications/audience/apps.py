@@ -15,5 +15,3 @@ class NotificationsAudienceConfig(AppConfig):
     name = "isik.django.apps.notifications.audience"
     label = "isik_notifications_audience"
     verbose_name = gettext_lazy("Notification audience")
-    # Fixed here rather than taken from DEFAULT_AUTO_FIELD, so the shipped migration matches every project.
-    default_auto_field = "django.db.models.BigAutoField"

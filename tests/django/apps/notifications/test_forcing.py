@@ -2,7 +2,8 @@
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
+from django.test.utils import CaptureQueriesContext
 
 from isik.django.apps.common import forcing
 from isik.django.apps.common.forcing import ForceRefused, checked_force, checked_release, get_force_source
@@ -19,6 +20,7 @@ from isik.django.apps.notifications.audience.helpers import (
 )
 from isik.django.apps.notifications.kinds import KindText, rendered, text_of
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy
+from tests.django.apps.notifications import kind_named
 from tests.testapp.models import ForceableSubscription
 
 
@@ -28,7 +30,7 @@ REASON = "the person asked support to keep these on while they're travelling"
 
 
 def row(alice, kind="parcel_flagged", variant=None):
-    return ForceableSubscription.objects.get(user=alice, kind_id=kind, variant=variant)
+    return ForceableSubscription.objects.get(user=alice, kind__name=kind, variant=variant)
 
 
 class TestForceSources:
@@ -71,6 +73,18 @@ class TestTheDefaultModel:
         with pytest.raises(KindIsMandatory, match="^subscription_forced is mandatory - it reaches everyone it's for.$"):
             subscribe(alice, "subscription_forced")
         assert KindIsMandatory.code == "kind_mandatory"
+
+    def test_a_kind_that_doesnt_exist_is_no_ones_to_choose(self, alice):
+        with pytest.raises(ValueError, match="^No kind is called nothing.$"):
+            subscribe(alice, "nothing")
+
+    def test_a_policy_row_is_taken_as_it_is(self, alice):
+        policy = kind_named("parcel_shipped")
+
+        with CaptureQueriesContext(connection) as queries:
+            subscribe(alice, policy, enabled=False)
+
+        assert [query["sql"] for query in queries if 'FROM "isik_notice_kind_policy"' in query["sql"]] == []
 
     def test_it_cant_be_forced(self, alice):
         with pytest.raises(
@@ -216,9 +230,9 @@ class TestAForcedRowCantBeChanged:
 
     def test_in_the_database(self, forceable, alice):
         with transaction.atomic(), pytest.raises(IntegrityError, match="_forced_exactly"):
-            forceable.create(user=alice, kind_id="parcel_flagged", forced=True, forced_source="staff")
+            forceable.create(user=alice, kind=kind_named("parcel_flagged"), forced=True, forced_source="staff")
         with transaction.atomic(), pytest.raises(IntegrityError, match="_chosen_or_forced"):
-            forceable.create(user=alice, kind_id="parcel_flagged", chosen=False)
+            forceable.create(user=alice, kind=kind_named("parcel_flagged"), chosen=False)
 
 
 class TestTellingThePerson:
@@ -228,21 +242,23 @@ class TestTellingThePerson:
         force_subscription(alice, "parcel_flagged", "lost", enabled=False, source="staff", reason=REASON)
         release_subscription(alice, "parcel_flagged", "lost")
 
-        assert [notice.snapshot for notice in Notice.objects.filter(kind_id="subscription_forced").order_by("pk")] == [
-            {"user": alice.pk, "kind": "parcel_flagged", "variant": "lost", "forced": True, "enabled": False},
-            {"user": alice.pk, "kind": "parcel_flagged", "variant": "lost", "forced": False, "enabled": None},
+        assert [
+            notice.snapshot for notice in Notice.objects.filter(kind__name="subscription_forced").order_by("pk")
+        ] == [
+            {"user": str(alice.pk), "kind": "parcel_flagged", "variant": "lost", "forced": True, "enabled": False},
+            {"user": str(alice.pk), "kind": "parcel_flagged", "variant": "lost", "forced": False, "enabled": None},
         ]
 
     def test_not_unless_a_kind_is_named(self, forceable, alice):
         force_subscription(alice, "parcel_flagged", enabled=False, source="staff", reason=REASON)
 
-        assert not Notice.objects.filter(kind_id="subscription_forced").exists()
+        assert not Notice.objects.filter(kind__name="subscription_forced").exists()
 
 
 class TestWhoGetsIt:
     def users(self, notice_kind, *users):
         kind = kinds.get_kind(notice_kind)
-        notice = Notice(kind_id=notice_kind, variant="lost", snapshot={})
+        notice = Notice(kind=kind_named(notice_kind), variant="lost", snapshot={})
         audience = type("Them", (), {"recipients": lambda self, notice: list(users)})()
         return pipeline.chosen_users(notice, kinds.Kind(name=kind.name, audience=audience, policy=kind.policy))
 
@@ -325,7 +341,7 @@ class TestTheChecks:
         assert checks._untracked_force_problems() == []
 
     def test_a_policy_row_is_read_for_mandatory(self, alice):
-        NoticeKindPolicy.objects.filter(pk="parcel_flagged").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="mandatory")
 
         with pytest.raises(KindIsMandatory):
             subscribe(alice, "parcel_flagged")

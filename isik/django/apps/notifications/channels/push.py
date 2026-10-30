@@ -163,11 +163,12 @@ def push_for(delivery, user):
     from isik.django.apps.notifications.kinds import get_kind, rendered, text_of
 
     notice = delivery.notice
-    content = get_kind(notice.kind_id).push
-    text, snapshot = text_of(notice.kind_id), notice.snapshot or {}
+    kind = notice.kind.name
+    content = get_kind(kind).push
+    text, snapshot = text_of(kind), notice.snapshot or {}
     language = conf.setting("RECIPIENT_LANGUAGE")(user) if user is not None else None
     with translation.override(language) if language else nullcontext():
-        label = str(text.label) if text.label is not None else notice.kind_id
+        label = str(text.label) if text.label is not None else kind
         if content.private:
             title, body = label, None
         else:
@@ -175,13 +176,13 @@ def push_for(delivery, user):
             body = rendered(text.message, snapshot, notice.variant)
     data = {
         "notice": str(notice.pk),
-        "kind": notice.kind_id,
+        "kind": kind,
         "variant": notice.variant,
         "subject_label": notice.subject_label,
         "subject_id": notice.subject_id,
         **{name: snapshot.get(name) for name in content.data},
     }
-    collapse = {"kind": notice.kind_id, "subject": f"{notice.kind_id}:{notice.subject_label}:{notice.subject_id}"}
+    collapse = {"kind": kind, "subject": f"{kind}:{notice.subject_label}:{notice.subject_id}"}
     return Push(
         title=title,
         body=body,

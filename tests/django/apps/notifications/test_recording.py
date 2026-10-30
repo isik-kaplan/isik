@@ -56,7 +56,7 @@ def test_a_sent_email_is_recorded_as_sent(alice, parcel, dispatched, settings):
 
     assert send.calls == 1
     notice = delivery.notice
-    assert (notice.kind_id, notice.variant, notice.subject_label, notice.subject_id, notice.subject_partition) == (
+    assert (notice.kind.name, notice.variant, notice.subject_label, notice.subject_id, notice.subject_partition) == (
         "parcel_receipt",
         "signed",
         "testapp.Parcel",
@@ -200,7 +200,7 @@ def test_a_broken_ledger_raises_only_what_send_raised(dispatched, monkeypatch):
 
 
 def test_a_retired_kind_is_sent_and_not_recorded(dispatched, caplog):
-    NoticeKindPolicy.objects.filter(pk="parcel_receipt").update(retired_at=timezone.now())
+    NoticeKindPolicy.objects.filter(name="parcel_receipt").update(retired_at=timezone.now())
     send = Sender()
 
     with caplog.at_level(logging.WARNING, logger="isik.django.apps.notifications.pipeline"):
@@ -229,7 +229,7 @@ class TestARecordedKind:
             None,
             ("signed",),
         )
-        assert NoticeKindPolicy.objects.get(pk="parcel_receipt").source == Source.RECORDED
+        assert NoticeKindPolicy.objects.get(name="parcel_receipt").source == Source.RECORDED
 
     @pytest.mark.parametrize("given", [{"audience": "x"}, {"policy": Policy.DEFAULT_ON}, {"channels": ("email",)}])
     def test_it_takes_nothing_isik_would_send_it_by(self, given):
@@ -315,6 +315,6 @@ class TestOneEmailAcrossItsTries:
 
     def test_a_retired_kind_still_records_a_retry_of_an_email_recorded_before(self, dispatched):
         record_email(PARCEL_RECEIPT, address="a@example.com", send=Sender(), key="t")
-        NoticeKindPolicy.objects.filter(pk="parcel_receipt").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_receipt").update(retired_at=timezone.now())
 
         assert record_email(PARCEL_RECEIPT, address="a@example.com", send=Sender(), key="t").attempt_count == 2

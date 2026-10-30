@@ -88,7 +88,9 @@ covering every variant is refused - `unsubscribe()` the kind first. Endpoint kin
 the same way.
 
 A `MANDATORY` kind has no choice to record: `subscribe()` refuses it (`KindIsMandatory`, code
-`kind_mandatory`), so no row says a person turned off what they can't. Each refusal is a
+`kind_mandatory`), so no row says a person turned off what they can't. A kind with no policy row is
+refused too, with a `ValueError`. Given a policy row rather than a name, `subscribe()` uses it without
+reading it again. Each refusal is a
 `SubscriptionRefused` carrying its `code`.
 
 ## Forcing one person's subscription
