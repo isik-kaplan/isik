@@ -236,13 +236,17 @@ class TestWritingDeliveries:
 
 
 class TestFanningOutEveryNotice:
-    def test_oldest_first_then_by_number(self, alice, dispatched, django_capture_on_commit_callbacks):
+    # A tie left to the database comes back in whatever order its plan reads the rows, so the tied pair
+    # is written both ways round: only an order by key puts the lower one first in both.
+    @pytest.mark.parametrize("tied_ids", [(950, 940), (940, 950)])
+    def test_oldest_first_then_by_number(self, tied_ids, alice, dispatched, django_capture_on_commit_callbacks):
         now = timezone.now()
         policy = NoticeKindPolicy.objects.get(name="parcel_reminder")
         later = Notice.objects.create(id=900, kind=policy, occurred_at=now)
         earlier = Notice.objects.create(id=901, kind=policy, occurred_at=now - timedelta(hours=1))
-        tied_high = Notice.objects.create(id=950, kind=policy, occurred_at=now + timedelta(hours=1))
-        tied_low = Notice.objects.create(id=940, kind=policy, occurred_at=now + timedelta(hours=1))
+        for tied_id in tied_ids:
+            Notice.objects.create(id=tied_id, kind=policy, occurred_at=now + timedelta(hours=1))
+        tied_low, tied_high = Notice.objects.get(id=940), Notice.objects.get(id=950)
 
         order = []
         for _ in range(4):
