@@ -7,6 +7,10 @@ A mutant's shard is a hash of its name, so there's no map of modules to shards t
 added or deleted is in every shard's share already, each shard holds about as many mutants as the next,
 and the same mutant lands in the same shard on every run and every machine. The shards are a partition -
 every mutant in exactly one - so all of them passing is the whole run passing.
+
+Every shard needs the same map of which tests reach which function, and building it means running the
+whole suite traced. So CI builds it once - `--stats-only`, `stop_after_stats()` - and hands each shard the
+`mutants/` files it lives in, which `mutation_cache.refresh()` then finds unchanged and mutmut loads.
 """
 
 import zlib
@@ -39,6 +43,24 @@ def install(index, count):
     def collect_source_file_mutation_data(*, mutant_names):
         mutants, by_path = collect(mutant_names=mutant_names)
         return [mutant for mutant in mutants if shard_of(mutant[1], count) == index], by_path
+
+    collect_source_file_mutation_data.stock = collect
+    mutmut_main.collect_source_file_mutation_data = collect_source_file_mutation_data
+
+
+class StatsCollected(Exception):
+    """Raised where mutmut would start on the mutants, once the map of tests is built and saved."""
+
+
+def stop_after_stats():
+    """End mutmut's run in this process once it has its map of tests - `StatsCollected`. `uninstall()` undoes it."""
+    import mutmut.__main__ as mutmut_main
+
+    uninstall()
+    collect = mutmut_main.collect_source_file_mutation_data
+
+    def collect_source_file_mutation_data(*, mutant_names):
+        raise StatsCollected
 
     collect_source_file_mutation_data.stock = collect
     mutmut_main.collect_source_file_mutation_data = collect_source_file_mutation_data

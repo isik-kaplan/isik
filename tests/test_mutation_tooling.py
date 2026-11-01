@@ -580,21 +580,55 @@ class TestMutationShards:
         ]
         assert "collect_source_file_mutation_data(mutant_names=" in inspect.getsource(mutmut_main._run)
 
-    def test_the_run_takes_its_shard_from_the_command_line(self, monkeypatch):
-        sys.path.insert(0, str(ROOT / "scripts"))
-        monkeypatch.setattr(sys, "path", sys.path)
-        run = _load("mutation_run")
-        installed, handed = [], []
-        monkeypatch.setattr(run.mutation_shards, "install", lambda index, count: installed.append((index, count)))
-        monkeypatch.setattr(run.mutmut_decorators, "install", lambda: None)
-        monkeypatch.setattr(run.mutation_cache, "refresh", lambda full: f"full={full}")
+    def test_stopped_after_stats_the_run_ends_where_the_mutants_would_start(self, shards, monkeypatch):
         import mutmut.__main__ as mutmut_main
 
-        monkeypatch.setattr(mutmut_main, "cli", lambda args, standalone_mode: handed.append(args))
+        stock = mutmut_main.collect_source_file_mutation_data
+        shards.stop_after_stats()
+        shards.stop_after_stats()
+
+        with pytest.raises(shards.StatsCollected):
+            mutmut_main.collect_source_file_mutation_data(mutant_names=())
+        shards.uninstall()
+        assert mutmut_main.collect_source_file_mutation_data is stock
+
+    @pytest.fixture
+    def run(self, monkeypatch):
+        """mutation_run, with every step it takes recorded instead of run - mutmut's run as `cli`."""
+        monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+        run = _load("mutation_run")
+        run.steps = []
+        monkeypatch.setattr(
+            run.mutation_shards, "install", lambda index, count: run.steps.append(("shard", index, count))
+        )
+        monkeypatch.setattr(run.mutation_shards, "stop_after_stats", lambda: run.steps.append(("stats only",)))
+        monkeypatch.setattr(run.mutmut_decorators, "install", lambda: None)
+        monkeypatch.setattr(run.mutation_cache, "refresh", lambda full: f"full={full}")
+        return run
+
+    def test_stats_only_ends_the_run_cleanly(self, run, monkeypatch):
+        import mutmut.__main__ as mutmut_main
+
+        def cli(args, standalone_mode):
+            run.steps.append(("run", args))
+            raise run.mutation_shards.StatsCollected
+
+        monkeypatch.setattr(mutmut_main, "cli", cli)
+
+        assert run.main(["--stats-only"]) == 0
+        assert run.steps == [("stats only",), ("run", ["run"])]
+
+    def test_stats_only_isnt_a_shard(self, run):
+        with pytest.raises(SystemExit, match="isn't one of them"):
+            run.main(["--stats-only", "--shard", "1/6"])
+
+    def test_the_run_takes_its_shard_from_the_command_line(self, run, monkeypatch):
+        import mutmut.__main__ as mutmut_main
+
+        monkeypatch.setattr(mutmut_main, "cli", lambda args, standalone_mode: run.steps.append(("run", args)))
 
         assert run.main(["--shard", "3/6", "--full", "isik.common.*"]) == 0
-        assert installed == [(3, 6)]
-        assert handed == [["run", "isik.common.*"]]
+        assert run.steps == [("shard", 3, 6), ("run", ["run", "isik.common.*"])]
 
 
 def test_ci_runs_a_job_for_every_shard_and_gates_on_all_of_them():
@@ -608,5 +642,16 @@ def test_ci_runs_a_job_for_every_shard_and_gates_on_all_of_them():
         "matrix": {"shard": list(range(1, count + 1))},
     }
     assert workflow["jobs"]["union"]["needs"] == "mutmut"
+    # The map of tests is built once, and every shard starts from it.
+    stats = workflow["jobs"]["stats"]["steps"]
+    assert "--stats-only" in next(step["run"] for step in stats if step.get("name") == "Build the map of tests")
+    handed = next(step for step in stats if step.get("uses", "").startswith("actions/upload-artifact"))["with"]
+    assert handed["name"] == "mutmut-map"
+    assert handed["path"].split() == ["mutants/mutmut-stats.json", "mutants/mutation-baseline.json"]
+    assert workflow["jobs"]["mutmut"]["needs"] == "stats"
+    taken = next(
+        step for step in workflow["jobs"]["mutmut"]["steps"] if step.get("name") == "Start from the map of tests"
+    )
+    assert taken["with"] == {"name": "mutmut-map", "path": "mutants"}
     # Over the free plan's 20 concurrent jobs, a run would queue against itself - and the four test jobs run beside.
     assert count + 4 <= 20

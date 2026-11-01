@@ -14,8 +14,77 @@ env:
   MUTATION_SHARDS: 6
 
 jobs:
+  stats:
+    # The map of which tests reach which function, built once: every shard needs the same one, and building it
+    # runs the whole suite traced. Each shard then starts from it - see scripts/mutation_shards.py.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: isik_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: isik_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tune Postgres for throwaway test data
+        # A CI database is discarded after the job, so crash safety buys nothing - these three are the
+        # difference between waiting on the disk for every commit and not. Not settable through the
+        # service definition, so set on the running server and reloaded.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+
+      - name: Build the map of tests
+        run: |
+          uv run python scripts/mutation_run.py --stats-only
+
+      - name: Hand it to the shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-map
+          # The map, and the baseline mutation_cache.refresh() checks it against - the same checkout's, so
+          # every shard finds nothing changed and loads it.
+          path: |
+            mutants/mutmut-stats.json
+            mutants/mutation-baseline.json
+          if-no-files-found: error
+          retention-days: 1
+
   mutmut:
     name: mutmut (shard ${{ matrix.shard }})
+    needs: stats
     runs-on: ubuntu-22.04
     # GitHub stops a job at six hours; this leaves the steps after the run time to save what it found.
     timeout-minutes: 330
@@ -73,6 +142,12 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --all-extras
+
+      - name: Start from the map of tests
+        uses: actions/download-artifact@v4
+        with:
+          name: mutmut-map
+          path: mutants
 
       - name: Restore the last run's killers
         # Only ever reorders each mutant's tests - a stale or missing log costs time, never a verdict.
