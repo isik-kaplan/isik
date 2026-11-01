@@ -7,9 +7,23 @@ on:
   # Pushes to master run this through publish.yml instead, so publishing can wait on it.
   workflow_call:
 
+env:
+  # How many shards the run is split into - the matrix below lists one job for each, as
+  # tests/test_mutation_tooling.py holds it to. Free GitHub plans run 20 jobs at once, and a push to
+  # master runs the four test jobs beside these.
+  MUTATION_SHARDS: 6
+
 jobs:
   mutmut:
+    name: mutmut (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
+    # GitHub stops a job at six hours; this leaves the steps after the run time to save what it found.
+    timeout-minutes: 330
+    strategy:
+      # One red shard doesn't cancel the rest: every other shard's answer is still worth having.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
 
     services:
       postgres:
@@ -65,8 +79,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: mutation-kills.jsonl
-          key: mutation-kills-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: mutation-kills-
+          key: mutation-kills-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: mutation-kills-${{ matrix.shard }}-
 
       - name: Use them as this run's prior
         run: |
@@ -74,7 +88,9 @@ jobs:
 
       - name: Run mutation testing
         run: |
-          uv run python scripts/mutation_run.py
+          # Every shard runs the whole suite against its share of the mutants - a share of the tests
+          # would call a mutant the other share kills a survivor. See scripts/mutation_shards.py.
+          uv run python scripts/mutation_run.py --shard ${{ matrix.shard }}/$MUTATION_SHARDS
 
       - name: Export stats
         run: |
@@ -86,13 +102,13 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: mutation-kills.jsonl
-          key: mutation-kills-${{ github.run_id }}-${{ github.run_attempt }}
+          key: mutation-kills-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload full results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mutmut-results
+          name: mutmut-results-${{ matrix.shard }}
           path: mutants/mutmut-cicd-stats.json
           retention-days: 14
 
@@ -101,7 +117,8 @@ jobs:
       - name: Name anything that is not a kill
         if: always()
         run: |
-          uv run mutmut results | grep -v ': killed$' || true
+          # Another shard's mutants read "not checked" here - they're its to name.
+          uv run mutmut results | grep -vE ': (killed|not checked)$' || true
 
       - name: Fail if any mutant survived
         run: |
@@ -115,4 +132,49 @@ jobs:
               print('longer produces it.')
               raise SystemExit(1)
           print('No mutants survived.')
+          "
+
+  union:
+    # The gate: every shard ran and reported, and none left a survivor. A shard that failed fails it too, and
+    # one that never reported can't pass for one that found nothing.
+    needs: mutmut
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Every shard finished
+        run: |
+          if [ "${{ needs.mutmut.result }}" != "success" ]; then
+            echo "A shard didn't pass (${{ needs.mutmut.result }}) - its job names what it left."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mutmut-results-*
+          path: shards
+
+      - name: Every shard reported, and nothing survived
+        run: |
+          python3 -c "
+          import json, pathlib
+          reports = sorted(pathlib.Path('shards').glob('mutmut-results-*/mutmut-cicd-stats.json'))
+          expected = $MUTATION_SHARDS
+          if len(reports) != expected:
+              raise SystemExit(f'{len(reports)} of {expected} shards reported.')
+          stats = [json.loads(report.read_text()) for report in reports]
+          # Each shard's total is every mutant; what it checked is its share. The shares have to be the whole -
+          # a sharding that dropped some would otherwise pass over fewer, and look like a clean run.
+          totals = {shard['total'] for shard in stats}
+          if len(totals) != 1:
+              raise SystemExit(f'The shards saw different totals: {sorted(totals)}.')
+          (total,) = totals
+          verdicts = ('killed', 'survived', 'no_tests', 'skipped', 'suspicious', 'timeout', 'segfault')
+          checked = sum(shard[verdict] for shard in stats for verdict in verdicts)
+          if checked != total or any(shard['check_was_interrupted_by_user'] for shard in stats):
+              raise SystemExit(f'The shards checked {checked} of {total} mutants.')
+          survived = sum(shard['survived'] for shard in stats)
+          killed = sum(shard['killed'] for shard in stats)
+          print(f'{expected} shards checked all {total}: {killed} killed, {survived} survived.')
+          if survived:
+              raise SystemExit(1)
           "

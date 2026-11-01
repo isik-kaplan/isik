@@ -14,6 +14,7 @@ import os
 import sys
 import tomllib
 import types
+import zlib
 from pathlib import Path
 
 import libcst as cst
@@ -488,3 +489,124 @@ def test_mutation_run_refreshes_the_cache_and_passes_everything_but_full_to_mutm
 
     assert run.main(["--full", "isik.common.*"]) == 0
     assert calls == ["install", ("refresh", True), ["run", "isik.common.*"]]
+
+
+class TestMutationShards:
+    @pytest.fixture
+    def shards(self, monkeypatch):
+        import mutmut.__main__ as mutmut_main
+
+        monkeypatch.setattr(
+            mutmut_main, "collect_source_file_mutation_data", mutmut_main.collect_source_file_mutation_data
+        )
+        module = _load("mutation_shards")
+        yield module
+        module.uninstall()
+
+    @pytest.mark.parametrize(("given", "parsed"), [("1/6", (1, 6)), ("6/6", (6, 6)), ("1/1", (1, 1))])
+    def test_a_shard_is_index_over_count(self, shards, given, parsed):
+        assert shards.parse(given) == parsed
+
+    @pytest.mark.parametrize("given", ["0/6", "7/6", "2", "a/6", "2/b", ""])
+    def test_anything_else_is_refused(self, shards, given):
+        with pytest.raises(SystemExit):
+            shards.parse(given)
+
+    def test_every_mutant_in_exactly_one_shard_and_the_same_one_each_time(self, shards):
+        names = [f"isik.module.x_function_{n}__mutmut_{k}" for n in range(200) for k in range(10)]
+
+        placed = [shards.shard_of(name, 6) for name in names]
+
+        assert set(placed) == {1, 2, 3, 4, 5, 6}
+        assert placed == [shards.shard_of(name, 6) for name in names]
+        # The name alone decides: crc32, which no interpreter's hash seed moves.
+        assert shards.shard_of("isik.common.x_f__mutmut_1", 6) == zlib.crc32(b"isik.common.x_f__mutmut_1") % 6 + 1
+        # About a sixth each: none over a fifth of the run.
+        assert max(placed.count(index) for index in range(1, 7)) < len(names) / 5
+
+    def test_installed_a_run_collects_its_shard_alone(self, shards, monkeypatch):
+        import mutmut.__main__ as mutmut_main
+
+        names = [f"isik.module.x_f__mutmut_{k}" for k in range(60)]
+        asked = []
+
+        def collect(*, mutant_names):
+            asked.append(mutant_names)
+            return [(None, name, None) for name in names], {"by": "path"}
+
+        monkeypatch.setattr(mutmut_main, "collect_source_file_mutation_data", collect)
+        shards.install(2, 3)
+        shards.install(2, 3)
+
+        mutants, by_path = mutmut_main.collect_source_file_mutation_data(mutant_names=("isik.*",))
+
+        assert [name for _, name, _ in mutants] == [name for name in names if shards.shard_of(name, 3) == 2]
+        assert by_path == {"by": "path"}
+        assert asked == [("isik.*",)]
+        shards.uninstall()
+        shards.uninstall()
+        assert mutmut_main.collect_source_file_mutation_data is collect
+
+    def test_installed_the_shards_are_disjoint_and_the_whole(self, shards, monkeypatch):
+        import mutmut.__main__ as mutmut_main
+
+        names = [f"isik.module{n % 7}.x_function_{n}__mutmut_{k}" for n in range(300) for k in range(5)]
+        monkeypatch.setattr(
+            mutmut_main,
+            "collect_source_file_mutation_data",
+            lambda *, mutant_names: ([(None, name, None) for name in names], {}),
+        )
+        stock = mutmut_main.collect_source_file_mutation_data
+        shares = []
+        for index in range(1, 7):
+            shards.install(index, 6)
+            shares.append({name for _, name, _ in mutmut_main.collect_source_file_mutation_data(mutant_names=())[0]})
+            shards.uninstall()
+
+        assert mutmut_main.collect_source_file_mutation_data is stock
+        assert sum(len(share) for share in shares) == len(names)
+        assert set().union(*shares) == set(names)
+        assert all(share for share in shares)
+
+    def test_what_it_patches_is_still_mutmuts_to_patch(self):
+        # A mutmut that renamed or reshaped this would leave a shard running every mutant, or none - loudly here.
+        import inspect
+
+        import mutmut.__main__ as mutmut_main
+
+        parameters = inspect.signature(mutmut_main.collect_source_file_mutation_data).parameters
+        assert [(name, parameter.kind) for name, parameter in parameters.items()] == [
+            ("mutant_names", inspect.Parameter.KEYWORD_ONLY)
+        ]
+        assert "collect_source_file_mutation_data(mutant_names=" in inspect.getsource(mutmut_main._run)
+
+    def test_the_run_takes_its_shard_from_the_command_line(self, monkeypatch):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        monkeypatch.setattr(sys, "path", sys.path)
+        run = _load("mutation_run")
+        installed, handed = [], []
+        monkeypatch.setattr(run.mutation_shards, "install", lambda index, count: installed.append((index, count)))
+        monkeypatch.setattr(run.mutmut_decorators, "install", lambda: None)
+        monkeypatch.setattr(run.mutation_cache, "refresh", lambda full: f"full={full}")
+        import mutmut.__main__ as mutmut_main
+
+        monkeypatch.setattr(mutmut_main, "cli", lambda args, standalone_mode: handed.append(args))
+
+        assert run.main(["--shard", "3/6", "--full", "isik.common.*"]) == 0
+        assert installed == [(3, 6)]
+        assert handed == [["run", "isik.common.*"]]
+
+
+def test_ci_runs_a_job_for_every_shard_and_gates_on_all_of_them():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/mutation.yml").read_text())
+    count = workflow["env"]["MUTATION_SHARDS"]
+
+    assert workflow["jobs"]["mutmut"]["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"shard": list(range(1, count + 1))},
+    }
+    assert workflow["jobs"]["union"]["needs"] == "mutmut"
+    # Over the free plan's 20 concurrent jobs, a run would queue against itself - and the four test jobs run beside.
+    assert count + 4 <= 20
