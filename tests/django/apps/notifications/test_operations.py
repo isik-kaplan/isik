@@ -48,7 +48,7 @@ class TestTheNoticesCommand:
         listed = json.loads(notices("--format", "json"))
 
         shipped = next(kind for kind in listed["kinds"] if kind["kind"] == "parcel_shipped")
-        assert shipped["condition"].startswith("<Q:")
+        assert shipped["condition"] == "(NEW.\"status\" = 'shipped' AND NOT (OLD.\"status\" = 'shipped'))"
         assert shipped["on"] == "UPDATE"
         assert listed["drift"] == {"unmirrored": [], "undeclared": [], "retired": []}
 

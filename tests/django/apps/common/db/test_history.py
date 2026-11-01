@@ -8,8 +8,8 @@ from django.db import connection, models
 from django.test import override_settings
 from django.test.utils import isolate_apps
 
+from isik.django.apps.common.db import APPEND_ONLY_TRIGGERS, track_events, track_history
 from isik.django.apps.common.db import history as history_module
-from isik.django.apps.common.db import track_events
 from isik.django.apps.common.db.history import (
     ContextField,
     event_model_for,
@@ -430,25 +430,46 @@ class TestTrackEventsOptions:
             == "track_events takes trackers= or condition=, not both - a tracker carries its own condition."
         )
 
+    @staticmethod
+    def triggers_of(tracked):
+        return {trigger.name for trigger in getattr(tracked.pgh_event_model._meta, "triggers", [])}
+
+    def test_the_names_pghistory_and_isik_give_them(self):
+        from isik.django.apps.common.db import APPEND_ONLY_TRIGGERS
+
+        assert APPEND_ONLY_TRIGGERS == ("append_only", "protect_truncate")
+
     @isolate_apps("tests.testapp")
-    def test_append_only_is_handed_on(self):
-        tracked = track_events(append_only=True)(_fresh_model("AppendOnly"))
+    def test_append_only_by_default(self, settings):
+        if hasattr(settings, "PGHISTORY_APPEND_ONLY"):
+            del settings.PGHISTORY_APPEND_ONLY
 
-        assert "append_only" in {trigger.name for trigger in tracked.pgh_event_model._meta.triggers}
+        assert {"append_only", "protect_truncate"} <= self.triggers_of(track_events()(_fresh_model("AppendOnly")))
 
     @isolate_apps("tests.testapp")
-    def test_append_only_left_out_is_pghistorys_to_decide(self, monkeypatch):
-        handed = {}
-        real = pghistory.track
+    def test_pghistorys_setting_turns_it_off(self, settings):
+        settings.PGHISTORY_APPEND_ONLY = False
 
-        def track(*trackers, **options):
-            handed.update(options)
-            return real(*trackers, **options)
+        assert self.triggers_of(track_events()(_fresh_model("Editable"))).isdisjoint(
+            {"append_only", "protect_truncate"}
+        )
 
-        monkeypatch.setattr(pghistory, "track", track)
-        track_events()(_fresh_model("Undecided"))
+    @isolate_apps("tests.testapp")
+    def test_a_model_says_so_over_the_setting(self, settings):
+        settings.PGHISTORY_APPEND_ONLY = False
 
-        assert "append_only" not in handed
+        assert {"append_only", "protect_truncate"} <= self.triggers_of(
+            track_events(append_only=True)(_fresh_model("Kept"))
+        )
+
+    @isolate_apps("tests.testapp")
+    def test_a_model_says_no_over_the_default(self, settings):
+        if hasattr(settings, "PGHISTORY_APPEND_ONLY"):
+            del settings.PGHISTORY_APPEND_ONLY
+
+        assert self.triggers_of(track_events(append_only=False)(_fresh_model("Loose"))).isdisjoint(
+            {"append_only", "protect_truncate"}
+        )
 
     @isolate_apps("tests.testapp")
     def test_its_event_model_is_marked_as_isiks(self):
@@ -567,3 +588,84 @@ class TestHistoryIndexProblems:
         proxy = self.model({}, meta={"proxy": True}, bases=(base,))
 
         assert self.problems(proxy) == []
+
+
+class TestTrackHistory:
+    """pghistory.track() as called, with isik's context fields, collision refusal and append-only protection."""
+
+    @staticmethod
+    def triggers_of(tracked):
+        return {trigger.name for trigger in getattr(tracked.pgh_event_model._meta, "triggers", [])}
+
+    @isolate_apps("tests.testapp")
+    def test_pghistorys_own_trackers_table_and_no_stream_index(self, settings):
+        if hasattr(settings, "PGHISTORY_APPEND_ONLY"):
+            del settings.PGHISTORY_APPEND_ONLY
+        model = _fresh_model("ByHand")
+
+        tracked = track_history()(model)
+
+        events = tracked.pgh_event_model
+        assert events._meta.db_table != f"{model._meta.db_table}_event"
+        assert _index_fields(events) == []
+        assert {"append_only", "protect_truncate"} <= self.triggers_of(tracked)
+        assert events.isik_generated == "event"
+
+    @isolate_apps("tests.testapp")
+    def test_its_trackers_and_options_handed_on(self):
+        handed = {}
+        real = pghistory.track
+
+        def track(*trackers, **options):
+            handed.update(trackers=trackers, options=options)
+            return real(*trackers, **options)
+
+        update = pghistory.UpdateEvent(condition=pghistory.AnyChange("name"))
+        with pytest.MonkeyPatch.context() as patching:
+            patching.setattr(pghistory, "track", track)
+            # A name of its own each run: pghistory refuses a second model of one name in an app.
+            renamed = f"Renamed{uuid.uuid4().hex[:8]}"
+            track_history(update, model_name=renamed, meta={"ordering": ["pgh_id"]})(_fresh_model("Handed"))
+
+        assert handed["trackers"] == (update,)
+        assert handed["options"]["model_name"] == renamed
+        assert handed["options"]["meta"]["ordering"] == ["pgh_id"]
+
+    @isolate_apps("tests.testapp")
+    def test_no_meta_of_its_own_when_it_adds_none(self):
+        handed = {}
+        real = pghistory.track
+
+        def track(*trackers, **options):
+            handed.update(options)
+            return real(*trackers, **options)
+
+        with pytest.MonkeyPatch.context() as patching:
+            patching.setattr(pghistory, "track", track)
+            track_history(append_only=False)(_fresh_model("Bare"))
+
+        assert "meta" not in handed
+        assert handed["append_only"] is False
+
+    @isolate_apps("tests.testapp")
+    def test_its_context_fields(self):
+        tracked = track_history(context_fields=[ContextField("actor", field=models.IntegerField(null=True))])(
+            _fresh_model("Context")
+        )
+
+        assert "actor" in {field.name for field in tracked.pgh_event_model._meta.fields}
+        assert "stamp_context_fields" in self.triggers_of(tracked)
+
+    @isolate_apps("tests.testapp")
+    def test_a_context_field_named_like_a_tracked_one_is_refused(self):
+        with pytest.raises(ImproperlyConfigured, match="has ContextFields named like its own tracked fields: name"):
+            track_history(context_fields=[ContextField("name", field=models.CharField(max_length=10))])(
+                _fresh_model("Colliding")
+            )
+
+    @isolate_apps("tests.testapp")
+    def test_append_only_turned_off(self, settings):
+        settings.PGHISTORY_APPEND_ONLY = False
+
+        assert self.triggers_of(track_history()(_fresh_model("Loose"))).isdisjoint(APPEND_ONLY_TRIGGERS)
+        assert set(APPEND_ONLY_TRIGGERS) <= self.triggers_of(track_history(append_only=True)(_fresh_model("Kept")))

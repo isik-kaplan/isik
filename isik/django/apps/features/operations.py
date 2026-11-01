@@ -119,6 +119,9 @@ def grant(holder, feature, *, source, reference="", starts_at=None, expires_at=N
             forget(holder)
             held = held_features(holder)
             _tell_crossing(holder, name, held - _held_only_by(made, name), held)
+        if made.starts_at > made.created_at or made.expires_at is not None:
+            # Once it's committed, so the run it schedules finds it.
+            transaction.on_commit(schedule_next_sweep)
     return made
 
 
@@ -236,33 +239,86 @@ def sweep_boundaries(now=None):
     Tells what a grant starting or ending since the last sweep moved - no row is written when one does, so nothing
     else would: `feature_changed`, and `setting_changed` for each setting it unlocks whose value moved. Each is told
     as of its own moment, in their order; one at or before its grant was written was told by `grant()`. Run it from
-    a beat, or `manage.py features --sweep` from a cron. Returns how many boundaries it found.
+    a beat, or `manage.py features --sweep` from a cron; with `SWEEP` "next_boundary" it schedules its next run
+    itself (`schedule_next_sweep()`). Returns how many boundaries it found.
     """
     now = now or timezone.now()
     with in_holder_schema(), transaction.atomic():
-        cursor = get_sweep_model()._default_manager.select_for_update().first()
-        if cursor is None:
-            # The first sweep starts the clock: nothing before it was missed, there was nobody to tell.
-            get_sweep_model()._default_manager.create(swept_at=now)
-            return 0
-        since, cursor.swept_at = cursor.swept_at, now
-        cursor.save()
-        crossings = [
-            (getattr(grant, field), grant)
-            for field in ("starts_at", "expires_at")
-            for grant in get_grant_model()
-            ._default_manager.select_related("feature")
-            .filter(
-                models.Q(revoked_at__isnull=True) | models.Q(revoked_at__gt=models.F(field)),
-                **{f"{field}__gt": since, f"{field}__lte": now},
-            )
-            .filter(**{f"{field}__gt": models.F("created_at")})
-        ]
-        crossings.sort(key=lambda crossing: crossing[0])
-        for at, grant in crossings:
-            before, after = features_at(grant.holder, at - JUST_BEFORE), features_at(grant.holder, at)
-            _tell_crossing(grant.holder, grant.feature.name, before, after)
+        found = _sweep(now)
+        schedule_next_sweep(now)
+    return found
+
+
+def _sweep(now):
+    """Tells each boundary crossed since the cursor's `swept_at`, and moves it to `now`. Returns how many."""
+    cursor = get_sweep_model()._default_manager.select_for_update().first()
+    if cursor is None:
+        # The first sweep starts the clock: nothing before it was missed, there was nobody to tell.
+        get_sweep_model()._default_manager.create(swept_at=now)
+        return 0
+    since, cursor.swept_at = cursor.swept_at, now
+    cursor.save()
+    crossings = [
+        (getattr(grant, field), grant)
+        for field in ("starts_at", "expires_at")
+        for grant in get_grant_model()
+        ._default_manager.select_related("feature")
+        .filter(
+            models.Q(revoked_at__isnull=True) | models.Q(revoked_at__gt=models.F(field)),
+            **{f"{field}__gt": since, f"{field}__lte": now},
+        )
+        .filter(**{f"{field}__gt": models.F("created_at")})
+    ]
+    crossings.sort(key=lambda crossing: crossing[0])
+    for at, grant in crossings:
+        before, after = features_at(grant.holder, at - JUST_BEFORE), features_at(grant.holder, at)
+        _tell_crossing(grant.holder, grant.feature.name, before, after)
     return len(crossings)
+
+
+def schedule_next_sweep(now=None):
+    """
+    With `SWEEP` "next_boundary", schedules one sweep at the next boundary still to come - no later than
+    `SWEEP_LOOKAHEAD` from now - unless one is scheduled already, due no later. With no sweep yet, it schedules one at
+    once, which starts the clock. Returns when the run it scheduled is due, else None.
+    """
+    if conf.setting("SWEEP") != "next_boundary":
+        return None
+    now = now or timezone.now()
+    with in_holder_schema(), transaction.atomic():
+        cursor = get_sweep_model()._default_manager.select_for_update().first()
+        due = now if cursor is None else _next_boundary(now)
+        if due is None:
+            return None
+        due = min(due, now + conf.setting("SWEEP_LOOKAHEAD"))
+        if cursor is not None:
+            # One due in the past was lost - the broker never ran it - so it doesn't count.
+            if cursor.next_sweep_at is not None and now < cursor.next_sweep_at <= due:
+                return None
+            cursor.next_sweep_at = due
+            cursor.save(update_fields=["next_sweep_at"])
+        from isik.django.apps.features import tasks
+
+        tasks.sweep_boundaries.apply_async(eta=due)
+    return due
+
+
+def _next_boundary(now):
+    """The earliest start or end after `now` of a grant not revoked - as the sweep reads one - else None."""
+    found = (
+        get_grant_model()
+        ._default_manager.filter(revoked_at__isnull=True)
+        .aggregate(
+            **{
+                field: models.Min(
+                    field,
+                    filter=models.Q(**{f"{field}__gt": now}) & models.Q(**{f"{field}__gt": models.F("created_at")}),
+                )
+                for field in ("starts_at", "expires_at")
+            }
+        )
+    )
+    return min((at for at in found.values() if at is not None), default=None)
 
 
 # How long before a boundary its "before" is read - the grain of a timestamp.

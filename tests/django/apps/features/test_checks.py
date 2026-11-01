@@ -39,9 +39,33 @@ class TestTheSettingsCheck:
         assert checks.features_can_work(None) == []
 
     def test_a_key_it_doesnt_know(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDERS": None, "SWEEP": None}
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDERS": None, "SWEEPS": None}
 
-        assert checks.setting_problems() == ["ISIK_FEATURES has keys it doesn't know: HOLDERS, SWEEP."]
+        assert checks.setting_problems() == ["ISIK_FEATURES has keys it doesn't know: HOLDERS, SWEEPS."]
+
+    @pytest.mark.parametrize("sweep", ["interval", "next_boundary"])
+    def test_either_sweep(self, settings, sweep):
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": sweep}
+
+        assert checks.setting_problems() == []
+
+    def test_a_sweep_it_doesnt_know(self, settings):
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "hourly"}
+
+        assert checks.setting_problems() == ["ISIK_FEATURES' SWEEP is 'hourly' - it's one of interval, next_boundary."]
+
+    def test_next_boundary_needs_celery(self, settings, monkeypatch):
+        import importlib.util
+
+        real = importlib.util.find_spec
+        monkeypatch.setattr(importlib.util, "find_spec", lambda name: None if name == "celery" else real(name))
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "next_boundary"}
+
+        assert checks.setting_problems() == [
+            "ISIK_FEATURES' SWEEP is next_boundary, which schedules each run with Celery - install it."
+        ]
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "interval"}
+        assert checks.setting_problems() == []
 
     def test_settings_with_nowhere_to_keep_them(self, settings):
         settings.ISIK_FEATURES_OVERRIDES_MODEL = None

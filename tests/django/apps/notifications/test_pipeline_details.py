@@ -586,7 +586,7 @@ class TestTheCommandExactly:
             "model": "testapp.Parcel",
             "trigger": "notify_parcel_shipped",
             "on": "UPDATE",
-            "condition": repr(kind.condition),
+            "condition": "(NEW.\"status\" = 'shipped' AND NOT (OLD.\"status\" = 'shipped'))",
             "variants": [],
             "audience": "Field('recipient')",
             "policy": "default_on",

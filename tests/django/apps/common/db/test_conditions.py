@@ -52,6 +52,19 @@ class TestTheConditions:
     def test_a_negated_one_stays_negated(self):
         assert (~AnyChange()).resolve(TimestampedNote) == f"NOT ({AnyChange().resolve(TimestampedNote)})"
 
+    @pytest.mark.parametrize(
+        ("condition", "printed"),
+        [
+            (AnyChange(), "AnyChange()"),
+            (AllDontChange("name", "size"), "AllDontChange('name', 'size')"),
+            (AnyDontChange(exclude=["name"]), "AnyDontChange(exclude=['name'])"),
+            (AllChange("name", exclude_auto=True), "AllChange('name', exclude_auto=True)"),
+            (~AnyChange("name", exclude=["size"]), "~AnyChange('name', exclude=['size'])"),
+        ],
+    )
+    def test_each_prints_as_it_was_written(self, condition, printed):
+        assert repr(condition) == printed
+
     def test_resolving_leaves_the_condition_as_it_was(self):
         made = AnyChange(exclude=["name"])
 

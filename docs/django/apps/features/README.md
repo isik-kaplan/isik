@@ -101,6 +101,28 @@ merge_beat_schedule(app)              # isik.features.sweep every minute; sweep_
 
 or from a cron, with `manage.py features --sweep`.
 
+That's `ISIK_FEATURES["SWEEP"] = "interval"`, the default: a run every so often, whether a boundary is near
+or not. `"next_boundary"` runs it when one is due instead:
+
+```python
+ISIK_FEATURES = {"SWEEP": "next_boundary"}                      # SWEEP_LOOKAHEAD: an hour unless set
+
+merge_beat_schedule(app, sweep_every=timedelta(hours=1))        # now only the backstop
+```
+
+- Each `grant()` with a start or an end still to come, once it's committed, and each sweep, schedule one
+  run (`schedule_next_sweep()`) at the next boundary - through Celery's `eta`, so it needs Celery.
+- None is further off than `SWEEP_LOOKAHEAD`: a boundary weeks away is reached by runs an hour apart, so
+  no broker holds a message for weeks - Redis's `visibility_timeout` would otherwise deliver it twice.
+- The cursor's `next_sweep_at` keeps one pending: a grant whose boundary is later than it schedules
+  nothing. A revoke schedules nothing either - the run at its old boundary finds nothing to tell.
+- A run the broker lost is caught by the beat, kept as a backstop at whatever interval you choose; its
+  `next_sweep_at` being past, the next grant or sweep schedules again.
+- With no grant to start or end, nothing is scheduled at all - only the backstop runs.
+
+Every run reads the boundaries since the last, so one early, late, twice or lost changes when a boundary
+is told, never whether.
+
 ## Settings
 
 A setting is a value a holder chooses, typed by a model field, with a default until they do:
@@ -280,6 +302,8 @@ delete it means. Only the keys declared `ERASE` are erased.
 | `FEATURES_VISIBLE`, `SETTINGS_VISIBLE` | `None` | `f(request, holder)` - the names the views show; every one declared visible by default |
 | `MAY_CHANGE_SETTING` | `None` | `f(request, holder, name)` - may this request change it; by default, when the holder is the requester |
 | `PEOPLE` | `None` | `f(holder)` - who a notice about the holder reaches (`HolderPeople`); the holder, when it's a user |
+| `SWEEP` | `"interval"` | how the boundary sweep runs: `"interval"` from a beat, or `"next_boundary"`, each run scheduled at the next boundary (needs Celery) |
+| `SWEEP_LOOKAHEAD` | an hour | with `"next_boundary"`, the furthest ahead a run is scheduled |
 
 ## Owning the models
 

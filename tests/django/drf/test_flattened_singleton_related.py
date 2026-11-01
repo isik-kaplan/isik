@@ -385,3 +385,54 @@ class TestTheCheck:
         type("Child", (parent,), {})
 
         assert flattened_singleton_related._declaring == [parent]
+
+
+@pytest.mark.django_db
+class TestTheSchema:
+    def schema(self, serializer, direction):
+        from drf_spectacular.drainage import GENERATOR_STATS, reset_generator_stats
+        from rest_framework.viewsets import ModelViewSet
+
+        from tests.django.drf.test_spectacular import generate_schema
+
+        class SiteViewSet(ModelViewSet):
+            endpoint = "sites"
+            queryset = Site.objects.all()
+            serializer_class = serializer
+
+        reset_generator_stats()
+        schema = generate_schema((SiteViewSet, "site"))
+        warned = [*GENERATOR_STATS._warn_cache, *GENERATOR_STATS._error_cache]
+        components = schema["components"]["schemas"]
+        name = serializer.__name__.removesuffix("Serializer")
+        return warned, components[name if direction == "response" else f"{name}Request"]
+
+    def test_it_is_its_inner_field_and_nothing_is_warned(self):
+        warned, component = self.schema(site_serializer(), "response")
+
+        assert warned == []
+        assert component["properties"]["primary_domain"] == {"type": "string", "maxLength": 100, "nullable": True}
+
+    def test_in_a_request_too(self, monkeypatch):
+        from drf_spectacular.settings import spectacular_settings
+
+        # A request component of its own, so what the field is written as is told apart from what it reads as.
+        monkeypatch.setattr(spectacular_settings, "COMPONENT_SPLIT_REQUEST", True)
+        warned, component = self.schema(site_serializer(), "request")
+
+        assert warned == []
+        assert component["properties"]["primary_domain"] == {"type": "string", "maxLength": 100, "nullable": True}
+
+    def test_an_empty_value_refused_is_a_minimum_length(self, monkeypatch):
+        from drf_spectacular.settings import spectacular_settings
+
+        monkeypatch.setattr(spectacular_settings, "COMPONENT_SPLIT_REQUEST", True)
+        warned, component = self.schema(site_serializer(on_empty="refuse", name="StrictSerializer"), "request")
+
+        assert component["properties"]["primary_domain"]["minLength"] == 1
+
+    def test_its_inner_fields_type_whatever_it_is(self):
+        warned, component = self.schema(site_serializer(attribute="is_primary", name="FlagSerializer"), "response")
+
+        assert warned == []
+        assert component["properties"]["primary_domain"] == {"type": "boolean", "nullable": True}

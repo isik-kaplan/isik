@@ -17,7 +17,8 @@ def describe(kind):
         "model": kind.model._meta.label if kind.model is not None else None,
         "trigger": kind.trigger_name if kind.model is not None else None,
         "on": str(kind.on) if kind.on is not None else None,
-        "condition": repr(kind.condition) if kind.condition is not None else None,
+        # The SQL the trigger tests - what any condition comes to, whatever it prints as.
+        "condition": str(kind.condition.resolve(kind.model)) if kind.condition is not None else None,
         "variants": list(kind.variants),
         "audience": str(kind.audience) if kind.audience is not None else None,
         "policy": str(kind.policy),

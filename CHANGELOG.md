@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-01
+
+### Added
+
+- `ISIK_FEATURES["SWEEP"] = "next_boundary"`: the boundary sweep runs when a boundary is due rather than
+  every so often. Each `grant()` with a start or an end to come, once committed, and each sweep schedule
+  one run at the next boundary (`schedule_next_sweep()`), no further off than `SWEEP_LOOKAHEAD` (an hour
+  unless set); the beat stays as the backstop. `"interval"`, the default, is the sweep as it was. A check
+  refuses a `SWEEP` it doesn't know, and `"next_boundary"` without Celery.
+- `AbstractSweepCursor.next_sweep_at`, the run `"next_boundary"` has pending (migration
+  `isik_features.0003`).
+- isik's four change conditions (`AnyChange`, `AnyDontChange`, `AllChange`, `AllDontChange`) print as
+  they were written - `AnyChange('name', exclude=['notes'])` - wherever one is printed.
+- `match_mode_filters(name, field_name=..., mode_param=None)`: a `MatchModeFilter` and its mode, declared
+  as a `MatchModeChoiceFilter` - so the mode is checked against `MATCH_MODES` and a schema, and every client
+  generated from one, publishes it. `mode_param` is `<name>_match` unless given.
+- `none_during_schema_generation(answer=...)`: what a guarded method answers with while a schema is
+  generated - a value, or `f(view)` - for a method returning something other than the viewset's own rows.
+  Bare, it's `self.model.objects.none()` as before.
+- `APPEND_ONLY_TRIGGERS`, the names of the triggers keeping a tracked model's event table append-only.
+- `track_history(*trackers, context_fields=(), append_only=None, **kwargs)`: `pghistory.track()` as called,
+  with isik's context fields, the refusal of one named like a tracked field, and append-only event tables -
+  for a model `track_events()`'s defaults don't fit (a proxy over another app's model, trackers of its own).
+  `track_events()` is now `track_history()` with its defaults.
+- `ModelMatchModeFilter`, and `match_mode_filters(..., queryset=...)` making one: `MatchModeFilter` over
+  rows - a `ModelMultipleChoiceFilter`, each value repeating the parameter, one naming no row a 400.
+
+### Fixed
+
+- `manage.py notices` shows each kind's condition as the SQL its trigger tests, not an object's address.
+- A `FlattenedSingletonRelatedMixin` field is described in a schema as the field it writes through - its type
+  and limits, and nullable - where drf-spectacular warned it couldn't resolve it and defaulted to a string.
+  Its class is public, `FlattenedSingletonField` (was `_SingletonField`).
+
+### Breaking
+
+- **`HistoryContextTask` sends its message once the dispatching transaction commits, by default.** A
+  worker no longer reads a row its request hasn't committed, or rolled back. `dispatch_on_commit = False`
+  on a task, or `HISTORY_TASK_DISPATCH_ON_COMMIT = False` for every task that doesn't say, sends at once
+  as before.
+- **`track_events()` makes the event table append-only, by default**: pghistory's `append_only` trigger
+  refusing updates and deletes, and `ProtectTruncate` as `protect_truncate` refusing a `TRUNCATE` (both
+  names in `APPEND_ONLY_TRIGGERS`, from `isik.django.apps.common.db`). Every
+  tracked model's event table gets the two in its next migration. `track_events(append_only=False)` leaves
+  a model's out, and pghistory's own `PGHISTORY_APPEND_ONLY = False` every one that doesn't say. A project
+  that added its own protection to its event tables has both until it drops one: drop its own, or pass
+  `append_only=False`. The refusal is pghistory's one trigger for both operations, so its message reads
+  "Cannot update or delete rows from <table> table" - a test or handler matching a message of its own
+  per operation needs changing.
+- **The pytest plugin's entry point is `isik`** (was `isik_notifications`), and it lets a
+  `transaction=True` test's flush through wherever a table refuses a `TRUNCATE` - not only where the
+  notifications ledger is installed. A project disabling it by name (`-p no:isik_notifications`) uses
+  `-p no:isik`.
+- A project owning its sweep cursor (`ISIK_FEATURES_SWEEP_MODEL`) gets `next_sweep_at` in its next
+  migration.
+
 ## [0.44.0] - 2026-10-30
 
 ### Added

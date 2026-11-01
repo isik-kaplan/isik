@@ -64,12 +64,11 @@ request is being served. That's true of `ATOMIC_REQUESTS`.
 
 ## Sent once the transaction commits - `dispatch_on_commit`
 
-`dispatch_on_commit = True` on a task (or `HISTORY_TASK_DISPATCH_ON_COMMIT = True` for every one
-that leaves it as `None`) sends the message only once the dispatching transaction commits - so a
-worker never reads a row its request hasn't committed yet, or one it rolled back:
+A `HistoryContextTask` sends its message only once the dispatching transaction commits - so a worker
+never reads a row its request hasn't committed yet, or one it rolled back:
 
 ```python
-@app.task(base=HistoryContextTask, dispatch_on_commit=True)
+@app.task(base=HistoryContextTask)
 def send_welcome(user_id): ...
 
 send_welcome.delay(user.pk)   # inside the request's transaction: sent on commit, never on rollback
@@ -78,4 +77,5 @@ send_welcome.delay(user.pk)   # inside the request's transaction: sent on commit
 - The call still returns an `AsyncResult`: its id is chosen up front, so the caller can follow it.
 - The cause is read when the task is dispatched, not when the message is sent.
 - Outside any transaction it's sent at once, as `transaction.on_commit` runs its callback at once.
-- Off by default.
+- On by default. `dispatch_on_commit = False` on a task sends it at once;
+  `HISTORY_TASK_DISPATCH_ON_COMMIT = False` does for every task that leaves it as `None`.

@@ -54,3 +54,34 @@ class RosterFilterSet(FilterSet):
 - A value given twice counts once.
 - Another mode is a 400 naming the parameter: `{"tags_match": ["Must be one of: any, all."]}`.
 - `mode_param` is required, and keyword-only. `MATCH_MODES` holds the modes.
+- Alone, `mode_param` is read but not declared: a schema doesn't show it, and nor does a client generated
+  from one. `match_mode_filters()` declares both - the filter, and a `MatchModeChoiceFilter` for its mode,
+  which narrows nothing but is checked against `MATCH_MODES` and published with them:
+
+```python
+from isik.django.drf.filters import match_mode_filters
+
+
+class RosterFilterSet(FilterSet):
+    locals().update(match_mode_filters("tags", field_name="tags__label"))
+    # produces: tags, tags_match - mode_param= names another
+```
+
+### Over rows - `ModelMatchModeFilter`
+
+Where the values name rows, `queryset=` makes the filter a `ModelMatchModeFilter` - a
+`ModelMultipleChoiceFilter` matched by any or all in the same one join. Each value repeats the parameter,
+and one naming no row of `queryset` is a 400 naming the filter, not a page of nothing:
+
+```python
+class TokenFilterSet(FilterSet):
+    locals().update(
+        match_mode_filters("scopes", field_name="scopes", queryset=Permission.objects.all(), to_field_name="codename")
+    )
+```
+
+```
+?scopes=read&scopes=write                    -> tokens with either
+?scopes=read&scopes=write&scopes_match=all   -> tokens with both
+?scopes=nonsense                             -> 400
+```

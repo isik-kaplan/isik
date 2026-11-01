@@ -56,6 +56,13 @@ On create and update alike, inside the save's transaction:
   loses on the unique constraint, and gets a 400 naming the field - not a 500.
 - A Django `ValidationError` from the row's own `full_clean()` comes back as a 400.
 
+## In a schema
+
+Each is a `FlattenedSingletonField`, which drf-spectacular describes as the field `attribute` has on its
+own model - a `CharField(max_length=253)` is a string of at most 253 - and nullable, with nothing to warn
+about. A minimum length is left out unless `on_empty` is `"refuse"`: otherwise an empty value is one it
+takes.
+
 ## Proven, not assumed - `isik.E006`
 
 "The one" holds only while the database says so. The system check `isik.E006`

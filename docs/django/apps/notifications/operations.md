@@ -121,7 +121,7 @@ channels and snapshot - and where the declarations and the policy rows differ: d
 
 `TRUNCATE` is refused on the notice and attempt tables, and a `transaction=True` test - or any
 `TransactionTestCase` - ends by flushing every table with one. isik's pytest plugin lets that flush
-through on its own, whenever the ledger app is installed: nothing to add to your `conftest.py`. Under
+through on its own, wherever a table refuses a `TRUNCATE`: nothing to add to your `conftest.py`. Under
 `unittest`, open `flushing_through_truncate_protection()` (from `isik.django.apps.common.db`) around the
 run. `manage.py flush` in development meets the same refusal - run it inside `allow_truncate()`, or
 drop the database instead. `ProtectTruncate` is there for your own append-only tables.

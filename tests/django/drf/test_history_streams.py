@@ -2,6 +2,7 @@
 
 import datetime
 
+import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from pghistory.models import Events
@@ -107,7 +108,10 @@ def in_order(*models):
 
     start = timezone.now()
     for minutes, model in enumerate(models):
-        event_model_for(model).objects.update(pgh_created_at=start + datetime.timedelta(minutes=minutes))
+        events = event_model_for(model)
+        # Their history refuses an update - this rewrites what a test can't wait for.
+        with pgtrigger.ignore(f"{events._meta.label}:append_only"):
+            events.objects.update(pgh_created_at=start + datetime.timedelta(minutes=minutes))
 
 
 class TestAnObjectsHistory:

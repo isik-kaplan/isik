@@ -39,6 +39,17 @@ def _kept_fields_of(model):
 
 
 class _LeavesKeptFieldsOut:
+    def __repr__(self):
+        # As it was written - `AnyChange('name', exclude=['notes'])` - wherever it's printed: a listing, a check's
+        # hint, a failing test.
+        arguments = [repr(field) for field in self.fields]
+        if self.exclude:
+            arguments.append(f"exclude={self.exclude!r}")
+        if self.exclude_auto:
+            arguments.append("exclude_auto=True")
+        written = f"{type(self).__name__}({', '.join(arguments)})"
+        return f"~{written}" if self._negated else written
+
     def resolve(self, model):
         kept = _kept_fields_of(model)
         named = sorted({model._meta.get_field(name).name for name in self.fields} & set(kept))

@@ -38,13 +38,14 @@ class HistoryContextTask(Task):
       request's context untouched: its rows are the request's.
     - `dispatch_on_commit = True` (or the setting `HISTORY_TASK_DISPATCH_ON_COMMIT`) sends the message
       once the dispatching transaction commits, so a worker never reads a row its request hasn't
-      committed, or rolled back. The call still returns an `AsyncResult`, its id chosen up front. Off
-      by default: a task dispatched outside any transaction is sent at once either way.
+      committed, or rolled back. The call still returns an `AsyncResult`, its id chosen up front. On
+      by default; `dispatch_on_commit = False` (or the setting False) sends it at once, and a task
+      dispatched outside any transaction is sent at once either way.
     """
 
     history_context_header = "isik_history_context"
     carried_history_keys = ("user",)
-    # None defers to HISTORY_TASK_DISPATCH_ON_COMMIT, which is False unless set.
+    # None defers to HISTORY_TASK_DISPATCH_ON_COMMIT, which is True unless set.
     dispatch_on_commit = None
 
     def history_cause(self):
@@ -72,10 +73,10 @@ class HistoryContextTask(Task):
         return json.loads(json.dumps(cause, cls=config.json_encoder()))
 
     def dispatches_on_commit(self):
-        """`dispatch_on_commit`, else `HISTORY_TASK_DISPATCH_ON_COMMIT`, else False."""
+        """`dispatch_on_commit`, else `HISTORY_TASK_DISPATCH_ON_COMMIT`, else True."""
         if self.dispatch_on_commit is not None:
             return self.dispatch_on_commit
-        return getattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT", False)
+        return getattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT", True)
 
     def apply_async(self, args=None, kwargs=None, **options):
         # The cause is read now, while the request that asked is still being served - not when the

@@ -64,6 +64,12 @@ def echo_at_once(*args, **kwargs):
     return list(args), kwargs
 
 
+@pytest.fixture(autouse=True)
+def sent_at_once(settings):
+    # How a task is dispatched is what most of these are about; TestDispatchOnCommit says when it waits.
+    settings.HISTORY_TASK_DISPATCH_ON_COMMIT = False
+
+
 @pytest.fixture
 def sent(monkeypatch):
     """The options each dispatch hands Celery, instead of sending anything."""
@@ -283,13 +289,9 @@ class TestDispatchOnCommit:
         monkeypatch.setattr(transaction, "on_commit", lambda callback: held.append(callback))
         return held
 
-    def test_off_by_default_sends_at_once(self, sent, committed):
-        assert echo.delay(1) == "sent"
-        assert len(sent) == 1
-        assert committed == []
-
-    def test_on_sends_once_the_transaction_commits(self, sent, committed, settings):
-        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+    def test_on_by_default_sends_once_the_transaction_commits(self, sent, committed, settings):
+        if hasattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT"):
+            del settings.HISTORY_TASK_DISPATCH_ON_COMMIT
 
         result = echo.delay(1)
 
@@ -298,11 +300,18 @@ class TestDispatchOnCommit:
         assert [message["args"] for message in sent] == [(1,)]
         assert sent[0]["task_id"] == result.id
 
-    def test_off_unless_set(self, settings):
+    def test_off_sends_at_once(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = False
+
+        assert echo.delay(1) == "sent"
+        assert len(sent) == 1
+        assert committed == []
+
+    def test_on_unless_set(self, settings):
         if hasattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT"):
             del settings.HISTORY_TASK_DISPATCH_ON_COMMIT
 
-        assert echo.dispatches_on_commit() is False
+        assert echo.dispatches_on_commit() is True
 
     def test_sent_with_its_keyword_arguments(self, sent, committed, settings):
         settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
@@ -312,13 +321,16 @@ class TestDispatchOnCommit:
 
         assert [(message["args"], message["kwargs"]) for message in sent] == [((1,), {"extra": 2})]
 
-    def test_the_task_can_say_so_itself(self, sent, committed):
+    def test_the_task_can_say_so_over_the_setting(self, sent, committed, settings):
+        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = False
+
         echo_on_commit.delay(1)
 
         assert sent == [] and len(committed) == 1
 
     def test_the_task_can_say_no_over_the_setting(self, sent, committed, settings):
-        settings.HISTORY_TASK_DISPATCH_ON_COMMIT = True
+        if hasattr(settings, "HISTORY_TASK_DISPATCH_ON_COMMIT"):
+            del settings.HISTORY_TASK_DISPATCH_ON_COMMIT
 
         assert echo_at_once.delay(1) == "sent"
 

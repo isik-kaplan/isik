@@ -54,3 +54,48 @@ class TestNoneDuringSchemaGeneration:
 
         assert method(view, 1, key=2) == (view, (1,), {"key": 2})
         assert method.__name__ == "method"
+
+
+class TestWhatItAnswersWith:
+    @pytest.fixture
+    def faking(self):
+        view = user_scoped_viewset()()
+        view.swagger_fake_view = True
+        return view
+
+    def test_a_value(self, faking):
+        @none_during_schema_generation(answer=())
+        def administered(view):
+            raise AssertionError("not run while a schema is generated")
+
+        assert administered(faking) == ()
+
+    def test_one_made_for_the_view(self, faking):
+        @none_during_schema_generation(answer=lambda view: (view, "answered"))
+        def administered(view):
+            raise AssertionError("not run while a schema is generated")
+
+        assert administered(faking) == (faking, "answered")
+
+    def test_none_is_an_answer_too(self, faking):
+        @none_during_schema_generation(answer=None)
+        def administered(view):
+            raise AssertionError("not run while a schema is generated")
+
+        assert administered(faking) is None
+
+    def test_with_parentheses_and_no_answer_its_the_empty_queryset(self, faking):
+        @none_during_schema_generation()
+        def administered(view):
+            raise AssertionError("not run while a schema is generated")
+
+        answered = administered(faking)
+        assert answered.model is Widget and list(answered) == []
+
+    def test_a_normal_request_runs_the_method(self):
+        @none_during_schema_generation(answer=())
+        def administered(view):
+            return ["ran"]
+
+        assert administered(user_scoped_viewset()()) == ["ran"]
+        assert administered.__name__ == "administered"

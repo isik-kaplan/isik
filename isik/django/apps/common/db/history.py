@@ -14,6 +14,7 @@ from pghistory.middleware import HistoryMiddleware
 from isik._internal.translation import gettext as _
 from isik.common.utils.sentinel import Sentinel
 from isik.django.apps.common.db.constraints import fitted_name
+from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.generated import mark_generated
 
 
@@ -197,22 +198,68 @@ def _refuse_colliding_context_fields(cls, context_fields, fields, exclude):
         )
 
 
+# The triggers keeping an event table track_events() makes append-only, by name: pghistory's own, refusing an update
+# or a delete, and the ProtectTruncate beside it.
+APPEND_ONLY_TRIGGERS = ("append_only", "protect_truncate")
+
+
+def track_history(*trackers, context_fields=(), append_only=None, **kwargs):
+    """
+    `pghistory.track()` as called - its trackers (pghistory's own when none), its table name and options -
+    with what isik holds every history to, for a model `track_events()`'s own defaults don't fit (a proxy
+    over another app's model, a tracker set of its own):
+
+        @track_history(UpdateEvent(condition=pghistory.AnyChange("name")), context_fields=CONTEXT_FIELDS)
+        class TrackedSession(Session):
+            class Meta:
+                proxy = True
+
+    - `context_fields` - each a real, indexed column of the event table (`ContextField`). One named like a
+      field the history tracks is refused: the event model would hold the context's value where the row's
+      was.
+    - `append_only` - whether the event table refuses updates and deletes (pghistory's own option, its
+      trigger `append_only`) and a TRUNCATE (`ProtectTruncate`, `protect_truncate`) - both named in
+      `APPEND_ONLY_TRIGGERS`. Left out, pghistory's `PGHISTORY_APPEND_ONLY` decides where a project set
+      it, and it's on where not: a history that can be edited isn't one.
+
+    The event model is marked as isik's (`generated_models("event")`).
+    """
+
+    def track_model_history(cls):
+        _refuse_colliding_context_fields(cls, context_fields, kwargs.get("fields"), kwargs.get("exclude"))
+        options = dict(kwargs)
+        meta = dict(options.get("meta", {}))
+        attrs, trigger = context_fields_trigger(context_fields)
+        if attrs:
+            options["attrs"] = {**attrs, **options.get("attrs", {})}
+        if trigger:
+            meta["triggers"] = [*meta.get("triggers", []), trigger]
+        options["append_only"] = (
+            getattr(settings, "PGHISTORY_APPEND_ONLY", True) if append_only is None else append_only
+        )
+        if options["append_only"]:
+            # pghistory's append_only refuses updates and deletes; a TRUNCATE would still empty the table at once.
+            meta["triggers"] = [*meta.get("triggers", []), ProtectTruncate(name=APPEND_ONLY_TRIGGERS[1])]
+        if meta:
+            options["meta"] = meta
+        tracked = pghistory.track(*trackers, **options)(cls)
+        for event_model in tracked.pgh_event_models.values():
+            mark_generated(event_model, "event")
+        return tracked
+
+    return track_model_history
+
+
 def track_events(*, trackers=None, condition=None, context_fields=(), append_only=None, **kwargs):
     """
-    `pghistory.track()` with isik's own base: an event on every insert, update and delete, the
-    `(pgh_obj, -pgh_id)` stream index (`object_stream_index()`), and `context_fields` - each a real,
-    indexed column of the event table (`ContextField`). The event model is marked as isik's
-    (`generated_models("event")`).
+    `track_history()` with isik's own defaults: an event on every insert, update and delete, the event
+    table named after its model's (`<table>_event`), and the `(pgh_obj, -pgh_id)` stream index
+    (`object_stream_index()`). `context_fields` and `append_only` are `track_history()`'s.
 
     - `trackers` - the events to record, in place of insert/update/delete: pghistory's own trackers,
       with conditions of their own (`UpdateEvent(condition=pghistory.AnyChange("name"))`).
     - `condition` - the condition of the default update event alone, keeping the other two. Not with
       `trackers`, which carry their own.
-    - `append_only` - True makes the event table refuse updates and deletes (pghistory's own option).
-      pghistory's setting decides when it's left out - off unless a project turns it on.
-
-    A ContextField named like a field the history tracks is refused: the event model would hold the
-    context's value where the row's was.
     """
     if trackers is not None and condition is not None:
         raise TypeError(
@@ -223,26 +270,15 @@ def track_events(*, trackers=None, condition=None, context_fields=(), append_onl
         trackers = [InsertEvent(), update, DeleteEvent()]
 
     def track_model_history(cls):
-        _refuse_colliding_context_fields(cls, context_fields, kwargs.get("fields"), kwargs.get("exclude"))
         options = dict(kwargs)
         # The event table follows the name its table was given - pghistory's own is the model's name, the
         # app label repeated, and stays put when the table it records is renamed.
         meta = {"db_table": f"{cls._meta.db_table}_event", **options.get("meta", {})}
-        attrs, trigger = context_fields_trigger(context_fields)
-        if attrs:
-            options["attrs"] = {**attrs, **options.get("attrs", {})}
-        if trigger:
-            meta["triggers"] = [*meta.get("triggers", []), trigger]
         # obj_field=None is an event table with no pgh_obj, so no stream to index.
         if options.get("obj_field", _NOT_GIVEN) is not None:
             meta["indexes"] = [*meta.get("indexes", []), object_stream_index(meta["db_table"])]
         options["meta"] = meta
-        if append_only is not None:
-            options["append_only"] = append_only
-        tracked = pghistory.track(*trackers, **options)(cls)
-        for event_model in tracked.pgh_event_models.values():
-            mark_generated(event_model, "event")
-        return tracked
+        return track_history(*trackers, context_fields=context_fields, append_only=append_only, **options)(cls)
 
     return track_model_history
 

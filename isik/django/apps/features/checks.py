@@ -3,6 +3,8 @@ The features app's system checks - `isik.E017` (`Check.FEATURES`) for a setting 
 and its share of `isik.E016` (`Check.LABELS`): a feature or setting that can't say what it is.
 """
 
+import importlib.util
+
 from django.core.checks import Error
 from django.db import models
 
@@ -19,6 +21,14 @@ def setting_problems():
     unknown = sorted(set(conf.configured()) - set(conf.DEFAULTS))
     if unknown:
         problems.append(_("ISIK_FEATURES has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)})
+    sweep = conf.setting("SWEEP")
+    if sweep not in conf.SWEEPS:
+        problems.append(
+            _("ISIK_FEATURES' SWEEP is %(sweep)r - it's one of %(sweeps)s.")
+            % {"sweep": sweep, "sweeps": ", ".join(conf.SWEEPS)}
+        )
+    if sweep == "next_boundary" and importlib.util.find_spec("celery") is None:
+        problems.append(_("ISIK_FEATURES' SWEEP is next_boundary, which schedules each run with Celery - install it."))
     overrides = get_overrides_model()
     if declarations.settings and overrides is None:
         problems.append(

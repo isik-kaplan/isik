@@ -154,6 +154,15 @@ class AbstractSweepCursor(UUIDPrimaryKeyModel):
         help_text=gettext_lazy("When the boundary sweep last ran."),
         db_comment="When the boundary sweep last ran - the next one looks at the boundaries since.",
     )
+    next_sweep_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("When the next boundary sweep is scheduled for."),
+        db_comment=(
+            "When the next boundary sweep is scheduled for, with ISIK_FEATURES' SWEEP next_boundary - none is "
+            "scheduled beside one due no later. Null with interval, and before the first."
+        ),
+    )
 
     class Meta:
         abstract = True

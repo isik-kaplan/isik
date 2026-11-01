@@ -6,6 +6,7 @@ from dataclasses import field as dataclass_field
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
 from django.db.models import Q, UniqueConstraint
+from drf_spectacular.extensions import OpenApiSerializerFieldExtension
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -76,8 +77,12 @@ def _relation(model, accessor):
     )
 
 
-class _SingletonField(serializers.Field):
-    """The flattened field: reads the matching row's `attribute`, and writes it through `inner`'s validation."""
+class FlattenedSingletonField(serializers.Field):
+    """
+    The field `FlattenedSingletonRelatedMixin` declares for each singleton: reads the matching row's
+    `attribute`, and writes it through `inner` - the field `attribute` would have on its own model - for its
+    validation. A schema describes it as `inner`.
+    """
 
     def __init__(self, *, singleton, inner, **kwargs):
         self.singleton = singleton
@@ -97,6 +102,24 @@ class _SingletonField(serializers.Field):
                 raise ValidationError([_("This field may not be empty.")])
             return {self.field_name: None}
         return {self.field_name: self.inner.run_validation(data)}
+
+
+class FlattenedSingletonFieldSchema(OpenApiSerializerFieldExtension):
+    """
+    drf-spectacular describing a `FlattenedSingletonField` as its `inner` field - its type, and its limits, but
+    for a minimum length where an empty value empties it rather than being refused.
+    """
+
+    target_class = FlattenedSingletonField
+
+    def map_serializer_field(self, auto_schema, direction):
+        inner = self.target.inner
+        schema = auto_schema._map_serializer_field(inner, direction)
+        auto_schema._insert_field_validators(inner, schema)
+        if self.target.singleton.on_empty != "refuse":
+            # An empty value is one it takes - it empties the field, by on_empty.
+            schema.pop("minLength", None)
+        return schema
 
 
 class FlattenedSingletonRelatedMixin:
@@ -151,7 +174,7 @@ class FlattenedSingletonRelatedMixin:
             field_class, field_kwargs = self.build_standard_field(singleton.attribute, model_field)
             # Never handed an empty value - the field deals with that itself, by on_empty.
             inner = field_class(**field_kwargs)
-            fields[name] = _SingletonField(singleton=singleton, inner=inner, allow_null=True)
+            fields[name] = FlattenedSingletonField(singleton=singleton, inner=inner, allow_null=True)
         return fields
 
     @transaction.atomic

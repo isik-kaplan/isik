@@ -28,6 +28,7 @@ from isik.django.apps.features.operations import (
     release_everything_forced_by,
     release_setting,
     revoke,
+    schedule_next_sweep,
     set_setting,
     sweep_boundaries,
 )
@@ -525,6 +526,160 @@ class TestTheSweep:
         assert heard == []
 
 
+class TestTheNextBoundarySweep:
+    @pytest.fixture(autouse=True)
+    def next_boundary(self, settings):
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "next_boundary"}
+
+    @pytest.fixture
+    def scheduled(self, monkeypatch):
+        """When each sweep run scheduled is due."""
+        due = []
+        monkeypatch.setattr(tasks.sweep_boundaries, "apply_async", lambda **options: due.append(options["eta"]))
+        return due
+
+    @pytest.fixture
+    def now(self):
+        now = timezone.now()
+        SweepCursor.objects.create(swept_at=now)
+        return now
+
+    def test_with_interval_nothing_is_scheduled(self, settings, alice, scheduled, django_capture_on_commit_callbacks):
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "interval"}
+        with django_capture_on_commit_callbacks(execute=True):
+            grant(alice, "beta", source="trial", starts_at=timezone.now() + timedelta(minutes=5))
+
+        assert schedule_next_sweep() is None
+        assert sweep_boundaries() == 0
+        assert scheduled == []
+
+    def test_before_the_first_sweep_one_is_scheduled_at_once(self, scheduled):
+        now = timezone.now()
+
+        assert schedule_next_sweep(now) == now
+        assert scheduled == [now]
+        assert not SweepCursor.objects.exists()
+
+    def test_with_no_boundary_to_come_nothing_is(self, alice, now, scheduled):
+        grant(alice, "beta", source="manual")
+        grant(alice, "webhooks", source="manual", expires_at=now - timedelta(minutes=1))
+
+        assert schedule_next_sweep(now) is None
+        assert scheduled == []
+        assert SweepCursor.objects.get().next_sweep_at is None
+
+    @pytest.mark.parametrize("field", ["starts_at", "expires_at"])
+    def test_the_earliest_boundary_to_come(self, alice, now, scheduled, field):
+        grant(alice, "beta", source="trial", **{field: now + timedelta(minutes=20)})
+        grant(alice, "webhooks", source="trial", **{field: now + timedelta(minutes=10)})
+        grant(alice, "long_lived_tokens", source="trial", **{field: now + timedelta(minutes=30)})
+
+        assert schedule_next_sweep(now) == now + timedelta(minutes=10)
+        assert scheduled == [now + timedelta(minutes=10)]
+        assert SweepCursor.objects.get().next_sweep_at == now + timedelta(minutes=10)
+
+    def test_a_start_and_an_end_compared(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=20))
+        grant(alice, "webhooks", source="trial", expires_at=now + timedelta(minutes=10))
+
+        assert schedule_next_sweep(now) == now + timedelta(minutes=10)
+
+    def test_a_revoked_grants_boundary_isnt_one(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+        revoke(alice, "beta")
+
+        assert schedule_next_sweep(now) is None
+
+    @pytest.mark.parametrize("field", ["starts_at", "expires_at"])
+    def test_a_boundary_before_its_grant_was_written_isnt_one(self, alice, now, scheduled, field):
+        # After the moment asked about, but before its writing - told by grant() itself, or never in force.
+        grant(alice, "beta", source="trial", **{field: now - timedelta(minutes=5)})
+
+        assert schedule_next_sweep(now - timedelta(minutes=10)) is None
+
+    def test_no_further_than_the_lookahead(self, settings, alice, now, scheduled):
+        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP_LOOKAHEAD": timedelta(minutes=15)}
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(days=30))
+
+        assert schedule_next_sweep(now) == now + timedelta(minutes=15)
+
+    def test_the_default_lookahead_is_an_hour(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(days=30))
+
+        assert schedule_next_sweep(now) == now + timedelta(hours=1)
+
+    def test_one_due_no_later_stands(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+        SweepCursor.objects.update(next_sweep_at=now + timedelta(minutes=10))
+
+        assert schedule_next_sweep(now) is None
+        SweepCursor.objects.update(next_sweep_at=now + timedelta(minutes=5))
+        assert schedule_next_sweep(now) is None
+        assert scheduled == []
+
+    def test_scheduling_writes_only_when_its_due(self, alice, now, scheduled):
+        # Where the sweep got to is the sweep's alone - never written back from a cursor read here.
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+
+        with CaptureQueriesContext(connection) as queries:
+            schedule_next_sweep(now)
+
+        (update,) = [query["sql"] for query in queries.captured_queries if query["sql"].startswith("UPDATE")]
+        assert '"next_sweep_at"' in update
+        assert '"swept_at"' not in update
+
+    def test_one_due_later_is_brought_forward(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+        SweepCursor.objects.update(next_sweep_at=now + timedelta(minutes=30))
+
+        assert schedule_next_sweep(now) == now + timedelta(minutes=10)
+        assert SweepCursor.objects.get().next_sweep_at == now + timedelta(minutes=10)
+
+    @pytest.mark.parametrize("ago", [timedelta(0), timedelta(minutes=5)])
+    def test_one_due_already_was_lost(self, alice, now, scheduled, ago):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+        SweepCursor.objects.update(next_sweep_at=now - ago)
+
+        assert schedule_next_sweep(now) == now + timedelta(minutes=10)
+
+    def test_a_grant_with_a_boundary_to_come_schedules_once_committed(
+        self, alice, now, scheduled, django_capture_on_commit_callbacks
+    ):
+        with django_capture_on_commit_callbacks() as callbacks:
+            grant(alice, "beta", source="trial", starts_at=timezone.now() + timedelta(minutes=10))
+            assert scheduled == []
+
+        assert len(callbacks) == 1
+        callbacks[0]()
+        assert len(scheduled) == 1
+
+    def test_a_grant_ending_later_schedules(self, alice, now, scheduled, django_capture_on_commit_callbacks):
+        with django_capture_on_commit_callbacks(execute=True):
+            grant(alice, "beta", source="trial", expires_at=timezone.now() + timedelta(minutes=10))
+
+        assert len(scheduled) == 1
+
+    def test_a_grant_with_no_boundary_to_come_doesnt(self, alice, now, django_capture_on_commit_callbacks):
+        with django_capture_on_commit_callbacks() as callbacks:
+            grant(alice, "beta", source="manual")
+
+        assert callbacks == []
+
+    def test_each_sweep_schedules_the_next(self, alice, now, scheduled):
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10), expires_at=now + timedelta(hours=2))
+        SweepCursor.objects.update(next_sweep_at=now + timedelta(minutes=10))
+
+        assert sweep_boundaries(now + timedelta(minutes=10)) == 1
+        assert scheduled == [now + timedelta(minutes=10) + timedelta(hours=1)]
+
+    def test_the_first_sweep_schedules_the_next(self, alice, scheduled):
+        now = timezone.now()
+        grant(alice, "beta", source="trial", starts_at=now + timedelta(minutes=10))
+
+        assert sweep_boundaries(now) == 0
+        assert scheduled == [now + timedelta(minutes=10)]
+
+
 class TestTheGrantLedger:
     def test_a_grant_is_never_deleted(self, alice):
         grant(alice, "webhooks", source="manual")
@@ -584,6 +739,18 @@ class TestErasing:
         assert list(FeatureGrant.objects.values_list("holder", flat=True)) == [bob.pk]
         assert not UserOverrides.objects.filter(holder=alice).exists()
         assert not UserOverrides.pgh_event_model.objects.filter(holder_id=alice.pk).exists()
+
+    def test_their_history_goes_through_its_append_only_protection(self, alice):
+        # The event table refuses a delete of its own - erasing stands aside for it, and only erasing does.
+        events = UserOverrides.pgh_event_model
+        assert {"append_only", "protect_truncate"} <= {trigger.name for trigger in events._meta.triggers}
+        force_setting(alice, "theme", "dark", source="staff", reason=REASON)
+        with pytest.raises(ProgrammingError, match="Cannot update or delete rows"), transaction.atomic():
+            events.objects.filter(holder_id=alice.pk).delete()
+
+        erase_holder(alice)
+
+        assert not events.objects.filter(holder_id=alice.pk).exists()
 
     def test_a_project_keeping_no_settings(self, alice, settings):
         grant(alice, "webhooks", source="manual")

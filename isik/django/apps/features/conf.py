@@ -3,6 +3,7 @@
 callable or its dotted path. Keys this module doesn't know are refused by a system check.
 """
 
+from datetime import timedelta
 from importlib import import_module
 
 from django.conf import settings
@@ -31,7 +32,16 @@ DEFAULTS = {
     "MAY_CHANGE_SETTING": None,
     # f(holder) -> the people a notice about the holder reaches. None: the holder, when it's a user.
     "PEOPLE": None,
+    # How the boundary sweep is run. "interval": a beat runs it every so often (beat_schedule's sweep_every).
+    # "next_boundary": each grant with a boundary to come, and each sweep, schedules one run at the next boundary -
+    # the beat left as the backstop for a run the broker lost. "next_boundary" needs Celery.
+    "SWEEP": "interval",
+    # With "next_boundary", the furthest ahead a run is scheduled: a boundary further off is reached by runs this far
+    # apart, so no broker holds a message for longer.
+    "SWEEP_LOOKAHEAD": timedelta(hours=1),
 }
+
+SWEEPS = ("interval", "next_boundary")
 
 HOOKS = ("HOLDER", "IN_HOLDER_SCHEMA", "FEATURES_VISIBLE", "SETTINGS_VISIBLE", "MAY_CHANGE_SETTING", "PEOPLE")
 
