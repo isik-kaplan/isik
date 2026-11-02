@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-02
+
+### Added
+
+- Every constraint isik generates says what it refuses, with a `violation_error_code`: `*_choices` names the
+  field and its values (`invalid_choice`), `*_validators` names the field (the validator's code, or
+  `invalid`), and the features overrides' and forceable subscriptions' `*_forced_exactly` and
+  `*_chosen_or_forced` say what a force needs. Before, each answered with its name:
+  `Constraint "users_user_language_choices" is violated.`
+- `isik.E021` (`Check.CONSTRAINT_MESSAGES`): a constraint of the project's models answering a violation with
+  Django's default. A `UniqueConstraint` over plain fields with no condition answers already - Django words it.
+- `NoViolationMessage(reason=...)`, the exemption from it, given where the message would be. A violation still
+  names the constraint in Django's default wording, translated; `manage.py exemptions` lists it.
+- `drf_validation_error(e)`: the DRF `ValidationError` a Django one is, codes kept.
+
+### Breaking
+
+- **`exception_handler` answers Django's `ValidationError` with a 400, not a 500.** It was only half true that
+  constraints gave 400s: DRF builds its own validator from a `UniqueConstraint`, so those never reached the
+  database, but it never calls `full_clean()` - a `CheckConstraint` refused the row in
+  `FullCleanOnSaveModel.save()`, after the serializer passed, and escaped the view as a 500 unless the view
+  carried `django_to_drf_validation_error`. Now its message is what the client reads.
+- **A test matching a constraint's name** - `pytest.raises(ValidationError, match="<constraint name>")` - fails
+  once the constraint has a message: the error says the message now, not the name. Match what a caller is shown.
+- The new messages are translatable. `makemessages` may mark them fuzzy against older, different strings;
+  check for fuzzy entries before compiling a catalog.
+- **`isik.E021` is an error from this version.** `manage.py check` fails on each constraint of the project's
+  models with Django's default message until it has one of its own or a `NoViolationMessage`.
+- **Migrations:** every model with a generated `*_choices`, `*_validators` or `*_forced_exactly` constraint - an
+  owned model on an isik base, a `FullCleanOnSaveModel` with choices or validators - wants an `AlterConstraint`
+  for its message: metadata only, nothing changes in the database. isik's own apps need none.
+- `django_to_drf_validation_error` keeps each message's code, and a model's own error - a constraint's, keyed
+  `__all__` by Django - is under DRF's `NON_FIELD_ERRORS_KEY` (`non_field_errors`), not `__all__`.
+
 ## [0.47.0] - 2026-11-02
 
 ### Breaking

@@ -33,6 +33,7 @@ from django.db.transaction import TransactionManagementError
 from django.utils.deconstruct import deconstructible
 
 from isik._internal.translation import gettext as _
+from isik._internal.translation import lazy_format, translate_text
 from isik.common.utils.exemptions import Exemption, makes_own_exemptions
 from isik.django.apps.common.db.models import FullCleanOnSaveModel
 
@@ -48,6 +49,69 @@ class NoDatabaseForm(
     why="A validator runs in full_clean() alone, so a rule only it holds is one a direct write ignores.",
 ):
     """This rule cannot hold at a column, and here is why."""
+
+
+# Django's own default, word for word - its msgid, so Django's catalogs translate it.
+DJANGO_VIOLATION_MESSAGE = "Constraint “%(name)s” is violated."
+
+
+class NoViolationMessage(
+    Exemption,
+    rule="constraints.violation-message",
+    why=(
+        "A constraint without its own violation_error_message answers a refused write with its name, "
+        "not with what was wrong - every caller is left to explain it again."
+    ),
+    shows_as="",
+):
+    """This constraint says nothing of its own when it refuses a row, and here is why.
+
+        models.CheckConstraint(condition=..., name="...", violation_error_message=NoViolationMessage(reason="..."))
+
+    A violation still says which constraint refused it: Django fills the name in with `%`, and this renders
+    Django's own default for it, in the request's language. It is `""` as a `str`, not that default -
+    Django copies a model's constraints through `deconstruct()`, which leaves out a message equal to its
+    default, and an exemption left out is one the model no longer carries. So it is written into the
+    migration, as the call that made it.
+    """
+
+    def __mod__(self, params):
+        return translate_text(DJANGO_VIOLATION_MESSAGE) % params
+
+
+def violation_message_problems(app_configs):
+    """
+    Each constraint on `app_configs`' models that answers a violation with Django's default - `Constraint
+    "<name>" is violated.`, a name rather than a reason - and isn't exempted with `NoViolationMessage`.
+    A `UniqueConstraint` over plain fields, with no condition, answers already: Django says "<Model> with
+    this <field> already exists." for it. The system check `isik.E021` reports them.
+    """
+    return [
+        _(
+            "%(model)s's constraint %(name)s says only that it is violated - give it a violation_error_message, "
+            "or NoViolationMessage(reason=...) why not."
+        )
+        % {"model": model._meta.label, "name": constraint.name}
+        for config in app_configs
+        for model in config.get_models()
+        if not model._meta.proxy
+        for constraint in model._meta.constraints
+        if not _says_why(constraint)
+    ]
+
+
+def _says_why(constraint):
+    message = constraint.violation_error_message
+    if isinstance(message, NoViolationMessage):
+        return True
+    if message is not None and message != constraint.default_violation_error_message and str(message).strip():
+        return True
+    return (
+        isinstance(constraint, models.UniqueConstraint)
+        and bool(constraint.fields)
+        and constraint.condition is None
+        and not constraint.expressions
+    )
 
 
 def as_condition(build):
@@ -298,19 +362,42 @@ def _choices_condition(field):
     return condition
 
 
+def _from_choices(field):
+    allowed = ", ".join(str(value) for value, _label in field.flatchoices if value is not None)
+    return models.CheckConstraint(
+        condition=_choices_condition(field),
+        name=_name(field, "choices"),
+        # %% for a %: Django fills the constraint's name in with %, after this is rendered.
+        violation_error_message=lazy_format(
+            "%(field)s must be one of: %(allowed)s.", field=field.name, allowed=allowed.replace("%", "%%")
+        ),
+        violation_error_code="invalid_choice",
+    )
+
+
 def _from_validators(field):
     """One constraint for everything the field's validators ask of the column.
 
     Combined rather than one apiece: two bounds on a number are one rule about it, and a reader of
     the schema should find them together.
     """
-    conditions = [c for v in field.validators if (c := condition_for(inspect.unwrap(v), field)) is not None]
-    if not conditions:
+    held = [(v, c) for v in map(inspect.unwrap, field.validators) if (c := condition_for(v, field)) is not None]
+    if not held:
         return None
+    conditions = [condition for _validator, condition in held]
     combined = conditions[0]
     for condition in conditions[1:]:
         combined &= condition
-    return models.CheckConstraint(condition=combined, name=_name(field, "validators"))
+    # A validator's own message needs the value it refused, which a constraint never has - so the field is
+    # named instead. It reaches a client only when the validator itself didn't run: full_clean() reports a
+    # field's validators first, and skips the constraints over a field they refused.
+    codes = {getattr(validator, "code", None) for validator, _condition in held}
+    return models.CheckConstraint(
+        condition=combined,
+        name=_name(field, "validators"),
+        violation_error_message=lazy_format("%(field)s is outside what its validators allow.", field=field.name),
+        violation_error_code=codes.pop() if len(codes) == 1 and None not in codes else "invalid",
+    )
 
 
 def constrain(model):
@@ -325,7 +412,7 @@ def constrain(model):
     wanted = []
     for field in model._meta.concrete_fields:
         if field.choices:
-            wanted.append(models.CheckConstraint(condition=_choices_condition(field), name=_name(field, "choices")))
+            wanted.append(_from_choices(field))
         wanted.append(_from_validators(field))
     wanted = [constraint for constraint in wanted if constraint is not None and constraint.name not in have]
     if not wanted:

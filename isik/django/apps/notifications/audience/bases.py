@@ -326,10 +326,23 @@ def _force_constraints(model):
     forced = models.Q(forced=True, forced_enabled__isnull=False) & ~models.Q(forced_source="")
     return [
         # Forced, with what it's forced to and by whom - or none of it.
-        models.CheckConstraint(condition=unforced | forced, name=fitted_name(table, "forced_exactly")),
+        models.CheckConstraint(
+            condition=unforced | forced,
+            name=fitted_name(table, "forced_exactly"),
+            violation_error_message=gettext_lazy(
+                "A forced subscription needs what it's forced to and its source, and an unforced one has neither, "
+                "nor a reason."
+            ),
+            violation_error_code="forced_exactly",
+        ),
         # A row is the person's choice, or a force's - never neither.
         models.CheckConstraint(
-            condition=models.Q(chosen=True) | models.Q(forced=True), name=fitted_name(table, "chosen_or_forced")
+            condition=models.Q(chosen=True) | models.Q(forced=True),
+            name=fitted_name(table, "chosen_or_forced"),
+            violation_error_message=gettext_lazy(
+                "A subscription is the person's own choice or a force's, never neither."
+            ),
+            violation_error_code="chosen_or_forced",
         ),
     ]
 

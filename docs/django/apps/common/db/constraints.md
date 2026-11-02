@@ -116,6 +116,46 @@ the constraint back `NOT VALID`: later writes are checked again, while the rows 
 until the rollback. A block that raises gets it back in Python only. Its transaction is likely broken,
 and the rollback restores the column.
 
+## What a refused row is told
+
+A constraint answers a violation with its `violation_error_message`, and Django's default names the
+constraint rather than the rule - `Constraint "users_user_language_choices" is violated.` So each one isik
+generates says what it refuses, with a `violation_error_code` a client can tell it apart by:
+
+| constraint | message | code |
+|---|---|---|
+| `*_choices` | `language must be one of: en, tr.` | `invalid_choice` |
+| `*_validators` | `count is outside what its validators allow.` | the validator's own (`min_value`), or `invalid` for several |
+| `*_forced_exactly` (features) | `A forced theme needs a value, its source and its reason, and an unforced one has none of them.` | `forced_exactly` |
+| `*_forced_exactly`, `*_chosen_or_forced` (forceable subscriptions) | what a forced subscription needs, and that a row is the person's choice or a force's | `forced_exactly`, `chosen_or_forced` |
+
+The `*_validators` one names the field, not each validator's message: those need the value they refused,
+which a constraint never has. It reaches a client only when the validator itself didn't run - `full_clean()`
+reports a field's validators first, and skips the constraints over a field they refused.
+
+The project's own constraints are held to the same by `isik.E021`: one answering with Django's default fails
+the check. A `UniqueConstraint` over plain fields, with no condition and no expressions, answers already -
+Django says `Site with this Domain already exists.` for it. One that shouldn't say anything says why not, in
+the message's own place:
+
+```python
+from isik.django.apps.common.db import NoViolationMessage
+
+models.CheckConstraint(
+    condition=Q(imported_at__lte=Now()),
+    name="imports_import_not_ahead",
+    violation_error_message=NoViolationMessage(reason="Only the nightly import writes it, and never from a request."),
+)
+```
+
+A violation still names the constraint, in Django's default wording and the request's language.
+`manage.py exemptions` lists each one, and the migration carries it as the call that made it.
+
+The message reaches a client through `full_clean()` and `validate_constraints()` - which
+`FullCleanOnSaveModel` runs on every save, and isik's `exception_handler` turns into a 400. A write that skips
+them - `QuerySet.update()`, `bulk_create`, two requests racing past the check - meets the column, and its
+`IntegrityError` carries Postgres's text, which names the constraint.
+
 ## Notes
 
 - Constraints are added from `AppConfig.ready()` **and** from `class_prepared`. Neither covers the

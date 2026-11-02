@@ -152,6 +152,7 @@ class TestTheSettings:
             "identifiers",
             "declared_names",
             "meta_inheritance",
+            "constraint_messages",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -218,7 +219,8 @@ class TestTheSettingsCheck:
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
-            "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE."
+            "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE, "
+            "Check.CONSTRAINT_MESSAGES."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -950,5 +952,136 @@ class TestMetaInheritance:
 
         assert [(error.id, error.msg, error.hint) for error in errors] == [
             ("isik.E020", "one", "See meta_inheritance_problems() (isik.django.apps.common.db.models).")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]
+
+
+class TestConstraintMessages:
+    REASON = "It guards a column no request ever writes, only the nightly import does."
+
+    @staticmethod
+    def problems(*models):
+        return constraints.violation_message_problems([types.SimpleNamespace(get_models=lambda: list(models))])
+
+    @staticmethod
+    def build(*declared, proxy_too=False):
+        import uuid
+
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        name = f"Constrained{uuid.uuid4().hex[:8]}"
+        with isolate_apps("tests.testapp"):
+            model = type(
+                name,
+                (models.Model,),
+                {
+                    "__module__": "tests.testapp.models",
+                    "Meta": type("Meta", (), {"app_label": "testapp", "constraints": list(declared)}),
+                    "size": models.IntegerField(),
+                    "label": models.CharField(max_length=8),
+                },
+            )
+            proxy = type(
+                f"{name}Proxy",
+                (model,),
+                {
+                    "__module__": "tests.testapp.models",
+                    "Meta": type("Meta", (), {"proxy": True, "app_label": "testapp"}),
+                },
+            )
+        return (model, proxy) if proxy_too else model
+
+    def refused(self, model, constraint_name):
+        return [
+            f"{model._meta.label}'s constraint {constraint_name} says only that it is violated - give it a "
+            "violation_error_message, or NoViolationMessage(reason=...) why not."
+        ]
+
+    def test_a_constraint_with_djangos_default_is_named(self):
+        from django.db import models
+
+        model = self.build(models.CheckConstraint(condition=models.Q(size__gt=0), name="positive"))
+
+        assert self.problems(model) == self.refused(model, "positive")
+
+    def test_a_constraint_saying_why_asks_nothing(self):
+        from django.db import models
+
+        model = self.build(
+            models.CheckConstraint(condition=models.Q(size__gt=0), name="positive", violation_error_message="Grows.")
+        )
+
+        assert self.problems(model) == []
+
+    def test_a_blank_message_says_nothing(self):
+        from django.db import models
+
+        model = self.build(
+            models.CheckConstraint(condition=models.Q(size__gt=0), name="positive", violation_error_message="  ")
+        )
+
+        assert self.problems(model) == self.refused(model, "positive")
+
+    def test_an_exemption_answers_it(self):
+        from django.db import models
+
+        model = self.build(
+            models.CheckConstraint(
+                condition=models.Q(size__gt=0),
+                name="positive",
+                violation_error_message=constraints.NoViolationMessage(reason=self.REASON),
+            )
+        )
+
+        assert self.problems(model) == []
+
+    @pytest.mark.parametrize("nulls_distinct", [None, False])
+    def test_a_unique_over_plain_fields_is_worded_by_django(self, nulls_distinct):
+        from django.db import models
+
+        model = self.build(
+            models.UniqueConstraint(fields=["size", "label"], name="once", nulls_distinct=nulls_distinct)
+        )
+
+        assert self.problems(model) == []
+
+    def test_a_unique_with_a_condition_isnt(self):
+        from django.db import models
+
+        model = self.build(models.UniqueConstraint(fields=["label"], condition=models.Q(size__gt=0), name="once"))
+
+        assert self.problems(model) == self.refused(model, "once")
+
+    def test_a_unique_over_an_expression_isnt(self):
+        from django.db import models
+        from django.db.models.functions import Lower
+
+        model = self.build(models.UniqueConstraint(Lower("label"), name="once"))
+
+        assert self.problems(model) == self.refused(model, "once")
+
+    def test_a_proxy_is_its_concrete_models_to_answer(self):
+        from django.db import models
+
+        model, proxy = self.build(
+            models.CheckConstraint(condition=models.Q(size__gt=0), name="positive"), proxy_too=True
+        )
+
+        assert self.problems(proxy) == []
+        assert self.problems(model, proxy) == self.refused(model, "positive")
+
+    def test_the_test_project_and_isik_have_none(self):
+        assert constraints.violation_message_problems(apps.get_app_configs()) == []
+        assert checks.every_constraint_says_what_it_refuses(app_configs=None) == []
+
+    def test_the_check_reports_them(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(constraints, "violation_message_problems", lambda configs: seen.append(configs) or ["one"])
+
+        errors = checks.every_constraint_says_what_it_refuses(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E021", "one", "See NoViolationMessage (isik.django.apps.common.db).")
         ]
         assert [config.label for config in seen[0]] == ["testapp"]

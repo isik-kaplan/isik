@@ -1,5 +1,5 @@
 from isik.django.apps.common.db import lookups  # noqa: F401
-from isik.django.apps.common.db.constraints import fitted_name
+from isik.django.apps.common.db.constraints import NoViolationMessage, fitted_name
 from isik.django.apps.common.db.history import (
     APPEND_ONLY_TRIGGERS,
     ContextField,
@@ -36,6 +36,7 @@ from isik.django.apps.common.db.triggers import (
 __all__ = [
     "APPEND_ONLY_TRIGGERS",
     "BaseModel",
+    "NoViolationMessage",
     "ProtectTruncate",
     "allow_truncate",
     "ContextField",

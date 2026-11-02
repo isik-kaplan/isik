@@ -684,7 +684,12 @@ class SiteDomain(BaseModel):
     class Meta:
         app_label = "testapp"
         constraints = [
-            models.UniqueConstraint(fields=["site"], condition=models.Q(is_primary=True), name="one_primary_domain"),
+            models.UniqueConstraint(
+                fields=["site"],
+                condition=models.Q(is_primary=True),
+                name="one_primary_domain",
+                violation_error_message="A site has one primary domain.",
+            ),
         ]
 
 

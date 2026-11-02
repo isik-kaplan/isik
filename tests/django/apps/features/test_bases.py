@@ -120,8 +120,20 @@ class TestTheOverridesColumns:
             models.CheckConstraint(
                 condition=unforced("limit") | (forced("limit") & models.Q(limit_forced_value__isnull=False)),
                 name="isolated_limit_forced_exactly",
+                violation_error_message=(
+                    "A forced limit needs a value, its source and its reason, and an unforced one has none of them."
+                ),
+                violation_error_code="forced_exactly",
             ),
-            models.CheckConstraint(condition=unforced("note") | forced("note"), name="isolated_note_forced_exactly"),
+            models.CheckConstraint(
+                condition=unforced("note") | forced("note"),
+                name="isolated_note_forced_exactly",
+                violation_error_message=(
+                    "A forced note needs its source and its reason, and an unforced one has no forced value, source "
+                    "or reason."
+                ),
+                violation_error_code="forced_exactly",
+            ),
         ]
         assert Isolated._meta.constraints == expected
         assert Isolated._meta.original_attrs["constraints"] == expected

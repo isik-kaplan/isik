@@ -43,6 +43,7 @@ leaves out the fields a model inherits unchanged from a library's abstract base.
 | Check.IDENTIFIERS          | isik.E018              | a table, column, constraint or index name Postgres would cut |
 | Check.DECLARED_NAMES       | isik.E019 (off)        | a table or index the project's models leave Django to name   |
 | Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
+| Check.CONSTRAINT_MESSAGES  | isik.E021              | a constraint answering a violation with only its name        |
 """
 
 import functools
@@ -81,6 +82,7 @@ class Check(Enum):
     IDENTIFIERS = "identifiers"
     DECLARED_NAMES = "declared_names"
     META_INHERITANCE = "meta_inheritance"
+    CONSTRAINT_MESSAGES = "constraint_messages"
 
 
 class CheckOption(Enum):
@@ -125,6 +127,7 @@ CHECKS = {
     Check.IDENTIFIERS: (CheckOption.APPS,),
     Check.DECLARED_NAMES: (CheckOption.APPS,),
     Check.META_INHERITANCE: (CheckOption.APPS,),
+    Check.CONSTRAINT_MESSAGES: (CheckOption.APPS,),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
@@ -510,6 +513,17 @@ def every_meta_inherits_its_bases(options, **kwargs):
     hint = _("See meta_inheritance_problems() (isik.django.apps.common.db.models).")
     return [
         Error(problem, hint=hint, id="isik.E020") for problem in meta_inheritance_problems(_project_configs(options))
+    ]
+
+
+@isik_check(Check.CONSTRAINT_MESSAGES, Tags.models)
+def every_constraint_says_what_it_refuses(options, **kwargs):
+    """A constraint refusing a write with its name leaves every caller to explain it again."""
+    from isik.django.apps.common.db.constraints import violation_message_problems
+
+    hint = _("See NoViolationMessage (isik.django.apps.common.db).")
+    return [
+        Error(problem, hint=hint, id="isik.E021") for problem in violation_message_problems(_project_configs(options))
     ]
 
 

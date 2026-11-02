@@ -3,7 +3,7 @@ from isik._internal import check_extra
 
 check_extra("drf", "rest_framework")
 
-from isik.django.drf.error_handling import django_to_drf_validation_error  # noqa: E402
+from isik.django.drf.error_handling import django_to_drf_validation_error, drf_validation_error  # noqa: E402
 from isik.django.drf.filters import (  # noqa: E402
     MatchModeChoiceFilter,
     MatchModeFilter,
@@ -67,6 +67,7 @@ __all__ = [
     "descriptor_attribute_name",
     "django_permission",
     "django_to_drf_validation_error",
+    "drf_validation_error",
     "evaluate_permission",
     "guarding",
     "guarding_matching",

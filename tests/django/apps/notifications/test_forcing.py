@@ -1,7 +1,7 @@
 """Forceable subscriptions, the force sources behind them, and what a kind says to people."""
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import IntegrityError, connection, models, transaction
 from django.test.utils import CaptureQueriesContext
 
@@ -353,8 +353,31 @@ def test_a_forceable_subscription_is_held_to_its_forcing_by_two_constraints():
     forced = models.Q(forced=True, forced_enabled__isnull=False) & ~models.Q(forced_source="")
 
     assert _force_constraints(ForceableSubscription) == [
-        models.CheckConstraint(condition=unforced | forced, name=f"{table}_forced_exactly"),
         models.CheckConstraint(
-            condition=models.Q(chosen=True) | models.Q(forced=True), name=f"{table}_chosen_or_forced"
+            condition=unforced | forced,
+            name=f"{table}_forced_exactly",
+            violation_error_message=(
+                "A forced subscription needs what it's forced to and its source, and an unforced one has neither, "
+                "nor a reason."
+            ),
+            violation_error_code="forced_exactly",
+        ),
+        models.CheckConstraint(
+            condition=models.Q(chosen=True) | models.Q(forced=True),
+            name=f"{table}_chosen_or_forced",
+            violation_error_message="A subscription is the person's own choice or a force's, never neither.",
+            violation_error_code="chosen_or_forced",
         ),
     ]
+
+
+def test_a_forcing_constraint_refusing_a_row_says_why(alice):
+    kind = NoticeKindPolicy.objects.get(name="parcel_flagged")
+    neither = ForceableSubscription(user=alice, kind=kind, chosen=False, forced=False)
+
+    with pytest.raises(ValidationError) as refused:
+        neither.validate_constraints()
+
+    (error,) = refused.value.error_dict["__all__"]
+    assert error.messages == ["A subscription is the person's own choice or a force's, never neither."]
+    assert error.code == "chosen_or_forced"

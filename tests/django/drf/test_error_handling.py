@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.http import Http404
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -47,6 +47,24 @@ class TestDjangoToDrfValidationError:
             raise_error_with_params()
         assert exc_info.value.detail == {"non_field_errors": ["Value must be at least 5"]}
 
+    def test_keeps_each_messages_code(self):
+        @django_to_drf_validation_error
+        def raise_coded():
+            raise ValidationError({"name": [ValidationError("Taken.", code="taken")]})
+
+        with pytest.raises(DRFValidationError) as exc_info:
+            raise_coded()
+        assert exc_info.value.detail["name"][0].code == "taken"
+
+    def test_a_models_own_error_is_under_drfs_non_field_key(self):
+        @django_to_drf_validation_error
+        def raise_model_wide():
+            raise ValidationError({NON_FIELD_ERRORS: ["A site has one primary domain."]})
+
+        with pytest.raises(DRFValidationError) as exc_info:
+            raise_model_wide()
+        assert exc_info.value.detail == {"non_field_errors": ["A site has one primary domain."]}
+
     def test_leaves_other_exceptions_untouched(self):
         @django_to_drf_validation_error
         def raise_other():
@@ -87,6 +105,46 @@ class TestTheExceptionHandler:
         response = exception_handler(DRFValidationError({"name": ["This field is required."]}), {})
 
         assert response.data == {"name": ["This field is required."]}
+
+    def test_a_django_validation_error_is_a_400_in_drfs_shape_with_its_codes(self):
+        raised = ValidationError({"name": [ValidationError("Taken.", code="taken")]})
+
+        response = exception_handler(raised, {})
+
+        assert response.status_code == 400
+        assert response.data == {"name": ["Taken."]}
+        assert response.data["name"][0].code == "taken"
+
+    def test_a_models_own_error_is_under_drfs_non_field_key(self):
+        raised = ValidationError({NON_FIELD_ERRORS: [ValidationError("A site has one primary domain.", code="one")]})
+
+        response = exception_handler(raised, {})
+
+        assert response.status_code == 400
+        assert response.data == {"non_field_errors": ["A site has one primary domain."]}
+        assert response.data["non_field_errors"][0].code == "one"
+
+    def test_a_models_own_errors_join_any_already_under_the_key(self):
+        raised = ValidationError({"non_field_errors": ["first"], NON_FIELD_ERRORS: ["second"]})
+
+        assert exception_handler(raised, {}).data == {"non_field_errors": ["first", "second"]}
+
+    def test_the_key_is_the_one_the_project_set(self, settings):
+        settings.REST_FRAMEWORK = {**getattr(settings, "REST_FRAMEWORK", {}), "NON_FIELD_ERRORS_KEY": "errors"}
+
+        assert exception_handler(ValidationError("Nope."), {}).data == {"errors": ["Nope."]}
+
+    @pytest.mark.django_db
+    def test_a_refused_constraint_reaches_the_client_as_its_message(self):
+        from tests.testapp.models import CleanedNote
+
+        with pytest.raises(ValidationError) as refused:
+            CleanedNote(count=1, kind="screw").validate_constraints()
+        response = exception_handler(refused.value, {})
+
+        assert response.status_code == 400
+        assert response.data == {"non_field_errors": ["kind must be one of: bolt, nut."]}
+        assert response.data["non_field_errors"][0].code == "invalid_choice"
 
     def test_what_isnt_an_api_error_is_left_alone(self):
         assert exception_handler(ValueError("boom"), {}) is None

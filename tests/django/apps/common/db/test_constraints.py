@@ -17,7 +17,9 @@ from isik.django.apps.common.db import BaseModel
 from isik.django.apps.common.db.constraints import (
     DJANGO_VALIDATORS,
     DJANGO_VALIDATORS_WITHOUT_ONE,
+    DJANGO_VIOLATION_MESSAGE,
     IDENTIFIER_LIMIT,
+    NoViolationMessage,
     _choices_condition,
     _from_validators,
     _name,
@@ -867,3 +869,143 @@ def test_an_index_name_fits_djangos_shorter_limit():
     assert len(name) == 30
     assert name.endswith("_unfinished")
     assert fitted_name("isik_fan_out_shard", "unfinished", limit=30) == "isik_fan_out_shard_unfinished"
+
+
+class TestWhatAGeneratedConstraintSays:
+    """A generated constraint refusing a row says which field and what it allows, not only its own name."""
+
+    def test_a_choices_constraint_names_the_field_and_its_values(self):
+        model = _fresh_model("Chosen", kind=models.CharField(max_length=8, choices=[("a", "A"), ("b", "B")]))
+
+        (constraint,) = [each for each in constrain_and_read(model) if each.name.endswith("_kind_choices")]
+
+        assert constraint.get_violation_error_message() == "kind must be one of: a, b."
+        assert constraint.violation_error_code == "invalid_choice"
+
+    def test_a_null_choice_is_left_out_of_the_values(self):
+        model = _fresh_model(
+            "NullChosen", kind=models.CharField(max_length=8, null=True, choices=[(None, "None"), ("a", "A")])
+        )
+
+        (constraint,) = [each for each in constrain_and_read(model) if each.name.endswith("_kind_choices")]
+
+        assert constraint.get_violation_error_message() == "kind must be one of: a."
+
+    def test_a_percent_sign_among_the_values_survives_djangos_own_formatting(self):
+        model = _fresh_model("Rated", rate=models.CharField(max_length=4, choices=[("5%", "Five"), ("10%", "Ten")]))
+
+        (constraint,) = [each for each in constrain_and_read(model) if each.name.endswith("_rate_choices")]
+
+        assert constraint.get_violation_error_message() == "rate must be one of: 5%, 10%."
+
+    def test_a_validators_constraint_names_the_field_and_keeps_its_one_validators_code(self):
+        model = _fresh_model(
+            "Floored", quantity=models.IntegerField(validators=[django_validators.MinValueValidator(1)])
+        )
+
+        constraint = _from_validators(model._meta.get_field("quantity"))
+
+        assert constraint.get_violation_error_message() == "quantity is outside what its validators allow."
+        assert constraint.violation_error_code == "min_value"
+
+    def test_two_validators_sharing_a_code_keep_it(self):
+        model = _fresh_model(
+            "Floors",
+            quantity=models.IntegerField(
+                validators=[django_validators.MinValueValidator(1), django_validators.MinValueValidator(2)]
+            ),
+        )
+
+        assert _from_validators(model._meta.get_field("quantity")).violation_error_code == "min_value"
+
+    def test_two_validators_with_different_codes_are_invalid(self):
+        model = _fresh_model(
+            "Ranged",
+            quantity=models.IntegerField(
+                validators=[django_validators.MinValueValidator(1), django_validators.MaxValueValidator(9)]
+            ),
+        )
+
+        assert _from_validators(model._meta.get_field("quantity")).violation_error_code == "invalid"
+
+    def test_a_validator_with_no_code_is_invalid(self):
+        assert _from_validators(CleanedNote._meta.get_field("count")).violation_error_code == "invalid"
+
+    def test_a_validator_the_column_already_holds_lends_no_code(self):
+        model = _fresh_model(
+            "Held",
+            quantity=models.PositiveIntegerField(
+                validators=[django_validators.MaxValueValidator(9), django_validators.MinValueValidator(0)]
+            ),
+        )
+
+        assert _from_validators(model._meta.get_field("quantity")).violation_error_code == "max_value"
+
+    def test_a_refused_row_hears_the_message_and_the_code(self):
+        with pytest.raises(ValidationError) as refused:
+            CleanedNote(count=1, kind="screw").validate_constraints()
+
+        (error,) = refused.value.error_dict["__all__"]
+        assert error.messages == ["kind must be one of: bolt, nut."]
+        assert error.code == "invalid_choice"
+
+
+def constrain_and_read(model):
+    constrain(model)
+    return model._meta.constraints
+
+
+class TestNoViolationMessage:
+    REASON = "It guards a column no request ever writes, only the nightly import does."
+
+    def test_it_renders_djangos_own_default(self):
+        assert DJANGO_VIOLATION_MESSAGE == str(models.constraints.BaseConstraint.default_violation_error_message)
+        assert NoViolationMessage(reason=self.REASON) % {"name": "positive"} == "Constraint “positive” is violated."
+
+    def test_a_violation_still_names_the_constraint_in_the_requests_language(self):
+        from django.utils import translation
+
+        constraint = models.CheckConstraint(
+            condition=models.Q(id__gt=0),
+            name="positive",
+            violation_error_message=NoViolationMessage(reason=self.REASON),
+        )
+
+        assert constraint.get_violation_error_message() == "Constraint “positive” is violated."
+        with translation.override("de"):
+            assert constraint.get_violation_error_message() == "Bedingung „positive“ ist nicht erfüllt."
+
+    def test_a_model_keeps_it_and_a_migration_writes_it(self):
+        from django.db.migrations.writer import MigrationWriter
+
+        with isolate_apps():
+            model = type(
+                f"Exempted{uuid.uuid4().hex[:8]}",
+                (models.Model,),
+                {
+                    "__module__": __name__,
+                    "Meta": type(
+                        "Meta",
+                        (),
+                        {
+                            "app_label": "testapp",
+                            "constraints": [
+                                models.CheckConstraint(
+                                    condition=models.Q(id__gt=0),
+                                    name="positive",
+                                    violation_error_message=NoViolationMessage(reason=self.REASON),
+                                )
+                            ],
+                        },
+                    ),
+                },
+            )
+        (constraint,) = model._meta.constraints
+
+        assert isinstance(constraint.violation_error_message, NoViolationMessage)
+        written, _imports = MigrationWriter.serialize(constraint)
+        assert f"NoViolationMessage(reason={self.REASON!r})" in written
+
+    def test_it_needs_a_reason(self):
+        with pytest.raises(ValueError, match="NoViolationMessage needs a reason"):
+            NoViolationMessage(reason="no")
