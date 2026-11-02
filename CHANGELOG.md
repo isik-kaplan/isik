@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-02
+
+### Breaking
+
+- **Every isik app's migrations are generated again from scratch** - `0001_initial`, and `0002_initial` where an
+  app's keys need another app's models first - with no upgrade path. Before 1.0 isik ships its schema as it is,
+  not the steps that led to it. Nothing about the schema or the code changed.
+- A database migrated by 0.46.0 needs nothing: the initials keep the names it recorded, and the schema is
+  0.46.0's. It keeps three `django_migrations` rows naming migrations that are gone -
+  `isik_features.0003_sweep_cursor_next_sweep_at`, `isik_features.0004_status_and_history`,
+  `isik_notifications.0002_status_and_history` - which Django ignores; leave them. One on an earlier isik runs
+  0.46.0's migrations first.
+
 ## [0.46.0] - 2026-11-02
 
 ### Added
