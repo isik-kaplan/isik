@@ -85,6 +85,43 @@ def django_db_modify_db_settings():
 # that stale, inherited entry regardless of what the mutation under test actually did, silently
 # masking the mutation instead of exercising it. Reset before every test so each one always starts
 # from a genuinely empty registry, not whatever the parent process happened to leave behind.
+def _throwaway(model):
+    """A model a test built for itself: defined in a test module, and not the one Django's registry holds."""
+    from django.apps import apps
+
+    if not model.__module__.startswith("tests.") or model.__module__ == "tests.testapp.models":
+        return False
+    try:
+        return apps.get_model(model._meta.label) is not model
+    except LookupError:
+        return True
+
+
+def _pgid_wide_for_throwaway_models():
+    """
+    A throwaway model's Postgres function names, hashed wider than pgtrigger's five hex digits. Those are a
+    million names, and every trigger a test's own model registers is checked against every function name in the
+    run - the project's own models' among them, which nothing forgets - so a few hundred random model names a run
+    make an unlucky one, refused as "already in use", a matter of time. A real model's name is pgtrigger's own:
+    its migrations name it.
+    """
+    import hashlib
+
+    import pgtrigger
+
+    narrow = pgtrigger.Trigger.get_pgid
+
+    def get_pgid(self, model):
+        if not _throwaway(model):
+            return narrow(self, model)
+        return f"pgtrigger_{self.name}_{hashlib.sha1(self.get_uri(model).encode()).hexdigest()[:12]}"[:63].lower()
+
+    pgtrigger.Trigger.get_pgid = get_pgid
+
+
+_pgid_wide_for_throwaway_models()
+
+
 @pytest.fixture(autouse=True)
 def _forget_triggers_registered_by_the_test():
     # A test building a model of its own (isolate_apps, a fresh uuid name) registers its triggers in
