@@ -378,7 +378,6 @@ def _erase_of(holder, holder_models):
 
 
 def _erase(rows):
-    """Deletes `rows` and, where their model is tracked, their history."""
-    if "pgh_event_model" in dir(rows.model):
-        rows.model.pgh_event_model._default_manager.filter(pgh_obj__in=rows).delete()
+    """Deletes `rows` and their history - a grant or overrides model has one, as isik.E017 holds it to."""
+    rows.model.pgh_event_model._default_manager.filter(pgh_obj__in=rows).delete()
     rows.delete()
