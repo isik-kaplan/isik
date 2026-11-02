@@ -6,7 +6,6 @@ import pgtrigger
 import pytest
 from django.apps import apps
 from django.db import DatabaseError
-from django.utils import timezone
 
 from isik.django.apps.common.checks import Check, CheckOption
 from isik.django.apps.notifications import checks, conf, kinds
@@ -272,7 +271,7 @@ class TestUnmirroredKinds:
             NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).delete()
 
     def test_a_declared_kind_with_no_row(self, unmirrored):
-        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(status="retired")
 
         assert checks.unmirrored_problems(["default"]) == [
             self.MESSAGE.format(kind="parcel_flagged"),
@@ -306,10 +305,11 @@ class TestUnmirroredKinds:
 @pytest.mark.django_db
 class TestRetiredKinds:
     def test_a_declared_kind_the_database_retired(self):
-        NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).update(status="retired")
         NoticeKindPolicy.objects.create(
-            name="undeclared", policy="mandatory", scope="single_partition", source="trigger", retired_at=timezone.now()
+            name="undeclared", policy="mandatory", scope="single_partition", source="trigger"
         )
+        NoticeKindPolicy.objects.filter(name="undeclared").update(status="retired")
 
         assert retired_problems(["default"]) == [
             "parcel_flagged is declared, and retired - its trigger writes nothing. Remove its declaration.",
@@ -317,7 +317,7 @@ class TestRetiredKinds:
         ]
 
     def test_without_databases_nothing_is_read(self):
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
 
         assert retired_problems(None) == []
 
@@ -330,7 +330,7 @@ class TestRetiredKinds:
         assert retired_problems(["default"]) == []
 
     def test_the_check_reports_them_as_warnings(self, settings):
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
         settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "COLOR": "red"}
 
         messages = checks.notifications_can_work(app_configs=None, databases=["default"])

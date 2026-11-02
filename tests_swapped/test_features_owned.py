@@ -162,8 +162,7 @@ def test_grants_loaded_with_the_organizations_are_used(monkeypatch, django_asser
         "ends later": dict(starts_at=now - timedelta(days=1), expires_at=now + timedelta(days=1)),
         "starts later": dict(starts_at=now + timedelta(days=1)),
         "ended now": dict(starts_at=now - timedelta(days=1), expires_at=now),
-        "revoked now": dict(starts_at=now - timedelta(days=1), revoked_at=now),
-        "revoked later": dict(starts_at=now - timedelta(days=1), revoked_at=now + timedelta(days=1)),
+        "revoked": dict(starts_at=now - timedelta(days=1)),
     }
     for name, terms in held.items():
         owned.FeatureGrant.objects.create(
@@ -172,6 +171,7 @@ def test_grants_loaded_with_the_organizations_are_used(monkeypatch, django_asser
             source="manual",
             **terms,
         )
+    owned.FeatureGrant.objects.filter(holder__name="revoked").update(status="revoked")
     owned.Organization.objects.create(name="none")
     monkeypatch.setattr(timezone, "now", lambda: now)
 
@@ -186,8 +186,7 @@ def test_grants_loaded_with_the_organizations_are_used(monkeypatch, django_asser
         "ends later": True,
         "starts later": False,
         "ended now": False,
-        "revoked now": False,
-        "revoked later": True,
+        "revoked": False,
         "none": False,
     }
 
@@ -200,3 +199,16 @@ def test_a_write_forgets_the_grants_loaded_with_the_organization(acme):
 
     assert has_feature(loaded, "webhooks") is True
     assert "feature_grants" not in loaded._prefetched_objects_cache
+
+
+def test_isiks_own_histories_are_keyed_to_the_projects_models():
+    # Swapped out with isik's models, and keyed as a key to a swappable model is - so nothing wants migrating.
+    from django.apps import apps
+
+    for own, theirs in (
+        ("isik_features.FeatureGrantEvent", owned.FeatureGrant),
+        ("isik_notifications.NoticeKindPolicyEvent", owned.KindPolicy),
+    ):
+        event = apps.get_model(own)
+        assert event._meta.swapped
+        assert event._meta.get_field("pgh_obj").related_model is theirs

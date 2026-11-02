@@ -55,7 +55,7 @@ from isik.django.apps.notifications.audience.swapping import (
     get_inbox_item_model,
     get_subscription_model,
 )
-from isik.django.apps.notifications.choices import Policy
+from isik.django.apps.notifications.choices import KindStatus, Policy
 from isik.django.apps.notifications.kinds import kinds, rendered, text_of
 from isik.django.apps.notifications.pipeline import RetryRefused, gets, is_forced, retry_delivery
 from isik.django.apps.notifications.swapping import (
@@ -107,7 +107,7 @@ class KindField(serializers.SlugRelatedField):
         super().__init__(slug_field="name", **kwargs)
 
     def get_queryset(self):
-        return get_kind_policy_model()._default_manager.filter(retired_at=None)
+        return get_kind_policy_model()._default_manager.filter(status=KindStatus.ACTIVE)
 
 
 def _data(item):
@@ -485,7 +485,7 @@ class NoticeKindViewSet(BaseViewSet):
 
     def get_queryset(self):
         """The kinds declared and not retired - what a schema types the `{kind}` path by, and `visible()` reads."""
-        return get_kind_policy_model()._default_manager.filter(retired_at=None, name__in=list(kinds()))
+        return get_kind_policy_model()._default_manager.filter(status=KindStatus.ACTIVE, name__in=list(kinds()))
 
     def visible(self):
         declared = kinds()

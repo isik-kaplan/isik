@@ -22,6 +22,7 @@ def table(name):
     return type("Meta", (), {"db_table": f"owned_{name}"})
 
 
+@track_events()
 class KindPolicy(bases.AbstractNoticeKindPolicy):
     Meta = table("kind_policy")
 
@@ -137,6 +138,7 @@ class Feature(features.AbstractFeature):
     Meta = table("feature")
 
 
+@track_events()
 class FeatureGrant(features.AbstractFeatureGrant):
     holder = models.ForeignKey(
         Organization,

@@ -2,7 +2,6 @@
 
 import uuid
 from contextlib import contextmanager
-from datetime import timedelta
 
 import pghistory
 import pgtrigger
@@ -151,7 +150,7 @@ class TestRaisingANotice:
             raise_notice("parcel_reminder", variant="hourly")
 
     def test_not_a_retired_kind(self):
-        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(status="retired")
 
         with pytest.raises(ImproperlyConfigured, match="^parcel_reminder is retired.$"):
             raise_notice("parcel_reminder")
@@ -519,9 +518,8 @@ class TestTheMirror:
 
     def test_it_brings_a_row_up_to_date_and_deletes_none(self, monkeypatch):
         NoticeKindPolicy.objects.filter(name="parcel_shipped").update(policy="mandatory", variants=["x"])
-        retired_at = timezone.now() - timedelta(days=1)
         NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
-        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(retired_at=retired_at)
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(status="retired")
 
         rows = mirror_kinds()
 
@@ -529,7 +527,7 @@ class TestTheMirror:
         shipped = NoticeKindPolicy.objects.get(name="parcel_shipped")
         assert (shipped.policy, shipped.variants) == ("default_on", [])
         assert NoticeKindPolicy.objects.filter(name="gone").exists()
-        assert NoticeKindPolicy.objects.get(name="parcel_reminder").retired_at == retired_at
+        assert NoticeKindPolicy.objects.get(name="parcel_reminder").status == "retired"
         assert str(shipped) == "parcel_shipped"
 
 

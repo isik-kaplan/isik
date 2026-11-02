@@ -7,6 +7,7 @@ import pgtrigger
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
+from django.db.models.fields.related import lazy_related_operation
 from django.utils.module_loading import import_string
 from pghistory.core import DeleteEvent, InsertEvent, UpdateEvent
 from pghistory.middleware import HistoryMiddleware
@@ -281,6 +282,25 @@ def track_events(*, trackers=None, condition=None, context_fields=(), append_onl
         return track_history(*trackers, context_fields=context_fields, append_only=append_only, **options)(cls)
 
     return track_model_history
+
+
+def history_swapped_with(tracked, setting):
+    """
+    Keys `tracked`'s history to the model the swappable `setting` names - as a key to a swappable model is written -
+    where its history is swapped out with it. pghistory keys an event model to the very class it tracks, which a
+    project swapping that class out can't relate to its setting: its migrations would want the key changed, for a
+    table it never creates.
+    """
+    event = tracked.pgh_event_model
+    if event._meta.swapped:
+        key = event._meta.get_field("pgh_obj")
+
+        def key_to(event, swapped_in):
+            key.remote_field.model = swapped_in
+            key.__dict__.pop("related_model", None)
+
+        lazy_related_operation(key_to, event, getattr(settings, setting))
+    return tracked
 
 
 def event_model_for(model):

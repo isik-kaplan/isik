@@ -90,7 +90,7 @@ def test_nothing_installed_names_isiks_tables():
         functions = cursor.fetchall()
         cursor.execute("SELECT indexname FROM pg_indexes WHERE indexdef ~ %s", [rf"\m({pattern})\M"])
         indexes = cursor.fetchall()
-    assert (len(ISIKS_TABLES), functions, indexes) == (14, [], [])
+    assert (len(ISIKS_TABLES), functions, indexes) == (15, [], [])
 
 
 def test_the_checks_have_nothing_to_say():

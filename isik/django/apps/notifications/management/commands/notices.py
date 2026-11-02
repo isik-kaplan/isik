@@ -1,10 +1,10 @@
 import json
 
 from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.notifications import pipeline
+from isik.django.apps.notifications.choices import KindStatus
 from isik.django.apps.notifications.kinds import kinds
 from isik.django.apps.notifications.swapping import get_kind_policy_model
 
@@ -31,11 +31,13 @@ def describe(kind):
 def drift():
     """{"unmirrored": [...], "undeclared": [...], "retired": [...]} - where the declarations and the mirror differ."""
     declared = set(kinds())
-    rows = dict(get_kind_policy_model().objects.values_list("name", "retired_at"))
+    rows = dict(get_kind_policy_model().objects.values_list("name", "status"))
     return {
         "unmirrored": sorted(declared - set(rows)),
-        "undeclared": sorted(name for name, retired_at in rows.items() if name not in declared and retired_at is None),
-        "retired": sorted(name for name, retired_at in rows.items() if name in declared and retired_at is not None),
+        "undeclared": sorted(
+            name for name, status in rows.items() if name not in declared and status == KindStatus.ACTIVE
+        ),
+        "retired": sorted(name for name, status in rows.items() if name in declared and status == KindStatus.RETIRED),
     }
 
 
@@ -117,7 +119,7 @@ class Command(BaseCommand):
 
     def _retire(self, name):
         policies = get_kind_policy_model().objects
-        retired = policies.filter(name=name, retired_at__isnull=True).update(retired_at=timezone.now())
+        retired = policies.filter(name=name, status=KindStatus.ACTIVE).update(status=KindStatus.RETIRED)
         if not retired:
             raise CommandError(_("No unretired kind is called %(kind)s.") % {"kind": name})
         self.stdout.write(_("Retired %(kind)s.") % {"kind": name})

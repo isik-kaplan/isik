@@ -5,7 +5,8 @@ inherits:
 - `AbstractFeature` - the catalog of declared features: a row outlives a removed declaration, so its grants keep
   naming something. Refuses a delete and a TRUNCATE.
 - `AbstractFeatureGrant` - a feature granted to a holder from a source, between two times. Append-only: never
-  deleted or truncated, and an update may only set `revoked_at` once - a grant after a revoke is a new row.
+  deleted or truncated, and an update may only revoke it, once - a grant after a revoke is a new row. When it was
+  revoked is its history's to say, which a check requires it to have.
 - `AbstractOverrides` - the project's own row per holder: what each setting is forced to (and by whom, and why),
   and the holder's own value where it lives here. Its columns come from the declared settings; history-tracking
   it is the project's, and a check holds it to that.
@@ -58,6 +59,13 @@ class AbstractFeature(UUIDPrimaryKeyModel):
         return self.name
 
 
+class GrantStatus(models.TextChoices):
+    """Whether a grant stands - apart from its term: an active grant may not be in force yet, or any longer."""
+
+    ACTIVE = "active", gettext_lazy("active")
+    REVOKED = "revoked", gettext_lazy("revoked")
+
+
 class AbstractFeatureGrant(models.Model):
     """A feature granted to a holder, from a source - in force from `starts_at` until it expires or is revoked."""
 
@@ -105,11 +113,13 @@ class AbstractFeatureGrant(models.Model):
         help_text=gettext_lazy("When it ends, or none for never."),
         db_comment="When the grant ends, or null for never.",
     )
-    revoked_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text=gettext_lazy("When it was revoked, or none."),
-        db_comment="When the grant was revoked - written once, or null.",
+    status = models.CharField(
+        max_length=16,
+        choices=GrantStatus.choices,
+        default=GrantStatus.ACTIVE,
+        db_default=GrantStatus.ACTIVE,
+        help_text=gettext_lazy("Whether it stands, or was revoked."),
+        db_comment="active, or revoked - once, never undone. When it was revoked is in the grant's history.",
     )
     created_at = models.DateTimeField(
         db_default=Now(),
@@ -187,16 +197,22 @@ def _rules(sender, **kwargs):
             sender,
             pgtrigger.Protect(name="protect_grant_delete", operation=pgtrigger.Delete),
             ProtectTruncate(name="protect_grant_truncate"),
-            # Only revoked_at may change, and only from null: a revoke is written once, never undone or redated.
+            # Only its status may change, and only to revoked: a revoke is written once and never undone. Nor is a grant
+            # written revoked - its history would have no revoke to say when.
             pgtrigger.Protect(
                 name="protect_grant_revoked",
                 operation=pgtrigger.Update,
-                condition=pgtrigger.Q(old__revoked_at__isnull=False),
+                condition=pgtrigger.Q(old__status=GrantStatus.REVOKED),
+            ),
+            pgtrigger.Protect(
+                name="protect_grant_written_revoked",
+                operation=pgtrigger.Insert,
+                condition=pgtrigger.Q(new__status=GrantStatus.REVOKED),
             ),
             pgtrigger.Protect(
                 name="protect_grant_terms",
                 operation=pgtrigger.Update,
-                condition=pgtrigger.AnyChange(exclude=["revoked_at"]),
+                condition=pgtrigger.AnyChange(exclude=["status"]),
             ),
         )
     if issubclass(sender, AbstractOverrides):

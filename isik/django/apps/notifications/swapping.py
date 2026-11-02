@@ -22,6 +22,9 @@ EMAIL_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_EMAIL_DELIVERY_MODEL"
 INBOX_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL"
 PUSH_DELIVERY_MODEL = "ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL"
 DELIVERY_ATTEMPT_MODEL = "ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL"
+# Not a project's to set: the history of isik's kind policy model is swapped out with it - isik's own while
+# ISIK_NOTIFICATIONS_KIND_POLICY_MODEL names isik's, the project's policy model once it's swapped.
+KIND_POLICY_HISTORY_MODEL = "ISIK_NOTIFICATIONS_KIND_POLICY_HISTORY_MODEL"
 
 DEFAULTS = {
     KIND_POLICY_MODEL: "isik_notifications.NoticeKindPolicy",
@@ -41,6 +44,12 @@ def set_defaults():
     for name, default in DEFAULTS.items():
         if not hasattr(settings, name):
             setattr(settings, name, default)
+    policies = getattr(settings, KIND_POLICY_MODEL)
+    setattr(
+        settings,
+        KIND_POLICY_HISTORY_MODEL,
+        "isik_notifications.NoticeKindPolicyEvent" if policies == DEFAULTS[KIND_POLICY_MODEL] else policies,
+    )
 
 
 def model_name(setting):

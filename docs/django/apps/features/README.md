@@ -44,9 +44,14 @@ revoke(org, BETA)                         # every grant of it not revoked yet; r
 has_feature(org, WEBHOOKS)                # in force now: started, not expired, not revoked
 ```
 
-Grants are a ledger. A database trigger refuses a delete, a TRUNCATE and every update except setting
-`revoked_at` where it was null - a revoke is written once, never undone or redated; a grant after it is a
-new row. `has_feature()` and `effective()` cache what a holder holds on the holder object, so a list view
+Grants are a ledger. A database trigger refuses a delete, a TRUNCATE and every update except a revoke -
+`status` from `active` to `revoked`, once, never undone - and a grant written already revoked; a grant after
+a revoke is a new row. When it was revoked is its history's to say: the grant model is tracked
+(`@track_events()`, isik's own already is), and that history is the only record of the moment. A read about
+now tests `status`, a column; the boundary sweep, asking what a holder had at a moment past, reads the revoke
+from history (`revoked_after()`), and `features_at(holder, when)` does for any moment but now. `isik.E017`
+refuses a grant model with no history, one whose history can be edited or leaves `status` out, and one whose
+update events don't record a change of it. `has_feature()` and `effective()` cache what a holder holds on the holder object, so a list view
 pays one lookup; `forget(holder)` drops it, as every write here does. Each half is asked for only when a
 read needs it - a setting with no feature never asks for the grants - and not at all when the caller
 loaded it with the holder:
@@ -203,7 +208,8 @@ Adding a setting is a `makemigrations` in your app. A row is made on the holder'
 every setting is its default.
 
 `isik.E017` refuses an overrides model that isn't tracked - who forced a setting, when and why is its
-history - and a holder key that cascades.
+history - a grant model whose history can't say when each grant was revoked, and a holder key that cascades.
+A grant model of your own is tracked like the overrides one: `@track_events()` on it.
 
 ### What a setting is: `effective()`
 

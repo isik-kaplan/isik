@@ -6,8 +6,9 @@ from django.conf import settings
 from django.db import models
 
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.history import history_swapped_with, track_events
 from isik.django.apps.features.bases import ERASE, AbstractFeature, AbstractFeatureGrant, AbstractSweepCursor
-from isik.django.apps.features.swapping import FEATURE_MODEL, GRANT_MODEL, SWEEP_MODEL
+from isik.django.apps.features.swapping import FEATURE_MODEL, GRANT_HISTORY_MODEL, GRANT_MODEL, SWEEP_MODEL
 
 
 class Feature(AbstractFeature):
@@ -17,6 +18,8 @@ class Feature(AbstractFeature):
         verbose_name = gettext_lazy("feature")
 
 
+# Its history says when each grant was revoked - swapped out with it.
+@track_events(meta={"swappable": GRANT_HISTORY_MODEL})
 class FeatureGrant(AbstractFeatureGrant):
     holder = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -30,6 +33,9 @@ class FeatureGrant(AbstractFeatureGrant):
         db_table = "isik_feature_grant"
         swappable = GRANT_MODEL
         verbose_name = gettext_lazy("feature grant")
+
+
+history_swapped_with(FeatureGrant, GRANT_MODEL)
 
 
 class SweepCursor(AbstractSweepCursor):

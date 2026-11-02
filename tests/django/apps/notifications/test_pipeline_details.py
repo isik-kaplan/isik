@@ -112,7 +112,7 @@ class TestTheMirrorsDatabase:
 
 class TestReadingRetiredKindsFromEachDatabase:
     def test_each_database_is_read_and_a_broken_one_skipped(self, monkeypatch):
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
         real = NoticeKindPolicy.objects.using
 
         def using(alias):
@@ -610,7 +610,7 @@ class TestTheCommandExactly:
     def test_retiring_one_retires_it_alone(self):
         run_notices("--retire", "parcel_shipped")
 
-        assert list(NoticeKindPolicy.objects.filter(retired_at__isnull=False).values_list("name", flat=True)) == [
+        assert list(NoticeKindPolicy.objects.filter(status="retired").values_list("name", flat=True)) == [
             "parcel_shipped"
         ]
 

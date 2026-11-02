@@ -156,8 +156,9 @@ attempt keeps where the email went (`{"to": address}`), never the message - no r
 
 ## Retiring a kind
 
-Nothing is deleted: notices outlive their kind. `manage.py notices --retire <kind>` stamps the policy
-row's `retired_at` - the trigger then writes nothing, `raise_notice()` refuses it, and `isik.W004`
+Nothing is deleted: notices outlive their kind. `manage.py notices --retire <kind>` sets the policy
+row's `status` to `retired` - once, never undone; when is in the row's history (isik's policy model is
+tracked; track one of your own the same way) - and the trigger then writes nothing, `raise_notice()` refuses it, and `isik.W004`
 reports a kind still declared after it was retired, so its declaration gets removed. A policy row no
 longer declared is listed by `manage.py notices`.
 

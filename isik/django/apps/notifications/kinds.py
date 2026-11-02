@@ -45,7 +45,7 @@ from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext as _
 from isik.common.utils.exemptions import Exemption
 from isik.django.apps.notifications import conf, swapping
-from isik.django.apps.notifications.choices import Policy, Scope, Source
+from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, Source
 
 
 class SensitiveSnapshotField(
@@ -414,18 +414,18 @@ def _retired(name):
     each request raising it wait for the one before to commit.
     """
     policy = swapping.get_kind_policy_model()
-    table, kind, retired_at = (
+    table, kind, status = (
         connection.ops.quote_name(identifier)
         for identifier in (
             policy._meta.db_table,
             policy._meta.get_field("name").column,
-            policy._meta.get_field("retired_at").column,
+            policy._meta.get_field("status").column,
         )
     )
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT {retired_at} FROM {table} WHERE {kind} = %s FOR SHARE""", [name])
+        cursor.execute(f"""SELECT {status} FROM {table} WHERE {kind} = %s FOR SHARE""", [name])
         row = cursor.fetchone()
-    return row is not None and row[0] is not None
+    return row is not None and row[0] == KindStatus.RETIRED
 
 
 def matching_variant(queryset, variant):

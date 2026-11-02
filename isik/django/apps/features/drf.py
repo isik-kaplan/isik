@@ -32,6 +32,7 @@ from isik.common.utils.exemptions import makes_own_exemptions
 from isik.django.apps.common.db.concurrency import concurrency_etag
 from isik.django.apps.common.forcing import force_sources
 from isik.django.apps.features import conf, declarations
+from isik.django.apps.features.bases import GrantStatus
 from isik.django.apps.features.guards import checks_feature
 from isik.django.apps.features.operations import SettingInvalid, SettingRefused, set_setting
 from isik.django.apps.features.resolution import effective, has_feature, in_holder_schema, overrides_of, own_value
@@ -129,7 +130,7 @@ class FeatureViewSet(BaseViewSet):
             grants = list(
                 get_grant_model()
                 ._default_manager.select_related("feature")
-                .filter(holder=holder, revoked_at__isnull=True)
+                .filter(holder=holder, status=GrantStatus.ACTIVE)
                 .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now()))
                 .order_by("starts_at")
             )

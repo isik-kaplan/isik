@@ -1,3 +1,4 @@
+import types
 import uuid
 
 import pghistory
@@ -669,3 +670,35 @@ class TestTrackHistory:
 
         assert self.triggers_of(track_history()(_fresh_model("Loose"))).isdisjoint(APPEND_ONLY_TRIGGERS)
         assert set(APPEND_ONLY_TRIGGERS) <= self.triggers_of(track_history(append_only=True)(_fresh_model("Kept")))
+
+
+class TestHistorySwappedWith:
+    @staticmethod
+    def tracked(swapped):
+        key = types.SimpleNamespace(remote_field=types.SimpleNamespace(model="isiks"), related_model="cached")
+        meta = types.SimpleNamespace(swapped=swapped, get_field=lambda name: key if name == "pgh_obj" else None)
+        return types.SimpleNamespace(pgh_event_model=types.SimpleNamespace(_meta=meta)), key
+
+    def test_a_history_in_use_keeps_its_key(self, monkeypatch):
+        tracked, key = self.tracked(swapped=None)
+        monkeypatch.setattr(history_module, "lazy_related_operation", lambda *args: pytest.fail("not swapped"))
+
+        assert history_module.history_swapped_with(tracked, "SOME_MODEL") is tracked
+        assert (key.remote_field.model, key.related_model) == ("isiks", "cached")
+
+    def test_one_swapped_out_is_keyed_to_the_model_its_setting_names(self, monkeypatch, settings):
+        tracked, key = self.tracked(swapped="owned.Thing")
+        settings.SOME_MODEL = "owned.Thing"
+        asked = []
+        monkeypatch.setattr(history_module, "lazy_related_operation", lambda *args: asked.append(args))
+
+        assert history_module.history_swapped_with(tracked, "SOME_MODEL") is tracked
+
+        ((key_to, event, named),) = asked
+        assert (event, named) == (tracked.pgh_event_model, "owned.Thing")
+        key_to(event, "the swapped-in model")
+        assert key.remote_field.model == "the swapped-in model"
+        assert "related_model" not in vars(key)
+        # Keyed again with nothing cached to forget - as before anything asked what it's keyed to.
+        key_to(event, "another")
+        assert key.remote_field.model == "another"

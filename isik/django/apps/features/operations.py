@@ -17,7 +17,7 @@ from django.utils import timezone
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.forcing import checked_force, checked_release
 from isik.django.apps.features import conf, declarations
-from isik.django.apps.features.bases import ERASE
+from isik.django.apps.features.bases import ERASE, GrantStatus
 from isik.django.apps.features.resolution import (
     effective,
     features_at,
@@ -26,6 +26,7 @@ from isik.django.apps.features.resolution import (
     in_holder_schema,
     live_grants,
     resolved,
+    revoked_after,
 )
 from isik.django.apps.features.signals import feature_changed, setting_changed
 from isik.django.apps.features.swapping import get_feature_model, get_grant_model, get_overrides_model, get_sweep_model
@@ -139,8 +140,8 @@ def revoke(holder, feature):
         before = held_features(holder)
         revoked = (
             get_grant_model()
-            ._default_manager.filter(holder=holder, feature__name=name, revoked_at__isnull=True)
-            .update(revoked_at=timezone.now())
+            ._default_manager.filter(holder=holder, feature__name=name, status=GrantStatus.ACTIVE)
+            .update(status=GrantStatus.REVOKED)
         )
         forget(holder)
         _tell_crossing(holder, name, before, held_features(holder))
@@ -264,7 +265,8 @@ def _sweep(now):
         for grant in get_grant_model()
         ._default_manager.select_related("feature")
         .filter(
-            models.Q(revoked_at__isnull=True) | models.Q(revoked_at__gt=models.F(field)),
+            # Standing, or revoked only after this boundary - its history says when.
+            models.Q(status=GrantStatus.ACTIVE) | models.Exists(revoked_after(models.OuterRef(field))),
             **{f"{field}__gt": since, f"{field}__lte": now},
         )
         .filter(**{f"{field}__gt": models.F("created_at")})
@@ -307,7 +309,7 @@ def _next_boundary(now):
     """The earliest start or end after `now` of a grant not revoked - as the sweep reads one - else None."""
     found = (
         get_grant_model()
-        ._default_manager.filter(revoked_at__isnull=True)
+        ._default_manager.filter(status=GrantStatus.ACTIVE)
         .aggregate(
             **{
                 field: models.Min(

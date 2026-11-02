@@ -6,6 +6,7 @@ swapped out by its `ISIK_NOTIFICATIONS_*_MODEL` setting, for a project owning it
 """
 
 from isik._internal.translation import gettext_lazy
+from isik.django.apps.common.db.history import history_swapped_with, track_events
 from isik.django.apps.notifications.bases import (
     AbstractDelivery,
     AbstractDeliveryAttempt,
@@ -18,13 +19,19 @@ from isik.django.apps.notifications.bases import (
     AbstractWebhookDelivery,
 )
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
+from isik.django.apps.notifications.swapping import KIND_POLICY_HISTORY_MODEL, KIND_POLICY_MODEL
 
 
+# Its history says when a kind was retired - swapped out with it.
+@track_events(meta={"swappable": KIND_POLICY_HISTORY_MODEL})
 class NoticeKindPolicy(AbstractNoticeKindPolicy):
     class Meta(AbstractNoticeKindPolicy.Meta):
         db_table = "isik_notice_kind_policy"
         swappable = "ISIK_NOTIFICATIONS_KIND_POLICY_MODEL"
         verbose_name = gettext_lazy("notice kind")
+
+
+history_swapped_with(NoticeKindPolicy, KIND_POLICY_MODEL)
 
 
 class Notice(AbstractNotice):

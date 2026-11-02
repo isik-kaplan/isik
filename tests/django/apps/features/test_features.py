@@ -3,6 +3,7 @@
 import gc
 from datetime import timedelta
 
+import pgtrigger
 import pytest
 from celery import Celery
 from django.core.exceptions import ImproperlyConfigured
@@ -32,7 +33,14 @@ from isik.django.apps.features.operations import (
     set_setting,
     sweep_boundaries,
 )
-from isik.django.apps.features.resolution import Effective, effective, effective_expression, has_feature, held_features
+from isik.django.apps.features.resolution import (
+    Effective,
+    effective,
+    effective_expression,
+    features_at,
+    has_feature,
+    held_features,
+)
 from tests.testapp.models import EmailUser, UserOverrides
 
 
@@ -182,13 +190,13 @@ class TestResolving:
             "ends_later": dict(starts_at=now - timedelta(days=1), expires_at=now + timedelta(days=1)),
             "starts_later": dict(starts_at=now + timedelta(days=1)),
             "ended_now": dict(starts_at=now - timedelta(days=1), expires_at=now),
-            "revoked_now": dict(starts_at=now - timedelta(days=1), revoked_at=now),
-            "revoked_later": dict(starts_at=now - timedelta(days=1), revoked_at=now + timedelta(days=1)),
+            "revoked": dict(starts_at=now - timedelta(days=1)),
         }
         holders, webhooks = {}, Feature.objects.get(name="webhooks")
         for name, made in terms.items():
             holders[name] = EmailUser.objects.create(username=name, email=f"{name}@example.com")
             FeatureGrant.objects.create(holder=holders[name], feature=webhooks, source="manual", **made)
+        FeatureGrant.objects.filter(holder=holders["revoked"]).update(status="revoked")
         loaded = {name: with_grants_loaded(EmailUser.objects.get(pk=holder.pk)) for name, holder in holders.items()}
         monkeypatch.setattr(timezone, "now", lambda: now)
 
@@ -200,8 +208,7 @@ class TestResolving:
             "ends_later": True,
             "starts_later": False,
             "ended_now": False,
-            "revoked_now": False,
-            "revoked_later": True,
+            "revoked": False,
         }
 
     def test_grants_loaded_without_their_features_are_read_again_once(self, alice, django_assert_num_queries):
@@ -299,11 +306,11 @@ class TestWriting:
     def test_a_grant_records_its_terms(self, alice):
         made = grant(alice, "webhooks", source="subscription", reference="inv-7")
 
-        assert (made.feature.name, made.source, made.reference, made.revoked_at) == (
+        assert (made.feature.name, made.source, made.reference, made.status) == (
             "webhooks",
             "subscription",
             "inv-7",
-            None,
+            "active",
         )
 
     def test_revoking_counts_what_it_revoked(self, alice):
@@ -434,6 +441,86 @@ class TestTelling:
             ("setting", alice.pk, "theme", "light", "dark"),
             ("setting", alice.pk, "session_length", timedelta(hours=8), timedelta(hours=1)),
         ]
+
+
+def revoked_at(grant, when):
+    """Moves the revoke in `grant`'s history to `when` - a test can't wait for one to come about later."""
+    events = FeatureGrant.pgh_event_model
+    with pgtrigger.ignore(f"{events._meta.label}:append_only"):
+        events.objects.filter(pgh_obj=grant, status="revoked").update(pgh_created_at=when)
+
+
+class TestRevokingInHistory:
+    def test_a_revoke_is_its_status_and_a_moment_in_its_history(self, alice):
+        made = grant(alice, "beta", source="manual")
+
+        assert revoke(alice, "beta") == 1
+
+        made.refresh_from_db()
+        assert made.status == "revoked"
+        (revoked,) = FeatureGrant.pgh_event_model.objects.filter(pgh_obj=made, status="revoked")
+        assert revoked.pgh_label == "update"
+        assert revoke(alice, "beta") == 0
+
+    def test_now_its_status_says(self, alice, django_assert_num_queries):
+        grant(alice, "beta", source="manual")
+        revoke(alice, "beta")
+
+        with CaptureQueriesContext(connection) as queries:
+            assert features_at(alice) == set()
+        # The column, not the history: now never reads it.
+        assert FeatureGrant.pgh_event_model._meta.db_table not in queries.captured_queries[0]["sql"]
+
+    def test_another_moment_reads_when_from_its_history(self, alice):
+        now = timezone.now()
+        made = grant(alice, "beta", source="manual", starts_at=now - timedelta(days=2))
+        revoke(alice, "beta")
+        revoked_at(made, now - timedelta(days=1))
+
+        assert features_at(alice, now - timedelta(days=1, hours=1)) == {"beta"}
+        assert features_at(alice, now - timedelta(days=1)) == set()
+        assert features_at(alice, now) == set()
+        assert features_at(alice, now + timedelta(days=1)) == set()
+
+    def test_each_grant_is_read_by_its_own_revoke(self, alice):
+        # Another grant's revoke, later, says nothing of this one's.
+        now = timezone.now()
+        early = grant(alice, "beta", source="manual", starts_at=now - timedelta(days=3))
+        late = grant(alice, "webhooks", source="manual", starts_at=now - timedelta(days=3))
+        revoke(alice, "beta")
+        revoke(alice, "webhooks")
+        revoked_at(early, now - timedelta(days=2))
+        revoked_at(late, now - timedelta(hours=1))
+
+        assert features_at(alice, now - timedelta(days=1)) == {"webhooks"}
+
+    def test_a_standing_grant_at_another_moment(self, alice):
+        now = timezone.now()
+        grant(alice, "beta", source="manual", starts_at=now - timedelta(days=2))
+
+        assert features_at(alice, now - timedelta(days=1)) == {"beta"}
+
+    def test_the_sweep_tells_a_boundary_its_grant_was_revoked_after(self, alice, heard):
+        now = timezone.now()
+        sweep_boundaries(now)
+        made = grant(alice, "beta", source="trial", expires_at=now + timedelta(hours=1))
+        revoke(alice, "beta")
+        revoked_at(made, now + timedelta(hours=2))
+        heard.clear()
+
+        assert sweep_boundaries(now + timedelta(hours=3)) == 1
+        assert heard == [("feature", alice.pk, "beta", False)]
+
+    def test_and_not_one_it_was_revoked_before(self, alice, heard):
+        now = timezone.now()
+        sweep_boundaries(now)
+        made = grant(alice, "beta", source="trial", expires_at=now + timedelta(hours=2))
+        revoke(alice, "beta")
+        revoked_at(made, now + timedelta(hours=1))
+        heard.clear()
+
+        assert sweep_boundaries(now + timedelta(hours=3)) == 0
+        assert heard == []
 
 
 class TestTheSweep:
@@ -697,9 +784,16 @@ class TestTheGrantLedger:
 
         with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot update"):
             FeatureGrant.objects.filter(pk=made.pk).update(source="trial")
-        FeatureGrant.objects.filter(pk=made.pk).update(revoked_at=timezone.now())
+        FeatureGrant.objects.filter(pk=made.pk).update(status="revoked")
         with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot update"):
-            FeatureGrant.objects.filter(pk=made.pk).update(revoked_at=timezone.now())
+            FeatureGrant.objects.filter(pk=made.pk).update(status="active")
+
+    def test_a_grant_is_never_written_revoked(self, alice):
+        # Its history would hold no revoke to say when.
+        with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot insert"):
+            FeatureGrant.objects.create(
+                holder=alice, feature=Feature.objects.get(name="webhooks"), source="manual", status="revoked"
+            )
 
     def test_a_feature_row_outlives_its_declaration(self):
         assert set(Feature.objects.values_list("name", flat=True)) >= set(declarations.features)

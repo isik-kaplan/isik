@@ -5,11 +5,14 @@ and its share of `isik.E016` (`Check.LABELS`): a feature or setting that can't s
 
 import importlib.util
 
+import pghistory.trigger
+import pgtrigger
 from django.core.checks import Error
 from django.db import models
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.common.checks import Check, isik_check
+from isik.django.apps.common.db.history import APPEND_ONLY_TRIGGERS
 from isik.django.apps.features import conf, declarations
 from isik.django.apps.features.bases import AbstractOverrides
 from isik.django.apps.features.swapping import get_grant_model, get_holder_model, get_overrides_model
@@ -62,6 +65,7 @@ def setting_problems():
                 "holder": get_holder_model()._meta.label,
             }
         )
+    problems += grant_history_problems(grants)
     for model in (grants, overrides):
         if model is not None and model._meta.get_field("holder").remote_field.on_delete is models.CASCADE:
             problems.append(
@@ -72,6 +76,56 @@ def setting_problems():
                 % {"model": model._meta.label}
             )
     return problems
+
+
+def grant_history_problems(grants):
+    """
+    What keeps `grants`' history from saying when each grant was revoked - the only record of it: none, one that
+    can be edited, or one that doesn't record a change of status.
+    """
+    label = grants._meta.label
+    event = getattr(grants, "pgh_event_model", None)
+    if event is None:
+        return [
+            _(
+                "%(model)s has no history - it's what says when each grant was revoked, and the sweep reads it. "
+                "Track it with @track_events()."
+            )
+            % {"model": label}
+        ]
+    problems = []
+    if "status" not in {field.name for field in event._meta.fields}:
+        problems.append(_("%(model)s's history leaves out status - track it.") % {"model": label})
+    triggers = {trigger.name for trigger in getattr(event._meta, "triggers", [])}
+    if not set(APPEND_ONLY_TRIGGERS) <= triggers:
+        problems.append(
+            _(
+                "%(model)s's history can be edited - when a grant was revoked has to stay as written. Keep it "
+                "append-only."
+            )
+            % {"model": label}
+        )
+    if not any(_records_status(trigger) for model, trigger in pgtrigger.registered() if model is grants):
+        problems.append(
+            _("%(model)s's history records no update changing status - a revoke would leave no time.")
+            % {"model": label}
+        )
+    return problems
+
+
+def _records_status(trigger):
+    """Whether `trigger` is a history event on update that a change of status alone fires."""
+    if not isinstance(trigger, pghistory.trigger.Event) or "UPDATE" not in str(trigger.operation):
+        return False
+    condition = trigger.condition
+    if condition is None:
+        return True
+    return (
+        isinstance(condition, pgtrigger.AnyChange)
+        and not condition._negated
+        and (not condition.fields or "status" in condition.fields)
+        and "status" not in condition.exclude
+    )
 
 
 def declaration_problems():

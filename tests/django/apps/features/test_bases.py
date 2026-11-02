@@ -146,5 +146,6 @@ class TestTheLedgerTriggers:
             "protect_grant_delete",
             "protect_grant_truncate",
             "protect_grant_revoked",
+            "protect_grant_written_revoked",
             "protect_grant_terms",
         ]

@@ -200,7 +200,7 @@ def test_a_broken_ledger_raises_only_what_send_raised(dispatched, monkeypatch):
 
 
 def test_a_retired_kind_is_sent_and_not_recorded(dispatched, caplog):
-    NoticeKindPolicy.objects.filter(name="parcel_receipt").update(retired_at=timezone.now())
+    NoticeKindPolicy.objects.filter(name="parcel_receipt").update(status="retired")
     send = Sender()
 
     with caplog.at_level(logging.WARNING, logger="isik.django.apps.notifications.pipeline"):
@@ -315,6 +315,6 @@ class TestOneEmailAcrossItsTries:
 
     def test_a_retired_kind_still_records_a_retry_of_an_email_recorded_before(self, dispatched):
         record_email(PARCEL_RECEIPT, address="a@example.com", send=Sender(), key="t")
-        NoticeKindPolicy.objects.filter(name="parcel_receipt").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_receipt").update(status="retired")
 
         assert record_email(PARCEL_RECEIPT, address="a@example.com", send=Sender(), key="t").attempt_count == 2

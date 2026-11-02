@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-11-02
+
+### Added
+
+- `revoked_after(at)`: the revoke in a grant's history after a moment or an expression - what the boundary
+  sweep and `features_at(holder, when)` read for any moment but now.
+- `history_swapped_with(tracked, setting)`: keys a shipped model's history to what its swappable setting names,
+  where the history is swapped out with the model.
+- isik's own `FeatureGrant` and `NoticeKindPolicy` are tracked (`FeatureGrantEvent`, `NoticeKindPolicyEvent`),
+  each history swapped out with its model.
+
+### Fixed
+
+- A grant revoked "later" can't exist: a revoke was a time any write could set ahead, which `live_grants()` read
+  as still in force and the features view and `revoke()` read as revoked already.
+
+### Breaking
+
+- **`AbstractFeatureGrant.revoked_at` is `status`** (`GrantStatus`: `active`, `revoked`). Every read about now
+  tests the column; when a grant was revoked is in its history alone, the transaction's time that revoked it.
+  A trigger refuses a revoke undone, and a grant written revoked. `isik_features.0004` turns a grant revoked
+  before into `revoked`, with no revoke in its history - so it reads as revoked before every boundary.
+- **A grant model has to be tracked**: `isik.E017` refuses one with no history, one whose history can be edited
+  or leaves `status` out, and one whose update events don't record a change of it. isik's own is; one of a
+  project's own takes `@track_events()`.
+- **`AbstractNoticeKindPolicy.retired_at` is `status`** (`KindStatus`: `active`, `retired`) - once, never
+  undone, and no kind written retired. `isik_notifications.0002` carries a retired kind over. The notice
+  trigger, `raise_notice()`, the API, the checks and `manage.py notices` read the status.
+- A project owning its grant or kind policy model gets `status` in place of the stamp in its next migration.
+
 ## [0.45.0] - 2026-11-01
 
 ### Added

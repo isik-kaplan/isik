@@ -267,3 +267,126 @@ class TestTheOverridesColumns:
         (constraint,) = Isolated._meta.constraints
         assert "note" not in {field.name for field in Isolated._meta.get_fields()}
         assert "note_forced_value__isnull" not in str(constraint.condition.children[1])
+
+
+class TestTheGrantHistoryCheck:
+    """A grant's history is the only record of when it was revoked - so it has to be there, whole, and kept."""
+
+    @staticmethod
+    def grants(name, *track):
+        from isik.django.apps.features.bases import AbstractFeatureGrant
+
+        # A name of its own each run: pghistory refuses a second event model of one name in an app.
+        model = type(
+            f"{name}{uuid.uuid4().hex[:8]}",
+            (AbstractFeatureGrant,),
+            {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})},
+        )
+        return track[0](model) if track else model
+
+    def test_isiks_own_has_nothing_to_say(self):
+        assert checks.grant_history_problems(FeatureGrant) == []
+
+    @isolate_apps("tests.testapp")
+    def test_one_with_no_history(self):
+        model = self.grants("Untracked")
+
+        assert checks.grant_history_problems(model) == [
+            f"{model._meta.label} has no history - it's what says when each grant was revoked, and the sweep reads it. "
+            "Track it with @track_events()."
+        ]
+
+    @isolate_apps("tests.testapp")
+    def test_one_whose_history_leaves_status_out(self):
+        from isik.django.apps.common.db import track_events
+
+        model = self.grants("NoStatus", track_events(exclude=["status"]))
+
+        assert checks.grant_history_problems(model) == [
+            f"{model._meta.label}'s history leaves out status - track it.",
+            f"{model._meta.label}'s history records no update changing status - a revoke would leave no time.",
+        ]
+
+    @isolate_apps("tests.testapp")
+    def test_one_whose_history_can_be_edited(self):
+        from isik.django.apps.common.db import track_events
+
+        model = self.grants("Editable", track_events(append_only=False))
+
+        assert checks.grant_history_problems(model) == [
+            f"{model._meta.label}'s history can be edited - when a grant was revoked has to stay as written. Keep it "
+            "append-only."
+        ]
+
+    @pytest.mark.parametrize(
+        "condition",
+        [
+            "excluded",
+            "other_fields",
+            "negated",
+            "not_a_change",
+        ],
+    )
+    @isolate_apps("tests.testapp")
+    def test_one_whose_updates_dont_record_a_status_change(self, condition):
+        import pghistory
+        import pgtrigger
+
+        from isik.django.apps.common.db import track_events
+
+        conditions = {
+            "excluded": pgtrigger.AnyChange(exclude=["status"]),
+            "other_fields": pgtrigger.AnyChange("source"),
+            "negated": ~pgtrigger.AnyChange("status"),
+            "not_a_change": pgtrigger.Q(old__source="manual"),
+        }
+        trackers = [pghistory.InsertEvent(), pghistory.UpdateEvent(condition=conditions[condition])]
+
+        model = self.grants("Narrow", track_events(trackers=trackers))
+
+        assert checks.grant_history_problems(model) == [
+            f"{model._meta.label}'s history records no update changing status - a revoke would leave no time."
+        ]
+
+    @pytest.mark.parametrize("condition", ["none", "named", "all"])
+    @isolate_apps("tests.testapp")
+    def test_updates_that_record_it(self, condition):
+        import pghistory
+        import pgtrigger
+
+        from isik.django.apps.common.db import track_events
+
+        conditions = {"none": None, "named": pgtrigger.AnyChange("status"), "all": pgtrigger.AnyChange()}
+        update = (
+            pghistory.UpdateEvent()
+            if conditions[condition] is None
+            else pghistory.UpdateEvent(condition=conditions[condition])
+        )
+
+        assert (
+            checks.grant_history_problems(self.grants(f"Records{condition.title()}", track_events(trackers=[update])))
+            == []
+        )
+
+    def test_an_update_event_with_no_condition_records_every_change(self):
+        import copy
+
+        import pghistory.trigger
+        import pgtrigger
+
+        events = {
+            trigger.name: trigger
+            for model, trigger in pgtrigger.registered()
+            if model is FeatureGrant and isinstance(trigger, pghistory.trigger.Event)
+        }
+        unconditional = copy.copy(events["update_update"])
+        unconditional.condition = None
+
+        assert checks._records_status(unconditional)
+        assert not checks._records_status(events["insert_insert"])
+        assert not checks._records_status(pgtrigger.Protect(name="protect", operation=pgtrigger.Update))
+
+    def test_its_part_of_the_settings_check(self, monkeypatch):
+        monkeypatch.setattr(checks, "grant_history_problems", lambda grants: [f"about {grants._meta.label}"])
+
+        assert checks.setting_problems() == ["about isik_features.FeatureGrant"]

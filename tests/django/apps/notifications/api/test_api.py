@@ -172,7 +172,7 @@ class TestSubscriptions:
     def test_a_retired_kind_is_refused(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(status="retired")
 
         assert client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json").status_code == 400
 
@@ -452,7 +452,7 @@ class TestTheDetails:
     def test_a_retired_kind_isnt_offered(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(status="retired")
 
         offered = [each["kind"] for each in client_for(alice).get("/kinds/").json()]
 
@@ -628,7 +628,7 @@ class TestAListReadsEachRowsKindWithIt:
         return [
             query["sql"]
             for query in queries
-            if f'FROM "{table}"' in query["sql"] and '"isik_notice_kind_policy"."retired_at"' in query["sql"]
+            if f'FROM "{table}"' in query["sql"] and '"isik_notice_kind_policy"."status"' in query["sql"]
         ]
 
     def test_the_inbox(self, alice):

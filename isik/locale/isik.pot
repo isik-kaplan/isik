@@ -42,7 +42,7 @@ msgstr ""
 msgid "%(count)d exemption call(s) or type(s) weren't loaded, so the listing isn't complete."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:98
+#: isik/django/apps/features/checks.py:152
 #, python-format
 msgid "%(feature)s unlocks no setting and nothing checks it - give a setting feature=, or check it with HasFeature or requires_feature()."
 msgstr ""
@@ -354,12 +354,12 @@ msgstr ""
 msgid "%(model)s has multiple %(verb)s fields - pass field= to disambiguate"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:352
+#: isik/django/apps/common/db/history.py:372
 #, python-format
 msgid "%(model)s has no (pgh_obj, -pgh_id) index - a page of one object's history costs the square of its length. Track it with track_events(), or add object_stream_index(<its table>) to its meta's indexes."
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:296
+#: isik/django/apps/common/db/history.py:316
 #, python-format
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
@@ -377,6 +377,11 @@ msgstr ""
 #: isik/django/apps/common/db/concurrency.py:389
 #, python-format
 msgid "%(model)s has no concurrency token."
+msgstr ""
+
+#: isik/django/apps/features/checks.py:90
+#, python-format
+msgid "%(model)s has no history - it's what says when each grant was revoked, and the sweep reads it. Track it with @track_events()."
 msgstr ""
 
 #: isik/django/apps/feedback/annotations.py:43
@@ -405,12 +410,12 @@ msgstr ""
 msgid "%(model)s isn't a model of votes(), comments(), notes() or bookmarks()"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:41
+#: isik/django/apps/features/checks.py:44
 #, python-format
 msgid "%(model)s isn't an AbstractOverrides."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:46
+#: isik/django/apps/features/checks.py:49
 #, python-format
 msgid "%(model)s keeps forced settings and has no history - who forced one, when and why is gone once it's released. Track it with @track_events()."
 msgstr ""
@@ -485,17 +490,32 @@ msgstr ""
 msgid "%(model)s's concurrency_strategy is ConcurrencyParts, and it has no concurrency_parts() method."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:55
+#: isik/django/apps/features/checks.py:58
 #, python-format
 msgid "%(model)s's grants are of %(granted)s, and ISIK_FEATURES_HOLDER_MODEL is %(holder)s - declare a grant model of your own on AbstractFeatureGrant and name it in ISIK_FEATURES_GRANT_MODEL."
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:193
+#: isik/django/apps/features/checks.py:102
+#, python-format
+msgid "%(model)s's history can be edited - when a grant was revoked has to stay as written. Keep it append-only."
+msgstr ""
+
+#: isik/django/apps/common/db/history.py:194
 #, python-format
 msgid "%(model)s's history has ContextFields named like its own tracked fields: %(names)s - name them otherwise, or leave those fields out of the history."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:68
+#: isik/django/apps/features/checks.py:98
+#, python-format
+msgid "%(model)s's history leaves out status - track it."
+msgstr ""
+
+#: isik/django/apps/features/checks.py:110
+#, python-format
+msgid "%(model)s's history records no update changing status - a revoke would leave no time."
+msgstr ""
+
+#: isik/django/apps/features/checks.py:72
 #, python-format
 msgid "%(model)s's holder key cascades - its rows refuse a delete, and their history would outlive them; on_delete=ERASE erases both."
 msgstr ""
@@ -560,7 +580,7 @@ msgstr ""
 msgid "%(name)s can't be used with %(other)s"
 msgstr ""
 
-#: isik/django/apps/features/drf.py:391
+#: isik/django/apps/features/drf.py:392
 #, python-format
 msgid "%(name)s holds a %(type)s."
 msgstr ""
@@ -570,7 +590,7 @@ msgstr ""
 msgid "%(name)s is %(value)s, above the recommended safe limit of %(soft_max)s - this may take a long time"
 msgstr ""
 
-#: isik/django/apps/features/operations.py:225
+#: isik/django/apps/features/operations.py:226
 #, python-format
 msgid "%(name)s is forced, so it can't be changed."
 msgstr ""
@@ -610,7 +630,7 @@ msgstr ""
 msgid "%(name)s needs %(other)s"
 msgstr ""
 
-#: isik/django/apps/features/operations.py:227
+#: isik/django/apps/features/operations.py:228
 #, python-format
 msgid "%(name)s needs a feature you don't have."
 msgstr ""
@@ -765,7 +785,7 @@ msgstr ""
 msgid "%(setting)s and %(other)s would both be %(name)s"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:84
+#: isik/django/apps/features/checks.py:138
 #, python-format
 msgid "%(setting)s could be null - a setting always has a value, so its field takes no null=True and its default isn't None."
 msgstr ""
@@ -780,7 +800,7 @@ msgstr ""
 msgid "%(setting)s resolves as %(field)s, its own value's field - a save would keep a forced value as the holder's own. Keep the own value in a field of another name."
 msgstr ""
 
-#: isik/django/apps/features/resolution.py:231
+#: isik/django/apps/features/resolution.py:253
 #, python-format
 msgid "%(setting)s resolves as %(model)s.%(name)s, which is a field of its - name another attribute."
 msgstr ""
@@ -790,12 +810,12 @@ msgstr ""
 msgid "%(setting)s would be %(name)s, which the command already is"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:92
+#: isik/django/apps/features/checks.py:146
 #, python-format
 msgid "%(setting)s's own value is the holder's %(field)s, which %(model)s has no field called."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:104
+#: isik/django/apps/features/operations.py:105
 #, python-format
 msgid "%(source)s isn't one of GRANT_SOURCES."
 msgstr ""
@@ -1171,11 +1191,11 @@ msgstr ""
 msgid "A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:101
+#: isik/django/apps/notifications/management/commands/notices.py:103
 msgid "A policy row no declaration makes - retire it"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:31
+#: isik/django/apps/notifications/choices.py:38
 msgid "A record of an email sent"
 msgstr ""
 
@@ -1196,7 +1216,7 @@ msgstr ""
 msgid "A setting called %(name)s is declared already."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:29
+#: isik/django/apps/notifications/choices.py:36
 msgid "A trigger"
 msgstr ""
 
@@ -1214,8 +1234,8 @@ msgstr ""
 msgid "APNs says the token is dead (%(reason)s) - the device is deactivated."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:38
 #: isik/django/apps/notifications/choices.py:45
+#: isik/django/apps/notifications/choices.py:52
 msgid "Abandoned"
 msgstr ""
 
@@ -1227,6 +1247,10 @@ msgstr ""
 #: isik/django/drf/permissions.py:184
 #, python-format
 msgid "Actions should not be: %(actions)s"
+msgstr ""
+
+#: isik/django/apps/notifications/choices.py:11
+msgid "Active"
 msgstr ""
 
 #: isik/django/apps/common/checks.py:424
@@ -1242,15 +1266,15 @@ msgstr ""
 msgid "Always %(code)s."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:255
+#: isik/django/apps/features/drf.py:256
 msgid "Always null: read the settings again."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:254
+#: isik/django/apps/features/drf.py:255
 msgid "Always precondition_failed."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:51
+#: isik/django/apps/notifications/choices.py:58
 msgid "Apple Push Notification service"
 msgstr ""
 
@@ -1273,7 +1297,7 @@ msgstr ""
 msgid "Asked %(key)s, which the test gave no answer for."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:114
+#: isik/django/apps/notifications/management/commands/notices.py:116
 #, python-format
 msgid "Asked again for %(deliveries)s deliveries and %(shards)s shards."
 msgstr ""
@@ -1317,7 +1341,7 @@ msgstr ""
 msgid "Circular ref() chain: %(chain)s."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:43
+#: isik/django/apps/notifications/choices.py:50
 msgid "Claimed"
 msgstr ""
 
@@ -1348,7 +1372,7 @@ msgstr ""
 msgid "Content is too large"
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:101
+#: isik/django/apps/common/db/history.py:102
 #, python-format
 msgid "ContextField(%(name)r) needs cast= - can't infer a Postgres type for %(field)r (only %(inferred)s are inferred; ForeignKey always needs an explicit cast)."
 msgstr ""
@@ -1381,11 +1405,11 @@ msgstr ""
 msgid "Declare a label (and a message, for a kind sent to the inbox) - see KindText."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:102
+#: isik/django/apps/notifications/management/commands/notices.py:104
 msgid "Declared, and retired"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:100
+#: isik/django/apps/notifications/management/commands/notices.py:102
 msgid "Declared, with no policy row - run migrate"
 msgstr ""
 
@@ -1463,7 +1487,7 @@ msgstr ""
 msgid "False opts out of %(rule)s without a reason, which needs Requirement.OPTIONAL for it - or write %(type)s(reason=...)."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:109
+#: isik/django/apps/notifications/management/commands/notices.py:111
 #, python-format
 msgid "Fanned out %(count)s notices."
 msgstr ""
@@ -1481,11 +1505,11 @@ msgstr ""
 msgid "Field()'s at= is SNAPSHOT or LIVE, not %(at)r."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:44
+#: isik/django/apps/notifications/choices.py:51
 msgid "Finished"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:52
+#: isik/django/apps/notifications/choices.py:59
 msgid "Firebase Cloud Messaging"
 msgstr ""
 
@@ -1517,7 +1541,7 @@ msgstr ""
 msgid "Headers sent to prepare for the response"
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:507
+#: isik/django/apps/notifications/bases.py:510
 msgid "How long it took, in milliseconds."
 msgstr ""
 
@@ -1533,15 +1557,15 @@ msgstr ""
 msgid "How many downvoted it."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:236
+#: isik/django/apps/notifications/bases.py:239
 msgid "How many times a worker has claimed it."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:325
+#: isik/django/apps/notifications/bases.py:328
 msgid "How many times it had been tried when its current run began."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:320
+#: isik/django/apps/notifications/bases.py:323
 msgid "How many times it's been tried."
 msgstr ""
 
@@ -1573,17 +1597,17 @@ msgstr ""
 msgid "ISIK_CHECKS[Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:23
+#: isik/django/apps/features/checks.py:26
 #, python-format
 msgid "ISIK_FEATURES has keys it doesn't know: %(keys)s."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:27
+#: isik/django/apps/features/checks.py:30
 #, python-format
 msgid "ISIK_FEATURES' SWEEP is %(sweep)r - it's one of %(sweeps)s."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:31
+#: isik/django/apps/features/checks.py:34
 msgid "ISIK_FEATURES' SWEEP is next_boundary, which schedules each run with Celery - install it."
 msgstr ""
 
@@ -1679,17 +1703,17 @@ msgstr ""
 msgid "Invalid responses from another server/proxy"
 msgstr ""
 
-#: isik/django/apps/features/drf.py:110
+#: isik/django/apps/features/drf.py:111
 msgid "Its grants in force now or to come."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:107
-#: isik/django/apps/features/drf.py:187
+#: isik/django/apps/features/drf.py:108
+#: isik/django/apps/features/drf.py:188
 #: isik/django/apps/notifications/drf.py:442
 msgid "Its name, as a person reads it."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:308
+#: isik/django/apps/notifications/bases.py:311
 msgid "Its target, as one key - what keeps a notice from reaching one target twice."
 msgstr ""
 
@@ -1705,11 +1729,11 @@ msgstr ""
 msgid "Make it where loading the project runs it - see manage.py exemptions."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:11
+#: isik/django/apps/notifications/choices.py:18
 msgid "Mandatory"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:20
+#: isik/django/apps/notifications/choices.py:27
 msgid "Many partitions"
 msgstr ""
 
@@ -1749,7 +1773,7 @@ msgstr ""
 msgid "No exemption type or policy exempts from %(rule)r."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:102
+#: isik/django/apps/features/operations.py:103
 #, python-format
 msgid "No feature called %(name)s is declared."
 msgstr ""
@@ -1777,12 +1801,12 @@ msgstr ""
 msgid "No question used the answers for %(keys)s."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:66
+#: isik/django/apps/features/operations.py:67
 #, python-format
 msgid "No setting called %(name)s is declared."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:122
+#: isik/django/apps/notifications/management/commands/notices.py:124
 #, python-format
 msgid "No unretired kind is called %(kind)s."
 msgstr ""
@@ -1833,11 +1857,11 @@ msgstr ""
 msgid "Object property %(property)s is False"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:13
+#: isik/django/apps/notifications/choices.py:20
 msgid "Off unless turned on"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:12
+#: isik/django/apps/notifications/choices.py:19
 msgid "On unless turned off"
 msgstr ""
 
@@ -1846,7 +1870,7 @@ msgstr ""
 msgid "One of %(codes)s."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:19
+#: isik/django/apps/notifications/choices.py:26
 msgid "One partition"
 msgstr ""
 
@@ -1888,8 +1912,8 @@ msgstr ""
 msgid "Partial content follows"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:35
 #: isik/django/apps/notifications/choices.py:42
+#: isik/django/apps/notifications/choices.py:49
 msgid "Pending"
 msgstr ""
 
@@ -1897,11 +1921,11 @@ msgstr ""
 msgid "Precondition in headers is false"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:58
+#: isik/django/apps/notifications/choices.py:65
 msgid "Production"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:116
+#: isik/django/apps/notifications/management/commands/notices.py:118
 #, python-format
 msgid "Pruned %(attempts)s attempts and %(notices)s notices."
 msgstr ""
@@ -1973,7 +1997,11 @@ msgstr ""
 msgid "Response contains multiple statuses in the body"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:123
+#: isik/django/apps/notifications/choices.py:12
+msgid "Retired"
+msgstr ""
+
+#: isik/django/apps/notifications/management/commands/notices.py:125
 #, python-format
 msgid "Retired %(kind)s."
 msgstr ""
@@ -1983,7 +2011,7 @@ msgstr ""
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:59
+#: isik/django/apps/notifications/choices.py:66
 msgid "Sandbox"
 msgstr ""
 
@@ -2023,7 +2051,7 @@ msgstr ""
 msgid "See isik.django.apps.common.checks."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:123
+#: isik/django/apps/features/checks.py:177
 msgid "See isik.django.apps.features."
 msgstr ""
 
@@ -2043,11 +2071,11 @@ msgstr ""
 msgid "See object_stream_index(table) (isik.django.apps.common.db.history)."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:36
+#: isik/django/apps/notifications/choices.py:43
 msgid "Sending"
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:37
+#: isik/django/apps/notifications/choices.py:44
 msgid "Sent"
 msgstr ""
 
@@ -2103,7 +2131,7 @@ msgstr ""
 msgid "Session key mismatch"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:35
+#: isik/django/apps/features/checks.py:38
 msgid "Settings are declared, and ISIK_FEATURES_OVERRIDES_MODEL names no model to keep them in - declare one on AbstractOverrides."
 msgstr ""
 
@@ -2168,11 +2196,11 @@ msgstr ""
 msgid "The %(target)s this vote is on."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:377
+#: isik/django/apps/features/drf.py:378
 msgid "The ETag of your settings as you read them - a \"defaults\" one until your first change - or *."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:489
+#: isik/django/apps/notifications/bases.py:492
 msgid "The HTTP status that came back, or none."
 msgstr ""
 
@@ -2180,7 +2208,7 @@ msgstr ""
 msgid "The Idempotency-Key the caller sent."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:397
+#: isik/django/apps/notifications/bases.py:400
 msgid "The address it's sent to."
 msgstr ""
 
@@ -2188,11 +2216,11 @@ msgstr ""
 msgid "The app's bundle identifier, where it isn't the project's one."
 msgstr ""
 
-#: isik/django/apps/notifications/choices.py:30
+#: isik/django/apps/notifications/choices.py:37
 msgid "The application"
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:460
+#: isik/django/apps/notifications/bases.py:463
 msgid "The attempt's own identifier."
 msgstr ""
 
@@ -2200,7 +2228,7 @@ msgstr ""
 msgid "The caller's own vote - 1, -1, or null for none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:297
+#: isik/django/apps/notifications/bases.py:300
 msgid "The channel it goes out on."
 msgstr ""
 
@@ -2232,15 +2260,15 @@ msgstr ""
 msgid "The delivery that put it here."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:372
+#: isik/django/apps/notifications/bases.py:375
 msgid "The delivery this is the target of."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:467
+#: isik/django/apps/notifications/bases.py:470
 msgid "The delivery tried."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:285
+#: isik/django/apps/notifications/bases.py:288
 msgid "The delivery's own identifier - the key a receiver dedupes it by."
 msgstr ""
 
@@ -2252,7 +2280,7 @@ msgstr ""
 msgid "The device was forgotten."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:440
+#: isik/django/apps/notifications/bases.py:443
 msgid "The device's primary key."
 msgstr ""
 
@@ -2302,32 +2330,32 @@ msgstr ""
 msgid "The endpoint's URL isn't http or https."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:383
+#: isik/django/apps/notifications/bases.py:386
 msgid "The endpoint's primary key."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:110
+#: isik/django/apps/features/checks.py:164
 #, python-format
 msgid "The feature %(name)s has no label - give it label=."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:82
+#: isik/django/apps/features/bases.py:90
 msgid "The feature granted."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:198
+#: isik/django/apps/features/drf.py:199
 msgid "The feature it needs, where you may see it - else none."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:106
+#: isik/django/apps/features/drf.py:107
 msgid "The feature's name - the key everything names it by."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:44
+#: isik/django/apps/features/bases.py:45
 msgid "The feature's name, as its declaration gives it."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:233
+#: isik/django/apps/features/bases.py:249
 msgid "The force source that forced it, while forced."
 msgstr ""
 
@@ -2339,11 +2367,11 @@ msgstr ""
 msgid "The gateway server did not receive a timely response"
 msgstr ""
 
-#: isik/django/apps/features/bases.py:68
+#: isik/django/apps/features/bases.py:76
 msgid "The grant's own identifier."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:180
+#: isik/django/apps/notifications/bases.py:183
 msgid "The history context of the change - who made it, and from where."
 msgstr ""
 
@@ -2351,7 +2379,7 @@ msgstr ""
 msgid "The history context the notice kept, beside who acted."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:214
+#: isik/django/apps/features/bases.py:230
 msgid "The holder's own choice, or none."
 msgstr ""
 
@@ -2371,7 +2399,7 @@ msgstr ""
 msgid "The kind's one variant this is for, or none for every one."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:132
+#: isik/django/apps/notifications/bases.py:135
 msgid "The model label of the row it happened to, or none."
 msgstr ""
 
@@ -2388,15 +2416,15 @@ msgstr ""
 msgid "The note's text."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:292
+#: isik/django/apps/notifications/bases.py:295
 msgid "The notice it sends."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:217
+#: isik/django/apps/notifications/bases.py:220
 msgid "The notice reaching the partition."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:111
+#: isik/django/apps/notifications/bases.py:114
 msgid "The notice's own identifier."
 msgstr ""
 
@@ -2409,15 +2437,15 @@ msgstr ""
 msgid "The partition %(key)r no longer exists."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:303
+#: isik/django/apps/notifications/bases.py:306
 msgid "The partition its target lives in, or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:145
+#: isik/django/apps/notifications/bases.py:148
 msgid "The partition the row it happened to belongs to, or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:223
+#: isik/django/apps/notifications/bases.py:226
 msgid "The partition's key, or none for a project with no partitions."
 msgstr ""
 
@@ -2426,7 +2454,7 @@ msgstr ""
 msgid "The primary key of the %(name)s object."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:139
+#: isik/django/apps/notifications/bases.py:142
 msgid "The primary key of the row it happened to, or none."
 msgstr ""
 
@@ -2451,7 +2479,7 @@ msgstr ""
 msgid "The row's identifier, assigned when it's created."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:157
+#: isik/django/apps/notifications/bases.py:160
 msgid "The same columns as they were before the change, for an update."
 msgstr ""
 
@@ -2479,20 +2507,20 @@ msgstr ""
 msgid "The service its pushes go through - apns or fcm."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:114
+#: isik/django/apps/features/checks.py:168
 #, python-format
 msgid "The setting %(name)s has no label - give it label=."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:183
+#: isik/django/apps/features/drf.py:184
 msgid "The setting's name - the key it's changed by."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:370
+#: isik/django/apps/features/drf.py:371
 msgid "The setting's name."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:229
+#: isik/django/apps/features/drf.py:230
 msgid "The setting's type, as listed."
 msgstr ""
 
@@ -2501,11 +2529,11 @@ msgstr ""
 msgid "The settings table in %(path)s is out of date - regenerate it with write_settings_table()."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:210
+#: isik/django/apps/notifications/bases.py:213
 msgid "The shard's own identifier."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:102
+#: isik/django/apps/features/drf.py:103
 msgid "The source's reference, where shown."
 msgstr ""
 
@@ -2513,7 +2541,7 @@ msgstr ""
 msgid "The status the request was answered with."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:151
+#: isik/django/apps/notifications/bases.py:154
 msgid "The subject's columns the kind allows, as they were after the change."
 msgstr ""
 
@@ -2526,7 +2554,7 @@ msgstr ""
 msgid "The tag's name, unique in its pool."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:254
+#: isik/django/apps/notifications/bases.py:257
 msgid "The task that last claimed it."
 msgstr ""
 
@@ -2551,15 +2579,15 @@ msgstr ""
 msgid "The user it's for."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:404
+#: isik/django/apps/notifications/bases.py:407
 msgid "The user the address belongs to, or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:445
+#: isik/django/apps/notifications/bases.py:448
 msgid "The user the device is theirs."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:426
+#: isik/django/apps/notifications/bases.py:429
 msgid "The user whose inbox it lands in."
 msgstr ""
 
@@ -2571,7 +2599,7 @@ msgstr ""
 msgid "The variants the kind declares - the only ones a notice or subscription may name."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:273
+#: isik/django/apps/features/drf.py:274
 msgid "The version of all your settings - send it back as it is, in If-Match."
 msgstr ""
 
@@ -2623,7 +2651,7 @@ msgstr ""
 msgid "This idempotency key was already used, and its response can't be sent again."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:76
+#: isik/django/apps/features/drf.py:77
 msgid "This needs a feature you don't have."
 msgstr ""
 
@@ -2732,27 +2760,27 @@ msgstr ""
 msgid "What a person gets by default."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:173
+#: isik/django/apps/features/drf.py:174
 msgid "What a person reads."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:332
+#: isik/django/apps/notifications/bases.py:335
 msgid "What asked for its next attempt, when it wasn't the send task."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:483
+#: isik/django/apps/notifications/bases.py:486
 msgid "What came back, redacted and cut short."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:188
+#: isik/django/apps/features/drf.py:189
 msgid "What it does."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:108
+#: isik/django/apps/features/drf.py:109
 msgid "What it gives."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:211
+#: isik/django/apps/features/drf.py:212
 msgid "What it may be."
 msgstr ""
 
@@ -2760,7 +2788,7 @@ msgstr ""
 msgid "What it's about."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:225
+#: isik/django/apps/features/bases.py:241
 msgid "What it's forced to, while forced."
 msgstr ""
 
@@ -2772,19 +2800,19 @@ msgstr ""
 msgid "What it's sent on."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:412
+#: isik/django/apps/notifications/bases.py:415
 msgid "What its sender named a recorded email by, across its tries - or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:118
+#: isik/django/apps/notifications/bases.py:121
 msgid "What kind of thing happened."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:186
+#: isik/django/apps/features/drf.py:187
 msgid "What kind of value it holds."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:247
+#: isik/django/apps/features/drf.py:248
 msgid "What refused it, for a client to tell refusals apart."
 msgstr ""
 
@@ -2792,11 +2820,11 @@ msgstr ""
 msgid "What staff forced it to for you, every variant - else none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:512
+#: isik/django/apps/notifications/bases.py:515
 msgid "What started it - the send task, the reaper, or someone by hand."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:171
+#: isik/django/apps/notifications/bases.py:174
 msgid "What the history context said that the project keeps on its notices."
 msgstr ""
 
@@ -2804,11 +2832,11 @@ msgstr ""
 msgid "What the notice carried."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:94
+#: isik/django/apps/features/bases.py:102
 msgid "What the source knows the grant by - an invoice, say."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:477
+#: isik/django/apps/notifications/bases.py:480
 msgid "What was sent, redacted."
 msgstr ""
 
@@ -2816,33 +2844,33 @@ msgstr ""
 msgid "What writes the kind's notices: a trigger, the application, or record_email()."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:172
+#: isik/django/apps/features/drf.py:173
 msgid "What's stored."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:247
+#: isik/django/apps/notifications/bases.py:250
 msgid "When a worker last claimed it."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:343
+#: isik/django/apps/notifications/bases.py:346
 msgid "When a worker last took it to send."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:503
+#: isik/django/apps/notifications/bases.py:506
 msgid "When it began."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:99
-#: isik/django/apps/features/drf.py:99
+#: isik/django/apps/features/bases.py:107
+#: isik/django/apps/features/drf.py:100
 msgid "When it comes into force."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:105
-#: isik/django/apps/features/drf.py:100
+#: isik/django/apps/features/bases.py:113
+#: isik/django/apps/features/drf.py:101
 msgid "When it ends, or none for never."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:186
+#: isik/django/apps/notifications/bases.py:189
 msgid "When it happened."
 msgstr ""
 
@@ -2850,11 +2878,11 @@ msgstr ""
 msgid "When it landed."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:50
+#: isik/django/apps/features/bases.py:51
 msgid "When it was first declared."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:117
+#: isik/django/apps/features/bases.py:127
 msgid "When it was granted."
 msgstr ""
 
@@ -2862,20 +2890,16 @@ msgstr ""
 msgid "When it was parked for failing - nothing is sent to it until it's unparked."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:111
-msgid "When it was revoked, or none."
-msgstr ""
-
-#: isik/django/apps/notifications/bases.py:349
+#: isik/django/apps/notifications/bases.py:352
 msgid "When it was sent."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:355
+#: isik/django/apps/notifications/bases.py:358
 msgid "When it was written."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:241
-#: isik/django/apps/notifications/bases.py:337
+#: isik/django/apps/notifications/bases.py:244
+#: isik/django/apps/notifications/bases.py:340
 msgid "When it's next due."
 msgstr ""
 
@@ -2883,11 +2907,11 @@ msgstr ""
 msgid "When its author last edited it - empty if never."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:260
+#: isik/django/apps/notifications/bases.py:263
 msgid "When its deliveries were written."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:192
+#: isik/django/apps/notifications/bases.py:195
 msgid "When its deliveries were written. Unset, it's waiting to be."
 msgstr ""
 
@@ -2895,7 +2919,7 @@ msgstr ""
 msgid "When the app on it last registered."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:154
+#: isik/django/apps/features/bases.py:164
 msgid "When the boundary sweep last ran."
 msgstr ""
 
@@ -2903,11 +2927,7 @@ msgstr ""
 msgid "When the key was spent."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:86
-msgid "When the kind was retired. A retired kind writes no more notices."
-msgstr ""
-
-#: isik/django/apps/features/bases.py:160
+#: isik/django/apps/features/bases.py:170
 msgid "When the next boundary sweep is scheduled for."
 msgstr ""
 
@@ -2935,11 +2955,11 @@ msgstr ""
 msgid "Where deliveries are POSTed."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:101
+#: isik/django/apps/features/drf.py:102
 msgid "Where it came from, where that's shown."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:87
+#: isik/django/apps/features/bases.py:95
 msgid "Where the grant came from - a subscription, a trial, by hand."
 msgstr ""
 
@@ -2952,15 +2972,19 @@ msgstr ""
 msgid "Whether deliveries are sent to it."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:499
+#: isik/django/apps/features/bases.py:121
+msgid "Whether it stands, or was revoked."
+msgstr ""
+
+#: isik/django/apps/notifications/bases.py:502
 msgid "Whether it went through."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:220
+#: isik/django/apps/features/bases.py:236
 msgid "Whether it's forced, so the holder can't change it."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:109
+#: isik/django/apps/features/drf.py:110
 msgid "Whether it's in force for you now."
 msgstr ""
 
@@ -2978,6 +3002,10 @@ msgstr ""
 
 #: isik/django/apps/feedback/drf.py:34
 msgid "Whether the caller bookmarked it."
+msgstr ""
+
+#: isik/django/apps/notifications/bases.py:88
+msgid "Whether the kind still writes notices. A retired kind writes no more."
 msgstr ""
 
 #: isik/django/apps/notifications/bases.py:67
@@ -3000,7 +3028,7 @@ msgstr ""
 msgid "Whether you get it now, every variant - forced, your own choice, or its policy."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:196
+#: isik/django/apps/features/drf.py:197
 msgid "Whether you may change it."
 msgstr ""
 
@@ -3012,11 +3040,11 @@ msgstr ""
 msgid "Which APNs issued its token - sandbox for a development build."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:125
+#: isik/django/apps/notifications/bases.py:128
 msgid "Which of the kind's variants happened, or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:471
+#: isik/django/apps/notifications/bases.py:474
 msgid "Which try it was, from 1."
 msgstr ""
 
@@ -3024,7 +3052,7 @@ msgstr ""
 msgid "Who acted, as the notice recorded them, or none."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:165
+#: isik/django/apps/notifications/bases.py:168
 msgid "Who acted, or none - a migration, a command, a scheduled task."
 msgstr ""
 
@@ -3044,8 +3072,8 @@ msgstr ""
 msgid "Who spent the key - a key is only ever compared with its caller's own."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:75
-#: isik/django/apps/features/models.py:25
+#: isik/django/apps/features/bases.py:83
+#: isik/django/apps/features/models.py:28
 msgid "Who the feature is granted to."
 msgstr ""
 
@@ -3061,20 +3089,20 @@ msgstr ""
 msgid "Whose device it is."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:139
+#: isik/django/apps/features/bases.py:149
 msgid "Whose settings these are."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:495
+#: isik/django/apps/notifications/bases.py:498
 msgid "Why it failed, or nothing."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:194
+#: isik/django/apps/features/drf.py:195
 #: isik/django/apps/notifications/drf.py:462
 msgid "Why it was forced, if you may read it."
 msgstr ""
 
-#: isik/django/apps/features/bases.py:242
+#: isik/django/apps/features/bases.py:258
 msgid "Why it was forced, while forced."
 msgstr ""
 
@@ -3082,16 +3110,16 @@ msgstr ""
 msgid "Why it was forced, while it's forced."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:191
+#: isik/django/apps/features/drf.py:192
 msgid "Why it's this value: forced, for want of a feature, limited, yours, or the default."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:266
+#: isik/django/apps/notifications/bases.py:269
 msgid "Why its last claim failed."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:246
-#: isik/django/apps/features/drf.py:253
+#: isik/django/apps/features/drf.py:247
+#: isik/django/apps/features/drf.py:254
 msgid "Why, in the request's language."
 msgstr ""
 
@@ -3122,7 +3150,7 @@ msgstr ""
 msgid "You need the %(permission)s permission to do this."
 msgstr ""
 
-#: isik/django/apps/features/drf.py:208
+#: isik/django/apps/features/drf.py:209
 msgid "Your own choice, or none yet."
 msgstr ""
 
@@ -3164,6 +3192,10 @@ msgstr ""
 msgid "a unique CharField"
 msgstr ""
 
+#: isik/django/apps/features/bases.py:65
+msgid "active"
+msgstr ""
+
 #: isik/django/apps/feedback/votes/_votes.py:42
 msgid "an IntegerField holding 1 or -1"
 msgstr ""
@@ -3181,15 +3213,15 @@ msgstr ""
 msgid "constraint"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:49
+#: isik/django/apps/notifications/models.py:56
 msgid "deliveries"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:48
+#: isik/django/apps/notifications/models.py:55
 msgid "delivery"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:88
+#: isik/django/apps/notifications/models.py:95
 msgid "delivery attempt"
 msgstr ""
 
@@ -3211,11 +3243,11 @@ msgstr ""
 msgid "django_permission's message= takes a template, a message or a callable - not %(message)r"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:65
+#: isik/django/apps/notifications/models.py:72
 msgid "email deliveries"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:64
+#: isik/django/apps/notifications/models.py:71
 msgid "email delivery"
 msgstr ""
 
@@ -3264,15 +3296,15 @@ msgstr ""
 msgid "extra_fields can't replace %(model)s's own %(fields)s - give the extra field another name"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:41
+#: isik/django/apps/notifications/models.py:48
 msgid "fan-out shard"
 msgstr ""
 
-#: isik/django/apps/features/models.py:17
+#: isik/django/apps/features/models.py:18
 msgid "feature"
 msgstr ""
 
-#: isik/django/apps/features/models.py:32
+#: isik/django/apps/features/models.py:35
 msgid "feature grant"
 msgstr ""
 
@@ -3318,11 +3350,11 @@ msgstr ""
 msgid "ignores_change_of names %(field)r, which isn't a tracked field of %(model)s or is named by shows_change_of too - its change can't both list an update and not."
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:73
+#: isik/django/apps/notifications/models.py:80
 msgid "inbox deliveries"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:72
+#: isik/django/apps/notifications/models.py:79
 msgid "inbox delivery"
 msgstr ""
 
@@ -3377,11 +3409,11 @@ msgstr ""
 msgid "no - %(reason)s"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:34
+#: isik/django/apps/notifications/models.py:41
 msgid "notice"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:27
+#: isik/django/apps/notifications/models.py:31
 msgid "notice kind"
 msgstr ""
 
@@ -3412,11 +3444,11 @@ msgstr ""
 msgid "options()'s errors= takes an ErrorStyle, not %(value)r."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:231
+#: isik/django/apps/notifications/bases.py:234
 msgid "pending, claimed, finished or abandoned."
 msgstr ""
 
-#: isik/django/apps/notifications/bases.py:315
+#: isik/django/apps/notifications/bases.py:318
 msgid "pending, sending, sent or abandoned."
 msgstr ""
 
@@ -3435,11 +3467,11 @@ msgstr ""
 msgid "prompt= takes a Prompt, or the function that asks, not %(value)r."
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:81
+#: isik/django/apps/notifications/models.py:88
 msgid "push deliveries"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:80
+#: isik/django/apps/notifications/models.py:87
 msgid "push delivery"
 msgstr ""
 
@@ -3500,6 +3532,10 @@ msgstr ""
 msgid "required"
 msgstr ""
 
+#: isik/django/apps/features/bases.py:66
+msgid "revoked"
+msgstr ""
+
 #: isik/django/apps/idempotency/claims.py:70
 msgid "sha256 of the request the key was spent on - its method, path, query and body."
 msgstr ""
@@ -3518,7 +3554,7 @@ msgstr ""
 msgid "subscription"
 msgstr ""
 
-#: isik/django/apps/features/models.py:39
+#: isik/django/apps/features/models.py:45
 msgid "sweep cursor"
 msgstr ""
 
@@ -3550,7 +3586,7 @@ msgstr ""
 msgid "touch_rows() moves version and updated_at, and %(model)s has neither."
 msgstr ""
 
-#: isik/django/apps/common/db/history.py:266
+#: isik/django/apps/common/db/history.py:267
 msgid "track_events takes trackers= or condition=, not both - a tracker carries its own condition."
 msgstr ""
 
@@ -3568,11 +3604,11 @@ msgstr ""
 msgid "validate_inputs() was given validators for parameters %(func)r doesn't have: %(unknown)s."
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:57
+#: isik/django/apps/notifications/models.py:64
 msgid "webhook deliveries"
 msgstr ""
 
-#: isik/django/apps/notifications/models.py:56
+#: isik/django/apps/notifications/models.py:63
 msgid "webhook delivery"
 msgstr ""
 

@@ -9,6 +9,7 @@ from django.apps import apps
 from django.db import connection
 
 from isik.django.apps.notifications import conf, swapping
+from isik.django.apps.notifications.choices import KindStatus
 
 
 def literal(value):
@@ -112,7 +113,7 @@ class NoticeTrigger(pgtrigger.Trigger):
         return (
             f"INSERT INTO {_quote(notice.db_table)} ({columns}) SELECT {values} FROM {_quote(policy.db_table)} "
             f"WHERE {_column(NoticeKindPolicy, 'name')} = {literal(self.kind.name)} "
-            f"AND {_column(NoticeKindPolicy, 'retired_at')} IS NULL;"
+            f"AND {_column(NoticeKindPolicy, 'status')} = {literal(KindStatus.ACTIVE)};"
         )
 
     def get_func(self, model):

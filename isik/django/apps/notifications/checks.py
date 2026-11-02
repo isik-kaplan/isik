@@ -36,7 +36,7 @@ from isik.django.apps.notifications.audience.swapping import (
 )
 from isik.django.apps.notifications.channels import get_channel, registered
 from isik.django.apps.notifications.channels.email import send_from_mjml_templates, send_from_templates
-from isik.django.apps.notifications.choices import Policy, Scope, Source
+from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import PartitionSource, _concrete
 from isik.django.apps.notifications.swapping import DEFAULTS as LEDGER_DEFAULTS
 from isik.django.apps.notifications.swapping import KIND_POLICY_MODEL
@@ -382,7 +382,7 @@ def kind_problems():
 
 
 def _mirrored(databases):
-    """{kind: retired_at} of the declared kinds' policy rows, in each database given that has its table."""
+    """{kind: status} of the declared kinds' policy rows, in each database given that has its table."""
     rows = []
     for alias in databases or ():
         try:
@@ -391,7 +391,7 @@ def _mirrored(databases):
                     swapping.get_kind_policy_model()
                     .objects.using(alias)
                     .filter(name__in=list(declarations.kinds()))
-                    .values_list("name", "retired_at")
+                    .values_list("name", "status")
                 )
             )
         except DatabaseError:
@@ -402,7 +402,7 @@ def _mirrored(databases):
 
 def retired_problems(databases):
     """The declared kinds the database has retired - read only when the check is given databases."""
-    retired = {kind for rows in _mirrored(databases) for kind, retired_at in rows.items() if retired_at is not None}
+    retired = {kind for rows in _mirrored(databases) for kind, status in rows.items() if status == KindStatus.RETIRED}
     return [
         _("%(kind)s is declared, and retired - its trigger writes nothing. Remove its declaration.") % {"kind": name}
         for name in sorted(retired)

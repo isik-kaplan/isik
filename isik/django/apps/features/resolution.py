@@ -21,7 +21,9 @@ from django.db.models.functions import Coalesce, Greatest, Least, Now
 from django.utils import timezone
 
 from isik._internal.translation import gettext as _
+from isik.django.apps.common.db.history import event_model_for
 from isik.django.apps.features import conf, declarations
+from isik.django.apps.features.bases import GrantStatus
 from isik.django.apps.features.swapping import get_grant_model, get_holder_model, get_overrides_model
 
 
@@ -47,13 +49,29 @@ def in_holder_schema():
 
 
 def live_grants(now=None):
-    """The grants in force at `now` (now, unless given): started, not ended, not revoked by then."""
-    now = now or timezone.now()
-    return (
+    """
+    The grants in force at `now` (now, unless given): started, not ended, not revoked by then. Now, a grant's status
+    says whether it's revoked; at another moment, its history says whether it was by then (`revoked_after()`).
+    """
+    at = now or timezone.now()
+    grants = (
         get_grant_model()
-        ._default_manager.filter(starts_at__lte=now)
-        .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now))
-        .filter(models.Q(revoked_at__isnull=True) | models.Q(revoked_at__gt=now))
+        ._default_manager.filter(starts_at__lte=at)
+        .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=at))
+    )
+    standing = models.Q(status=GrantStatus.ACTIVE)
+    if now is None:
+        return grants.filter(standing)
+    return grants.filter(standing | models.Exists(revoked_after(at)))
+
+
+def revoked_after(at):
+    """
+    The revoke in the history of the grant `OuterRef("pk")` names, where it came after `at` - a moment, or an
+    expression over the grant (`OuterRef("expires_at")`). Its time is the transaction's that revoked it.
+    """
+    return event_model_for(get_grant_model())._default_manager.filter(
+        pgh_obj=models.OuterRef("pk"), status=GrantStatus.REVOKED, pgh_created_at__gt=at
     )
 
 
@@ -96,7 +114,11 @@ def _prefetched_features(holder):
 
 
 def _in_force(grant, now):
-    return grant.starts_at <= now and all(end is None or end > now for end in (grant.expires_at, grant.revoked_at))
+    return (
+        grant.status == GrantStatus.ACTIVE
+        and grant.starts_at <= now
+        and (grant.expires_at is None or grant.expires_at > now)
+    )
 
 
 def _overrides(holder):
@@ -255,7 +277,7 @@ def effective_expression(name):
             ._default_manager.filter(
                 holder=models.OuterRef("pk"),
                 feature__name=setting.feature,
-                revoked_at__isnull=True,
+                status=GrantStatus.ACTIVE,
                 starts_at__lte=Now(),
             )
             .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=Now()))

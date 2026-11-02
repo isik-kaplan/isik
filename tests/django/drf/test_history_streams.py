@@ -458,8 +458,9 @@ class TestTheSchema:
             Box.objects.create(name="theirs")
         actor = context_filter("user", filter_cls=_JSONContextUUIDFilter)
 
-        assert [event.pgh_data["name"] for event in actor.filter(Events.objects.all(), mine)] == ["mine"]
-        assert actor.filter(Events.objects.all(), None).count() == 2
+        boxes = Events.objects.filter(pgh_model="testapp.BoxEvent")
+        assert [event.pgh_data["name"] for event in actor.filter(boxes, mine)] == ["mine"]
+        assert actor.filter(boxes, None).count() == 2
 
 
 class TestTheParts:

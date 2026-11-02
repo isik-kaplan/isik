@@ -14,7 +14,6 @@ from celery import Celery
 from django.core.management import CommandError, call_command
 from django.db import ProgrammingError, connection
 from django.test import TransactionTestCase
-from django.utils import timezone
 
 from isik.django.apps.common.db import (
     ProtectTruncate,
@@ -56,7 +55,7 @@ class TestTheNoticesCommand:
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
             NoticeKindPolicy.objects.filter(name="parcel_reminder").delete()
         NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
 
         listed = notices()
 
@@ -67,9 +66,33 @@ class TestTheNoticesCommand:
     def test_it_retires_a_kind(self):
         assert notices("--retire", "parcel_shipped") == "Retired parcel_shipped.\n"
 
-        assert NoticeKindPolicy.objects.get(name="parcel_shipped").retired_at is not None
+        assert NoticeKindPolicy.objects.get(name="parcel_shipped").status == "retired"
         with pytest.raises(CommandError, match="^No unretired kind is called parcel_shipped.$"):
             notices("--retire", "parcel_shipped")
+
+    def test_a_retire_is_a_moment_in_its_history_and_never_undone(self):
+        from django.db import transaction
+
+        notices("--retire", "parcel_shipped")
+        policy = NoticeKindPolicy.objects.get(name="parcel_shipped")
+
+        (retired,) = NoticeKindPolicy.pgh_event_model.objects.filter(pgh_obj=policy, status="retired")
+        assert retired.pgh_label == "update"
+        with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot update"):
+            NoticeKindPolicy.objects.filter(pk=policy.pk).update(status="active")
+
+    def test_a_kind_is_never_written_retired(self):
+        from django.db import transaction
+
+        with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot insert"):
+            NoticeKindPolicy.objects.create(
+                name="born_retired", policy="mandatory", scope="single_partition", source="trigger", status="retired"
+            )
+
+    def test_a_retired_kinds_other_columns_still_change(self):
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
+
+        assert NoticeKindPolicy.objects.filter(name="parcel_shipped").update(policy="mandatory") == 1
 
 
 @pytest.mark.django_db

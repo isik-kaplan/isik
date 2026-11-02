@@ -104,7 +104,7 @@ class TestTheNoticeTrigger:
         assert notices("parcel_shipped") == []
 
     def test_a_retired_kind_writes_nothing(self, parcel):
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(retired_at=timezone.now())
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
 
         parcel.status = "shipped"
         parcel.save()
@@ -375,7 +375,7 @@ class TestTheCompiledSql:
         assert "CASE WHEN TG_OP = 'UPDATE' THEN jsonb_build_object('status', OLD.\"status\", " in func
         assert func.endswith(
             '_pgh_attach_context() FROM "isik_notice_kind_policy" '
-            'WHERE "name" = \'parcel_shipped\' AND "retired_at" IS NULL; END IF; RETURN NULL;'
+            "WHERE \"name\" = 'parcel_shipped' AND \"status\" = 'active'; END IF; RETURN NULL;"
         )
 
     def test_a_kind_with_variants_writes_one_per_condition_holding(self):

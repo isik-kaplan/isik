@@ -5,6 +5,13 @@ from django.db import models
 from isik._internal.translation import gettext_lazy
 
 
+class KindStatus(models.TextChoices):
+    """Whether a kind still writes notices. When one was retired is in its policy row's history."""
+
+    ACTIVE = "active", gettext_lazy("Active")
+    RETIRED = "retired", gettext_lazy("Retired")
+
+
 class Policy(models.TextChoices):
     """Who gets a kind: everyone its audience names, everyone but those opting out, or only those opting in."""
 

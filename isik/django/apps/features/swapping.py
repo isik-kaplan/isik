@@ -14,6 +14,9 @@ FEATURE_MODEL = "ISIK_FEATURES_FEATURE_MODEL"
 GRANT_MODEL = "ISIK_FEATURES_GRANT_MODEL"
 SWEEP_MODEL = "ISIK_FEATURES_SWEEP_MODEL"
 OVERRIDES_MODEL = "ISIK_FEATURES_OVERRIDES_MODEL"
+# Not a project's to set: the history of isik's grant model is swapped out with it, so this names isik's own while
+# ISIK_FEATURES_GRANT_MODEL does, and the project's grant model once it's swapped - whose history is the project's.
+GRANT_HISTORY_MODEL = "ISIK_FEATURES_GRANT_HISTORY_MODEL"
 
 DEFAULTS = {
     FEATURE_MODEL: "isik_features.Feature",
@@ -29,6 +32,10 @@ def set_defaults():
     for name, default in DEFAULTS.items():
         if not hasattr(settings, name):
             setattr(settings, name, default)
+    grants = getattr(settings, GRANT_MODEL)
+    setattr(
+        settings, GRANT_HISTORY_MODEL, "isik_features.FeatureGrantEvent" if grants == DEFAULTS[GRANT_MODEL] else grants
+    )
 
 
 def model_name(setting):

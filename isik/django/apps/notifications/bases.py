@@ -31,7 +31,7 @@ from isik.django.apps.common.db.conditions import AnyChange
 from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import DatabaseUUID7, UUIDPrimaryKeyModel, new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
-from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
+from isik.django.apps.notifications.choices import DeliveryState, KindStatus, Policy, Scope, ShardState, Source
 from isik.django.apps.notifications.swapping import (
     DELIVERY_MODEL,
     KIND_POLICY_MODEL,
@@ -80,11 +80,14 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
         db_comment="The variants the kind declares. A subscription, endpoint kind or inbox item naming another "
         "is refused.",
     )
-    retired_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text=gettext_lazy("When the kind was retired. A retired kind writes no more notices."),
-        db_comment="When the kind was retired, or null. A retired kind writes no more notices.",
+    status = models.CharField(
+        max_length=16,
+        choices=KindStatus.choices,
+        default=KindStatus.ACTIVE,
+        db_default=KindStatus.ACTIVE,
+        help_text=gettext_lazy("Whether the kind still writes notices. A retired kind writes no more."),
+        db_comment="active, or retired - once, never undone. A retired kind writes no more notices; when it was "
+        "retired is in the row's history.",
     )
 
     class Meta:
@@ -525,6 +528,17 @@ def _rules(model):
             [
                 pgtrigger.ReadOnly(name="protect_kind", fields=["id", "name"]),
                 pgtrigger.Protect(name="protect_policy_delete", operation=pgtrigger.Delete),
+                # A retire is never undone, nor a kind written retired - its history would have no retire to say when.
+                pgtrigger.Protect(
+                    name="protect_kind_retired",
+                    operation=pgtrigger.Update,
+                    condition=pgtrigger.Q(old__status=KindStatus.RETIRED, new__status=KindStatus.ACTIVE),
+                ),
+                pgtrigger.Protect(
+                    name="protect_kind_written_retired",
+                    operation=pgtrigger.Insert,
+                    condition=pgtrigger.Q(new__status=KindStatus.RETIRED),
+                ),
                 # A notice outlives its kind: emptying the table would orphan every one, as deleting a row does.
                 ProtectTruncate(name="protect_policy_truncate"),
             ],
