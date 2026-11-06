@@ -181,6 +181,93 @@ class TestWriting:
             "primary_domain": ["This was set by another request at the same time - try again."]
         }
 
+    def test_losing_a_race_to_update_it_is_a_400(self, site, monkeypatch):
+        from django.db import IntegrityError
+        from rest_framework.exceptions import ValidationError
+
+        SiteDomain.objects.create(site=site, domain="old.example", is_primary=True)
+
+        def collide(self, *args, **kwargs):
+            raise IntegrityError("duplicate key value violates unique constraint")
+
+        monkeypatch.setattr(SiteDomain, "save", collide)
+
+        with pytest.raises(ValidationError) as raised:
+            self.write(site, "example.com")
+
+        assert raised.value.detail == {
+            "primary_domain": ["This was set by another request at the same time - try again."]
+        }
+
+
+@pytest.mark.django_db
+class TestAUniqueAttribute:
+    # SiteDomain.domain is unique=True: DRF gives its field a UniqueValidator, which would look for the row to
+    # leave out through the serializer it's on - the Site's - so it's replaced by one that knows the row.
+    def refused(self, serializer):
+        assert not serializer.is_valid()
+        return serializer.errors
+
+    def test_writing_the_value_it_already_holds_passes(self, site):
+        SiteDomain.objects.create(site=site, domain="example.com", is_primary=True)
+
+        TestWriting().write(site, "example.com")
+
+        assert primary(site) == ["example.com"]
+
+    def test_moving_it_to_a_free_value_passes(self, site):
+        SiteDomain.objects.create(site=site, domain="old.example", is_primary=True)
+
+        TestWriting().write(site, "new.example")
+
+        assert primary(site) == ["new.example"]
+
+    def test_a_value_another_parents_row_holds_is_a_400_naming_the_field(self, site):
+        other = Site.objects.create(name="other")
+        SiteDomain.objects.create(site=other, domain="example.com", is_primary=True)
+        SiteDomain.objects.create(site=site, domain="old.example", is_primary=True)
+
+        errors = self.refused(site_serializer()(site, data={"primary_domain": "example.com"}, partial=True))
+
+        assert errors == {"primary_domain": ["site domain with this domain already exists."]}
+        assert errors["primary_domain"][0].code == "unique"
+
+    def test_a_value_another_of_its_own_rows_holds_is_refused_too(self, site):
+        SiteDomain.objects.create(site=site, domain="example.com")
+        SiteDomain.objects.create(site=site, domain="old.example", is_primary=True)
+
+        errors = self.refused(site_serializer()(site, data={"primary_domain": "example.com"}, partial=True))
+
+        assert errors["primary_domain"][0].code == "unique"
+
+    def test_with_no_row_yet_a_taken_value_is_refused(self, site):
+        SiteDomain.objects.create(site=Site.objects.create(name="other"), domain="example.com")
+
+        errors = self.refused(site_serializer()(site, data={"primary_domain": "example.com"}, partial=True))
+
+        assert errors["primary_domain"][0].code == "unique"
+
+    def test_on_create_a_taken_value_is_refused(self, site):
+        SiteDomain.objects.create(site=site, domain="example.com", is_primary=True)
+
+        errors = self.refused(site_serializer()(data={"name": "new", "primary_domain": "example.com"}))
+
+        assert errors["primary_domain"][0].code == "unique"
+
+    def test_its_other_validators_still_run(self, site):
+        errors = self.refused(site_serializer()(site, data={"primary_domain": "x" * 101}, partial=True))
+
+        assert errors["primary_domain"][0].code == "max_length"
+
+    def test_the_check_is_one_query(self, site):
+        SiteDomain.objects.create(site=site, domain="example.com", is_primary=True)
+        serializer = site_serializer()(site, data={"primary_domain": "example.com"}, partial=True)
+
+        with CaptureQueriesContext(connection) as queries:
+            assert serializer.is_valid(), serializer.errors
+
+        assert len(queries) == 1
+
 
 class TestDeclaring:
     def test_a_lookup_in_match_is_refused(self):

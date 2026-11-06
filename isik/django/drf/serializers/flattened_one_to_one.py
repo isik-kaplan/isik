@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models.fields.reverse_related import OneToOneRel
 
 from isik._internal.translation import gettext as _
+from isik.django.drf._related_unique import related_row_uniqueness
 from isik.django.drf.error_handling import django_to_drf_validation_error
 
 
@@ -141,12 +142,23 @@ class FlattenedOneToOneMixin(_OneToOneWriteMixin):
         flattened = getattr(self.Meta, "flattened_one_to_one_fields", None)
         if flattened:
             for field_name, nested_cls in flattened.items():
+                relation = self.Meta.model._meta.get_field(field_name)
                 for name, field in nested_cls().fields.items():
                     new_source = f"{field_name}.{field.source}"
+                    # Unique among every row but the one the parent holds - not every row but the parent.
+                    validators = related_row_uniqueness(
+                        field.validators,
+                        attribute=field.source,
+                        rows=lambda parent, relation=relation: relation.related_model._default_manager.filter(
+                            **{relation.field.name: parent}
+                        ),
+                    )
                     # Reconstructed through the constructor, not mutated on a deep-copied instance
                     # - Field.__deepcopy__ always rebuilds from the field's own stashed _args/
                     # _kwargs, and ModelSerializer.get_fields() deep-copies _declared_fields on
                     # every request, so a post-hoc `field.source = ...` mutation would silently
                     # vanish the next time this serializer is instantiated.
-                    fields[name] = field.__class__(*field._args, **{**field._kwargs, "source": new_source})
+                    fields[name] = field.__class__(
+                        *field._args, **{**field._kwargs, "source": new_source, "validators": validators}
+                    )
         return fields

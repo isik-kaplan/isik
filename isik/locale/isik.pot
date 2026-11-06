@@ -750,22 +750,22 @@ msgstr ""
 msgid "%(serializer)s, a serializer of %(view)s, lets a request write %(model)s's concurrency token %(token)r as %(field)r - make it read-only."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:256
+#: isik/django/drf/serializers/flattened_singleton_related.py:267
 #, python-format
 msgid "%(serializer)s.%(name)s: %(accessor)r isn't a reverse foreign key of %(model)s."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:265
+#: isik/django/drf/serializers/flattened_singleton_related.py:276
 #, python-format
 msgid "%(serializer)s.%(name)s: %(field)r isn't a concrete field of %(related)s other than its key back to %(model)s."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:279
+#: isik/django/drf/serializers/flattened_singleton_related.py:290
 #, python-format
 msgid "%(serializer)s.%(name)s: nothing proves %(related)s has one row per %(model)s matching %(match)r - add UniqueConstraint(fields=[%(key)r], condition=Q(**%(match)r))."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:274
+#: isik/django/drf/serializers/flattened_singleton_related.py:285
 #, python-format
 msgid "%(serializer)s.%(name)s: on_empty='clear' needs %(field)r to be nullable."
 msgstr ""
@@ -780,17 +780,17 @@ msgstr ""
 msgid "%(serializer)s: %(fields)s can't be in both write_only_fields and create_only_fields."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_one_to_one.py:22
+#: isik/django/drf/serializers/flattened_one_to_one.py:23
 #, python-format
 msgid "%(serializer)s: '%(field)s' isn't a field on %(model)s."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_one_to_one.py:27
+#: isik/django/drf/serializers/flattened_one_to_one.py:28
 #, python-format
 msgid "%(serializer)s: '%(field)s' isn't a reverse one-to-one relation on %(model)s."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_one_to_one.py:131
+#: isik/django/drf/serializers/flattened_one_to_one.py:132
 #, python-format
 msgid "%(serializer)s: flattened field '%(name)s' is declared by both '%(first)s' and '%(second)s'."
 msgstr ""
@@ -2172,17 +2172,17 @@ msgstr ""
 msgid "Settings are declared, and ISIK_FEATURES_OVERRIDES_MODEL names no model to keep them in - declare one on AbstractOverrides."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:58
+#: isik/django/drf/serializers/flattened_singleton_related.py:59
 #, python-format
 msgid "SingletonRelated(%(accessor)r)'s match computes %(names)s - it takes plain values."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:47
+#: isik/django/drf/serializers/flattened_singleton_related.py:48
 #, python-format
 msgid "SingletonRelated(%(accessor)r)'s match names %(names)s - it takes equality on the related model's own fields, which is also what a missing row is created with."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:63
+#: isik/django/drf/serializers/flattened_singleton_related.py:64
 #, python-format
 msgid "SingletonRelated(%(accessor)r)'s on_empty is %(value)r - it takes %(choices)s."
 msgstr ""
@@ -2672,7 +2672,7 @@ msgstr ""
 msgid "This field can't be changed once it's set."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:102
+#: isik/django/drf/serializers/flattened_singleton_related.py:113
 msgid "This field may not be empty."
 msgstr ""
 
@@ -2714,7 +2714,7 @@ msgstr ""
 msgid "This subscription is forced by staff, so it can't be changed."
 msgstr ""
 
-#: isik/django/drf/serializers/flattened_singleton_related.py:219
+#: isik/django/drf/serializers/flattened_singleton_related.py:230
 msgid "This was set by another request at the same time - try again."
 msgstr ""
 

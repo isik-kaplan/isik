@@ -6,7 +6,7 @@ the parent, read from it and written through to it: a site's primary domain amon
 ```python
 class SiteDomain(BaseModel):
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="domains")
-    domain = models.CharField(max_length=100)
+    domain = models.CharField(max_length=100, unique=True)
     is_primary = models.BooleanField(default=False)
 
     class Meta:
@@ -55,6 +55,10 @@ On create and update alike, inside the save's transaction:
 - No matching row: one is created from `match` and the value. A concurrent request creating it too
   loses on the unique constraint, and gets a 400 naming the field - not a 500.
 - A Django `ValidationError` from the row's own `full_clean()` comes back as a 400.
+- A `unique=True` attribute is unique among every row but the one the parent holds now: writing the
+  value it already has passes, and a value any other row holds - the parent's own or another's - is a 400
+  naming the field (`unique`), checked in the one query DRF's own `UniqueValidator` would make. A
+  concurrent request taking it between that check and the save gets the same 400 as a create race.
 
 ## In a schema
 

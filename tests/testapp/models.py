@@ -677,7 +677,7 @@ class Site(BaseModel):
 
 class SiteDomain(BaseModel):
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="domains")
-    domain = models.CharField(max_length=100)
+    domain = models.CharField(max_length=100, unique=True)
     is_primary = models.BooleanField(default=False)
     note = models.CharField(max_length=50, null=True, blank=True)
 

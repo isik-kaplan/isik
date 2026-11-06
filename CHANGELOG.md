@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.1] - 2026-11-06
+
+### Fixed
+
+- **A `FlattenedSingletonRelatedMixin` field over a `unique=True` column was a 500 on every non-empty write**
+  (`'CharField' object has no attribute 'source_attrs'`): its inner field was never bound, and DRF's
+  `UniqueValidator` reads that. Bound, it would still have checked the wrong row - DRF leaves out the
+  serializer's own instance, the parent, not the singleton row - so it is now unique among every row but the one
+  the parent holds: the unchanged value passes, a value any other row holds is a 400 naming the field (`unique`),
+  in one query. A concurrent update taking the value before the save is the same 400 as a concurrent create,
+  not a 500.
+- **`FlattenedOneToOneMixin` refused a `unique=True` value the related row already held**: DRF's
+  `UniqueValidator` left out the parent's pk, not the related row's. It leaves out the related row now.
+
 ## [0.48.0] - 2026-11-02
 
 ### Added

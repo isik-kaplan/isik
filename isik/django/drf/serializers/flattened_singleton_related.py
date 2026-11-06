@@ -11,6 +11,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from isik._internal.translation import gettext as _
+from isik.django.drf._related_unique import related_row_uniqueness
 from isik.django.drf.error_handling import django_to_drf_validation_error
 
 
@@ -81,13 +82,23 @@ class FlattenedSingletonField(serializers.Field):
     """
     The field `FlattenedSingletonRelatedMixin` declares for each singleton: reads the matching row's
     `attribute`, and writes it through `inner` - the field `attribute` would have on its own model - for its
-    validation. A schema describes it as `inner`.
+    validation - bound beside it, so its validators see the serializer. A `unique=True` attribute is unique
+    among every row but the one the parent holds now. A schema describes it as `inner`.
     """
 
     def __init__(self, *, singleton, inner, **kwargs):
         self.singleton = singleton
         self.inner = inner
+        inner.validators = related_row_uniqueness(
+            inner.validators,
+            attribute=singleton.attribute,
+            rows=lambda parent: getattr(parent, singleton.accessor).filter(**singleton.match),
+        )
         super().__init__(source="*", required=False, **kwargs)
+
+    def bind(self, field_name, parent):
+        super().bind(field_name, parent)
+        self.inner.bind(field_name, self.parent)
 
     def to_representation(self, parent):
         row = getattr(parent, self.singleton.accessor).filter(**self.singleton.match).first()
@@ -205,15 +216,15 @@ class FlattenedSingletonRelatedMixin:
             rows.delete()
             return
         row = rows.select_for_update().first()
-        if row is not None:
-            setattr(row, singleton.attribute, value)
-            row.save(update_fields=[singleton.attribute])
-            return
-        if value is None:
+        if row is None and value is None:
             return
         try:
             with transaction.atomic():
-                getattr(parent, singleton.accessor).create(**singleton.match, **{singleton.attribute: value})
+                if row is None:
+                    getattr(parent, singleton.accessor).create(**singleton.match, **{singleton.attribute: value})
+                else:
+                    setattr(row, singleton.attribute, value)
+                    row.save(update_fields=[singleton.attribute])
         except IntegrityError:
             raise ValidationError(
                 {name: [_("This was set by another request at the same time - try again.")]}

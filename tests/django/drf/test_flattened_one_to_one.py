@@ -2,6 +2,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.validators import UniqueValidator
 
 from isik.django.drf.serializers.flattened_one_to_one import FlattenedOneToOneMixin
 from tests.testapp.models import Widget, WidgetProfile, WidgetSettings
@@ -194,3 +195,83 @@ class TestFlattenedOneToOneMixinValidation:
                     fields = ["id", "name"]
                     # "name" is a real field on Widget, but a plain CharField, not a OneToOneRel.
                     flattened_one_to_one_fields = {"name": WidgetProfileSerializer}
+
+
+class UniqueProfileSerializer(serializers.ModelSerializer):
+    # What ModelSerializer builds for a unique=True column, spelled out - WidgetProfile.bio isn't one.
+    bio = serializers.CharField(validators=[UniqueValidator(queryset=WidgetProfile.objects.all())])
+
+    class Meta:
+        model = WidgetProfile
+        fields = ["bio"]
+
+
+class UniqueSettingsSerializer(serializers.ModelSerializer):
+    settings_bio = serializers.CharField(
+        source="bio", validators=[UniqueValidator(queryset=WidgetSettings.objects.all())]
+    )
+
+    class Meta:
+        model = WidgetSettings
+        fields = ["settings_bio"]
+
+
+class UniqueWidgetSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
+    class Meta:
+        model = Widget
+        fields = ["id", "name"]
+        flattened_one_to_one_fields = {"profile": UniqueProfileSerializer, "settings": UniqueSettingsSerializer}
+
+
+class TestFlattenedOneToOneMixinUniqueness:
+    # DRF's UniqueValidator leaves out the serializer's own instance - the Widget, not the row the value is
+    # written to - so it's replaced by one leaving out the related row the Widget holds.
+    def test_writing_the_value_its_related_row_already_holds_passes(self):
+        widget = Widget.objects.create(name="bolt")
+        WidgetProfile.objects.create(widget=widget, bio="same")
+        WidgetSettings.objects.create(widget=widget, bio="other")
+
+        serializer = UniqueWidgetSerializer(widget, data={"bio": "same", "settings_bio": "other"}, partial=True)
+
+        assert serializer.is_valid(), serializer.errors
+
+    def test_a_value_another_parents_row_holds_is_refused(self):
+        WidgetProfile.objects.create(widget=Widget.objects.create(name="nut"), bio="taken")
+        widget = Widget.objects.create(name="bolt")
+        WidgetProfile.objects.create(widget=widget, bio="mine")
+
+        serializer = UniqueWidgetSerializer(widget, data={"bio": "taken"}, partial=True)
+
+        assert not serializer.is_valid()
+        assert serializer.errors["bio"][0].code == "unique"
+
+    def test_on_create_a_taken_value_is_refused(self):
+        WidgetSettings.objects.create(widget=Widget.objects.create(name="nut"), bio="taken")
+
+        serializer = UniqueWidgetSerializer(data={"name": "bolt", "settings_bio": "taken"})
+
+        assert not serializer.is_valid()
+        assert serializer.errors["settings_bio"] == ["This field must be unique."]
+
+    def test_a_lookup_the_unique_validator_was_given_is_kept(self):
+        class CaselessProfileSerializer(serializers.ModelSerializer):
+            bio = serializers.CharField(
+                validators=[UniqueValidator(queryset=WidgetProfile.objects.all(), lookup="iexact")]
+            )
+
+            class Meta:
+                model = WidgetProfile
+                fields = ["bio"]
+
+        class CaselessWidgetSerializer(FlattenedOneToOneMixin, serializers.ModelSerializer):
+            class Meta:
+                model = Widget
+                fields = ["id", "name"]
+                flattened_one_to_one_fields = {"profile": CaselessProfileSerializer}
+
+        WidgetProfile.objects.create(widget=Widget.objects.create(name="nut"), bio="taken")
+
+        serializer = CaselessWidgetSerializer(data={"name": "bolt", "bio": "TAKEN"})
+
+        assert not serializer.is_valid()
+        assert serializer.errors["bio"][0].code == "unique"
