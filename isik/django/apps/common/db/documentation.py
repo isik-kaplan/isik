@@ -38,24 +38,23 @@ def _from_a_library(model, field):
     return False
 
 
-def _answered(value, exemption_types):
-    if isinstance(value, Exemption):
-        return isinstance(value, exemption_types)
-    return bool(str(value or "").strip())
+def _says(value):
+    # An exemption is a reason not to say it, which says nothing about the field - whatever it shows as.
+    return not isinstance(value, Exemption) and bool(str(value or "").strip())
 
 
-def documentation_problems(app_configs, exemption_types=(Exemption,), inherited_from_libraries=True):
+def documentation_problems(app_configs, inherited_from_libraries=True):
     """
     Each field of the models in `app_configs` that doesn't say what it holds, one sentence each: no
     `help_text` (what the API schema and the admin show), or - for a field with a column of a managed
-    model - no `db_comment` (what someone reading the database sees). An exemption of one of
-    `exemption_types` given as either answers it. Fields Django adds itself (an implicit `id`, a
+    model - no `db_comment` (what someone reading the database sees). An exemption given as either
+    answers neither: there is no way out per field. Fields Django adds itself (an implicit `id`, a
     parent link) are left out, as are proxies and the models isik or pghistory generate. With
     `inherited_from_libraries=False`, so are the fields a model inherits unchanged from a library's
-    abstract base - its description is the library's to write. The system check `isik.E010` reports
+    abstract base - its description is the library's to write, or the project's, through `redeclare()`.
+    The system check `isik.E010` reports
     them.
     """
-    exemption_types = tuple(exemption_types)
     problems = []
     for config in app_configs:
         for model in config.get_models():
@@ -65,14 +64,14 @@ def documentation_problems(app_configs, exemption_types=(Exemption,), inherited_
                 if field.auto_created or (not inherited_from_libraries and _from_a_library(model, field)):
                     continue
                 missing = []
-                if not _answered(field.help_text, exemption_types):
+                if not _says(field.help_text):
                     missing.append("help_text")
                 has_column = field.concrete and not field.many_to_many and model._meta.managed
-                if has_column and not _answered(field.db_comment, exemption_types):
+                if has_column and not _says(field.db_comment):
                     missing.append("db_comment")
                 if missing:
                     problems.append(
-                        _("%(model)s.%(field)s has no %(missing)s - say what it holds, or give an exemption why not.")
+                        _("%(model)s.%(field)s has no %(missing)s - say what it holds.")
                         % {"model": model._meta.label, "field": field.name, "missing": " or ".join(missing)}
                     )
     return problems

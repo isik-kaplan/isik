@@ -78,7 +78,7 @@ class TestConcurrencyToken:
         assert token.field == "revision"
         assert isinstance(token.reason, UnprovenConcurrencyToken)
         assert token.reason == REASON
-        made = declared_exemptions("isik.concurrency-token.unproven")[-1]
+        made = declared_exemptions("isik.django.concurrency-token.unproven")[-1]
         assert made is token.reason
         assert (made.file, made.line) == (HERE, line)
 

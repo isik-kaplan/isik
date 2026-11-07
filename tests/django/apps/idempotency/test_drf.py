@@ -443,7 +443,10 @@ class TestDeclaringExemptions:
 
         assert declared.idempotency_exempt_actions == {"preview": exempt}
         assert declared.idempotency_no_replay_actions == {"x": kept}
-        assert (NoIdempotencyKey.rule, NoReplay.rule) == ("isik.idempotency.key", "isik.idempotency.replay")
+        assert (NoIdempotencyKey.rule, NoReplay.rule) == (
+            "isik.django.idempotency.key",
+            "isik.django.idempotency.replay",
+        )
 
     def test_a_subclass_keeps_its_parents_init_subclass(self):
         seen = []

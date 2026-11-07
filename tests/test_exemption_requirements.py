@@ -124,14 +124,14 @@ class TestLevels:
             exemption_class("Bad", rule="tests.bad", why="x", requirement="optional")
 
     def test_off_is_for_a_check_never_for_what_changes_behavior(self):
-        exemption_requirements({"tests.foo": Requirement.OFF, "settings.question": Requirement.OFF})
+        exemption_requirements({"tests.foo": Requirement.OFF, "isik.settings.question": Requirement.OFF})
 
         assert enforced(FooReason) is False
         assert enforced(LooseReason) is True
         with pytest.raises(TypeError) as raised:
             requirement_of(NoQuestion)
         assert str(raised.value) == (
-            "settings.question can't be Requirement.OFF: its exemption changes what code does rather than "
+            "isik.settings.question can't be Requirement.OFF: its exemption changes what code does rather than "
             "answering a check. Make it Requirement.OPTIONAL instead."
         )
 
@@ -173,17 +173,17 @@ class TestSettings:
         with pytest.raises(TypeError) as raised:
             Setting(str, "Name", default="", question=False)
         assert str(raised.value) == (
-            "False opts out of settings.question without a reason, which needs Requirement.OPTIONAL for it - "
+            "False opts out of isik.settings.question without a reason, which needs Requirement.OPTIONAL for it - "
             "or write NoQuestion(reason=...)."
         )
 
     def test_false_where_its_optional(self):
         exemption_requirements(
             {
-                "settings.question": Requirement.OPTIONAL,
-                "settings.option": Requirement.OPTIONAL,
-                "settings.environment-variable": Requirement.OPTIONAL,
-                "settings.constant": Requirement.OPTIONAL,
+                "isik.settings.question": Requirement.OPTIONAL,
+                "isik.settings.option": Requirement.OPTIONAL,
+                "isik.settings.environment-variable": Requirement.OPTIONAL,
+                "isik.settings.constant": Requirement.OPTIONAL,
             }
         )
         setting = Setting(str, "Name", default="", question=False, option=False, env=False)
@@ -211,7 +211,7 @@ class TestDjango:
                 model = Widget
                 exempt_from_registry = True
 
-        exemption_requirements({"isik.viewset-registry": Requirement.OPTIONAL})
+        exemption_requirements({"isik.django.viewset-registry": Requirement.OPTIONAL})
 
         class Loose(ViewSetRegistryMixin):
             model = Widget
@@ -221,7 +221,7 @@ class TestDjango:
         assert ViewSetRegistryMixin.get_for_model(Widget) is not Loose
 
     def test_a_map_of_exemptions_with_true(self):
-        exemption_requirements({"isik.precondition": Requirement.OPTIONAL})
+        exemption_requirements({"isik.django.precondition": Requirement.OPTIONAL})
 
         class Loose(PreconditionMixin):
             precondition_exempt_actions = {"poke": True}
@@ -232,7 +232,7 @@ class TestDjango:
         monkeypatch.setattr(constraints, "unclassified_validators", lambda: ["app.Thing.note (unanswered)"])
         assert len(checks.every_validator_says_whether_it_can_hold_at_the_column(app_configs=None)) == 1
 
-        exemption_requirements({"isik.validators.database-form": Requirement.OFF})
+        exemption_requirements({"isik.django.validators.database-form": Requirement.OFF})
 
         assert checks.every_validator_says_whether_it_can_hold_at_the_column(app_configs=None) == []
 

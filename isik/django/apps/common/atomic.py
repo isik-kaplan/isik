@@ -10,7 +10,7 @@ from isik.common.utils.exemptions import Exemption
 
 class NotAtomic(
     Exemption,
-    rule="isik.not-atomic",
+    rule="isik.django.not-atomic",
     changes_behavior=True,
     why=(
         "A request served outside a transaction leaves whatever it wrote before failing written, and "
@@ -28,7 +28,7 @@ def not_atomic(reason, using=None):
         @not_atomic("streams a large export, which one transaction would hold open for minutes")
         def export(request): ...
 
-    The reason is a `NotAtomic` (rule `isik.not-atomic`), held to its floor and listed by
+    The reason is a `NotAtomic` (rule `isik.django.not-atomic`), held to its floor and listed by
     `manage.py exemptions`. The system check `isik.E011` refuses a routed view served outside the
     transaction without one - see `not_atomic_problems()`.
     """

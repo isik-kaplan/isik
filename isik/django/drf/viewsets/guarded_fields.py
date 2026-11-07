@@ -34,7 +34,7 @@ def _guards_in(permission):
 
 class WritesNoGuardedFields(
     Exemption,
-    rule="isik.guarded-fields.writes-none",
+    rule="isik.django.guarded-fields.writes-none",
     changes_behavior=True,
     why="A write through a viewset with field guards runs them, or it fails and is rolled back.",
 ):
@@ -75,7 +75,7 @@ def writes_no_guarded_fields(reason):
 
 class UnguardedField(
     Exemption,
-    rule="isik.guarded-fields.unguarded",
+    rule="isik.django.guarded-fields.unguarded",
     changes_behavior=True,
     why=(
         "A field one viewset guards is guarded wherever its serializer writes it, or the other viewset is a "

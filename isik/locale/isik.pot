@@ -72,12 +72,12 @@ msgstr ""
 msgid "%(field)s's db_default %(default)r has no value in Python - give the field one before encoding."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:560
+#: isik/django/apps/common/checks.py:557
 #, python-format
 msgid "%(file)s:%(line)s declares %(name)s, which loading the project didn't import."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:555
+#: isik/django/apps/common/checks.py:552
 #, python-format
 msgid "%(file)s:%(line)s makes an exemption through %(name)s that loading the project didn't."
 msgstr ""
@@ -560,9 +560,9 @@ msgstr ""
 msgid "%(model)s's version covers %(relation)r, rows pointing at it - pass related={%(relation)r: <a function making one for the instance it's given>}."
 msgstr ""
 
-#: isik/django/apps/common/db/documentation.py:75
+#: isik/django/apps/common/db/documentation.py:74
 #, python-format
-msgid "%(model)s.%(field)s has no %(missing)s - say what it holds, or give an exemption why not."
+msgid "%(model)s.%(field)s has no %(missing)s - say what it holds."
 msgstr ""
 
 #: isik/django/drf/schema.py:50
@@ -680,7 +680,7 @@ msgstr ""
 msgid "%(option)s is a plain click option - declare it as a Setting, or pass plain_options="
 msgstr ""
 
-#: isik/django/apps/common/checks.py:376
+#: isik/django/apps/common/checks.py:373
 #, python-format
 msgid "%(owner)s's version covers %(relation)r, but the trigger locking it on %(table)s is %(status)s on database %(database)r - a change to it can slip past a write's If-Match."
 msgstr ""
@@ -730,12 +730,12 @@ msgstr ""
 msgid "%(policy)s is the project's, and %(kept)s still isik's - whose shipped guard reads isik's policy table. Own those too."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:366
+#: isik/common/utils/exemptions.py:367
 #, python-format
 msgid "%(rule)s can't be Requirement.OFF: its exemption changes what code does rather than answering a check. Make it Requirement.OPTIONAL instead."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:482
+#: isik/common/utils/exemptions.py:483
 #, python-format
 msgid "%(rule)s has %(count)d exemptions, over its budget of %(budget)d:\n%(where)s"
 msgstr ""
@@ -840,67 +840,67 @@ msgstr ""
 msgid "%(strict)s guards %(fields)s on %(serializer)s, but %(lenient)s uses the same serializer without guarding them - guard them there too, or name them in %(lenient)s.unguarded_fields with the reason they're open there."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:166
+#: isik/common/utils/exemptions.py:167
 #, python-format
 msgid "%(type)s claims the rule %(rule)r, which %(module)s.%(claimed)s already exempts from - name another."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:212
+#: isik/common/utils/exemptions.py:213
 #, python-format
 msgid "%(type)s is the base to make exemption types from - subclass it with rule= and why=."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:244
+#: isik/common/utils/exemptions.py:245
 #, python-format
 msgid "%(type)s needs a reason of at least %(length)d characters. %(why)s Got %(reason)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:224
+#: isik/common/utils/exemptions.py:225
 #, python-format
 msgid "%(type)s needs reason=."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:179
+#: isik/common/utils/exemptions.py:180
 #, python-format
 msgid "%(type)s needs rule= - the dotted name of the rule it exempts from."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:185
+#: isik/common/utils/exemptions.py:186
 #, python-format
 msgid "%(type)s needs why= - what the rule asks for, and why it matters."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:216
+#: isik/common/utils/exemptions.py:217
 #, python-format
 msgid "%(type)s takes its reason as reason=, not positionally."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:220
+#: isik/common/utils/exemptions.py:221
 #, python-format
 msgid "%(type)s takes only reason=, not %(names)s."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:191
+#: isik/common/utils/exemptions.py:192
 #, python-format
 msgid "%(type)s's min_length must be a whole number of at least 1, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:238
+#: isik/common/utils/exemptions.py:239
 #, python-format
 msgid "%(type)s's reason must be text, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:149
+#: isik/common/utils/exemptions.py:150
 #, python-format
 msgid "%(type)s's requirement must be a Requirement, not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:159
+#: isik/common/utils/exemptions.py:160
 #, python-format
-msgid "%(type)s's rule must be a dotted slug like 'schema-docs.help-text', not %(rule)r."
+msgid "%(type)s's rule must be a dotted slug like 'api-docs.summary', not %(rule)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:196
+#: isik/common/utils/exemptions.py:197
 #, python-format
 msgid "%(type)s's shows_as must be a str, not %(value)r."
 msgstr ""
@@ -960,12 +960,12 @@ msgstr ""
 msgid "%(view)s answered %(method)s %(action)s without get_object(), so it sent no ETag - and a write needs one to name in If-Match. Fetch the row with self.get_object(), or take the action out of precondition_read_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:457
+#: isik/django/apps/common/checks.py:454
 #, python-format
 msgid "%(view)s answers %(method)s without asking If-Match."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:426
+#: isik/django/apps/common/checks.py:423
 #, python-format
 msgid "%(view)s answers %(method)s without honoring an Idempotency-Key."
 msgstr ""
@@ -1105,7 +1105,7 @@ msgstr ""
 msgid "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't listed."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:326
+#: isik/common/utils/exemptions.py:327
 #, python-format
 msgid "%(where)s gives %(rule)r the level %(level)r - write a Requirement, e.g. Requirement.OPTIONAL."
 msgstr ""
@@ -1115,7 +1115,7 @@ msgstr ""
 msgid "%(where)s gives two things one name - rename one:\n%(lines)s"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:227
+#: isik/django/apps/common/checks.py:224
 #, python-format
 msgid "%(where)s has CheckOption.%(option)s - it takes %(takes)s."
 msgstr ""
@@ -1125,17 +1125,17 @@ msgstr ""
 msgid "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't listed above."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:205
+#: isik/django/apps/common/checks.py:202
 #, python-format
 msgid "%(where)s names %(key)r as a string - write %(member)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:210
+#: isik/django/apps/common/checks.py:207
 #, python-format
 msgid "%(where)s names %(key)r, which isn't a %(enum)s: %(members)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:238
+#: isik/django/apps/common/checks.py:235
 #, python-format
 msgid "%(where)s's severity is %(value)r - write %(choices)s."
 msgstr ""
@@ -1190,6 +1190,10 @@ msgstr ""
 #: isik/django/apps/features/declarations.py:51
 #, python-format
 msgid "A feature called %(name)s is declared already."
+msgstr ""
+
+#: isik/django/apps/common/checks.py:569
+msgid "A field a library's abstract base declares is described with redeclare() (isik.django.apps.common.db); ISIK_CHECKS[Check.DOCUMENTATION] says which fields are checked at all."
 msgstr ""
 
 #: isik/django/apps/common/forcing.py:83
@@ -1286,11 +1290,11 @@ msgstr ""
 msgid "Active"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:427
+#: isik/django/apps/common/checks.py:424
 msgid "Add IdempotencyMixin (BaseModelViewSet has it) with the method in idempotent_methods, or exempt the action in idempotency_exempt_actions."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:458
+#: isik/django/apps/common/checks.py:455
 msgid "Add PreconditionMixin (BaseModelViewSet has it) with the method in precondition_methods, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
@@ -1430,11 +1434,11 @@ msgstr ""
 msgid "DatabaseTimestampsModel (and so BaseModel) requires 'pgtrigger' in INSTALLED_APPS - it maintains created_at/updated_at via database triggers, not Django's auto_now/auto_now_add. django-pgtrigger installs automatically as django-pghistory's dependency; add both to INSTALLED_APPS."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:504
+#: isik/django/apps/common/checks.py:501
 msgid "Declare Meta.db_table, and a name for each Meta.indexes entry."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:543
+#: isik/django/apps/common/checks.py:540
 msgid "Declare a label (and a message, for a kind sent to the inbox) - see KindText."
 msgstr ""
 
@@ -1546,7 +1550,7 @@ msgstr ""
 msgid "Firebase Cloud Messaging"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:315
+#: isik/django/apps/common/checks.py:312
 msgid "Give the class an `as_condition`, decorate it with `no_database_form(reason)`, or wrap the instance in `python_only_validator(validator, reason=...)`."
 msgstr ""
 
@@ -1615,17 +1619,17 @@ msgstr ""
 msgid "ID"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:278
+#: isik/django/apps/common/checks.py:275
 #, python-format
 msgid "ISIK_CHECKS is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:287
+#: isik/django/apps/common/checks.py:284
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] is %(value)r, not a dict."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:262
+#: isik/django/apps/common/checks.py:259
 #, python-format
 msgid "ISIK_CHECKS[Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s."
 msgstr ""
@@ -1754,11 +1758,11 @@ msgstr ""
 msgid "Its variants, if any."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:264
+#: isik/django/apps/common/checks.py:261
 msgid "Leave out CheckOption.URLCONFS to check every urlconf the project serves."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:552
+#: isik/django/apps/common/checks.py:549
 msgid "Make it where loading the project runs it - see manage.py exemptions."
 msgstr ""
 
@@ -1796,7 +1800,7 @@ msgstr ""
 msgid "No channel is registered as %(name)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:468
+#: isik/common/utils/exemptions.py:469
 #, python-format
 msgid "No exemption type exempts from %(rule)r."
 msgstr ""
@@ -2039,7 +2043,7 @@ msgstr ""
 msgid "Retired %(kind)s."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:387
+#: isik/django/apps/common/checks.py:384
 #, python-format
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
 msgstr ""
@@ -2048,43 +2052,39 @@ msgstr ""
 msgid "Sandbox"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:602
+#: isik/django/apps/common/checks.py:598
 msgid "See AnyChange and its siblings (isik.django.apps.common.db.conditions), which leave them out."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:444
+#: isik/django/apps/common/checks.py:441
 msgid "See FlattenedSingletonRelatedMixin (isik.django.drf.serializers)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:524
+#: isik/django/apps/common/checks.py:521
 msgid "See NoViolationMessage (isik.django.apps.common.db)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:334
+#: isik/django/apps/common/checks.py:331
 msgid "See PreconditionMixin (isik.django.drf.viewsets.preconditions) and concurrency tokens (isik.django.apps.common.db.concurrency)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:351
+#: isik/django/apps/common/checks.py:348
 msgid "See PreconditionMixin's options (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:402
+#: isik/django/apps/common/checks.py:399
 msgid "See PreconditionMixin's version reads (isik.django.drf.viewsets.preconditions)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:484
+#: isik/django/apps/common/checks.py:481
 msgid "See ProtectTruncate (isik.django.apps.common.db)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:575
-msgid "See documentation_problems() (isik.django.apps.common.db.documentation)."
-msgstr ""
-
-#: isik/django/apps/common/checks.py:495
+#: isik/django/apps/common/checks.py:492
 msgid "See fitted_name() (isik.django.apps.common.db)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:279
+#: isik/django/apps/common/checks.py:276
 msgid "See isik.django.apps.common.checks."
 msgstr ""
 
@@ -2096,15 +2096,15 @@ msgstr ""
 msgid "See isik.django.apps.notifications."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:513
+#: isik/django/apps/common/checks.py:510
 msgid "See meta_inheritance_problems() (isik.django.apps.common.db.models)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:593
+#: isik/django/apps/common/checks.py:589
 msgid "See not_atomic() (isik.django.apps.common.atomic)."
 msgstr ""
 
-#: isik/django/apps/common/checks.py:475
+#: isik/django/apps/common/checks.py:472
 msgid "See object_stream_index(table) (isik.django.apps.common.db.history)."
 msgstr ""
 
@@ -2764,7 +2764,7 @@ msgstr ""
 msgid "User property %(property)s is False"
 msgstr ""
 
-#: isik/django/apps/common/checks.py:313
+#: isik/django/apps/common/checks.py:310
 #, python-format
 msgid "Validators do not say whether they can hold at the column: %(names)s"
 msgstr ""
@@ -3305,7 +3305,7 @@ msgstr ""
 msgid "env= takes the variable's full name, or NoEnv(reason=...), not %(value)r."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:313
+#: isik/common/utils/exemptions.py:314
 #, python-format
 msgid "exemption_class() can't tell which module %(name)s is in - pass module=."
 msgstr ""
@@ -3423,7 +3423,7 @@ msgstr ""
 msgid "lifted_constraint() drops %(name)r from the table, so it runs inside a transaction that rolls back - a test's own."
 msgstr ""
 
-#: isik/common/utils/exemptions.py:416
+#: isik/common/utils/exemptions.py:417
 #, python-format
 msgid "makes_exemption() takes an exemption type, not %(value)r."
 msgstr ""
@@ -3530,6 +3530,21 @@ msgstr ""
 #: isik/django/apps/feedback/annotations.py:82
 #, python-format
 msgid "ranked() ranks by a votes() attachment, not %(field)r"
+msgstr ""
+
+#: isik/django/apps/common/db/fields.py:60
+#, python-format
+msgid "redeclare(%(model)s.%(field)s) changes nothing - inheriting it declares the same field."
+msgstr ""
+
+#: isik/django/apps/common/db/fields.py:52
+#, python-format
+msgid "redeclare(%(model)s.%(field)s): %(model)s is a concrete model, whose own table holds %(field)s - redeclare() takes a field an abstract model declares."
+msgstr ""
+
+#: isik/django/apps/common/db/fields.py:48
+#, python-format
+msgid "redeclare() takes a model's field, not %(value)r."
 msgstr ""
 
 #: isik/common/config/builder.py:126

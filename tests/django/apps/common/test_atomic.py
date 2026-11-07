@@ -32,7 +32,7 @@ class TestOnAFunction:
 
         assert type(view.not_atomic) is NotAtomic
         assert view.not_atomic == REASON
-        assert NotAtomic.rule == "isik.not-atomic"
+        assert NotAtomic.rule == "isik.django.not-atomic"
 
     def test_takes_one_already_made(self):
         made = NotAtomic(reason=REASON)

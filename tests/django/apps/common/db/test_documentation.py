@@ -8,7 +8,7 @@ from django.db import models
 from django.test.utils import isolate_apps
 from pghistory.models import Event
 
-from isik.common.utils.exemptions import Exemption, exemption_class
+from isik.common.utils.exemptions import exemption_class
 from isik.django.apps.common.db.documentation import documentation_problems
 from isik.django.apps.common.generated import mark_generated
 
@@ -22,6 +22,7 @@ NoComment = exemption_class(
     "NoDocumentationComment",
     rule="tests.documentation-comment",
     why="Another test type of exemption from saying what a field holds.",
+    shows_as="",
 )
 REASON = "the labels of its choices already say what it holds"
 
@@ -37,8 +38,8 @@ def model(fields, meta=None, bases=(models.Model,)):
     return type(f"Documented{uuid.uuid4().hex[:8]}", bases, attrs)
 
 
-def problems(*models_, exemption_types=(Exemption,)):
-    return documentation_problems([types.SimpleNamespace(get_models=lambda: models_)], exemption_types)
+def problems(*models_):
+    return documentation_problems([types.SimpleNamespace(get_models=lambda: models_)])
 
 
 class TestAField:
@@ -50,10 +51,7 @@ class TestAField:
     def test_without_either_is_named_once(self):
         made = model({"name": models.CharField(max_length=5)})
 
-        assert problems(made) == [
-            f"testapp.{made.__name__}.name has no help_text or db_comment - say what it holds, or give an "
-            "exemption why not."
-        ]
+        assert problems(made) == [f"testapp.{made.__name__}.name has no help_text or db_comment - say what it holds."]
 
     def test_without_one_names_that_one(self):
         no_comment = model({"name": models.CharField(max_length=5, help_text="Its name.")})
@@ -69,7 +67,8 @@ class TestAField:
 
         assert len(problems(made)) == 1
 
-    def test_an_exemption_answers_for_either(self):
+    def test_an_exemption_answers_for_neither(self):
+        # NoHelpText shows as its reason, NoComment as nothing - neither is a description.
         made = model(
             {
                 "name": models.CharField(
@@ -78,15 +77,8 @@ class TestAField:
             }
         )
 
-        assert problems(made) == []
-
-    def test_only_an_exemption_of_the_types_given(self):
-        made = model(
-            {"name": models.CharField(max_length=5, help_text=NoHelpText(reason=REASON), db_comment="Its name.")}
-        )
-
-        assert len(problems(made, exemption_types=[NoComment])) == 1
-        assert problems(made, exemption_types=[NoHelpText]) == []
+        assert named(problems(made)) == ["name"]
+        assert "no help_text or db_comment" in problems(made)[0]
 
     def test_a_many_to_many_needs_no_comment(self):
         made = model({"others": models.ManyToManyField("auth.Group", help_text="Its groups.")})
@@ -179,9 +171,7 @@ class TestFieldsInheritedFromALibrary:
 
 
 def documentation_problems_of(*models_, inherited_from_libraries):
-    return documentation_problems(
-        [types.SimpleNamespace(get_models=lambda: models_)], (Exemption,), inherited_from_libraries
-    )
+    return documentation_problems([types.SimpleNamespace(get_models=lambda: models_)], inherited_from_libraries)
 
 
 class TestALibrarysPath:
@@ -195,3 +185,13 @@ class TestALibrarysPath:
         assert is_library_path("/usr/lib/python3/dist-packages/django_tenants/models.py")
         assert is_library_path(str(Path(isik.__file__).parent / "django" / "models.py"))
         assert not is_library_path(__file__)
+
+
+def test_isiks_own_models_say_what_every_field_holds():
+    # The check isik holds a project to, held over isik's own apps - every field, a library's included.
+    from django.apps import apps
+
+    own = [config for config in apps.get_app_configs() if config.name.startswith("isik.")]
+
+    assert {config.label for config in own} >= {"isik_notifications", "isik_features", "idempotency_by_reference"}
+    assert documentation_problems(own, inherited_from_libraries=True) == []

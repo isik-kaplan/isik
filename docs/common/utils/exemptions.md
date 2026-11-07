@@ -2,27 +2,27 @@
 
 `Exemption`: a `str` that skips one named rule and carries the reason it does. The reason is held to
 a minimum length, so it tells the next reader something. A project's opt-outs ("this field needs no
-help_text", "this view needs no transaction") are made with it, as are isik's own. Every opt-out can
+summary", "this view needs no transaction") are made with it, as are isik's own. Every opt-out can
 then be listed by the rule it skips.
 
 ```python
 from isik.common.utils.exemptions import Exemption, exemption_class
 
 
-class NoHelpText(
+class NoSummary(
     Exemption,
-    rule="schema-docs.help-text",
-    why="Every field should say what it holds in help_text.",
+    rule="api-docs.summary",
+    why="Every endpoint should say what it does in its summary.",
     shows_as="",
 ):
     pass
 
 
 # The same class, in one line:
-NoComment = exemption_class(
-    "NoComment",
-    rule="schema-docs.db-comment",
-    why="Every column should say what it holds.",
+NoDescription = exemption_class(
+    "NoDescription",
+    rule="api-docs.description",
+    why="Every endpoint should say what it returns in its description.",
     shows_as="",
 )
 
@@ -31,11 +31,12 @@ class NotAtomicReason(Exemption, rule="transactions.atomic-requests", why="Every
     pass
 
 
-language = models.CharField(..., help_text=NoHelpText(reason="the labels of its choices already say what it holds"))
+@extend_schema(summary=NoSummary(reason="its operation id already says what the endpoint does"))
+def health(request): ...
 
-NoHelpText(reason="it is obvious")
-# ValueError: NoHelpText needs a reason of at least 40 characters. Every field should say what it holds
-# in help_text. Got 'it is obvious'.
+NoSummary(reason="it is obvious")
+# ValueError: NoSummary needs a reason of at least 40 characters. Every endpoint should say what it does
+# in its summary. Got 'it is obvious'.
 ```
 
 `exemption_class()` makes the class in the module that calls it, which is the module migrations
@@ -46,15 +47,21 @@ import it from. Pass `module=` when the class is importable from somewhere else.
 - `rule` is the stable dotted slug of the rule it exempts from (`[a-z0-9-]+(\.[a-z0-9-]+)*`). It is
   required and unique: a second type claiming a rule is refused at import, naming both classes. A
   subclass that names no rule keeps its parent's, which is how a floor is raised:
-  `class StrictNoHelpText(NoHelpText, min_length=60)`.
+  `class StrictNoSummary(NoSummary, min_length=60)`.
+
+  Rules share one namespace across isik and every project using it, so isik's own say where they live:
+  `isik.django.` for the Django layer (`isik.django.idempotency.key`, `isik.django.constraints.violation-message`,
+  and the `isik.django.policy.<name>` a request policy's exemptions list under), `isik.` for the rest
+  (`isik.settings.option`). Everything under `isik.` is isik's - a project's own rules take its own prefix,
+  or none (`api-docs.summary`). A test holds isik's to it.
 - `why` says what the rule asks for and why it matters. It is required, it becomes the class
   docstring unless the class has its own, and every refusal repeats it, so the error teaches the rule
   to whoever is trying to skip it.
 - `min_length` is the shortest reason accepted, 40 by default. Whitespace runs collapse before
   counting.
 - `shows_as` is what the `str` is. By default it's the reason itself. Use `""` for a sentinel that
-  Django and drf-spectacular must see as empty (`help_text`, `db_comment`) while it still carries its
-  reason.
+  Django and drf-spectacular must see as empty (a `summary`, a constraint's `violation_error_message`)
+  while it still carries its reason.
 
 ## How much a rule asks
 
@@ -77,10 +84,10 @@ from isik.common.utils.exemptions import Requirement, exemption_class, exemption
 FooReason = exemption_class("FooReason", rule="foo.bar", why="...", requirement=Requirement.OPTIONAL)
 
 # The project's levels, in Django settings - keyed by rule, a rule covering the kinds of it:
-ISIK_EXEMPTIONS = {"foo.bar": Requirement.STRICT, "settings.question": Requirement.OPTIONAL}
+ISIK_EXEMPTIONS = {"foo.bar": Requirement.STRICT, "isik.settings.question": Requirement.OPTIONAL}
 
 # Without Django, before what declares exemptions is imported (a call wins over the setting):
-exemption_requirements({"settings.question": Requirement.OPTIONAL})
+exemption_requirements({"isik.settings.question": Requirement.OPTIONAL})
 ```
 
 A level is read when an exemption is made, so set it before the code that declares them is imported.
@@ -96,12 +103,12 @@ isik's own checks keep their own switches (`ISIK_CHECKS`) as well.
 
 ## Making one
 
-Only `reason=`, as a keyword: `NoHelpText(reason="...")`. A positional reason, any other keyword, a
+Only `reason=`, as a keyword: `NoSummary(reason="...")`. A positional reason, any other keyword, a
 missing reason, and the `Exemption` base itself are all refused.
 
 An exemption is equal to, and hashes as, the `str` it shows as. `copy` and `deepcopy` return it as
 is, and `pickle` rebuilds it. `deconstruct()` makes Django's migration writer spell it as the call that
-made it, `module.NoHelpText(reason='...')`, rather than as `""`. Without that, the migration state would
+made it, `module.NoSummary(reason='...')`, rather than as `""`. Without that, the migration state would
 hold the empty string and `makemigrations` would never settle. `repr()` reads as the call too.
 
 ## Listing them
@@ -209,15 +216,15 @@ def carried_by_copies(decorators):
 
 `manage.py exemptions` puts these together. It loads the models and every urlconf the project serves,
 then lists every exemption by rule. Each `RequestPolicy`'s `{action: exemption}` exemptions on routed
-views appear under `policy.<policy-name>`:
+views appear under `isik.django.policy.<policy-name>`:
 
 ```console
 $ python manage.py exemptions
-schema-docs.help-text         apps/users/models/user.py:41   the labels of its choices already say what it holds
-transactions.atomic-requests  apps/files/views/upload.py:18  streams to storage the whole time
-policy.organization-is-set-up apps/orgs/views.py:12          me - answers who is asking, which a blocked caller needs
+api-docs.summary                          apps/ops/views/health.py:9     its operation id already says what the endpoint does
+isik.django.policy.organization-is-set-up apps/orgs/views.py:12          me - answers who is asking, which a blocked caller needs
+transactions.atomic-requests              apps/files/views/upload.py:18  streams to storage the whole time
 
-$ python manage.py exemptions --rule schema-docs.help-text   # one rule
+$ python manage.py exemptions --rule api-docs.summary        # one rule
 $ python manage.py exemptions --rules                        # each rule, its count, and its why
 $ python manage.py exemptions --format json                  # for tooling and CI diffing
 $ python manage.py exemptions --urlconf config.urls.api --urlconf config.urls.admin
@@ -243,18 +250,18 @@ Every opt-out isik offers has its own type, with a rule under `isik.`:
 
 | Opt-out | Type | Rule |
 |---|---|---|
-| `ViewSetRegistryMixin.exempt_from_registry` | `ViewSetRegistryExemption` | `isik.viewset-registry` |
-| `ModelSerializerRegistryMixin.exempt_from_registry` | `SerializerRegistryExemption` | `isik.serializer-registry` |
-| `@writes_no_guarded_fields(...)`, `actions_writing_no_guarded_fields` | `WritesNoGuardedFields` | `isik.guarded-fields.writes-none` |
-| `GuardedFieldsMixin.unguarded_fields` | `UnguardedField` | `isik.guarded-fields.unguarded` |
-| `<policy>_exempt_actions` | `RequestPolicyExemption`, or the policy's own `exemption_type` | `isik.request-policy`, or its own |
-| `IdempotencyMixin.idempotency_exempt_actions` | `NoIdempotencyKey` | `isik.idempotency.key` |
-| `IdempotencyMixin.idempotency_no_replay_actions` | `NoReplay` | `isik.idempotency.replay` |
-| `PreconditionMixin.precondition_exempt_actions` | `NoPrecondition` | `isik.precondition` |
-| `PreconditionMixin.precondition_unread_actions` | `NoReadableVersion` | `isik.precondition.readable-version` |
-| `@no_database_form(...)`, `python_only_validator(...)` | `NoDatabaseForm` | `isik.validators.database-form` |
-| `ConcurrencyToken(field, reason=...)` | `UnprovenConcurrencyToken` | `isik.concurrency-token.unproven` |
-| `concurrency_strategy = ConcurrencyParts(reason=...)` | `ConcurrencyParts` | `isik.concurrency-parts.unproven` |
+| `ViewSetRegistryMixin.exempt_from_registry` | `ViewSetRegistryExemption` | `isik.django.viewset-registry` |
+| `ModelSerializerRegistryMixin.exempt_from_registry` | `SerializerRegistryExemption` | `isik.django.serializer-registry` |
+| `@writes_no_guarded_fields(...)`, `actions_writing_no_guarded_fields` | `WritesNoGuardedFields` | `isik.django.guarded-fields.writes-none` |
+| `GuardedFieldsMixin.unguarded_fields` | `UnguardedField` | `isik.django.guarded-fields.unguarded` |
+| `<policy>_exempt_actions` | `RequestPolicyExemption`, or the policy's own `exemption_type` | `isik.django.request-policy`, or its own |
+| `IdempotencyMixin.idempotency_exempt_actions` | `NoIdempotencyKey` | `isik.django.idempotency.key` |
+| `IdempotencyMixin.idempotency_no_replay_actions` | `NoReplay` | `isik.django.idempotency.replay` |
+| `PreconditionMixin.precondition_exempt_actions` | `NoPrecondition` | `isik.django.precondition` |
+| `PreconditionMixin.precondition_unread_actions` | `NoReadableVersion` | `isik.django.precondition.readable-version` |
+| `@no_database_form(...)`, `python_only_validator(...)` | `NoDatabaseForm` | `isik.django.validators.database-form` |
+| `ConcurrencyToken(field, reason=...)` | `UnprovenConcurrencyToken` | `isik.django.concurrency-token.unproven` |
+| `concurrency_strategy = ConcurrencyParts(reason=...)` | `ConcurrencyParts` | `isik.django.concurrency-parts.unproven` |
 
 An attribute, or each value of a `{name: ...}` map, is written as the type itself - never a bare
 string, which reads at the call site as a value to be used, an exception message say, rather than the
@@ -271,7 +278,7 @@ A function or decorator whose own call names the rule - `@writes_no_guarded_fiel
 `@no_database_form("...")`, `ConcurrencyToken(field, reason=...)` - takes the reason as text: there's
 nothing to mistake it for.
 
-A request policy's exemptions are listed under the policy, as `policy.<name>` with the action each
+A request policy's exemptions are listed under the policy, as `isik.django.policy.<name>` with the action each
 exempts, rather than under their type's rule. A policy names a type of its own with a subclass of
 `RequestPolicyExemption` carrying its own rule:
 

@@ -20,7 +20,7 @@ class ExportView(View): ...
 - On a function view, on what `as_view()` returns, or on a class-based view's class - which gets a
   `dispatch` of its own, so the other views inheriting its `dispatch` stay in the transaction.
 - `using` names the database, as `non_atomic_requests(using)` does.
-- The reason is a `NotAtomic` exemption (rule `isik.not-atomic`), held to its floor and listed by
+- The reason is a `NotAtomic` exemption (rule `isik.django.not-atomic`), held to its floor and listed by
   `manage.py exemptions` where it was made.
 
 The system check `isik.E011` ([checks](checks.md)) refuses a routed view served outside the

@@ -13,7 +13,7 @@ minor release with no alias, as with every breaking change while isik is at 0.y.
    as everything is - `http_exceptions`, `orm.py`. This is isik-ts's rule in Python's two cases, so
    the two libraries read alike.
 3. **American spelling**, in identifiers and in prose: `behavior`, `honor`, `organization`.
-4. **A name says what the thing is for** - for a domain type: `NoHelpText`, `IdempotencyKeyReused`.
+4. **A name says what the thing is for** - for a domain type: `NoViolationMessage`, `IdempotencyKeyReused`.
    Machinery whose whole job *is* its mechanism is named for the mechanism, and that's not a
    violation: `TransformExceptions`, `RequiredAttributesMixin`, `NarrowingFilterMixin`.
 5. **A conjunction in capitals is allowed, and it isn't an acronym.** `CookieORHeaderSessionMiddleware`,

@@ -14,7 +14,7 @@ from isik.common.utils.exemptions import Exemption
 
 class ScheduledElsewhere(
     Exemption,
-    rule="isik.notifications.fan-out-started",
+    rule="isik.django.notifications.fan-out-started",
     why=(
         "A notice waits until something starts a fan-out, and isik sees only its middleware, FAN_OUT_AFTER_TASKS "
         "and beat_schedule() in the Celery app's beat."
@@ -25,7 +25,7 @@ class ScheduledElsewhere(
 
 class SendsInline(
     Exemption,
-    rule="isik.notifications.sends-inline",
+    rule="isik.django.notifications.sends-inline",
     why="With tasks run inline, a webhook is sent inside the request or task that wrote its notice.",
 ):
     """Why sending inside the writing request or task is acceptable - `ISIK_NOTIFICATIONS["SENDS_INLINE"]`."""
@@ -33,7 +33,7 @@ class SendsInline(
 
 class SharedEndpoints(
     Exemption,
-    rule="isik.notifications.shared-endpoints",
+    rule="isik.django.notifications.shared-endpoints",
     why=(
         "With no ENDPOINT_OWNER_FIELD every endpoint hears every notice of its kinds - an endpoint keyed to a "
         "user is sent every other user's."

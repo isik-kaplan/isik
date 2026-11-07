@@ -251,7 +251,7 @@ class TestDeclaringOne:
 
     def test_its_exemptions_are_request_policy_exemptions_by_default(self):
         assert RequestPolicy.exemption_type is RequestPolicyExemption
-        assert RequestPolicyExemption.rule == "isik.request-policy"
+        assert RequestPolicyExemption.rule == "isik.django.request-policy"
         assert RequestPolicyExemption.listed_by_policy is True
 
     def test_it_can_name_a_type_of_its_own_which_its_exemptions_must_be(self):

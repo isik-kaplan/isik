@@ -23,7 +23,7 @@ write made against the version before it could lose
 
 Any other field is declared, with the reason it changes on every write. A trigger of the project's
 own, for instance: its SQL can't be read for that, so isik takes the reason instead. The reason is an
-`UnprovenConcurrencyToken` exemption (rule `isik.concurrency-token.unproven`), held to its 40-character
+`UnprovenConcurrencyToken` exemption (rule `isik.django.concurrency-token.unproven`), held to its 40-character
 floor and listed by `manage.py exemptions`:
 
 ```python
@@ -145,7 +145,7 @@ class Squad(VersionedModel, BaseModel):
 
 The model says what its version covers, in Python: `concurrency_parts(self)` returns a list of JSON-able
 values (a datetime, a UUID or a `Decimal` reads as its text), and the ETag is a SHA-256 of the token
-and that list. The reason is a `ConcurrencyParts` exemption (rule `isik.concurrency-parts.unproven`), held
+and that list. The reason is a `ConcurrencyParts` exemption (rule `isik.django.concurrency-parts.unproven`), held
 to its floor and listed by `manage.py exemptions`.
 
 - *When.* A version that depends on something the other two can't read - a reverse relation, a value in

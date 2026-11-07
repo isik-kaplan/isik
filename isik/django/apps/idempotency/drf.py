@@ -22,7 +22,7 @@ LOCK_TIMEOUT = 10_000
 
 class NoIdempotencyKey(
     Exemption,
-    rule="isik.idempotency.key",
+    rule="isik.django.idempotency.key",
     changes_behavior=True,
     why=(
         "A request that changes state honors an Idempotency-Key, or a retry after a lost response does the work twice."
@@ -33,7 +33,7 @@ class NoIdempotencyKey(
 
 class NoReplay(
     Exemption,
-    rule="isik.idempotency.replay",
+    rule="isik.django.idempotency.replay",
     changes_behavior=True,
     why="A retry with the same key gets the first response back, or it can't tell what the first did.",
 ):

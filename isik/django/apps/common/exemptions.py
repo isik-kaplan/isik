@@ -46,8 +46,8 @@ class ExemptionRule:
 
 
 def policy_rule(policy):
-    """The rule a `RequestPolicy`'s `{action: reason}` exemptions are listed under: `policy.<its name>`."""
-    return "policy." + camel_to_snake(policy.__name__).replace("_", "-")
+    """The rule a `RequestPolicy`'s `{action: reason}` exemptions are listed under: `isik.django.policy.<its name>`."""
+    return "isik.django.policy." + camel_to_snake(policy.__name__).replace("_", "-")
 
 
 def _source(cls):

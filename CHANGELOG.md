@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-06
+
+### Added
+
+- `redeclare(field, **changes)` (`isik.django.apps.common.db`): the field an abstract model declares - read off
+  it, `AbstractUser.first_name`, or given itself - built again from its own `deconstruct()` with `changes` made,
+  to declare on a model inheriting it. The library's `max_length`, `unique`, `default`, choices and validators are
+  kept, not copied by hand, so they can't drift. Any constructor argument can be changed; an argument the field
+  doesn't take fails at import. A field declared further up - `AbstractUser`'s `password` from `AbstractBaseUser`,
+  `is_superuser` from `PermissionsMixin` - is reached the same way. A concrete model's field, and a call changing
+  nothing, are refused.
+- `if_unset(value)`: a `redeclare()` argument used only where the library left it at Django's default - Django's
+  own `help_text` on `is_staff` stays, the `db_comment` it never wrote is filled.
+- isik's own models pass `isik.E010` with every field checked, libraries' included; a test holds them to it.
+
+### Breaking
+
+- **`isik.E010` has no way out per field.** An `Exemption` given as a field's `help_text` or `db_comment` no
+  longer answers for it - whatever it shows as. Which fields are checked is decided once, in `ISIK_CHECKS`:
+  every field (the default), the project's own (`CheckOption.INHERITED_FROM_LIBRARIES: False`), or none
+  (`CheckOption.ENABLED: False`). A field a library's abstract base declares is described with `redeclare()`.
+  A project's own exemption types still exist, and `manage.py exemptions` still lists them; they just don't
+  satisfy this check.
+- **`CheckOption.EXEMPTION_TYPES` is removed.** Setting it is `isik.E012`. (It also never could say "none":
+  an empty list fell back to every `Exemption`.)
+- `documentation_problems(app_configs, inherited_from_libraries=True)` takes no `exemption_types`.
+- `isik.E010`'s message ends "say what it holds." - no longer "or give an exemption why not." - and its hint
+  points at `redeclare()` and `ISIK_CHECKS`.
+- **Every exemption rule of isik's is prefixed by its layer**: `isik.django.` for the Django layer, `isik.` for
+  the rest - rules share one namespace with every project's, and an unprefixed one could take a slug a project
+  had every reason to think was free. Renamed:
+  - `isik.<rule>` -> `isik.django.<rule>` for `idempotency.key`, `idempotency.replay`, `precondition`,
+    `precondition.readable-version`, `request-policy`, `serializer-registry`, `viewset-registry`,
+    `guarded-fields.writes-none`, `guarded-fields.unguarded`, `not-atomic`, `validators.database-form`,
+    `concurrency-token.unproven`, `concurrency-parts.unproven`, and the five `notifications.*`.
+  - `constraints.violation-message` -> `isik.django.constraints.violation-message`.
+  - `settings.option`, `settings.environment-variable`, `settings.question`, `settings.question.asked-at-use`,
+    `settings.question.replaced-by-flow`, `settings.constant` -> `isik.settings.*`.
+  - A request policy's exemptions list under `isik.django.policy.<name>`, not `policy.<name>`.
+
+  A project's `ISIK_EXEMPTIONS` keys, `exemption_requirements()` calls and `manage.py exemptions --rule`
+  arguments naming one take the new name - and so does anything else that names one, a test asserting a rule is
+  registered included: search for the old slugs, not only for exemptions declared. Everything under `isik.` is
+  isik's; a project's own rules keep its own prefix, or none.
+- The `Exemption` docs' examples are a project's own `api-docs.summary` rule, not `schema-docs.help-text`, and
+  a malformed rule's error gives `'api-docs.summary'` as its example slug.
+
 ## [0.48.1] - 2026-11-06
 
 ### Fixed

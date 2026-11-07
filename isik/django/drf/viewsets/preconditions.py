@@ -29,7 +29,7 @@ from isik.django.apps.common.db.concurrency import (
 
 class NoPrecondition(
     Exemption,
-    rule="isik.precondition",
+    rule="isik.django.precondition",
     changes_behavior=True,
     why=(
         "A write that doesn't say which version of the row it was made against (If-Match) overwrites "
@@ -41,7 +41,7 @@ class NoPrecondition(
 
 class NoReadableVersion(
     Exemption,
-    rule="isik.precondition.readable-version",
+    rule="isik.django.precondition.readable-version",
     changes_behavior=True,
     why=(
         "A write that asks If-Match needs a read that hands out the version to send - a GET sending its "

@@ -2,21 +2,22 @@
 Exemption - a `str` that skips one named rule and carries the reason it does, held to a floor so the
 reason tells the next reader something.
 
-    class NoHelpText(
+    class NoSummary(
         Exemption,
-        rule="schema-docs.help-text",
-        why="Every field should say what it holds in help_text.",
+        rule="api-docs.summary",
+        why="Every endpoint should say what it does in its summary.",
         shows_as="",
     ):
         pass
 
-    language = models.CharField(..., help_text=NoHelpText(reason="the labels of its choices already say it"))
+    @extend_schema(summary=NoSummary(reason="its operation id already says what it does"))
+    def health(request): ...
 
-    NoHelpText(reason="it is obvious")
-    # ValueError: NoHelpText needs a reason of at least 40 characters. Every field should say what it
-    # holds in help_text. Got 'it is obvious'.
+    NoSummary(reason="it is obvious")
+    # ValueError: NoSummary needs a reason of at least 40 characters. Every endpoint should say what it
+    # does in its summary. Got 'it is obvious'.
 
-`exemption_class("NoHelpText", rule=..., why=..., shows_as="")` makes the same class in one line.
+`exemption_class("NoSummary", rule=..., why=..., shows_as="")` makes the same class in one line.
 
 Every type registers its rule, which no other type may claim, and every exemption registers where it
 was made - `exemption_types()`, `declared_exemptions()`, `assert_exemption_budget()`, and
@@ -109,7 +110,7 @@ class Exemption(str):
     """
     The base every exemption type subclasses, with its rule as class keywords - see the module docstring:
 
-    - `rule` - the stable dotted slug of the rule it exempts from (`schema-docs.help-text`). Required,
+    - `rule` - the stable dotted slug of the rule it exempts from (`api-docs.summary`). Required,
       and unique: a second type claiming a rule is refused. A subclass that names none keeps its parent's.
     - `why` - what the rule asks for and why it matters. Required; it's the class docstring unless the
       class has one, and every refusal says it.
@@ -156,7 +157,7 @@ class Exemption(str):
         if rule is not None:
             if not isinstance(rule, str) or not RULE_PATTERN.fullmatch(rule):
                 raise TypeError(
-                    _("%(type)s's rule must be a dotted slug like 'schema-docs.help-text', not %(rule)r.")
+                    _("%(type)s's rule must be a dotted slug like 'api-docs.summary', not %(rule)r.")
                     % {"type": cls.__name__, "rule": rule}
                 )
             claimed = _types.get(rule)
@@ -296,10 +297,10 @@ def exemption_class(
     """
     `Exemption` subclassed in one line, in the caller's module - so migrations can import it by name:
 
-        NoHelpText = exemption_class(
-            "NoHelpText",
-            rule="schema-docs.help-text",
-            why="Every field should say what it holds in help_text.",
+        NoSummary = exemption_class(
+            "NoSummary",
+            rule="api-docs.summary",
+            why="Every endpoint should say what it does in its summary.",
             shows_as="",
         )
 
@@ -335,7 +336,7 @@ def exemption_requirements(levels):
     project without Django, before what declares exemptions is imported. With Django, the
     `ISIK_EXEMPTIONS` setting says the same, and a rule named here wins over it.
 
-        exemption_requirements({"settings.question": Requirement.OPTIONAL, "foo.bar": Requirement.OFF})
+        exemption_requirements({"isik.settings.question": Requirement.OPTIONAL, "foo.bar": Requirement.OFF})
     """
     _levels.clear()
     _levels.update(_checked_levels(dict(levels), "exemption_requirements()"))
@@ -354,7 +355,7 @@ def _django_levels():
 def requirement_of(exemption_type):
     """
     The level `exemption_type`'s rule is held to: the project's, for its rule or a rule it's a kind of
-    (`NoReauthentication` under `isik.request-policy`), else the level its owner gave it.
+    (`NoReauthentication` under `isik.django.request-policy`), else the level its owner gave it.
     """
     for source in (_levels, _django_levels()):
         for cls in exemption_type.__mro__:

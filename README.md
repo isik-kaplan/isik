@@ -62,7 +62,7 @@ see. It needs no Django and these come up in Django code constantly:
 - `returns(value)` / `raises(exception)` / `noop` / `identity` - small callables for defaults and
   hooks.
 - `Exemption` - an opt-out that names the rule it skips and says why, held to a minimum length and
-  listed by rule (`manage.py exemptions`): `NoHelpText(reason="why")`.
+  listed by rule (`manage.py exemptions`): `NotAtomic(reason="why")`.
 - `TransformExceptions` / `SuppressAndRun` - turn one exception into another, or run something
   when one is swallowed.
 

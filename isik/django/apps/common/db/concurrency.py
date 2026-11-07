@@ -47,7 +47,7 @@ ETAG_ANNOTATION = "isik_concurrency_etag"
 
 class UnprovenConcurrencyToken(
     Exemption,
-    rule="isik.concurrency-token.unproven",
+    rule="isik.django.concurrency-token.unproven",
     changes_behavior=True,
     why=(
         "A concurrency token must change on every write, or a write made against an older version "
@@ -77,7 +77,7 @@ class ConcurrencyToken:
 
 class ConcurrencyParts(
     Exemption,
-    rule="isik.concurrency-parts.unproven",
+    rule="isik.django.concurrency-parts.unproven",
     changes_behavior=True,
     why=(
         "A version computed in Python covers only what its concurrency_parts() reads, and nothing proves "

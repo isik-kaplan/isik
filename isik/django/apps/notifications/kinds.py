@@ -50,7 +50,7 @@ from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, So
 
 class SensitiveSnapshotField(
     Exemption,
-    rule="isik.notifications.sensitive-snapshot",
+    rule="isik.django.notifications.sensitive-snapshot",
     why="A notice's snapshot is copied into the ledger, read by every channel, and kept after the row is gone.",
 ):
     """Why a kind's snapshot carries a field that looks secret - one per field, in `notifies(sensitive=...)`."""
@@ -58,7 +58,7 @@ class SensitiveSnapshotField(
 
 class PushDataField(
     Exemption,
-    rule="isik.notifications.push-data",
+    rule="isik.django.notifications.push-data",
     why="A push's data passes through Apple's or Google's servers and sits on the device, outside the project.",
 ):
     """Why a kind's push carries a snapshot field - one per field, in `PushContent(data=...)`."""

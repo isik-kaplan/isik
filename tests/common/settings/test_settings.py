@@ -829,7 +829,7 @@ def test_prompt_is_an_enum():
 
 
 def test_no_option_is_an_exemption():
-    assert NoOption(reason=REASON).rule == "settings.option"
+    assert NoOption(reason=REASON).rule == "isik.settings.option"
 
 
 class TestLabels:

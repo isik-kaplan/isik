@@ -58,13 +58,11 @@ imports nothing of a project's, so a settings file can import it.
   `Check.KEPT_FIELD_CONDITIONS`): app labels. The project's
   own apps by default - `project_app_configs()`: every installed app not installed as a library, and
   not isik's.
-- `CheckOption.EXEMPTION_TYPES` - for `Check.DOCUMENTATION`: the `Exemption` types, or their dotted paths, that answer
-  for a field. Any `Exemption` by default.
 - `CheckOption.INHERITED_FROM_LIBRARIES` - for `Check.DOCUMENTATION`: `True` by default, so every field is checked.
   `False` leaves out the fields a model inherits unchanged from an installed library's abstract base -
   `AbstractUser`'s `username`, an OAuth application's `client_id`, a tenant mixin's `schema_name` -
-  whose description is the library's to write, not the project's. A field the project declares again,
-  and one from its own abstract base, are still checked.
+  whose description is the library's to write, not the project's. A field the project declares again -
+  by hand or with [`redeclare()`](db/fields.md) - and one from its own abstract base, are still checked.
 
 A key that isn't a `Check`, an option that isn't a `CheckOption` or that the check doesn't take, or a
 severity that isn't a `Severity` - a string for any of them included - is an error: `isik.E012`.
@@ -73,27 +71,30 @@ severity that isn't a `Severity` - a string for any of them included - is an err
 
 Every field of the project's own models says what it holds: in `help_text`, which the API schema and
 the admin show, and - for a field with a column of a managed model - in `db_comment`, which someone
-reading the database sees. An exemption answers for either:
+reading the database sees. There is no way out per field - an exemption given as either answers
+neither. What a project decides is which fields are checked, in one place:
 
 ```python
-class NoHelpText(Exemption, rule="schema-docs.help-text", why="Every field says what it holds."):
-    pass
-
-
-language = models.CharField(
-    choices=LANGUAGES,
-    help_text=NoHelpText(reason="the labels of its choices already say what it holds"),
-    db_comment="The language the user reads in.",
-)
+ISIK_CHECKS = {Check.DOCUMENTATION: {}}                                              # every field (the default)
+ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}   # the project's own fields
+ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.ENABLED: False}}                    # none
 ```
+
+With every field checked, a field a model inherits from a library's abstract base - `AbstractUser`'s
+`first_name` - is described by declaring it again with [`redeclare()`](db/fields.md), which keeps the
+library's definition and changes only what it's given:
 
 ```python
-ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}
+class User(AbstractUser):
+    first_name = redeclare(AbstractUser.first_name, help_text="What the person is called first.", db_comment="...")
+    is_staff = redeclare(AbstractUser.is_staff, db_comment="Whether the person can sign in to the admin.")
 ```
+
+isik's own models pass it with every field checked.
 
 Left out: fields Django adds itself (an implicit `id`, a parent link), a many-to-many's `db_comment`
 (it has no column), and proxies, auto-created models, and the models isik or pghistory generate.
-`documentation_problems(app_configs, exemption_types)` (`isik.django.apps.common.db.documentation`)
+`documentation_problems(app_configs, inherited_from_libraries=True)` (`isik.django.apps.common.db.documentation`)
 lists the fields.
 
 ## Upgrading to 0.30

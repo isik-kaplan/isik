@@ -94,7 +94,7 @@ class TestDeclaring:
         view = type("Unread", (PreconditionMixin, GenericViewSet), {"precondition_unread_actions": {"x": made}})
 
         assert view.precondition_unread_actions["x"] is made
-        assert declared_exemptions("isik.precondition.readable-version")[-1] is made
+        assert declared_exemptions("isik.django.precondition.readable-version")[-1] is made
         assert (made.file, made.line) == (HERE, line)
 
     def test_an_unread_write_takes_the_type_not_a_bare_string(self):

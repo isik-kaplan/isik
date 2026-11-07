@@ -11,7 +11,7 @@ from isik.common.utils.strings import camel_to_snake
 
 class RequestPolicyExemption(
     Exemption,
-    rule="isik.request-policy",
+    rule="isik.django.request-policy",
     changes_behavior=True,
     why="A request policy holds for every action of a view that carries it, or the one skipping it is a way around it.",
 ):

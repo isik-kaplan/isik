@@ -167,7 +167,7 @@ class TestParts:
     def test_the_reason_is_a_listed_exemption(self):
         made, line = ConcurrencyParts(reason=REASON), sys._getframe().f_lineno
 
-        assert declared_exemptions("isik.concurrency-parts.unproven")[-1] is made
+        assert declared_exemptions("isik.django.concurrency-parts.unproven")[-1] is made
         assert (made.file, made.line) == (HERE, line)
 
     def test_the_etag_hashes_the_token_and_the_parts(self, tag):

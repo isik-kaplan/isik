@@ -138,9 +138,7 @@ class TestTypes:
         with pytest.raises(TypeError) as raised:
             type("Malformed", (Exemption,), {}, rule=rule, why="x")
 
-        assert str(raised.value) == (
-            f"Malformed's rule must be a dotted slug like 'schema-docs.help-text', not {rule!r}."
-        )
+        assert str(raised.value) == (f"Malformed's rule must be a dotted slug like 'api-docs.summary', not {rule!r}.")
 
     def test_a_rule_another_type_claims_is_refused_naming_both(self):
         with pytest.raises(TypeError) as raised:

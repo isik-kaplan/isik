@@ -7,7 +7,7 @@ from isik.common.utils.exemptions import Exemption
 
 class ViewSetRegistryExemption(
     Exemption,
-    rule="isik.viewset-registry",
+    rule="isik.django.viewset-registry",
     changes_behavior=True,
     why="A model has one viewset in the registry, and a second one over it is usually a mistake.",
 ):

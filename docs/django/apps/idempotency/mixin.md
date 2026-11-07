@@ -30,8 +30,8 @@ POST /installations/  Idempotency-Key: 0192f5a4-...   -> 201 {"id": 7, ...}   Id
 | `idempotency_header`             | `"Idempotency-Key"` | The request header holding the key. |
 | `idempotency_replayed_header`    | `"Idempotent-Replayed"` | The response header marking a replay. |
 
-Both dicts take their type for every action - `NoIdempotencyKey` (rule `isik.idempotency.key`) and
-`NoReplay` (rule `isik.idempotency.replay`), each held to a 40-character floor and listed by
+Both dicts take their type for every action - `NoIdempotencyKey` (rule `isik.django.idempotency.key`) and
+`NoReplay` (rule `isik.django.idempotency.replay`), each held to a 40-character floor and listed by
 `manage.py exemptions`. A bare string, or anything else, raises `ImproperlyConfigured` naming the type
 to write. An exemption should say what it exempts.
 

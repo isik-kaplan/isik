@@ -16,9 +16,8 @@ not a fault) and `CheckOption.SEVERITY` (a `Severity`, default the check's own).
 views takes `CheckOption.URLCONFS` - every urlconf the project serves by default (`project_urlconfs()`),
 and a warning, `isik.W003`, names each served one it is told to skip. A check over models takes
 `CheckOption.APPS`, app labels - the project's own apps by default (`project_app_configs()`).
-`Check.DOCUMENTATION` also takes `CheckOption.EXEMPTION_TYPES`, the `Exemption` types (or their dotted
-paths) that answer for a field, and `CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False
-leaves out the fields a model inherits unchanged from a library's abstract base. Anything else in
+`Check.DOCUMENTATION` also takes `CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False leaves
+out the fields a model inherits unchanged from a library's abstract base. Anything else in
 `ISIK_CHECKS` - a string where an enum belongs included - is an error, `isik.E012`.
 
 | check                      | id                     | what it refuses                                              |
@@ -92,7 +91,6 @@ class CheckOption(Enum):
     SEVERITY = "severity"
     URLCONFS = "urlconfs"
     APPS = "apps"
-    EXEMPTION_TYPES = "exemption_types"
     INHERITED_FROM_LIBRARIES = "inherited_from_libraries"
 
 
@@ -117,7 +115,7 @@ CHECKS = {
     Check.PRECONDITIONS: (CheckOption.URLCONFS,),
     Check.HISTORY_INDEXES: (CheckOption.APPS,),
     Check.EXEMPTIONS: (CheckOption.URLCONFS,),
-    Check.DOCUMENTATION: (CheckOption.APPS, CheckOption.EXEMPTION_TYPES, CheckOption.INHERITED_FROM_LIBRARIES),
+    Check.DOCUMENTATION: (CheckOption.APPS, CheckOption.INHERITED_FROM_LIBRARIES),
     Check.NOT_ATOMIC: (CheckOption.URLCONFS,),
     Check.KEPT_FIELD_CONDITIONS: (CheckOption.APPS,),
     Check.NOTIFICATIONS: (),
@@ -138,7 +136,6 @@ DEFAULTS = {
     CheckOption.SEVERITY: None,
     CheckOption.URLCONFS: None,
     CheckOption.APPS: None,
-    CheckOption.EXEMPTION_TYPES: None,
     CheckOption.INHERITED_FROM_LIBRARIES: True,
 }
 
@@ -567,17 +564,16 @@ def every_exemption_is_seen(options, **kwargs):
 @isik_check(Check.DOCUMENTATION)
 def every_field_says_what_it_holds(options, **kwargs):
     """A field without help_text or db_comment leaves its next reader to guess - see `documentation_problems()`."""
-    from isik.common.utils.exemptions import Exemption
     from isik.django.apps.common.db.documentation import documentation_problems
 
-    given = options[CheckOption.EXEMPTION_TYPES] or (Exemption,)
-    types = [import_string(each) if isinstance(each, str) else each for each in given]
-    hint = _("See documentation_problems() (isik.django.apps.common.db.documentation).")
+    hint = _(
+        "A field a library's abstract base declares is described with redeclare() "
+        "(isik.django.apps.common.db); ISIK_CHECKS[Check.DOCUMENTATION] says which fields are checked at all."
+    )
     return [
         Error(problem, hint=hint, id="isik.E010")
         for problem in documentation_problems(
             _project_configs(options),
-            exemption_types=types,
             inherited_from_libraries=options[CheckOption.INHERITED_FROM_LIBRARIES],
         )
     ]

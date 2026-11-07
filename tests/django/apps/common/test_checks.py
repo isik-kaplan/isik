@@ -8,9 +8,7 @@ from django.apps import apps
 from django.core.checks import Error
 from django.core.checks import Warning as CheckWarning
 
-from isik.common.utils.exemptions import Exemption
 from isik.django.apps.common import checks, exemptions
-from isik.django.apps.common.atomic import NotAtomic
 from isik.django.apps.common.checks import (
     Check,
     CheckOption,
@@ -24,7 +22,7 @@ from isik.django.apps.common.db import triggers as db_triggers
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.project import project_app_configs
 from isik.django.drf.serializers import flattened_singleton_related
-from isik.django.drf.viewsets import ViewSetRegistryExemption, preconditions
+from isik.django.drf.viewsets import preconditions
 from tests.testapp.models import TimestampedNote, Widget
 
 
@@ -67,7 +65,6 @@ class TestTheSettings:
             CheckOption.SEVERITY: None,
             CheckOption.URLCONFS: None,
             CheckOption.APPS: None,
-            CheckOption.EXEMPTION_TYPES: None,
             CheckOption.INHERITED_FROM_LIBRARIES: True,
         }
 
@@ -159,7 +156,6 @@ class TestTheSettings:
             "severity",
             "urlconfs",
             "apps",
-            "exemption_types",
             "inherited_from_libraries",
         ]
         assert [severity.value for severity in Severity] == ["error", "warning"]
@@ -193,7 +189,7 @@ class TestTheSettingsCheck:
                 CheckOption.SEVERITY: Severity.WARNING,
                 CheckOption.URLCONFS: [URLS],
             },
-            Check.DOCUMENTATION: {CheckOption.APPS: ["testapp"], CheckOption.EXEMPTION_TYPES: []},
+            Check.DOCUMENTATION: {CheckOption.APPS: ["testapp"], CheckOption.INHERITED_FROM_LIBRARIES: False},
         }
 
         assert self.messages() == []
@@ -234,7 +230,7 @@ class TestTheSettingsCheck:
         assert self.errors() == [
             "ISIK_CHECKS[Check.IDEMPOTENCY] names 'urlconfs' as a string - write CheckOption.URLCONFS.",
             "ISIK_CHECKS[Check.IDEMPOTENCY] names 3, which isn't a CheckOption: CheckOption.ENABLED, "
-            "CheckOption.SEVERITY, CheckOption.URLCONFS, CheckOption.APPS, CheckOption.EXEMPTION_TYPES, "
+            "CheckOption.SEVERITY, CheckOption.URLCONFS, CheckOption.APPS, "
             "CheckOption.INHERITED_FROM_LIBRARIES.",
         ]
 
@@ -482,40 +478,34 @@ class TestTheExemptionsCheck:
 
 
 class TestTheDocumentationCheck:
-    def test_reads_the_projects_own_apps_with_every_exemption(self, monkeypatch):
+    def test_reads_the_projects_own_apps_and_every_field_a_library_declares(self, monkeypatch):
         seen = []
         monkeypatch.setattr(
             documentation,
             "documentation_problems",
-            lambda configs, exemption_types, inherited_from_libraries: (
-                seen.append((configs, exemption_types)) or ["one"]
-            ),
+            lambda configs, inherited_from_libraries: seen.append((configs, inherited_from_libraries)) or ["one"],
         )
 
         (error,) = checks.every_field_says_what_it_holds(app_configs=None)
 
         assert (error.id, error.msg) == ("isik.E010", "one")
-        assert error.hint == "See documentation_problems() (isik.django.apps.common.db.documentation)."
-        configs, types = seen[0]
-        assert [config.label for config in configs] == ["testapp"]
-        assert types == [Exemption]
-
-    def test_takes_exemption_types_and_their_paths(self, settings, monkeypatch):
-        seen = []
-        monkeypatch.setattr(
-            documentation,
-            "documentation_problems",
-            lambda configs, exemption_types, inherited_from_libraries: seen.append(exemption_types) or [],
+        assert error.hint == (
+            "A field a library's abstract base declares is described with redeclare() "
+            "(isik.django.apps.common.db); ISIK_CHECKS[Check.DOCUMENTATION] says which fields are checked at all."
         )
-        settings.ISIK_CHECKS = {
-            Check.DOCUMENTATION: {
-                CheckOption.EXEMPTION_TYPES: ["isik.django.apps.common.atomic.NotAtomic", ViewSetRegistryExemption]
-            }
-        }
+        configs, inherited = seen[0]
+        assert [config.label for config in configs] == ["testapp"]
+        assert inherited is True
 
-        checks.every_field_says_what_it_holds(app_configs=None)
+    def test_exemption_types_is_no_option_of_it(self, settings):
+        settings.ISIK_CHECKS = {Check.DOCUMENTATION: {"exemption_types": []}}
 
-        assert seen == [[NotAtomic, ViewSetRegistryExemption]]
+        (error,) = checks.isik_checks_are_configured(None)
+
+        assert error.id == "isik.E012"
+        assert error.msg.startswith(
+            "ISIK_CHECKS[Check.DOCUMENTATION] names 'exemption_types', which isn't a CheckOption"
+        )
 
 
 def test_project_app_configs_by_label_in_the_order_given():
@@ -620,7 +610,7 @@ def test_the_documentation_check_hands_on_inherited_from_libraries(settings, mon
     monkeypatch.setattr(
         documentation,
         "documentation_problems",
-        lambda configs, exemption_types, inherited_from_libraries: seen.append(inherited_from_libraries) or [],
+        lambda configs, inherited_from_libraries: seen.append(inherited_from_libraries) or [],
     )
 
     checks.every_field_says_what_it_holds(app_configs=None)

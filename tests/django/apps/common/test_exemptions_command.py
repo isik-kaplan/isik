@@ -33,7 +33,7 @@ URLCONF = "tests.django.drf.test_coverage"
 MODELS = str(Path(models.__file__).resolve())
 COVERAGE = inspect.getsourcefile(Gated)
 CONSTRAINTS = str(Path(constraints.__file__).resolve())
-DATABASE_FORM = "isik.validators.database-form"
+DATABASE_FORM = "isik.django.validators.database-form"
 
 
 Unused = exemption_class("Unused", rule="tests.command-unused", why="Nothing here ever skips it.")
@@ -62,7 +62,7 @@ def help_text_line():
 
 class TestTheListing:
     def test_a_policys_rule_is_named_for_it(self):
-        assert policy_rule(SetUp) == "policy.set-up"
+        assert policy_rule(SetUp) == "isik.django.policy.set-up"
 
     def test_every_exemption_type_and_routed_policy_is_listed_by_rule(self):
         entries = project_exemptions(URLCONF)
@@ -74,9 +74,9 @@ class TestTheListing:
                 help_text_line(),
             )
         ]  # fmt: skip
-        assert [e for e in entries if e.rule == "policy.set-up"] == [
+        assert [e for e in entries if e.rule == "isik.django.policy.set-up"] == [
             ExemptionEntry(
-                "policy.set-up", "Gated", "reading one changes nothing the gate protects", COVERAGE,
+                "isik.django.policy.set-up", "Gated", "reading one changes nothing the gate protects", COVERAGE,
                 inspect.getsourcelines(Gated)[1], "retrieve",
             )
         ]  # fmt: skip
@@ -85,12 +85,14 @@ class TestTheListing:
         entries = project_exemptions(URLCONF)
 
         assert [e.rule for e in entries if e.reason == "reading one changes nothing the gate protects"] == [
-            "policy.set-up"
+            "isik.django.policy.set-up"
         ]
-        assert "isik.request-policy" not in {rule.rule for rule in project_exemption_rules(URLCONF)}
+        assert "isik.django.request-policy" not in {rule.rule for rule in project_exemption_rules(URLCONF)}
 
     def test_a_view_routed_twice_is_listed_once(self):
-        assert [e.declared_by for e in project_exemptions(URLCONF) if e.rule == "policy.set-up"] == ["Gated"]
+        assert [e.declared_by for e in project_exemptions(URLCONF) if e.rule == "isik.django.policy.set-up"] == [
+            "Gated"
+        ]
         assert GatedPlainView.request_policy_exemptions(SetUp) == {}
 
     def test_each_rule_with_why_and_count(self):
@@ -99,13 +101,15 @@ class TestTheListing:
         assert rules["testapp.help-text"] == ExemptionRule(
             "testapp.help-text", "Every field should say what it holds in help_text.", 1
         )
-        assert rules["policy.set-up"] == ExemptionRule("policy.set-up", "This request isn't allowed.", 1)
-        assert rules["isik.guarded-fields.writes-none"].why.startswith("A write through a viewset")
+        assert rules["isik.django.policy.set-up"] == ExemptionRule(
+            "isik.django.policy.set-up", "This request isn't allowed.", 1
+        )
+        assert rules["isik.django.guarded-fields.writes-none"].why.startswith("A write through a viewset")
 
     def test_a_policy_with_a_docstring_gives_its_first_line_as_why(self, monkeypatch):
         monkeypatch.setattr(SetUp, "__doc__", "Set up\n    first.\n\nMore.")
 
-        assert {r.rule: r.why for r in project_exemption_rules(URLCONF)}["policy.set-up"] == "Set up first."
+        assert {r.rule: r.why for r in project_exemption_rules(URLCONF)}["isik.django.policy.set-up"] == "Set up first."
 
     def test_calls_the_import_never_ran_are_found(self, monkeypatch, tmp_path):
         source = tmp_path / "later.py"
@@ -127,7 +131,7 @@ class TestTheCommand:
         assert err == ""
 
     def test_a_policys_exemption_names_its_action(self):
-        out, _ = run("--rule", "policy.set-up")
+        out, _ = run("--rule", "isik.django.policy.set-up")
 
         assert out.rstrip("\n").endswith("retrieve - reading one changes nothing the gate protects")
 
@@ -158,7 +162,9 @@ class TestTheCommand:
         payload = json.loads(run("--rules", "--format", "json")[0])
 
         assert "testapp.help-text" in text
-        assert {"rule": "policy.set-up", "why": "This request isn't allowed.", "count": 1} in payload["rules"]
+        assert {"rule": "isik.django.policy.set-up", "why": "This request isn't allowed.", "count": 1} in payload[
+            "rules"
+        ]
 
     def test_unseen_calls_are_warned_about(self, monkeypatch, tmp_path):
         source = tmp_path / "later.py"
@@ -360,19 +366,24 @@ class TestAcrossUrlconfs:
         listed = json.loads(out.getvalue())["exemptions"]
 
         assert [(e["rule"], e["declared_by"], e["action"]) for e in listed if e["reason"] == HOSTED_REASON] == [
-            ("isik.viewset-registry", "ViewSetRegistryExemption", None)
+            ("isik.django.viewset-registry", "ViewSetRegistryExemption", None)
         ]
         assert self.hosted(project_exemptions()) == [
-            ("isik.viewset-registry", "ViewSetRegistryExemption", HOSTED_REASON, None),
-            ("policy.set-up", "HostedGated", "a host's health check reads the list, before any set-up", "list"),
+            (
+                "isik.django.policy.set-up",
+                "HostedGated",
+                "a host's health check reads the list, before any set-up",
+                "list",
+            ),
+            ("isik.django.viewset-registry", "ViewSetRegistryExemption", HOSTED_REASON, None),
         ]
 
     def test_urlconf_given_twice_loads_both(self):
-        out, _ = run("--urlconf", HOSTED, "--rule", "policy.set-up")
+        out, _ = run("--urlconf", HOSTED, "--rule", "isik.django.policy.set-up")
 
         assert out.splitlines()[-1].endswith("list - a host's health check reads the list, before any set-up")
-        assert self.hosted(project_exemptions([URLCONF, HOSTED]))[-1] == (
-            "policy.set-up",
+        assert self.hosted(project_exemptions([URLCONF, HOSTED]))[0] == (
+            "isik.django.policy.set-up",
             "HostedGated",
             "a host's health check reads the list, before any set-up",
             "list",

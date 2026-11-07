@@ -9,7 +9,7 @@ from isik.common.utils.exemptions import Exemption
 
 class NoOption(
     Exemption,
-    rule="settings.option",
+    rule="isik.settings.option",
     why="Every setting can be given as a command-line option.",
     changes_behavior=True,
 ):
@@ -18,7 +18,7 @@ class NoOption(
 
 class NoEnv(
     Exemption,
-    rule="settings.environment-variable",
+    rule="isik.settings.environment-variable",
     why="Every setting can be given as an environment variable.",
     changes_behavior=True,
 ):
@@ -27,7 +27,7 @@ class NoEnv(
 
 class NoQuestion(
     Exemption,
-    rule="settings.question",
+    rule="isik.settings.question",
     why="Every setting is asked for when a command runs interactively.",
     changes_behavior=True,
 ):
@@ -36,7 +36,7 @@ class NoQuestion(
 
 class AskedAtUse(
     Exemption,
-    rule="settings.question.asked-at-use",
+    rule="isik.settings.question.asked-at-use",
     why="Every setting is asked for with the others; one asked only where it's used must say so.",
     changes_behavior=True,
 ):
@@ -45,7 +45,7 @@ class AskedAtUse(
 
 class ReplacedByFlow(
     Exemption,
-    rule="settings.question.replaced-by-flow",
+    rule="isik.settings.question.replaced-by-flow",
     why="Every setting is asked for with the others; one a hand-written flow asks for instead must say so.",
     changes_behavior=True,
 ):
@@ -61,7 +61,7 @@ class ReplacedByFlow(
 
 class IsConstant(
     Exemption,
-    rule="settings.constant",
+    rule="isik.settings.constant",
     why="A setting is something a user can set; a fixed value must say why it's fixed.",
     changes_behavior=True,
 ):

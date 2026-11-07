@@ -45,7 +45,7 @@ IDENTIFIER_LIMIT = 63
 
 class NoDatabaseForm(
     Exemption,
-    rule="isik.validators.database-form",
+    rule="isik.django.validators.database-form",
     why="A validator runs in full_clean() alone, so a rule only it holds is one a direct write ignores.",
 ):
     """This rule cannot hold at a column, and here is why."""
@@ -57,7 +57,7 @@ DJANGO_VIOLATION_MESSAGE = "Constraint “%(name)s” is violated."
 
 class NoViolationMessage(
     Exemption,
-    rule="constraints.violation-message",
+    rule="isik.django.constraints.violation-message",
     why=(
         "A constraint without its own violation_error_message answers a refused write with its name, "
         "not with what was wrong - every caller is left to explain it again."

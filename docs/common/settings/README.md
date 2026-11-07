@@ -126,12 +126,12 @@ would silently derive a different key".
 
 | Exemption | Rule | |
 | --- | --- | --- |
-| `NoOption` | `settings.option` | No command-line option. |
-| `NoEnv` | `settings.environment-variable` | No environment variable - say, where a stray one would quietly change a result. |
-| `NoQuestion` | `settings.question` | Never asked. |
-| `AskedAtUse` | `settings.question.asked-at-use` | Asked by the app where it's used, such as an overwrite confirmation. |
-| `ReplacedByFlow` | `settings.question.replaced-by-flow` | A hand-written flow asks for it instead. `flow=` names it; isik never calls it. |
-| `Constant` | `settings.constant` | Fixed. |
+| `NoOption` | `isik.settings.option` | No command-line option. |
+| `NoEnv` | `isik.settings.environment-variable` | No environment variable - say, where a stray one would quietly change a result. |
+| `NoQuestion` | `isik.settings.question` | Never asked. |
+| `AskedAtUse` | `isik.settings.question.asked-at-use` | Asked by the app where it's used, such as an overwrite confirmation. |
+| `ReplacedByFlow` | `isik.settings.question.replaced-by-flow` | A hand-written flow asks for it instead. `flow=` names it; isik never calls it. |
+| `Constant` | `isik.settings.constant` | Fixed. |
 
 ## Names never clash
 
@@ -146,14 +146,14 @@ Where a project makes a settings rule `Requirement.OPTIONAL` (see
 [exemptions](../utils/exemptions.md#how-much-a-rule-asks)), `False` stands for the exemption:
 
 ```python
-ISIK_EXEMPTIONS = {"settings.question": Requirement.OPTIONAL, "settings.environment-variable": Requirement.OPTIONAL}
+ISIK_EXEMPTIONS = {"isik.settings.question": Requirement.OPTIONAL, "isik.settings.environment-variable": Requirement.OPTIONAL}
 
 verbose = Setting(bool, "Show every file", default=False, question=False)   # never asked
 class Server(Settings, env=False): ...                                     # no variables at all
 ```
 
 Under a strict rule, `False` is refused, naming the rule to loosen. `Constant(32)` without a reason works
-the same way, under `settings.constant`.
+the same way, under `isik.settings.constant`.
 
 ## Errors
 

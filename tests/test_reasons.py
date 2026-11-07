@@ -126,13 +126,13 @@ class TestAFactorysReason:
     def test_isiks_own_rules(self):
         types = exemption_types()
 
-        assert types["isik.viewset-registry"] is ViewSetRegistryExemption
-        assert types["isik.serializer-registry"] is SerializerRegistryExemption
-        assert types["isik.guarded-fields.writes-none"] is WritesNoGuardedFields
-        assert types["isik.precondition"] is NoPrecondition
-        assert types["isik.concurrency-token.unproven"] is UnprovenConcurrencyToken
-        assert types["isik.guarded-fields.unguarded"] is UnguardedField
-        assert types["isik.request-policy"] is RequestPolicyExemption
+        assert types["isik.django.viewset-registry"] is ViewSetRegistryExemption
+        assert types["isik.django.serializer-registry"] is SerializerRegistryExemption
+        assert types["isik.django.guarded-fields.writes-none"] is WritesNoGuardedFields
+        assert types["isik.django.precondition"] is NoPrecondition
+        assert types["isik.django.concurrency-token.unproven"] is UnprovenConcurrencyToken
+        assert types["isik.django.guarded-fields.unguarded"] is UnguardedField
+        assert types["isik.django.request-policy"] is RequestPolicyExemption
 
 
 class WidgetSerializer(serializers.ModelSerializer):
@@ -152,7 +152,7 @@ class TestWhereItApplies:
 
         assert ViewSetRegistryMixin.get_for_model(Widget) is not reasoned
         assert reasoned.exempt_from_registry is made
-        assert declared_exemptions("isik.viewset-registry")[-1] is made
+        assert declared_exemptions("isik.django.viewset-registry")[-1] is made
         assert (made.file, made.line) == (HERE, line)
 
     def test_a_subclass_inherits_its_parents_exemption_as_it_is(self):
@@ -161,11 +161,11 @@ class TestWhereItApplies:
             (ViewSetRegistryMixin,),
             {"model": Widget, "exempt_from_registry": ViewSetRegistryExemption(reason=REASON)},
         )
-        count = len(declared_exemptions("isik.viewset-registry"))
+        count = len(declared_exemptions("isik.django.viewset-registry"))
         child = type("Child", (parent,), {})
 
         assert child.exempt_from_registry is parent.exempt_from_registry
-        assert len(declared_exemptions("isik.viewset-registry")) == count
+        assert len(declared_exemptions("isik.django.viewset-registry")) == count
 
     def test_a_serializer_exempt_from_its_registry_says_why(self):
         with pytest.raises(
@@ -217,7 +217,7 @@ class TestWhereItApplies:
         assert isinstance(made, WritesNoGuardedFields)
         assert made == "deleting a row writes none of its fields"
         assert made.library is True
-        assert all(each is not made for each in declared_exemptions("isik.guarded-fields.writes-none"))
+        assert all(each is not made for each in declared_exemptions("isik.django.guarded-fields.writes-none"))
 
     def test_isiks_own_destroy_is_made_where_isik_makes_it(self):
         made = _destroy_writes_no_guarded_field()["destroy"]

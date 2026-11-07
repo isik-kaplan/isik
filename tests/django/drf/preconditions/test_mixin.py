@@ -78,7 +78,7 @@ class TestExemptActions:
         view = type("Exempting", (PreconditionMixin, GenericViewSet), {"precondition_exempt_actions": {"touch": made}})
 
         assert view.precondition_exempt_actions["touch"] is made
-        assert declared_exemptions("isik.precondition")[-1] is made
+        assert declared_exemptions("isik.django.precondition")[-1] is made
         assert (made.file, made.line) == (HERE, line)
 
     def test_a_bare_string_is_refused_naming_the_type(self):
