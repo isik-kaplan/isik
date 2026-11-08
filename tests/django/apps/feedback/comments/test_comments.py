@@ -533,12 +533,12 @@ class TestPlainTextMaxLength:
 
 class TestPerCallTiptapSchemaPath:
     """tiptap_schema_path= must reach the TiptapValidator comments() builds, not just fall back to
-    FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH."""
+    ISIK['DJANGO']['FEEDBACK']['COMMENTS_TIPTAP_SCHEMA_PATH']."""
 
     @isolate_apps("tests.testapp")
     def test_a_document_valid_under_the_full_schema_but_not_the_narrower_per_call_schema_fails(self, alice):
         minimal_schema_path = os.path.join(
-            os.path.dirname(django_settings.FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH), "tiptap_schema_minimal.json"
+            os.path.dirname(django_settings.TIPTAP_SCHEMA_PATH), "tiptap_schema_minimal.json"
         )
 
         class NarrowSchemaCommentHost(models.Model):

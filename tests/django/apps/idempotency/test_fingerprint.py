@@ -4,7 +4,6 @@ import hashlib
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
 from django.test.client import encode_multipart
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
@@ -16,6 +15,7 @@ from isik.django.apps.idempotency.fingerprint import (
     configured_normalize,
     request_fingerprint,
 )
+from isik.django.conf import override_isik
 
 
 PARSERS = [JSONParser(), FormParser(), MultiPartParser()]
@@ -69,7 +69,7 @@ def test_canonical_json_refuses_what_it_cannot_write_and_says_where_to_turn():
 
     assert str(raised.value) == (
         "Can't fingerprint a value of type object. Pass a normalizer that turns the body into JSON - "
-        "idempotency_normalize on the view, or IDEMPOTENCY_NORMALIZE."
+        "idempotency_normalize on the view, or ISIK['DJANGO']['IDEMPOTENCY']['NORMALIZE']."
     )
 
 
@@ -89,12 +89,12 @@ def test_the_default_normalizer_is_canonical_body():
     assert configured_normalize() is canonical_body
 
 
-@override_settings(IDEMPOTENCY_NORMALIZE=body_only)
+@override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": body_only}})
 def test_the_normalizer_setting_takes_a_callable():
     assert configured_normalize() is body_only
 
 
-@override_settings(IDEMPOTENCY_NORMALIZE="tests.django.apps.idempotency.test_fingerprint.body_only")
+@override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": "tests.django.apps.idempotency.test_fingerprint.body_only"}})
 def test_the_normalizer_setting_takes_a_dotted_path():
     assert configured_normalize() is body_only
 
@@ -149,12 +149,12 @@ def test_a_different_upload_is_a_different_request():
     assert request_fingerprint(first) != request_fingerprint(retry)
 
 
-@override_settings(IDEMPOTENCY_NORMALIZE=body_only)
+@override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": body_only}})
 def test_the_configured_normalizer_decides_what_the_body_is():
     assert request_fingerprint(json_request({"name": "bolt"})) == request_fingerprint(json_request({"name": "nut"}))
 
 
-@override_settings(IDEMPOTENCY_NORMALIZE=body_only)
+@override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": body_only}})
 def test_a_normalizer_passed_in_wins_over_the_configured_one():
     def name_only(request):
         return request.data["name"]

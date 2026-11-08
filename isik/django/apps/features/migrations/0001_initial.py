@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Feature',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(db_comment="The feature's name, as its declaration gives it. Never changes.", help_text="The feature's name, as its declaration gives it.", max_length=100, unique=True)),
                 ('created_at', models.DateTimeField(db_comment='When the feature was first mirrored from its declaration.', db_default=django.db.models.functions.datetime.Now(), editable=False, help_text='When it was first declared.')),
             ],
@@ -74,9 +74,9 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='SweepCursor',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('swept_at', models.DateTimeField(db_comment='When the boundary sweep last ran - the next one looks at the boundaries since.', help_text='When the boundary sweep last ran.')),
-                ('next_sweep_at', models.DateTimeField(blank=True, db_comment="When the next boundary sweep is scheduled for, with ISIK_FEATURES' SWEEP next_boundary - none is scheduled beside one due no later. Null with interval, and before the first.", help_text='When the next boundary sweep is scheduled for.', null=True)),
+                ('next_sweep_at', models.DateTimeField(blank=True, db_comment="When the next boundary sweep is scheduled for, with ISIK['DJANGO']['FEATURES']['SWEEP'] next_boundary - none is scheduled beside one due no later. Null with interval, and before the first.", help_text='When the next boundary sweep is scheduled for.', null=True)),
             ],
             options={
                 'verbose_name': 'sweep cursor',

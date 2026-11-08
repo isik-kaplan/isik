@@ -8,7 +8,6 @@ import pytest
 from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError, connection, models
-from django.test import override_settings
 from rest_framework.response import Response
 
 from isik.django.apps.idempotency import claims
@@ -21,6 +20,7 @@ from isik.django.apps.idempotency.claims import (
 )
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyInFlight
 from isik.django.apps.idempotency.with_body.models import IdempotencyClaimWithBody
+from isik.django.conf import override_isik
 from tests.django.apps.idempotency.support import make_user
 
 
@@ -48,11 +48,11 @@ class TestGetClaimModel:
     def test_a_label_passed_in_is_looked_up(self):
         assert get_claim_model("idempotency_with_body.IdempotencyClaimWithBody") is IdempotencyClaimWithBody
 
-    @override_settings(IDEMPOTENCY_CLAIM_MODEL="idempotency_with_body.IdempotencyClaimWithBody")
+    @override_isik(DJANGO={"IDEMPOTENCY": {"CLAIM_MODEL": "idempotency_with_body.IdempotencyClaimWithBody"}})
     def test_the_setting_names_the_model_otherwise(self):
         assert get_claim_model() is IdempotencyClaimWithBody
 
-    @override_settings(IDEMPOTENCY_CLAIM_MODEL="idempotency_with_body.IdempotencyClaimWithBody")
+    @override_isik(DJANGO={"IDEMPOTENCY": {"CLAIM_MODEL": "idempotency_with_body.IdempotencyClaimWithBody"}})
     def test_a_model_passed_in_wins_over_the_setting(self):
         assert get_claim_model(IdempotencyClaim) is IdempotencyClaim
 
@@ -77,7 +77,8 @@ class TestGetClaimModel:
 
         assert str(raised.value) == (
             "Install exactly one of isik.django.apps.idempotency.by_reference and "
-            "isik.django.apps.idempotency.with_body, or set IDEMPOTENCY_CLAIM_MODEL to the claim model to use."
+            "isik.django.apps.idempotency.with_body, or set ISIK['DJANGO']['IDEMPOTENCY']['CLAIM_MODEL'] to the claim "
+            "model to use."
         )
 
 
@@ -205,27 +206,27 @@ class TestBodyCodecs:
     def test_json_is_the_default_codec(self):
         assert isinstance(configured_body_codec(), JSONBodyCodec)
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC=reversing_codec)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": reversing_codec}})
     def test_the_setting_takes_a_codec(self):
         assert configured_body_codec() is reversing_codec
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC=ReversingCodec)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": ReversingCodec}})
     def test_the_setting_takes_a_codec_class_and_makes_one(self):
         assert isinstance(configured_body_codec(), ReversingCodec)
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC="tests.django.apps.idempotency.test_claims.reversing_codec")
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": "tests.django.apps.idempotency.test_claims.reversing_codec"}})
     def test_the_setting_takes_a_dotted_path_to_a_codec(self):
         assert configured_body_codec() is reversing_codec
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC="tests.django.apps.idempotency.test_claims.ReversingCodec")
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": "tests.django.apps.idempotency.test_claims.ReversingCodec"}})
     def test_the_setting_takes_a_dotted_path_to_a_codec_class(self):
         assert isinstance(configured_body_codec(), ReversingCodec)
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC=reversing_codec)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": reversing_codec}})
     def test_a_claim_uses_the_configured_codec(self):
         assert IdempotencyClaimWithBody().get_body_codec() is reversing_codec
 
-    @override_settings(IDEMPOTENCY_BODY_CODEC=reversing_codec)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"BODY_CODEC": reversing_codec}})
     def test_a_claims_own_codec_wins_over_the_setting(self, monkeypatch):
         own = JSONBodyCodec()
         monkeypatch.setattr(IdempotencyClaimWithBody, "body_codec", own)

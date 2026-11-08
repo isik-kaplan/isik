@@ -31,6 +31,7 @@ from isik.django.apps.notifications.models import (
 )
 from isik.django.apps.notifications.partitions import Column, Expression, Follow
 from isik.django.apps.notifications.pipeline import retry_delivery
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_pipeline import delivery_on, fan_out, ship
 from tests.django.apps.notifications.test_pipeline_details import hooked, receiver, shipped  # noqa: F401
@@ -205,7 +206,7 @@ class TestFinishingOnlyYourOwnClaim:
         assert FanOutShard.objects.get(pk=other.pk).state == ShardState.CLAIMED
 
     def test_a_shard_out_of_attempts_says_why(self, monkeypatch, parcel, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "MAX_ATTEMPTS": 1}
         shard = FanOutShard.objects.create(notice=ship(parcel), partition=None)
         monkeypatch.setattr(pipeline, "_shard_work", lambda shard, kind: (_ for _ in ()).throw(RuntimeError("down")))
 
@@ -269,8 +270,8 @@ class TestRetryDetails:
         def enter(key):
             yield
 
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PARTITIONS": lambda: ["north"],
             "IN_PARTITION": enter,
         }
@@ -337,7 +338,7 @@ class TestDeliveriesListedInFewQueries:
 @pytest.mark.django_db
 class TestReadingABody:
     def test_its_chunks_are_put_together(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
         receiver.chunks = [b"ab", b"cd"]
 
         pipeline.send(hooked[0].pk)
@@ -345,7 +346,11 @@ class TestReadingABody:
         assert DeliveryAttempt.objects.get().response["body"] == "abcd"
 
     def test_a_full_body_is_never_timed(self, monkeypatch, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all", "MAX_RESPONSE_BYTES": 4}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "RECORD_ATTEMPTS": "all",
+            "MAX_RESPONSE_BYTES": 4,
+        }
         receiver.chunks = [b"abcd", b"efgh"]
         clock = iter([0.0, 0.0, 100.0])
         monkeypatch.setattr(webhook_module.time, "monotonic", lambda: next(clock, 100.0))
@@ -361,7 +366,7 @@ class TestReadingABody:
         assert pipeline.send(hooked[0].pk).state == DeliveryState.SENT
 
     def test_bytes_that_arent_utf8_are_replaced(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
         receiver.chunks = [b"ok\xff"]
 
         pipeline.send(hooked[0].pk)
@@ -383,7 +388,7 @@ class TestReadingABody:
 
 class TestTheGuardsDetails:
     def test_a_mapped_address_is_judged_as_the_ipv4_one_it_is(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": ["10.0.0.0/8"]}
+        isik_areas(settings).NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": ["10.0.0.0/8"]}
 
         guard.check("::ffff:10.0.0.1")
 

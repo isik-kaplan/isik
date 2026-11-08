@@ -7,6 +7,7 @@ from django.test import RequestFactory
 
 from isik.django.apps.common.db.history import open_history_context
 from isik.django.apps.common.middleware import HistoryContextMiddleware
+from isik.django.conf import isik_with
 from tests.testapp.models import EmailUser, Widget, WidgetEvent
 
 
@@ -132,59 +133,69 @@ class TestOptionalKeys:
         assert set(self.seen(rf)) == {"url", "user"}
 
     def test_the_version_named(self, rf, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["version"]
-        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["version"]}})
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_VERSION": "1.2.3"}})
 
         assert self.seen(rf)["version"] == "1.2.3"
 
     def test_the_version_and_its_build(self, rf, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["version", "build"]
-        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
-        settings.HISTORY_CONTEXT_BUILD = "5c49407"
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["version", "build"]}})
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_VERSION": "1.2.3"}})
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_BUILD": "5c49407"}})
 
         seen = self.seen(rf)
 
         assert (seen["version"], seen["build"]) == ("1.2.3", "5c49407")
 
     def test_the_build_needs_its_setting(self, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["build"]
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["build"]}})
 
         with pytest.raises(ImproperlyConfigured) as raised:
             HistoryContextMiddleware(get_response=lambda request: None)
 
-        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names build, and HISTORY_CONTEXT_BUILD isn't set."
+        assert (
+            str(raised.value)
+            == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names build, and ISIK['DJANGO']['HISTORY']['CONTEXT_BUILD'] "
+            "isn't set."
+        )
 
     def test_the_request_id_a_proxy_sent(self, rf, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
 
         assert self.seen(rf, **{"X-Request-ID": "abc"})["request_id"] == "abc"
 
     def test_the_request_id_header_is_a_setting(self, rf, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
-        settings.HISTORY_REQUEST_ID_HEADER = "X-Trace"
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"REQUEST_ID_HEADER": "X-Trace"}})
 
         assert self.seen(rf, **{"X-Trace": "abc"})["request_id"] == "abc"
 
     def test_a_request_id_is_made_when_none_was_sent(self, rf, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["request_id"]
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
 
         first, second = self.seen(rf)["request_id"], self.seen(rf)["request_id"]
 
         assert len(first) == 32 and first != second
 
     def test_an_unknown_key_is_refused(self, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["version", "sha", "commit"]
-        settings.HISTORY_CONTEXT_VERSION = "1.2.3"
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["version", "sha", "commit"]}})
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_VERSION": "1.2.3"}})
 
         with pytest.raises(ImproperlyConfigured) as raised:
             HistoryContextMiddleware(get_response=lambda request: None)
 
-        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names commit, sha - it takes version, build, request_id."
+        assert (
+            str(raised.value)
+            == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names commit, sha - it takes version, build, request_id."
+        )
 
     def test_the_version_needs_its_setting(self, settings):
-        settings.HISTORY_CONTEXT_KEYS = ["version"]
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["version"]}})
 
         with pytest.raises(ImproperlyConfigured) as raised:
             HistoryContextMiddleware(get_response=lambda request: None)
 
-        assert str(raised.value) == "HISTORY_CONTEXT_KEYS names version, and HISTORY_CONTEXT_VERSION isn't set."
+        assert (
+            str(raised.value) == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names version, and "
+            "ISIK['DJANGO']['HISTORY']['CONTEXT_VERSION'] isn't set."
+        )

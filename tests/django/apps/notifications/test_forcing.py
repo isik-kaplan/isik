@@ -20,6 +20,7 @@ from isik.django.apps.notifications.audience.helpers import (
 )
 from isik.django.apps.notifications.kinds import KindText, rendered, text_of
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.testapp.models import ForceableSubscription
 
@@ -237,7 +238,10 @@ class TestAForcedRowCantBeChanged:
 
 class TestTellingThePerson:
     def test_a_force_and_its_release_are_told(self, forceable, alice, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "SUBSCRIPTION_FORCED_KIND": "subscription_forced"}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "SUBSCRIPTION_FORCED_KIND": "subscription_forced",
+        }
 
         force_subscription(alice, "parcel_flagged", "lost", enabled=False, source="staff", reason=REASON)
         release_subscription(alice, "parcel_flagged", "lost")

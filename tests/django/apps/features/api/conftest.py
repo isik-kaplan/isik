@@ -1,6 +1,8 @@
 import pytest
 from django.db import connection
 
+from isik.django.conf import isik_with
+
 
 @pytest.fixture(autouse=True)
 def atomic_requests(monkeypatch):
@@ -11,4 +13,4 @@ def atomic_requests(monkeypatch):
 @pytest.fixture(autouse=True)
 def urls(settings):
     settings.ROOT_URLCONF = "tests.django.apps.features.api.urls"
-    settings.IDEMPOTENCY_CLAIM_MODEL = "idempotency_by_reference.IdempotencyClaim"
+    settings.ISIK = isik_with(DJANGO={"IDEMPOTENCY": {"CLAIM_MODEL": "idempotency_by_reference.IdempotencyClaim"}})

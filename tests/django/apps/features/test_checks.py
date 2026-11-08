@@ -12,6 +12,7 @@ from isik.django.apps.features.audiences import HolderPeople
 from isik.django.apps.features.bases import AbstractOverrides
 from isik.django.apps.features.declarations import Default, OnHolder, OnOverrides, Setting
 from isik.django.apps.features.models import Feature, FeatureGrant
+from isik.django.conf import isik_areas
 from tests.testapp.models import EmailUser, Tag, UserOverrides
 
 
@@ -39,32 +40,39 @@ class TestTheSettingsCheck:
         assert checks.features_can_work(None) == []
 
     def test_a_key_it_doesnt_know(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDERS": None, "SWEEPS": None}
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
+            "HOLDERS": None,
+            "SWEEPS": None,
+            "GRANT_MODEL": "isik_features.FeatureGrant",
+        }
 
-        assert checks.setting_problems() == ["ISIK_FEATURES has keys it doesn't know: HOLDERS, SWEEPS."]
+        assert checks.setting_problems() == ["ISIK['DJANGO']['FEATURES'] has keys it doesn't know: HOLDERS, SWEEPS."]
 
     @pytest.mark.parametrize("sweep", ["interval", "next_boundary"])
     def test_either_sweep(self, settings, sweep):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": sweep}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": sweep}
 
         assert checks.setting_problems() == []
 
     def test_a_sweep_it_doesnt_know(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "hourly"}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": "hourly"}
 
-        assert checks.setting_problems() == ["ISIK_FEATURES' SWEEP is 'hourly' - it's one of interval, next_boundary."]
+        assert checks.setting_problems() == [
+            "ISIK['DJANGO']['FEATURES']['SWEEP'] is 'hourly' - it's one of interval, next_boundary."
+        ]
 
     def test_next_boundary_needs_celery(self, settings, monkeypatch):
         import importlib.util
 
         real = importlib.util.find_spec
         monkeypatch.setattr(importlib.util, "find_spec", lambda name: None if name == "celery" else real(name))
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "next_boundary"}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": "next_boundary"}
 
         assert checks.setting_problems() == [
-            "ISIK_FEATURES' SWEEP is next_boundary, which schedules each run with Celery - install it."
+            "ISIK['DJANGO']['FEATURES']['SWEEP'] is next_boundary, which schedules each run with Celery - install it."
         ]
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "interval"}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": "interval"}
         assert checks.setting_problems() == []
 
     def test_settings_with_nowhere_to_keep_them(self, settings):
@@ -119,7 +127,7 @@ class TestTheSettingsCheck:
         ]
 
     def test_it_is_reported_as_an_error(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDERS": None}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDERS": None}
 
         (error,) = checks.features_can_work(None)
 
@@ -201,7 +209,7 @@ class TestHolderPeople:
     def test_the_project_says_who_a_holders_people_are(self, settings):
         alice = EmailUser.objects.create(username="alice", email="alice@example.com")
         bob = EmailUser.objects.create(username="bob", email="bob@example.com")
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "PEOPLE": lambda holder: iter([holder, bob])}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "PEOPLE": lambda holder: iter([holder, bob])}
 
         assert HolderPeople().recipients(self.notice(alice.pk)) == [alice, bob]
 
@@ -214,7 +222,10 @@ class TestHolderPeople:
 
 class TestConfiguration:
     def test_a_hook_by_its_dotted_path(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDER": "tests.testapp.policies.RecentlyProved"}
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
+            "HOLDER": "tests.testapp.policies.RecentlyProved",
+        }
 
         from tests.testapp.policies import RecentlyProved
 
@@ -246,7 +257,7 @@ class TestTheOverridesColumns:
     @isolate_apps("tests.testapp")
     def test_built_without_a_settings_module(self, settings, monkeypatch):
         # Settings declared some other way are still columns; nothing is imported for them.
-        settings.ISIK_FEATURES = {}
+        isik_areas(settings).FEATURES = {}
         monkeypatch.setattr(declarations, "settings", {"limit": a_setting("limit")})
 
         class Isolated(AbstractOverrides):

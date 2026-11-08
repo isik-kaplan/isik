@@ -4,6 +4,7 @@ import pytest
 
 from isik.django.apps.notifications.audience.helpers import force_subscription, subscribe
 from isik.django.apps.notifications.models import NoticeKindPolicy
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications.api.test_api import client_for
 from tests.django.apps.notifications.test_forcing import REASON, row
 
@@ -103,7 +104,10 @@ class TestTheApi:
         assert listed["parcel_reminder"]["enabled_variants"] == {"daily": True, "weekly": True}
 
     def test_the_catalog_publishes_the_fields_a_project_names(self, alice, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_KIND_FIELDS": ["kind", "label"]}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "NOTICE_KIND_FIELDS": ["kind", "label"],
+        }
 
         assert client_for(alice).get("/kinds/parcel_shipped/").json() == {
             "kind": "parcel_shipped",
@@ -112,8 +116,8 @@ class TestTheApi:
 
     def test_the_catalog_shows_the_kinds_a_project_lets_a_person_see(self, alice, settings):
         seen = []
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "KINDS_VISIBLE": lambda request: seen.append(request.user) or ["parcel_shipped"],
         }
 

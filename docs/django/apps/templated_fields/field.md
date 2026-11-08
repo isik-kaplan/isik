@@ -19,5 +19,5 @@ post.default_text.render(request=request)  # "me" resolves via getattr(request, 
 ```
 
 - `available` must be a plain module-level function, not a lambda/closure - like any callable passed to a field kwarg, it has to survive migration serialization as a dotted import path.
-- `policy` (default `TemplatePolicy.STANDARD()`) and `delimiters` each resolve through their own settings fallback (`TEMPLATE_FIELDS_POLICY`/`TEMPLATE_FIELDS_DELIMITERS`); `undefined` (`"strict"` default, or `"blank"`, via `TEMPLATE_FIELDS_UNDEFINED`) controls whether a name `available()` didn't provide raises `jinja2.UndefinedError` or silently renders empty.
+- `policy` (default `TemplatePolicy.STANDARD()`) and `delimiters` each resolve through their own settings fallback (`ISIK["DJANGO"]["TEMPLATED_FIELDS"]["POLICY"]`/`ISIK["DJANGO"]["TEMPLATED_FIELDS"]["DELIMITERS"]`); `undefined` (`"strict"` default, or `"blank"`, via `ISIK["DJANGO"]["TEMPLATED_FIELDS"]["UNDEFINED"]`) controls whether a name `available()` didn't provide raises `jinja2.UndefinedError` or silently renders empty.
 - `full_clean()`/`Field.clean()` run the template through `engine.validate_syntax()` - a syntactically invalid or policy-violating template fails validation at save time, not first render.

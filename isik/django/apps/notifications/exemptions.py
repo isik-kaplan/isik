@@ -1,6 +1,6 @@
 """
-The reasons a project gives `ISIK_NOTIFICATIONS` for what a check would otherwise warn of - each typed, each
-held to a reason worth reading, each listed by `manage.py exemptions`. Nothing here imports a model, so a
+The reasons a project gives `ISIK['DJANGO']['NOTIFICATIONS']` for what a check would otherwise warn of - each typed,
+each held to a reason worth reading, each listed by `manage.py exemptions`. Nothing here imports a model, so a
 settings module imports them:
 
 - `ScheduledElsewhere` - `FAN_OUT_BY`: what starts the fan-out where isik can't see it (`isik.W006`).
@@ -20,7 +20,7 @@ class ScheduledElsewhere(
         "and beat_schedule() in the Celery app's beat."
     ),
 ):
-    """What starts the fan-out where isik can't see it - `ISIK_NOTIFICATIONS["FAN_OUT_BY"]`."""
+    """What starts the fan-out where isik can't see it - the notifications area's `FAN_OUT_BY`."""
 
 
 class SendsInline(
@@ -28,7 +28,7 @@ class SendsInline(
     rule="isik.django.notifications.sends-inline",
     why="With tasks run inline, a webhook is sent inside the request or task that wrote its notice.",
 ):
-    """Why sending inside the writing request or task is acceptable - `ISIK_NOTIFICATIONS["SENDS_INLINE"]`."""
+    """Why sending inside the writing request or task is acceptable - the notifications area's `SENDS_INLINE`."""
 
 
 class SharedEndpoints(
@@ -39,4 +39,4 @@ class SharedEndpoints(
         "user is sent every other user's."
     ),
 ):
-    """Why endpoints keyed to a user are still the deployment's - `ISIK_NOTIFICATIONS["ENDPOINTS_SHARED"]`."""
+    """Why endpoints keyed to a user are still the deployment's - the notifications area's `ENDPOINTS_SHARED`."""

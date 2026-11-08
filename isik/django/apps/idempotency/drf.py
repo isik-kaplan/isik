@@ -2,7 +2,6 @@
 
 import uuid
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import router, transaction
 from rest_framework.exceptions import NotAuthenticated, ValidationError
@@ -13,10 +12,12 @@ from isik.common.utils.exemptions import Exemption
 from isik.django.apps.idempotency.claims import claim_idempotency_key, get_claim_model
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyNotReplayable, IdempotencyKeyReused
 from isik.django.apps.idempotency.fingerprint import request_fingerprint
+from isik.django.conf import django_setting
 
 
 # How long a retry waits, in milliseconds, for the first request with its key to finish before it's
-# answered 409 to retry shortly - IDEMPOTENCY_LOCK_TIMEOUT unless set; None there waits indefinitely.
+# answered 409 to retry shortly - ISIK['DJANGO']['IDEMPOTENCY']['LOCK_TIMEOUT'] unless set; None there waits
+# indefinitely.
 LOCK_TIMEOUT = 10_000
 
 
@@ -162,7 +163,7 @@ class IdempotencyMixin:
             )
         fingerprint = request_fingerprint(request, self.get_idempotency_normalize())
         claim, created = claim_idempotency_key(
-            model, owner, key, fingerprint, lock_timeout=getattr(settings, "IDEMPOTENCY_LOCK_TIMEOUT", LOCK_TIMEOUT)
+            model, owner, key, fingerprint, lock_timeout=django_setting("IDEMPOTENCY", "LOCK_TIMEOUT", LOCK_TIMEOUT)
         )
         if created:
             self.idempotency_claim = claim

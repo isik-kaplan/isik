@@ -13,6 +13,7 @@ from isik.django.apps.notifications.channels import email as email_module
 from isik.django.apps.notifications.channels.email import language_of
 from isik.django.apps.notifications.kinds import raise_notice
 from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications.test_pipeline import fan_out
 
 
@@ -42,7 +43,10 @@ class TestPlainTextIsLeftAlone:
 
 class TestTheRecipientsLanguage:
     def test_their_own_when_they_have_one(self, reminded, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECIPIENT_LANGUAGE": lambda user: "de"}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "RECIPIENT_LANGUAGE": lambda user: "de",
+        }
 
         pipeline.send(reminded.pk)
 
@@ -50,8 +54,8 @@ class TestTheRecipientsLanguage:
 
     def test_the_sites_when_they_have_none(self, reminded, settings):
         asked = []
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "RECIPIENT_LANGUAGE": lambda user: asked.append(user.username) or None,
         }
 
@@ -62,7 +66,7 @@ class TestTheRecipientsLanguage:
 
     def test_an_address_belonging_to_nobody_is_written_in_the_sites(self, reminded, settings):
         asked = []
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECIPIENT_LANGUAGE": asked.append}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECIPIENT_LANGUAGE": asked.append}
         reminded.email.user_id = None
         reminded.email.save()
 
@@ -72,8 +76,8 @@ class TestTheRecipientsLanguage:
 
     def test_a_projects_own_sender_is_in_it_too(self, reminded, settings):
         seen = []
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "RECIPIENT_LANGUAGE": lambda user: "de",
             "EMAIL_SENDER": lambda delivery, notice, address: seen.append((translation.get_language(), address)),
         }
@@ -98,8 +102,8 @@ class TestTheRecipientsLanguage:
 class TestTheSharedContext:
     def test_every_email_starts_from_it_and_the_kinds_own_wins(self, reminded, settings, monkeypatch):
         asked, rendered = [], []
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "EMAIL_CONTEXT": lambda delivery, notice: (
                 asked.append((delivery.pk, notice.pk)) or {"site_name": "Acme", "data": "shadowed"}
             ),
@@ -117,8 +121,8 @@ class TestTheSharedContext:
 
 class TestMjml:
     def test_its_html_from_the_mjml_template(self, reminded, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "EMAIL_SENDER": "isik.django.apps.notifications.channels.email.send_from_mjml_templates",
         }
 

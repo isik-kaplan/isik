@@ -23,6 +23,13 @@ up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `Exempti
 
 - [sentry/](sentry/README.md) - Sentry-reporting exception suppression helpers (`sentry` extra)
 
+## isik.django
+
+- [django/conf.md](django/conf.md) - `ISIK`, the one setting every part of isik is configured in, and
+  `override_isik()` for tests
+- [django/sms.md](django/sms.md) - `send_sms()`: SMS sent through a configured sender - console, an outbox
+  for tests, Twilio - like Django's email backends (`sms` extra)
+
 ## isik.django.apps
 
 The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#install).
@@ -70,7 +77,7 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 ## Primary keys
 
 - [primary-keys.md](primary-keys.md) - every key isik has is a UUID called `id` from `new_primary_key()`
-  (uuid7 unless `ISIK_PRIMARY_KEY` says otherwise), and a key to a row stores its UUID
+  (uuid7 unless `ISIK["DJANGO"]["PRIMARY_KEY"]` says otherwise), and a key to a row stores its UUID
 
 ## Translations
 

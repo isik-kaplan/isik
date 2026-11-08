@@ -49,7 +49,7 @@ An item whose snapshot lacks what the text names - older than the text - reads a
 failing. `notifies()` given a bare name takes the same four.
 
 `isik.E016` (`Check.LABELS`) reports a kind with no `label`, and an inbox kind with no `message`; set its
-severity, or turn it off, in `ISIK_CHECKS` like any other.
+severity, or turn it off, in `ISIK["DJANGO"]["CHECKS"]` like any other.
 
 **Run `makemessages` after declaring text, and clear the fuzzy entries it writes.** For a new string it
 guesses a translation from a similar existing one and marks it `#, fuzzy` - another sentence's meaning,

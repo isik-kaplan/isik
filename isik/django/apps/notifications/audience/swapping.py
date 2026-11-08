@@ -10,6 +10,8 @@ audience app loads, for a project that sets none of them.
 from django.apps import apps
 from django.conf import settings
 
+from isik.django.conf import give_swappable_settings
+
 
 SUBSCRIPTION_MODEL = "ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL"
 INBOX_ITEM_MODEL = "ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL"
@@ -27,7 +29,8 @@ DEFAULTS = {
 
 
 def set_defaults():
-    """Gives each swappable setting the project leaves unset its default."""
+    """Gives each swappable setting what `ISIK['DJANGO']['NOTIFICATIONS']` names, else its default."""
+    give_swappable_settings("NOTIFICATIONS", DEFAULTS)
     for name, default in DEFAULTS.items():
         if not hasattr(settings, name):
             setattr(settings, name, default)

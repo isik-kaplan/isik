@@ -28,12 +28,12 @@ INSTALLED_APPS = [
     "isik.django.apps.notifications.audience",  # the rows naming people: subscriptions, inbox, endpoints, devices
 ]
 
-ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Acme"}   # only needed once a kind is sent by webhook
+ISIK = {"DJANGO": {"NOTIFICATIONS": {"PROJECT_NAME": "Acme"}}}   # only needed once a kind is sent by webhook
 ```
 
 Then declare a kind on the model it watches, write its email templates if it's sent by email, call
 `merge_beat_schedule(app)` in your `celery.py` (see [operations.md](operations.md)), and run `migrate` - which
-also writes each kind's policy row. A project with no webhook kinds sets no `ISIK_NOTIFICATIONS` at all.
+also writes each kind's policy row. A project with no webhook kinds sets no `ISIK["DJANGO"]["NOTIFICATIONS"]` at all.
 
 Your `transaction=True` tests keep working: the ledger refuses `TRUNCATE`, which a test's flush uses, and
 isik's pytest plugin lets that flush through on its own (see [operations.md](operations.md#tests)).
@@ -74,22 +74,22 @@ after their table: `isik_delivery_once`, `isik_notice_unfanned`. Yours are named
 model's `Meta` inheriting its base's (`class Meta(bases.AbstractNotice.Meta)`), so it keeps what the base
 declares - `isik.E020` refuses one that drops it.
 
-| model | abstract base | setting |
+| model | abstract base | key of `ISIK["DJANGO"]["NOTIFICATIONS"]` |
 |---|---|---|
-| `NoticeKindPolicy` | `bases.AbstractNoticeKindPolicy` | `ISIK_NOTIFICATIONS_KIND_POLICY_MODEL` |
-| `Notice` | `bases.AbstractNotice` | `ISIK_NOTIFICATIONS_NOTICE_MODEL` |
-| `FanOutShard` | `bases.AbstractFanOutShard` | `ISIK_NOTIFICATIONS_FAN_OUT_SHARD_MODEL` |
-| `Delivery` | `bases.AbstractDelivery` | `ISIK_NOTIFICATIONS_DELIVERY_MODEL` |
-| `WebhookDelivery` | `bases.AbstractWebhookDelivery` | `ISIK_NOTIFICATIONS_WEBHOOK_DELIVERY_MODEL` |
-| `EmailDelivery` | `bases.AbstractEmailDelivery` | `ISIK_NOTIFICATIONS_EMAIL_DELIVERY_MODEL` |
-| `InboxDelivery` | `bases.AbstractInboxDelivery` | `ISIK_NOTIFICATIONS_INBOX_DELIVERY_MODEL` |
-| `PushDelivery` | `bases.AbstractPushDelivery` | `ISIK_NOTIFICATIONS_PUSH_DELIVERY_MODEL` |
-| `DeliveryAttempt` | `bases.AbstractDeliveryAttempt` | `ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL` |
-| `Subscription` | `audience.bases.AbstractSubscription` | `ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL` |
-| `InboxItem` | `audience.bases.AbstractInboxItem` | `ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL` |
-| `Endpoint` | `audience.bases.AbstractEndpoint` | `ISIK_NOTIFICATIONS_ENDPOINT_MODEL` |
-| `EndpointKind` | `audience.bases.AbstractEndpointKind` | `ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL` |
-| `Device` | `audience.bases.AbstractDevice` | `ISIK_NOTIFICATIONS_DEVICE_MODEL` |
+| `NoticeKindPolicy` | `bases.AbstractNoticeKindPolicy` | `"KIND_POLICY_MODEL"` |
+| `Notice` | `bases.AbstractNotice` | `"NOTICE_MODEL"` |
+| `FanOutShard` | `bases.AbstractFanOutShard` | `"FAN_OUT_SHARD_MODEL"` |
+| `Delivery` | `bases.AbstractDelivery` | `"DELIVERY_MODEL"` |
+| `WebhookDelivery` | `bases.AbstractWebhookDelivery` | `"WEBHOOK_DELIVERY_MODEL"` |
+| `EmailDelivery` | `bases.AbstractEmailDelivery` | `"EMAIL_DELIVERY_MODEL"` |
+| `InboxDelivery` | `bases.AbstractInboxDelivery` | `"INBOX_DELIVERY_MODEL"` |
+| `PushDelivery` | `bases.AbstractPushDelivery` | `"PUSH_DELIVERY_MODEL"` |
+| `DeliveryAttempt` | `bases.AbstractDeliveryAttempt` | `"DELIVERY_ATTEMPT_MODEL"` |
+| `Subscription` | `audience.bases.AbstractSubscription` | `"SUBSCRIPTION_MODEL"` |
+| `InboxItem` | `audience.bases.AbstractInboxItem` | `"INBOX_ITEM_MODEL"` |
+| `Endpoint` | `audience.bases.AbstractEndpoint` | `"ENDPOINT_MODEL"` |
+| `EndpointKind` | `audience.bases.AbstractEndpointKind` | `"ENDPOINT_KIND_MODEL"` |
+| `Device` | `audience.bases.AbstractDevice` | `"DEVICE_MODEL"` |
 
 ```python
 # notifications/models.py - your app
@@ -103,9 +103,19 @@ class Delivery(bases.AbstractDelivery):
 # ... and the rest
 
 # settings.py
-ISIK_NOTIFICATIONS_NOTICE_MODEL = "notifications.Notice"
-ISIK_NOTIFICATIONS_DELIVERY_MODEL = "notifications.Delivery"
+ISIK = {
+    "DJANGO": {
+        "NOTIFICATIONS": {
+            "NOTICE_MODEL": "notifications.Notice",
+            "DELIVERY_MODEL": "notifications.Delivery",
+        },
+    },
+}
 ```
+
+Django swaps a model by a top-level setting - `ISIK_NOTIFICATIONS_NOTICE_MODEL`, which a migration naming
+the model reads too - and isik gives it that from `ISIK` when its apps load. A project setting one itself is
+held to naming the same model there (`isik.E023`).
 
 The ledger's bases carry every field, and their keys point at the configured models, so the subclasses
 stay empty and key to each other. The audience's bases declare every field but `user` and `kind` (and
@@ -119,11 +129,11 @@ the getters - `get_notice_model()` and its siblings in `isik.django.apps.notific
 included: `from isik.django.apps.notifications.models import Notice` names isik's default, which stops
 being there the moment it's swapped.
 
-**Keys.** Every model here is keyed by `new_primary_key()`, a uuid7 unless `ISIK_PRIMARY_KEY` says
+**Keys.** Every model here is keyed by `new_primary_key()`, a uuid7 unless `ISIK["DJANGO"]["PRIMARY_KEY"]` says
 otherwise - see [primary keys](../../../primary-keys.md). A kind's policy row is keyed by its `id` too, its
 `name` unique, and a notice, subscription, inbox item or endpoint kind stores that `id`. A notice written by
 its trigger gets its key from the database, `DatabaseUUID7()`, as no Python function reaches a trigger. One
-written from Python still gets `ISIK_PRIMARY_KEY`'s. A delivery's channel row has an `id` of its own beside
+written from Python still gets `ISIK["DJANGO"]["PRIMARY_KEY"]`'s. A delivery's channel row has an `id` of its own beside
 its one-to-one key to the delivery.
 
 Own the policy model, and own the three models its guard reads it from too - `Subscription`, `InboxItem`
@@ -153,7 +163,7 @@ superuser turning triggers off - it narrows accidents, not attackers.
 
 ## Settings
 
-`ISIK_NOTIFICATIONS`, a dict - every key has a default, and a key it doesn't know is refused by
+`ISIK["DJANGO"]["NOTIFICATIONS"]`, a dict - every key has a default, and a key it doesn't know is refused by
 `isik.E014`. A hook is a callable or its dotted path.
 
 | key | default | |

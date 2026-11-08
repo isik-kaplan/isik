@@ -10,5 +10,5 @@ one of the two apps beside it, which each own one concrete claim and its migrati
   body itself.
 
 Or subclass one of the abstract claims in `claims` in an app of your own, and point
-`IDEMPOTENCY_CLAIM_MODEL` at it.
+`ISIK['DJANGO']['IDEMPOTENCY']['CLAIM_MODEL']` at it.
 """

@@ -1,10 +1,10 @@
 """
-isik's own system checks - each on by default, and each tuned or turned off in `ISIK_CHECKS`, named
+isik's own system checks - each on by default, and each tuned or turned off in `ISIK['DJANGO']['CHECKS']`, named
 by the enums here rather than by strings:
 
     from isik.django.apps.common.checks import Check, CheckOption, Severity
 
-    ISIK_CHECKS = {
+    ISIK['DJANGO']['CHECKS'] = {
         Check.DOCUMENTATION: {CheckOption.APPS: ["billing", "accounts"]},
         Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["config.urls.api"]},
         Check.NOT_ATOMIC: {CheckOption.SEVERITY: Severity.WARNING},
@@ -18,7 +18,7 @@ and a warning, `isik.W003`, names each served one it is told to skip. A check ov
 `CheckOption.APPS`, app labels - the project's own apps by default (`project_app_configs()`).
 `Check.DOCUMENTATION` also takes `CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False leaves
 out the fields a model inherits unchanged from a library's abstract base. Anything else in
-`ISIK_CHECKS` - a string where an enum belongs included - is an error, `isik.E012`.
+`ISIK['DJANGO']['CHECKS']` - a string where an enum belongs included - is an error, `isik.E012`.
 
 | check                      | id                     | what it refuses                                              |
 |----------------------------|------------------------|--------------------------------------------------------------|
@@ -43,8 +43,14 @@ out the fields a model inherits unchanged from a library's abstract base. Anythi
 | Check.DECLARED_NAMES       | isik.E019 (off)        | a table or index the project's models leave Django to name   |
 | Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
 | Check.CONSTRAINT_MESSAGES  | isik.E021              | a constraint answering a violation with only its name        |
+
+These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
+swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
+`ISIK['DJANGO']['SMS']` is set - `isik.E024` an SMS sender configured wrong and `isik.W010` one sending nothing
+anywhere while DEBUG is off.
 """
 
+import difflib
 import functools
 from enum import Enum
 
@@ -54,12 +60,14 @@ from django.core.checks import Error, Tags, Warning, register
 from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
+from isik.django import conf as isik_conf
+from isik.django.conf import django_area
 
 
-# Plain enums, not StrEnums: a string never equals a member, so a string in ISIK_CHECKS is refused
+# Plain enums, not StrEnums: a string never equals a member, so a string in ISIK['DJANGO']['CHECKS'] is refused
 # rather than quietly taken.
 class Check(Enum):
-    """Each of isik's system checks - a key of `ISIK_CHECKS`."""
+    """Each of isik's system checks - a key of `ISIK['DJANGO']['CHECKS']`."""
 
     VALIDATORS = "validators"
     CONCURRENCY_TOKENS = "concurrency_tokens"
@@ -85,7 +93,7 @@ class Check(Enum):
 
 
 class CheckOption(Enum):
-    """What a check's `ISIK_CHECKS` entry sets - the keys of its dict."""
+    """What a check's `ISIK['DJANGO']['CHECKS']` entry sets - the keys of its dict."""
 
     ENABLED = "enabled"
     SEVERITY = "severity"
@@ -141,11 +149,11 @@ DEFAULTS = {
 
 
 def _configured():
-    return getattr(settings, "ISIK_CHECKS", None) or {}
+    return django_area("CHECKS") or {}
 
 
 def check_options(check):
-    """The options `check` runs with: its `ISIK_CHECKS` entry over the defaults."""
+    """The options `check` runs with: its `ISIK['DJANGO']['CHECKS']` entry over the defaults."""
     defaults = {**DEFAULTS, CheckOption.ENABLED: check not in OFF_UNLESS_ASKED}
     given = _configured().get(check)
     return {**defaults, **given} if isinstance(given, dict) else defaults
@@ -153,8 +161,8 @@ def check_options(check):
 
 def isik_check(check, *tags):
     """
-    Registers `function(options)` as `check`: skipped when `ISIK_CHECKS` turns it off, and its messages
-    given the severity `ISIK_CHECKS` sets, keeping their ids.
+    Registers `function(options)` as `check`: skipped when `ISIK['DJANGO']['CHECKS']` turns it off, and its messages
+    given the severity `ISIK['DJANGO']['CHECKS']` sets, keeping their ids.
     """
 
     def decorate(function):
@@ -213,7 +221,7 @@ def _key_problem(key, enum, where):
 
 
 def _entry_problems(check, options):
-    where = f"ISIK_CHECKS[Check.{check.name}]"
+    where = f"ISIK['DJANGO']['CHECKS'][Check.{check.name}]"
     problems = []
     takes = (CheckOption.ENABLED, CheckOption.SEVERITY, *CHECKS[check])
     for option in options:
@@ -256,7 +264,7 @@ def _blind_spots(check, options):
         return []
     return [
         Warning(
-            _("ISIK_CHECKS[Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s.")
+            _("ISIK['DJANGO']['CHECKS'][Check.%(name)s] leaves served urlconfs unchecked: %(urlconfs)s.")
             % {"name": check.name, "urlconfs": ", ".join(skipped)},
             hint=_("Leave out CheckOption.URLCONFS to check every urlconf the project serves."),
             id="isik.W003",
@@ -267,26 +275,108 @@ def _blind_spots(check, options):
 @register()
 def isik_checks_are_configured(app_configs, **kwargs):
     """
-    `ISIK_CHECKS` names only checks, options and severities there are, each by its enum - and says when
+    `ISIK['DJANGO']['CHECKS']` names only checks, options and severities there are, each by its enum - and says when
     it leaves served urlconfs unchecked.
     """
     configured = _configured()
     if not isinstance(configured, dict):
-        return [Error(_("ISIK_CHECKS is %(value)r, not a dict.") % {"value": configured}, id="isik.E012")]
+        return [Error(_("ISIK['DJANGO']['CHECKS'] is %(value)r, not a dict.") % {"value": configured}, id="isik.E012")]
     hint = _("See isik.django.apps.common.checks.")
     problems = []
     warnings = []
     for check, options in configured.items():
         if not isinstance(check, Check):
-            problems.append(_key_problem(check, Check, "ISIK_CHECKS"))
+            problems.append(_key_problem(check, Check, "ISIK['DJANGO']['CHECKS']"))
         elif not isinstance(options, dict):
             problems.append(
-                _("ISIK_CHECKS[Check.%(name)s] is %(value)r, not a dict.") % {"name": check.name, "value": options}
+                _("ISIK['DJANGO']['CHECKS'][Check.%(name)s] is %(value)r, not a dict.")
+                % {"name": check.name, "value": options}
             )
         else:
             problems.extend(_entry_problems(check, options))
             warnings.extend(_blind_spots(check, options))
     return [Error(problem, hint=hint, id="isik.E012") for problem in problems] + warnings
+
+
+def _unknown_keys(given, known, where):
+    problems = []
+    for key in given:
+        if key in known:
+            continue
+        close = difflib.get_close_matches(str(key), known)
+        problems.append(
+            _("%(where)s names %(key)r - did you mean %(match)r?") % {"where": where, "key": key, "match": close[0]}
+            if close
+            else _("%(where)s names %(key)r, which isn't one of %(known)s.")
+            % {"where": where, "key": key, "known": ", ".join(known)}
+        )
+    return problems
+
+
+def _isik_problems():
+    if not hasattr(settings, isik_conf.SETTING):
+        return []
+    given = getattr(settings, isik_conf.SETTING)
+    if not isinstance(given, dict):
+        return [_("ISIK is %(value)r, not a dict.") % {"value": given}]
+    problems = _unknown_keys(given, list(isik_conf.KEYS), "ISIK")
+    django = given.get("DJANGO", {})
+    if not isinstance(django, dict):
+        return [*problems, _("ISIK['DJANGO'] is %(value)r, not a dict.") % {"value": django}]
+    problems += _unknown_keys(django, list(isik_conf.DJANGO_AREAS), "ISIK['DJANGO']")
+    for area, keys in isik_conf.AREA_KEYS.items():
+        values = django.get(area, {})
+        where = f"ISIK['DJANGO']['{area}']"
+        if isinstance(values, dict):
+            problems += _unknown_keys(values, list(keys), where)
+        else:
+            problems.append(_("%(where)s is %(value)r, not a dict.") % {"where": where, "value": values})
+    return problems
+
+
+def _swappable_problems():
+    problems = []
+    for name, (area, key) in isik_conf.SWAPPABLE_SETTINGS.items():
+        named = (django_area(area) or {}).get(key)
+        if named is not None and getattr(settings, name) != named:
+            problems.append(
+                _(
+                    "%(setting)s is %(set)r, and ISIK['DJANGO']['%(area)s']['%(key)s'] is %(named)r - name the "
+                    "model in ISIK alone."
+                )
+                % {"setting": name, "set": getattr(settings, name), "area": area, "key": key, "named": named}
+            )
+    return problems
+
+
+@register()
+def isik_is_configured(app_configs, **kwargs):
+    """
+    `ISIK` holds only the keys isik reads - `isik.E022` - and every swappable model setting is the model `ISIK`
+    names for it - `isik.E023`.
+    """
+    hint = _("See isik.django.conf.")
+    return [Error(problem, hint=hint, id="isik.E022") for problem in _isik_problems()] + [
+        Error(problem, hint=hint, id="isik.E023") for problem in _swappable_problems()
+    ]
+
+
+@register()
+def sms_senders_are_configured(app_configs, **kwargs):
+    """
+    Each SMS sender is configured as its backend takes - `isik.E024` - and sends somewhere with DEBUG off -
+    `isik.W010`.
+    """
+    if django_area("SMS") is None:
+        return []
+    from isik.django.sms.checks import sender_problems
+
+    errors, warnings = sender_problems()
+    hint = _("See isik.django.sms.")
+    return [Error(problem, hint=hint, id="isik.E024") for problem in errors] + [
+        Warning(problem, hint=_("Name a sender that sends, or silence isik.W010 where that's meant."), id="isik.W010")
+        for problem in warnings
+    ]
 
 
 @isik_check(Check.VALIDATORS)
@@ -567,8 +657,8 @@ def every_field_says_what_it_holds(options, **kwargs):
     from isik.django.apps.common.db.documentation import documentation_problems
 
     hint = _(
-        "A field a library's abstract base declares is described with redeclare() "
-        "(isik.django.apps.common.db); ISIK_CHECKS[Check.DOCUMENTATION] says which fields are checked at all."
+        "A field a library's abstract base declares is described with redeclare() (isik.django.apps.common.db); "
+        "ISIK['DJANGO']['CHECKS'][Check.DOCUMENTATION] says which fields are checked at all."
     )
     return [
         Error(problem, hint=hint, id="isik.E010")

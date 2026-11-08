@@ -7,7 +7,7 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 `first_of`, `not_none`, `with_attrs`, `returns`, `Exemption`: see
 [common/utils](../../../common/utils/README.md).
 
-- [checks](checks.md) — isik's system checks, and `ISIK_CHECKS` to tune or turn each off
+- [checks](checks.md) — isik's system checks, and `ISIK["DJANGO"]["CHECKS"]` to tune or turn each off
 - [atomic](atomic.md) — `not_atomic(reason)`, a view served outside `ATOMIC_REQUESTS` saying why
 - [generated](generated.md) — `generated_models()`, the models isik generates, marked by kind
 - [model_makers](model_makers.md) — shared plumbing behind feedback/tags' model-generating "makers"

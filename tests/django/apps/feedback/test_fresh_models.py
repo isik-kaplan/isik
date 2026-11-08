@@ -116,6 +116,8 @@ def test_waiting_for_a_model_stops_once_its_heard():
 
     assert len(_model_makers._waiting) == 1
     assert len(class_prepared.receivers) == listening + 1
+    # Held here, so a receiver left connected stays alive to be found - not collected out of the count.
+    (waiting,) = _model_makers._waiting
 
     class Made(DefaultMakerBase):
         on = models.ForeignKey(host, on_delete=models.CASCADE, related_name="feedback")
@@ -126,6 +128,7 @@ def test_waiting_for_a_model_stops_once_its_heard():
             app_label = "testapp"
 
     assert _model_makers._waiting == set()
+    assert class_prepared.disconnect(waiting) is False
     assert len(class_prepared.receivers) == listening
     assert host.feedback.model is Made
 

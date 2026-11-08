@@ -3,7 +3,6 @@ TemplateCharField/TemplateTextField - Jinja-templated text fields, restricted to
 `TemplateString.render()` does the actual rendering - see `engine.py` for how.
 """
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.fields import DeferredAttribute
@@ -12,13 +11,14 @@ from jinja2 import TemplateSyntaxError
 from isik.django.apps.templated_fields import engine
 from isik.django.apps.templated_fields.delimiters import resolve_delimiters
 from isik.django.apps.templated_fields.policy import resolve_policy
+from isik.django.conf import django_setting
 
 
 def _resolve_undefined(explicit):
-    """explicit -> settings.TEMPLATE_FIELDS_UNDEFINED -> "strict"."""
+    """explicit -> ISIK['DJANGO']['TEMPLATED_FIELDS']['UNDEFINED'] -> "strict"."""
     if explicit is not None:
         return explicit
-    return getattr(settings, "TEMPLATE_FIELDS_UNDEFINED", "strict")
+    return django_setting("TEMPLATED_FIELDS", "UNDEFINED", "strict")
 
 
 class TemplateString(str):
@@ -118,10 +118,10 @@ class TemplateCharField(_TemplateFieldMixin, models.CharField):
         post.default_text.render(request=request)    # the rendered output
 
     `policy` (a `TemplatePolicy`, default `TemplatePolicy.STANDARD()` or the
-    `TEMPLATE_FIELDS_POLICY` setting) controls which Jinja syntax is allowed - see
+    `ISIK['DJANGO']['TEMPLATED_FIELDS']['POLICY']` setting) controls which Jinja syntax is allowed - see
     `TemplatePolicy`'s own docstring. `delimiters` (a `TemplateDelimiters`, e.g. for `<<var>>`
-    instead of `{{ var }}`) resolves the same way via `TEMPLATE_FIELDS_DELIMITERS`. `undefined`
-    (`"strict"`, the default, or `"blank"`, also settable via `TEMPLATE_FIELDS_UNDEFINED`)
+    instead of `{{ var }}`) resolves the same way via `ISIK['DJANGO']['TEMPLATED_FIELDS']['DELIMITERS']`. `undefined`
+    (`"strict"`, the default, or `"blank"`, also settable via `ISIK['DJANGO']['TEMPLATED_FIELDS']['UNDEFINED']`)
     controls what happens when the template references a name `available()` didn't provide -
     `"strict"` raises `jinja2.UndefinedError` at render time, `"blank"` silently renders an empty
     string instead.

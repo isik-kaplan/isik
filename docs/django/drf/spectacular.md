@@ -121,11 +121,11 @@ SPECTACULAR_SETTINGS = {
 ## One language - `SpectacularAPIView`
 
 `isik.django.drf.schema_views.SpectacularAPIView` is drf-spectacular's schema view, generating the
-document in `ISIK_SCHEMA_LANGUAGE` whatever the request's own language - so every client gets, and
+document in `ISIK["DJANGO"]["SCHEMA_LANGUAGE"]` whatever the request's own language - so every client gets, and
 every cache keeps, one document:
 
 ```python
-ISIK_SCHEMA_LANGUAGE = "en"
+ISIK = {"DJANGO": {"SCHEMA_LANGUAGE": "en"}}
 
 path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
 ```

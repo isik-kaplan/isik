@@ -4,14 +4,15 @@ Apart from `isik.django.drf.spectacular`, which `DEFAULT_SCHEMA_CLASS` names: dr
 read that setting as they load, so a module holding both would import itself half-made.
 """
 
-from django.conf import settings
 from django.utils import translation
 from drf_spectacular.views import SpectacularAPIView as _BaseSpectacularAPIView
+
+from isik.django.conf import django_area
 
 
 class SpectacularAPIView(_BaseSpectacularAPIView):
     """
-    drf-spectacular's schema view, generating the document in `ISIK_SCHEMA_LANGUAGE` whatever the
+    drf-spectacular's schema view, generating the document in `ISIK['DJANGO']['SCHEMA_LANGUAGE']` whatever the
     request's own language - so every client gets, and every cache keeps, one document. A `?lang=`
     still picks another. Without the setting it's drf-spectacular's own.
 
@@ -19,7 +20,7 @@ class SpectacularAPIView(_BaseSpectacularAPIView):
     """
 
     def _get_schema_response(self, request):
-        language = getattr(settings, "ISIK_SCHEMA_LANGUAGE", None)
+        language = django_area("SCHEMA_LANGUAGE")
         if language is None or request.GET.get("lang"):
             return super()._get_schema_response(request)
         with translation.override(language):

@@ -26,6 +26,7 @@ from isik.django.apps.notifications.models import (
 )
 from isik.django.apps.notifications.partitions import PartitionGone
 from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications.test_pipeline import deliveries, delivery_on, fan_out, flag, redeclared, ship
 from tests.django.apps.notifications.test_pipeline_details import hooked, receiver, shipped  # noqa: F401  # noqa: F401
 from tests.testapp.models import EmailUser, Parcel
@@ -49,8 +50,8 @@ def partitions(settings):
         entered.append(key)
         yield
 
-    settings.ISIK_NOTIFICATIONS = {
-        **settings.ISIK_NOTIFICATIONS,
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
         "PARTITIONS": lambda: ["north", "south"],
         "IN_PARTITION": enter,
     }
@@ -249,7 +250,7 @@ class TestWhatCantBeStored:
 
 class TestTheReaperAtItsLimits:
     def test_a_stranded_delivery_whose_run_is_spent_is_abandoned(self, shipped, settings, dispatched):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 2}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "MAX_ATTEMPTS": 2}
         long_ago = timezone.now() - timedelta(hours=1)
         inbox, email = delivery_on(shipped, "inbox"), delivery_on(shipped, "email")
         Delivery.objects.filter(pk=inbox.pk).update(
@@ -265,7 +266,7 @@ class TestTheReaperAtItsLimits:
         assert Delivery.objects.get(pk=email.pk).state == DeliveryState.PENDING
 
     def test_a_stranded_shard_whose_attempts_are_spent_is_abandoned(self, parcel, settings, dispatched):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 2}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "MAX_ATTEMPTS": 2}
         long_ago = timezone.now() - timedelta(hours=1)
         notice = ship(parcel)
         spent = FanOutShard.objects.create(
@@ -289,7 +290,7 @@ class TestTheReaperAtItsLimits:
         assert dispatched == [("send", (str(inbox.pk),), {"triggered_by": "reap_stranded"})]
 
     def test_no_more_than_a_batch_most_overdue_first(self, shipped, settings, dispatched):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "HOUSEKEEPING_BATCH": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "HOUSEKEEPING_BATCH": 1}
         inbox, email = delivery_on(shipped, "inbox"), delivery_on(shipped, "email")
         Delivery.objects.filter(pk=inbox.pk).update(next_attempt_at=timezone.now() - timedelta(hours=1))
         Delivery.objects.filter(pk=email.pk).update(next_attempt_at=timezone.now() - timedelta(hours=2))
@@ -307,8 +308,8 @@ class TestTheReaperAtItsLimits:
 
 class TestPruningInBatches:
     def test_attempts(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "RECORD_ATTEMPTS": "all",
             "ATTEMPT_RETENTION": timedelta(0),
             "HOUSEKEEPING_BATCH": 1,
@@ -322,8 +323,8 @@ class TestPruningInBatches:
         assert DeliveryAttempt.objects.count() == 1
 
     def test_notices(self, parcel, alice, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "NOTICE_RETENTION": timedelta(0),
             "HOUSEKEEPING_BATCH": 1,
         }
@@ -334,7 +335,7 @@ class TestPruningInBatches:
         assert Notice.objects.count() == 1
 
     def test_a_full_batch_starts_another(self, monkeypatch, settings, dispatched):
-        settings.ISIK_NOTIFICATIONS = {"HOUSEKEEPING_BATCH": 2}
+        isik_areas(settings).NOTIFICATIONS = {"HOUSEKEEPING_BATCH": 2}
         asked = []
         for name in ("prune_attempts", "prune_notices"):
             counts = iter([2, 1])
@@ -348,7 +349,7 @@ class TestPruningInBatches:
 
 @pytest.mark.django_db(transaction=True)
 def test_pruning_skips_a_notice_a_retry_holds(settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
     alice = EmailUser.objects.create(username="alice", email="alice@example.com")
     parcel = Parcel.objects.create(sender=alice)
     notice = ship(parcel)
@@ -391,7 +392,7 @@ class TestRetryingByHand:
         dispatched,
         django_capture_on_commit_callbacks,
     ):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
 
         with django_capture_on_commit_callbacks(execute=True):
             retried = retry_delivery(abandoned)
@@ -411,7 +412,11 @@ class TestRetryingByHand:
         assert retry_delivery(abandoned.pk).state == DeliveryState.PENDING
 
     def test_each_run_has_its_own_attempts_and_backoff(self, abandoned, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 2, "BACKOFF": (60, 7200)}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "MAX_ATTEMPTS": 2,
+            "BACKOFF": (60, 7200),
+        }
         receiver.status = 500
         retry_delivery(abandoned)
 
@@ -467,8 +472,8 @@ class TestRetryingByHand:
 
 class TestTheWebhooksLimits:
     def test_a_body_without_end_is_read_no_further_than_the_limit(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "RECORD_ATTEMPTS": "all",
             "MAX_RESPONSE_BYTES": 10,
         }
@@ -498,7 +503,7 @@ class TestTheWebhooksLimits:
         assert len(receiver.requests) == 1
 
     def test_which_statuses_are_retried_is_a_setting(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RETRYABLE_STATUSES": (404,)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RETRYABLE_STATUSES": (404,)}
         receiver.status = 404
 
         assert pipeline.send(hooked[0].pk).state == DeliveryState.PENDING
@@ -512,7 +517,10 @@ class TestTheWebhooksLimits:
         assert DeliveryAttempt.objects.get().error == "The endpoint is refused: it resolves to a loopback address."
 
     def test_through_a_proxy_the_resolved_address_is_still_checked(self, hooked, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "WEBHOOK_PROXY": "http://proxy.internal:3128"}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "WEBHOOK_PROXY": "http://proxy.internal:3128",
+        }
         get_endpoint_model().objects.filter(pk=hooked[1].pk).update(url="http://127.0.0.1:9/in")
 
         failed = pipeline.send(hooked[0].pk)
@@ -544,7 +552,7 @@ class TestParkingOnce:
         from isik.django.apps.notifications.channels.webhook import WebhookChannel
         from isik.django.apps.notifications.signals import endpoint_parked
 
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DISABLE_AFTER": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "DISABLE_AFTER": 1}
         delivery = Delivery.objects.get(pk=hooked[0].pk)
         heard = []
 

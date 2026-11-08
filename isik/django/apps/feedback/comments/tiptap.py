@@ -6,7 +6,7 @@ real `Schema` + `Node.from_json` + `.check()` rather than a hand-rolled structur
 `.check()` is what actually walks the tree and raises on that.
 
 This module never hand-maintains its own copy of the frontend's schema. It reads one from a JSON
-file at `settings.FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH` (or a per-call `schema_path=` override),
+file at `ISIK['DJANGO']['FEEDBACK']['COMMENTS_TIPTAP_SCHEMA_PATH']` (or a per-call `schema_path=` override),
 shaped exactly like a ProseMirror schema spec minus the DOM-only parts:
 
     {"nodes": {"doc": {"content": "block+"},
@@ -25,12 +25,12 @@ https://prosemirror.net/docs/guide/#schema for the content-expression syntax.
 import functools
 import json
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.deconstruct import deconstructible
 from prosemirror.model import Node, Schema
 
 from isik._internal.translation import gettext as _
+from isik.django.conf import django_setting
 
 
 @functools.lru_cache
@@ -41,10 +41,13 @@ def _load_schema(schema_path):
 
 
 def _resolve_schema_path(explicit):
-    path = explicit or getattr(settings, "FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH", None)
+    path = explicit or django_setting("FEEDBACK", "COMMENTS_TIPTAP_SCHEMA_PATH")
     if not path:
         raise ValidationError(
-            _("No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly.")
+            _(
+                "No Tiptap schema configured - set ISIK['DJANGO']['FEEDBACK']['COMMENTS_TIPTAP_SCHEMA_PATH'] or pass "
+                "schema_path= explicitly."
+            )
         )
     return path
 

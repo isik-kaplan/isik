@@ -26,6 +26,7 @@ from isik.django.apps.notifications.choices import Platform, PushEnvironment
 from isik.django.apps.notifications.kinds import PushContent, PushDataField, raise_notice
 from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState, PushDelivery
 from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_pipeline import fan_out, redeclared
 from tests.testapp.models import EmailUser
@@ -83,8 +84,8 @@ def services(monkeypatch, settings):
     monkeypatch.setattr(push, "client", lambda: httpx.Client(transport=httpx.MockTransport(faked)))
     monkeypatch.setattr(push, "_tokens", {})
     monkeypatch.setattr(push.time, "time", lambda: NOW)
-    settings.ISIK_NOTIFICATIONS = {
-        **settings.ISIK_NOTIFICATIONS,
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
         "CHANNELS": ("inbox", "email", "webhook", "push"),
         "PUSH": {"APNS": APNS, "FCM": {"CREDENTIALS": ACCOUNT}},
         "RECORD_ATTEMPTS": "all",
@@ -359,8 +360,8 @@ class TestFcm:
 
     def test_credentials_given_as_json_naming_their_project(self, remind, android, services, settings):
         account = {key: value for key, value in ACCOUNT.items() if key != "token_uri"}
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PUSH": {"FCM": {"CREDENTIALS": json.dumps(account), "PROJECT_ID": "acme-other"}},
         }
         services.answers.append(httpx.Response(200, json={"access_token": "ya29.google", "expires_in": 3600}))
@@ -464,14 +465,14 @@ class TestFcm:
 
 class TestWhatItSays:
     def test_in_the_recipients_language(self, remind, phone, services, settings, monkeypatch):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECIPIENT_LANGUAGE": BY_USER}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECIPIENT_LANGUAGE": BY_USER}
         with redeclared(monkeypatch, "parcel_reminder", text=_titled(lambda data, variant: translation.get_language())):
             pipeline.send(remind(phone).pk)
 
         assert _alert(services)["title"] == "de"
 
     def test_in_the_sites_language_for_a_user_gone(self, remind, phone, services, monkeypatch, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECIPIENT_LANGUAGE": BY_USER}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECIPIENT_LANGUAGE": BY_USER}
         delivery = remind(phone)
         PushDelivery.objects.filter(delivery=delivery).update(user_id=str(uuid.uuid4()))
         with redeclared(monkeypatch, "parcel_reminder", text=_titled(lambda data, variant: translation.get_language())):
@@ -622,8 +623,8 @@ class TestADeviceGone:
     def test_nor_once_its_partition_is_gone(self, remind, phone, services, settings):
         delivery = remind(phone)
         Delivery.objects.filter(pk=delivery.pk).update(state=DeliveryState.ABANDONED, partition="gone")
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PARTITIONS": lambda: ["north"],
             "IN_PARTITION": lambda key: nullcontext(),
         }
@@ -642,8 +643,8 @@ class TestPartitions:
             entered.append(key)
             yield
 
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PARTITIONS": lambda: ["north"],
             "IN_PARTITION": enter,
         }
@@ -697,7 +698,7 @@ class TestDevices:
 
 class TestTheClient:
     def test_one_http2_client_a_worker_with_the_endpoint_timeout(self, settings, monkeypatch):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ENDPOINT_TIMEOUT": 7}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ENDPOINT_TIMEOUT": 7}
         # Its arguments, not a client: making a real one sets up TLS, which a forked mutation run can't.
         monkeypatch.setattr(push.httpx, "Client", lambda **made: made)
 

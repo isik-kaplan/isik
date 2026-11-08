@@ -22,6 +22,7 @@ from isik.django.apps.notifications.models import (
     Source,
 )
 from isik.django.apps.notifications.pipeline import RetryRefused, record_email, retry_delivery
+from isik.django.conf import isik_areas
 from tests.testapp.models import PARCEL_RECEIPT
 
 
@@ -41,7 +42,7 @@ class Sender:
 
 
 def test_a_sent_email_is_recorded_as_sent(alice, parcel, dispatched, settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
     send = Sender()
 
     delivery = record_email(
@@ -139,7 +140,7 @@ def test_a_failed_send_is_recorded_and_raised_again(alice, parcel, dispatched):
 
 
 def test_the_attempt_takes_as_long_as_the_send(dispatched, monkeypatch, settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
     ticks = iter([10.0, 12.5])
     monkeypatch.setattr(pipeline.time, "monotonic", lambda: next(ticks, 11.0))
 
@@ -273,7 +274,7 @@ class TestARecordedKind:
 
 class TestOneEmailAcrossItsTries:
     def test_a_retry_adds_its_attempt_to_the_first_delivery(self, alice, dispatched, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
 
         for error in (ConnectionRefusedError("down"), TimeoutError("slow")):
             with pytest.raises(type(error)):

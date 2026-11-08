@@ -23,7 +23,7 @@ it takes to read `actor_id` back where a primary key alone names a different per
 the schema the actor lives in, say:
 
 ```python
-ISIK_NOTIFICATIONS = {"NOTICE_CONTEXT_KEYS": ("user", "schema")}
+ISIK = {"DJANGO": {"NOTIFICATIONS": {"NOTICE_CONTEXT_KEYS": ("user", "schema")}}}
 ```
 
 Both are read where the notice is written, so changing either setting changes the trigger SQL - a
@@ -133,11 +133,15 @@ reaches gets a delivery of its own, sent straight to its platform's service over
 token, FCM for a Firebase one. No middleman, no SDK: the extra is `httpx[http2]` and `pyjwt[crypto]`.
 
 ```python
-ISIK_NOTIFICATIONS = {
-    "CHANNELS": ("inbox", "email", "push"),
-    "PUSH": {
-        "APNS": {"TEAM_ID": "...", "KEY_ID": "...", "KEY": os.environ["APNS_KEY"], "TOPIC": "com.acme.app"},
-        "FCM": {"CREDENTIALS": json.loads(os.environ["FCM_SERVICE_ACCOUNT"])},
+ISIK = {
+    "DJANGO": {
+        "NOTIFICATIONS": {
+            "CHANNELS": ("inbox", "email", "push"),
+            "PUSH": {
+                "APNS": {"TEAM_ID": "...", "KEY_ID": "...", "KEY": os.environ["APNS_KEY"], "TOPIC": "com.acme.app"},
+                "FCM": {"CREDENTIALS": json.loads(os.environ["FCM_SERVICE_ACCOUNT"])},
+            },
+        },
     },
 }
 ```
@@ -147,7 +151,7 @@ Either service, or both. `KEY` is the `.p8` key's PEM; `TOPIC` the app's bundle 
 project named by `project_id` unless `PROJECT_ID` says otherwise. A kind sent on push with neither set is
 refused at startup.
 
-**Devices.** `Device` (in the audience app, swappable as `ISIK_NOTIFICATIONS_DEVICE_MODEL`) is one app
+**Devices.** `Device` (in the audience app, swappable as `"DEVICE_MODEL"`) is one app
 install: `platform` (`apns` or `fcm`), `token`, `environment` (`production`, or `sandbox` for a development
 build's APNs token - the two hosts refuse each other's), `app_id`, `is_active` and `last_seen_at`. A token
 is unique on its platform: `register_device(user, platform, token, environment=..., app_id=...)` makes the

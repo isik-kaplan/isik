@@ -15,6 +15,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.viewsets import GenericViewSet
 
 from isik.django.apps.common import generated
+from isik.django.conf import isik_areas
 from isik.django.drf import spectacular
 from isik.django.drf.schema_views import SpectacularAPIView
 from isik.django.drf.spectacular import _choices_key, _common_name, enum_name_overrides
@@ -216,17 +217,17 @@ class TestTheSchemaLanguage:
         return seen
 
     def test_generated_in_the_pinned_language(self, monkeypatch, settings):
-        settings.ISIK_SCHEMA_LANGUAGE = "fr"
+        isik_areas(settings).SCHEMA_LANGUAGE = "fr"
 
         assert self.run(monkeypatch) == [("fr", True)]
 
     def test_a_lang_query_still_picks_another(self, monkeypatch, settings):
-        settings.ISIK_SCHEMA_LANGUAGE = "fr"
+        isik_areas(settings).SCHEMA_LANGUAGE = "fr"
 
         assert self.run(monkeypatch, {"lang": "tr"}) == [("tr", True)]
 
     def test_without_the_setting_the_requests_own(self, monkeypatch, settings):
-        if hasattr(settings, "ISIK_SCHEMA_LANGUAGE"):
-            del settings.ISIK_SCHEMA_LANGUAGE
+        if hasattr(settings, "ISIK['DJANGO']['SCHEMA_LANGUAGE']"):
+            del isik_areas(settings).SCHEMA_LANGUAGE
 
         assert self.run(monkeypatch) == [("de", True)]

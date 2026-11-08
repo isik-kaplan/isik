@@ -10,6 +10,7 @@ from isik.django.apps.notifications.drf import inbox_item_serializer
 from isik.django.apps.notifications.kinds import raise_notice
 from isik.django.apps.notifications.models import Delivery, Notice
 from isik.django.apps.notifications.pipeline import record_email
+from isik.django.conf import isik_areas
 from tests.testapp.models import PARCEL_RECEIPT, PARCEL_REMINDER
 
 
@@ -79,12 +80,12 @@ def test_the_inbox_item_carries_them_and_doesnt_show_them(parcel, alice, bob, di
 
 class TestTheSQL:
     def test_no_actor_key_records_no_one(self, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ACTOR_CONTEXT_KEY": None}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ACTOR_CONTEXT_KEY": None}
 
         assert triggers.actor() == "NULL"
 
     def test_no_context_keys_keep_nothing(self, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_CONTEXT_KEYS": ()}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_CONTEXT_KEYS": ()}
 
         assert triggers.context() == "'{}'::jsonb"
 
@@ -99,18 +100,21 @@ class TestTheSQL:
 @pytest.mark.parametrize(
     ("configured", "problem"),
     [
-        ({"ACTOR_CONTEXT_KEY": 7}, "ISIK_NOTIFICATIONS' ACTOR_CONTEXT_KEY is a history context key, or None."),
+        (
+            {"ACTOR_CONTEXT_KEY": 7},
+            "ISIK['DJANGO']['NOTIFICATIONS']['ACTOR_CONTEXT_KEY'] is a history context key, or None.",
+        ),
         (
             {"NOTICE_CONTEXT_KEYS": "user"},
-            'ISIK_NOTIFICATIONS\' NOTICE_CONTEXT_KEYS is history context keys, such as ("user",).',
+            "ISIK['DJANGO']['NOTIFICATIONS']['NOTICE_CONTEXT_KEYS'] is history context keys, such as (\"user\",).",
         ),
         (
             {"NOTICE_CONTEXT_KEYS": ("user", 7)},
-            'ISIK_NOTIFICATIONS\' NOTICE_CONTEXT_KEYS is history context keys, such as ("user",).',
+            "ISIK['DJANGO']['NOTIFICATIONS']['NOTICE_CONTEXT_KEYS'] is history context keys, such as (\"user\",).",
         ),
     ],
 )
 def test_the_settings_are_checked(settings, configured, problem):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, **configured}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, **configured}
 
     assert checks.setting_problems() == [problem]

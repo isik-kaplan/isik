@@ -9,7 +9,6 @@ from uuid import UUID
 
 import pgtrigger
 from django.apps import apps as django_apps
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models, transaction
 from django.db.models import options as model_options
@@ -35,6 +34,7 @@ from isik._internal.translation import gettext_lazy
 from isik.common.utils.strings import snake_to_pascal
 from isik.django.apps.common.generated import mark_generated
 from isik.django.apps.common.skippable_validators import SkippableValidatorsMixin
+from isik.django.conf import django_area
 
 
 def _check_pgtrigger_installed():
@@ -118,18 +118,18 @@ def _primary_key_function(path):
 
 def new_primary_key():
     """
-    A new primary key - for every model isik keys, and every model it makes: `ISIK_PRIMARY_KEY`'s, a
+    A new primary key - for every model isik keys, and every model it makes: `ISIK['DJANGO']['PRIMARY_KEY']`'s, a
     dotted path to a function returning a UUID, isik's `uuid7` unless set. Read when a key is made
     rather than written into each model's migration, so changing it is a setting, not a migration of
     every model.
     """
-    return _primary_key_function(getattr(settings, "ISIK_PRIMARY_KEY", "isik.django.apps.common.db.models.uuid7"))()
+    return _primary_key_function(django_area("PRIMARY_KEY", "isik.django.apps.common.db.models.uuid7"))()
 
 
 class UUIDPrimaryKeyModel(models.Model):
     """
     A UUID primary key - nothing to guess from, nothing to enumerate, no sequence to share. A `uuid7`
-    unless `ISIK_PRIMARY_KEY` picks another kind, see `new_primary_key()`.
+    unless `ISIK['DJANGO']['PRIMARY_KEY']` picks another kind, see `new_primary_key()`.
     """
 
     id = models.UUIDField(
@@ -139,7 +139,7 @@ class UUIDPrimaryKeyModel(models.Model):
         default=new_primary_key,
         verbose_name=gettext_lazy("ID"),
         help_text=gettext_lazy("The row's identifier, assigned when it's created."),
-        db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
+        db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.",
     )
 
     class Meta:

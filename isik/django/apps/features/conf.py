@@ -1,13 +1,14 @@
 """
-`ISIK_FEATURES`, the one setting the features app reads - a dict whose keys each have a default. A hook is a
+`ISIK['DJANGO']['FEATURES']`, all the features app reads - a dict whose keys each have a default. A hook is a
 callable or its dotted path. Keys this module doesn't know are refused by a system check.
 """
 
 from datetime import timedelta
 from importlib import import_module
 
-from django.conf import settings
 from django.utils.module_loading import import_string
+
+from isik.django.conf import django_area
 
 
 DEFAULTS = {
@@ -47,8 +48,8 @@ HOOKS = ("HOLDER", "IN_HOLDER_SCHEMA", "FEATURES_VISIBLE", "SETTINGS_VISIBLE", "
 
 
 def configured():
-    """`ISIK_FEATURES` as the project set it."""
-    return getattr(settings, "ISIK_FEATURES", None) or {}
+    """`ISIK['DJANGO']['FEATURES']` as the project set it."""
+    return django_area("FEATURES") or {}
 
 
 def import_settings_module():

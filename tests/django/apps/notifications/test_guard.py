@@ -9,6 +9,7 @@ import pytest
 
 from isik.django.apps.notifications.channels import guard
 from isik.django.apps.notifications.channels.guard import GuardedBackend, RefusedTarget, check
+from isik.django.conf import isik_areas
 
 
 class TestWhatIsRefused:
@@ -59,13 +60,13 @@ class TestWhatIsRefused:
 
 class TestAllowingPrivateTargets:
     def test_every_one(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": True}
+        isik_areas(settings).NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": True}
 
         check("10.0.0.5")
         check("127.0.0.1")
 
     def test_the_networks_named(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": ["10.1.0.0/16", "fd00::/8"]}
+        isik_areas(settings).NOTIFICATIONS = {"ALLOW_PRIVATE_TARGETS": ["10.1.0.0/16", "fd00::/8"]}
 
         check("10.1.2.3")
         check("fd00::1")
@@ -125,7 +126,7 @@ class TestConnecting:
 
 class TestThroughAProxy:
     def test_the_proxy_carries_it(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"WEBHOOK_PROXY": "http://proxy.internal:3128"}
+        isik_areas(settings).NOTIFICATIONS = {"WEBHOOK_PROXY": "http://proxy.internal:3128"}
 
         transport = guard.transport()
 

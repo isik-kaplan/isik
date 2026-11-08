@@ -97,8 +97,8 @@ reading it again. Each refusal is a
 
 Staff turning a kind back on (or off) for one person, which they then can't change, is an optional model
 base - a project that never forces one carries none of its columns. Base your subscription model on
-`AbstractForceableSubscription` instead, track its history, and point
-`ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL` at it:
+`AbstractForceableSubscription` instead, track its history, and name it as
+`ISIK["DJANGO"]["NOTIFICATIONS"]["SUBSCRIPTION_MODEL"]`:
 
 ```python
 from isik.django.apps.common.db.history import track_events
@@ -129,7 +129,7 @@ own kind > the kind's policy**. With the plain base it's exactly the policy and 
 - A `MANDATORY` kind can't be forced: off would silence what must reach them, on means nothing.
 - `subscribe()` and `unsubscribe()` refuse a forced row (`SubscriptionForced`, code
   `subscription_forced`), and so do the REST create and delete, with that code in a `409`.
-- `ISIK_NOTIFICATIONS["SUBSCRIPTION_FORCED_KIND"]` names a `MANDATORY` application kind of yours,
+- `ISIK["DJANGO"]["NOTIFICATIONS"]["SUBSCRIPTION_FORCED_KIND"]` names a `MANDATORY` application kind of yours,
   raised on each force and release with `{user, kind, variant, forced, enabled}` - never the forced kind
   itself, which a force could silence.
 - `isik.E014` refuses a forceable subscription model that isn't tracked.

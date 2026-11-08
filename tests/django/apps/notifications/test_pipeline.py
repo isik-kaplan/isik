@@ -37,6 +37,7 @@ from isik.django.apps.notifications.models import (
     ShardState,
 )
 from isik.django.apps.notifications.signals import endpoint_parked
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.testapp.models import EmailUser, Parcel
 
@@ -99,7 +100,7 @@ def partitioned(settings):
         entered.append(key)
         yield
 
-    settings.ISIK_NOTIFICATIONS = {
+    isik_areas(settings).NOTIFICATIONS = {
         "PROJECT_NAME": "Testapp",
         "PARTITIONS": lambda: ["north", "south"],
         "IN_PARTITION": in_partition,
@@ -216,7 +217,7 @@ class TestFanningOut:
     ):
         # The test project's endpoints have no owner; their URL stands in for one, the audience naming it by
         # what the notice says.
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ENDPOINT_OWNER_FIELD": "url"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ENDPOINT_OWNER_FIELD": "url"}
         endpoints, wanted = get_endpoint_model().objects, get_endpoint_kind_model().objects
         mine = endpoints.create(url="https://lost.example/hook", secret="s")
         theirs = endpoints.create(url="https://damaged.example/hook", secret="s")
@@ -410,7 +411,7 @@ class TestShards:
         assert pipeline.run_shard(shard.pk) is None
 
     def test_a_failing_one_waits_then_is_abandoned(self, monkeypatch, shard, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 2, "BACKOFF": (60,)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "MAX_ATTEMPTS": 2, "BACKOFF": (60,)}
         monkeypatch.setattr(pipeline, "targets", lambda *args: (_ for _ in ()).throw(RuntimeError("down")))
 
         failed = pipeline.run_shard(shard.pk)
@@ -439,12 +440,12 @@ def test_writing_deliveries_twice_writes_them_once(parcel, bob):
 
 class TestBackoff:
     def test_each_failure_waits_its_entry_then_the_last(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"BACKOFF": (10, 20)}
+        isik_areas(settings).NOTIFICATIONS = {"BACKOFF": (10, 20)}
 
         assert [pipeline.backoff(n) for n in (1, 2, 3)] == [timedelta(seconds=s) for s in (10, 20, 20)]
 
     def test_jitter_adds_up_to_a_tenth(self, monkeypatch, settings):
-        settings.ISIK_NOTIFICATIONS = {"BACKOFF": (100,)}
+        isik_areas(settings).NOTIFICATIONS = {"BACKOFF": (100,)}
         monkeypatch.setattr(pipeline.random, "uniform", lambda low, high: (low, high)[1])
 
         assert pipeline.backoff(1) == timedelta(seconds=110)
@@ -522,8 +523,8 @@ class TestSendingEmail:
 
     def test_a_project_sends_its_own(self, shipped, settings):
         sent = []
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "EMAIL_SENDER": lambda delivery, notice, address: sent.append((delivery.pk, notice.pk, address)),
         }
         delivery = delivery_on(shipped, "email")
@@ -536,8 +537,8 @@ class TestSendingEmail:
     def test_a_project_picks_the_address_or_none(
         self, parcel, settings, dispatched, django_capture_on_commit_callbacks
     ):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "EMAIL_ADDRESS": lambda user: f"{user.username}@work.example",
         }
         notice = ship(parcel)
@@ -630,7 +631,10 @@ class TestSendingWebhooks:
         assert current == f"v1={hmac.new(b'current', signed, hashlib.sha256).hexdigest()}"
 
     def test_the_header_is_named_by_the_setting(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "SIGNATURE": {"header": "Signature"}}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "SIGNATURE": {"header": "Signature"},
+        }
 
         pipeline.send(hooked[0].pk)
 
@@ -687,7 +691,7 @@ class TestSendingWebhooks:
 
     def test_failures_in_a_row_park_the_endpoint_and_say_so(self, hooked, receiver, settings):
         delivery, endpoint = hooked
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DISABLE_AFTER": 2}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "DISABLE_AFTER": 2}
         get_endpoint_model().objects.filter(pk=endpoint.pk).update(consecutive_failures=1)
         receiver.status = 500
         parked = []
@@ -707,7 +711,7 @@ class TestSendingWebhooks:
 
     def test_a_parked_endpoint_isnt_parked_again(self, hooked, receiver, settings):
         delivery, endpoint = hooked
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DISABLE_AFTER": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "DISABLE_AFTER": 1}
         receiver.status = 500
         pipeline.send(delivery.pk)
         endpoint.refresh_from_db()
@@ -737,7 +741,7 @@ class TestSendingWebhooks:
 
 class TestTriesAndRecords:
     def test_the_last_try_abandons_it(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "MAX_ATTEMPTS": 2}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "MAX_ATTEMPTS": 2}
         receiver.status = 500
         delivery = hooked[0]
 
@@ -766,7 +770,7 @@ class TestTriesAndRecords:
         assert DeliveryAttempt.objects.get().error == "RuntimeError: inbox down"
 
     def test_every_attempt_is_recorded_when_asked(self, shipped, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
 
         pipeline.send(delivery_on(shipped, "inbox").pk, triggered_by="manual")
 
@@ -780,7 +784,7 @@ class TestTriesAndRecords:
         assert attempt.duration_ms >= 0
 
     def test_none_is_recorded_when_asked(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "none"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "none"}
         receiver.status = 500
 
         pipeline.send(hooked[0].pk)
@@ -788,8 +792,8 @@ class TestTriesAndRecords:
         assert not DeliveryAttempt.objects.exists()
 
     def test_the_redactor_sees_what_is_recorded(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "REDACTOR": lambda value: {key: "[redacted]" for key in value},
         }
         receiver.status = 500
@@ -845,7 +849,7 @@ class TestPruning:
     def test_old_attempts_go(self, hooked, receiver, settings):
         receiver.status = 500
         pipeline.send(hooked[0].pk)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ATTEMPT_RETENTION": timedelta(0)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ATTEMPT_RETENTION": timedelta(0)}
 
         assert pipeline.prune_attempts() == 1
         assert not DeliveryAttempt.objects.exists()
@@ -857,14 +861,14 @@ class TestPruning:
         assert pipeline.prune_attempts() == 0
 
     def test_no_retention_keeps_everything(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"ATTEMPT_RETENTION": None, "NOTICE_RETENTION": None}
+        isik_areas(settings).NOTIFICATIONS = {"ATTEMPT_RETENTION": None, "NOTICE_RETENTION": None}
 
         assert (pipeline.prune_attempts(), pipeline.prune_notices()) == (0, 0)
 
     def test_old_finished_notices_go_with_their_deliveries(self, shipped, settings):
         for delivery in Delivery.objects.filter(notice=shipped):
             pipeline.send(delivery.pk)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
 
         assert pipeline.prune_notices() == 1
         assert not Notice.objects.exists()
@@ -872,7 +876,7 @@ class TestPruning:
 
     def test_a_notice_still_waiting_or_sending_stays(self, shipped, alice, settings):
         waiting = flag(alice)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
 
         assert pipeline.prune_notices() == 0
         assert set(Notice.objects.values_list("pk", flat=True)) == {shipped.pk, waiting.pk}
@@ -883,7 +887,7 @@ class TestPruning:
         notice = ship(parcel)
         with redeclared(monkeypatch, "parcel_shipped", audience=TwoPartitions([bob]), scope=Scope.CROSS_PARTITION):
             fan_out(django_capture_on_commit_callbacks)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
 
         assert pipeline.prune_notices() == 0
         FanOutShard.objects.filter(notice=notice).update(state=ShardState.FINISHED)
@@ -920,7 +924,7 @@ class TestRegisteringAChannel:
 
         monkeypatch.setitem(registered, "pager", None)
         register_channel("pager", Pager)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "CHANNELS": ("pager",)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("pager",)}
         notice = ship(parcel)
 
         fan_out(django_capture_on_commit_callbacks)

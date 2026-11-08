@@ -25,6 +25,7 @@ from isik.django.apps.notifications.models import NoticeKindPolicy, Policy, Scop
 from isik.django.apps.notifications.partitions import Column
 from isik.django.apps.notifications.sync import mirror_kinds
 from isik.django.apps.notifications.triggers import NoticeTrigger
+from isik.django.conf import isik_areas
 from isik.django.drf.viewsets.preconditions import NoPrecondition
 
 
@@ -386,7 +387,7 @@ class TestTheSwappableSettings:
 
 
 def test_an_unset_isik_notifications_reads_as_empty(settings):
-    del settings.ISIK_NOTIFICATIONS
+    del isik_areas(settings).NOTIFICATIONS
 
     assert conf.configured() == {}
 

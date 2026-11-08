@@ -16,6 +16,7 @@ from isik.django.apps.notifications.hooks import FanOutAfterWritesMiddleware, fa
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.management.commands.notices import Command as NoticesCommand
 from isik.django.apps.notifications.models import Notice, Policy, Source
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.testapp.models import Parcel
 
@@ -60,7 +61,7 @@ class Task:
     ("on", "name", "asked"), [(True, "app.work", 1), (True, "isik.notifications.send", 0), (False, "app.work", 0)]
 )
 def test_a_task_asks_while_the_setting_is_on(waiting, dispatched, settings, on, name, asked):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "FAN_OUT_AFTER_TASKS": on}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "FAN_OUT_AFTER_TASKS": on}
 
     task_postrun.send(sender=Task(name))
 
@@ -68,7 +69,7 @@ def test_a_task_asks_while_the_setting_is_on(waiting, dispatched, settings, on, 
 
 
 def test_the_command_fans_out_everything_waiting(waiting, dispatched, settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "BATCH_SIZE": 1}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "BATCH_SIZE": 1}
     Notice.objects.create(kind=kind_named("parcel_reminder"), variant="daily", snapshot={})
     out = StringIO()
 
@@ -79,7 +80,7 @@ def test_the_command_fans_out_everything_waiting(waiting, dispatched, settings):
 
 
 def test_the_work_command_runs_what_a_beat_would(waiting, dispatched, settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
     out = StringIO()
 
     call_command("notices", "--work", stdout=out)
@@ -116,7 +117,7 @@ def celery_conf(monkeypatch):
 
 @pytest.fixture
 def unacknowledged(settings):
-    settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp"}
+    isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": "Testapp"}
     return settings
 
 
@@ -151,13 +152,13 @@ class TestNothingStartsAFanOut:
 
     def test_fanning_out_after_tasks_starts_it(self, unacknowledged, celery_conf):
         celery_conf()
-        unacknowledged.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "FAN_OUT_AFTER_TASKS": True}
+        isik_areas(unacknowledged).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "FAN_OUT_AFTER_TASKS": True}
 
         assert checks.fan_out_warnings() == []
 
     def test_a_reason_acknowledges_it(self, unacknowledged, celery_conf):
         celery_conf()
-        unacknowledged.ISIK_NOTIFICATIONS = {
+        isik_areas(unacknowledged).NOTIFICATIONS = {
             "PROJECT_NAME": "Testapp",
             "FAN_OUT_BY": exemptions.ScheduledElsewhere(reason="a cron runs manage.py notices --work every minute"),
         }
@@ -177,10 +178,10 @@ class TestNothingStartsAFanOut:
 @pytest.mark.parametrize("name", ["FAN_OUT_BY", "SENDS_INLINE"])
 @pytest.mark.parametrize("value", ["a cron runs manage.py notices --work every minute", True])
 def test_an_acknowledgement_is_a_typed_reason(unacknowledged, name, value):
-    unacknowledged.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", name: value}
+    isik_areas(unacknowledged).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", name: value}
 
     assert checks.setting_problems() == [
-        f"ISIK_NOTIFICATIONS.{name} takes a "
+        f"ISIK['DJANGO']['NOTIFICATIONS'].{name} takes a "
         f"{'ScheduledElsewhere' if name == 'FAN_OUT_BY' else 'SendsInline'}(reason=...), "
         f"{'not a bare string' if value is not True else 'not True'}."
     ]
@@ -190,7 +191,7 @@ class TestSendingInline:
     @pytest.fixture
     def inline(self, unacknowledged, celery_conf):
         celery_conf(eager=True)
-        unacknowledged.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "FAN_OUT_AFTER_TASKS": True}
+        isik_areas(unacknowledged).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "FAN_OUT_AFTER_TASKS": True}
         return unacknowledged
 
     def test_it_warns(self, inline):
@@ -209,7 +210,7 @@ class TestSendingInline:
         assert checks.inline_send_warnings() == []
 
     def test_not_without_a_fan_out_after_writes(self, inline, celery_conf):
-        inline.ISIK_NOTIFICATIONS = {
+        isik_areas(inline).NOTIFICATIONS = {
             "PROJECT_NAME": "Testapp",
             "FAN_OUT_BY": exemptions.ScheduledElsewhere(reason="x" * 40),
         }
@@ -230,8 +231,8 @@ class TestSendingInline:
         assert checks.inline_send_warnings() == []
 
     def test_a_reason_acknowledges_it(self, inline):
-        inline.ISIK_NOTIFICATIONS = {
-            **inline.ISIK_NOTIFICATIONS,
+        isik_areas(inline).NOTIFICATIONS = {
+            **isik_areas(inline).NOTIFICATIONS,
             "SENDS_INLINE": exemptions.SendsInline(reason="webhooks go to our own receiver, on the same host"),
         }
 
@@ -240,7 +241,7 @@ class TestSendingInline:
 
 def test_the_app_connects_the_task_hook(waiting, dispatched, settings):
     task_postrun.disconnect(hooks.fan_out_after_task)
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "FAN_OUT_AFTER_TASKS": True}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "FAN_OUT_AFTER_TASKS": True}
 
     django_apps.get_app_config("isik_notifications").ready()
     task_postrun.send(sender=Task("app.work"))

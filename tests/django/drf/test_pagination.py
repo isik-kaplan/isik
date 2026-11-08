@@ -2,6 +2,7 @@ import pytest
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from isik.django.conf import isik_with
 from isik.django.drf.pagination import PageNumberPagination
 
 
@@ -44,13 +45,13 @@ def test_page_size_is_capped_at_default_max_page_size(make_request, paginator):
 
 
 def test_page_size_max_is_configurable_via_settings(settings, make_request, paginator):
-    settings.DRF_PAGINATION_MAX_PAGE_SIZE = 5
+    settings.ISIK = isik_with(DJANGO={"DRF": {"PAGINATION_MAX_PAGE_SIZE": 5}})
     request = make_request("/", {"page_size": 999999})
     assert paginator.get_page_size(request) == 5
 
 
 def test_page_size_max_page_size_attribute_overrides_settings(settings, make_request, paginator):
-    settings.DRF_PAGINATION_MAX_PAGE_SIZE = 5
+    settings.ISIK = isik_with(DJANGO={"DRF": {"PAGINATION_MAX_PAGE_SIZE": 5}})
     paginator.max_page_size = 10
     request = make_request("/", {"page_size": 999999})
     assert paginator.get_page_size(request) == 10

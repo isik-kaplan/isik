@@ -1,17 +1,21 @@
 # checks
 
-isik's own system checks. Each is on by default, and each is tuned or turned off in `ISIK_CHECKS`,
+isik's own system checks. Each is on by default, and each is tuned or turned off in `ISIK["DJANGO"]["CHECKS"]`,
 named by enums rather than strings - `Check`, `CheckOption` and `Severity`, all from
 `isik.django.apps.common.checks`:
 
 ```python
 from isik.django.apps.common.checks import Check, CheckOption, Severity
 
-ISIK_CHECKS = {
-    Check.DOCUMENTATION: {CheckOption.APPS: ["billing", "accounts"]},
-    Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["config.urls.api"]},
-    Check.NOT_ATOMIC: {CheckOption.SEVERITY: Severity.WARNING},
-    Check.HISTORY_INDEXES: {CheckOption.ENABLED: False},
+ISIK = {
+    "DJANGO": {
+        "CHECKS": {
+            Check.DOCUMENTATION: {CheckOption.APPS: ["billing", "accounts"]},
+            Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["config.urls.api"]},
+            Check.NOT_ATOMIC: {CheckOption.SEVERITY: Severity.WARNING},
+            Check.HISTORY_INDEXES: {CheckOption.ENABLED: False},
+        },
+    },
 }
 ```
 
@@ -41,7 +45,7 @@ imports nothing of a project's, so a settings file can import it.
 | `Check.META_INHERITANCE` | `isik.E020` | a model whose own `Meta` drops options an abstract base's `Meta` declares - ordering, constraints, indexes, triggers, `get_latest_by` and the rest - because it doesn't inherit it: Django takes a model's `Meta` whole. An option the model declares again is its own ([models](db/models.md)) |
 | `Check.IDENTIFIERS` | `isik.E018` | a table, column, constraint or index name of the project's models longer than the 63 characters Postgres keeps - it cuts one without a word ([constraints](db/constraints.md#notes)) |
 | `Check.CONSTRAINT_MESSAGES` | `isik.E021` | a constraint of the project's models answering a violation with Django's default, `Constraint "<name>" is violated.` - its name, not what it refuses. A `UniqueConstraint` over plain fields with no condition answers already; one that shouldn't say anything takes `NoViolationMessage(reason=...)` ([constraints](db/constraints.md#what-a-refused-row-is-told)) |
-| `Check.FEATURES` | `isik.E017` | a features setting or declaration that can't work: unknown `ISIK_FEATURES` keys, settings with no overrides model or an untracked one, a holder key that cascades, an `OnHolder` field the holder lacks, a feature nothing reads ([features](../features/README.md)) |
+| `Check.FEATURES` | `isik.E017` | a features setting or declaration that can't work: unknown `ISIK["DJANGO"]["FEATURES"]` keys, settings with no overrides model or an untracked one, a holder key that cascades, an `OnHolder` field the holder lacks, a feature nothing reads ([features](../features/README.md)) |
 
 ## Options
 
@@ -75,9 +79,9 @@ reading the database sees. There is no way out per field - an exemption given as
 neither. What a project decides is which fields are checked, in one place:
 
 ```python
-ISIK_CHECKS = {Check.DOCUMENTATION: {}}                                              # every field (the default)
-ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}   # the project's own fields
-ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.ENABLED: False}}                    # none
+ISIK = {"DJANGO": {"CHECKS": {Check.DOCUMENTATION: {}}}}                                              # every field (the default)
+ISIK = {"DJANGO": {"CHECKS": {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}}}   # the project's own fields
+ISIK = {"DJANGO": {"CHECKS": {Check.DOCUMENTATION: {CheckOption.ENABLED: False}}}}                    # none
 ```
 
 With every field checked, a field a model inherits from a library's abstract base - `AbstractUser`'s

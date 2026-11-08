@@ -9,8 +9,9 @@ import enum
 import functools
 from dataclasses import dataclass, field
 
-from django.conf import settings
 from jinja2 import nodes
+
+from isik.django.conf import django_setting
 
 
 class TemplateFeature(enum.Flag):
@@ -152,8 +153,8 @@ class TemplatePolicy:
 
 
 def resolve_policy(explicit):
-    """explicit -> settings.TEMPLATE_FIELDS_POLICY -> TemplatePolicy.STANDARD()."""
+    """explicit -> ISIK['DJANGO']['TEMPLATED_FIELDS']['POLICY'] -> TemplatePolicy.STANDARD()."""
     if explicit is not None:
         return explicit
-    configured = getattr(settings, "TEMPLATE_FIELDS_POLICY", None)
+    configured = django_setting("TEMPLATED_FIELDS", "POLICY")
     return configured if configured is not None else TemplatePolicy.STANDARD()

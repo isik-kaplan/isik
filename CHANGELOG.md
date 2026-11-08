@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-08
+
+### Added
+
+- `ISIK`, the one Django setting every part of isik is configured in (`isik.django.conf`), keyed by isik's own
+  layers: `EXEMPTIONS`, read by isik's non-Django code too, and `DJANGO` - `CHECKS`, `PRIMARY_KEY`,
+  `SCHEMA_LANGUAGE`, `FEATURES`, `NOTIFICATIONS`, `SMS`, `HISTORY`, `SESSIONS`, `IDEMPOTENCY`, `DRF`, `FEEDBACK`,
+  `TEMPLATED_FIELDS`. A swappable model is named in its area like everything
+  else (`ISIK["DJANGO"]["FEATURES"]["GRANT_MODEL"]`), and isik gives Django the top-level setting it swaps the model
+  by (`ISIK_FEATURES_GRANT_MODEL`) when its apps load. `isik.E022` refuses a key isik doesn't read, naming the one
+  it's closest to; `isik.E023` a top-level swappable setting a project set itself that names another model than
+  `ISIK` does.
+- `override_isik(**changes)`: `override_settings` for `ISIK`, an area's keys given replacing the project's and
+  every other key kept - a decorator or a context manager, over `ISIK` as it is when entered. `isik_with()` is the
+  dict it sets; `isik_areas(settings)` reads, sets or deletes one area whole on pytest-django's `settings`.
+- `isik.django.sms` (`sms` extra): text messages sent through senders configured in `ISIK["DJANGO"]["SMS"]`,
+  `{alias: {"BACKEND", "OPTIONS"}}` - the shape of Django's `CACHES` and `STORAGES`, and of `MAILERS` from 6.1. `send_sms(to, body, using=...)` and
+  `SMSMessage(...).send()` answer a `SendStatus` - a `RecipientStatus` per number, each sent as a message of its
+  own - with `media_urls`, `metadata`, `send_at`, `validity`, `status_callback`, `message_type` and
+  `provider_extra`. Senders: console (one line a message), locmem (`isik.django.sms.outbox`, with `respond()` to
+  script a number's answer), dummy, file (JSON lines), Twilio (its REST API over httpx, no SDK: auth token or API
+  key, Messaging Services, regions, refusals mapped to `invalid`/`rejected`, `SMSRateLimited`, and only a request
+  that never reached Twilio tried again) and failover (the next sender only when one couldn't be reached). Every
+  sender takes `fail_silently`, `from_`, `status_callback`, `ignore_unsupported_features` and
+  `ignore_recipient_status`; a project's own subclasses `BaseSMSBackend` and sends one message to one number.
+  `pre_send` (which may cancel), `post_send`, `delivery` and `inbound` signals; Twilio's status and inbound
+  webhook views, checking `X-Twilio-Signature` with the auth token or a rotated one, and flagging an opt-out;
+  `supersedes()` for reports arriving out of order; `segments()` for GSM-7/UCS-2 parts. isik's pytest plugin
+  makes every configured sender the locmem one for a test run and empties the outbox before each test.
+  `isik.E024` refuses a sender configured wrong; `isik.W010` warns of one sending nothing anywhere with DEBUG off.
+
+### Breaking
+
+- Every isik setting moved into `ISIK` - nothing reads the old names:
+
+  | was | is |
+  |---|---|
+  | `ISIK_EXEMPTIONS` | `ISIK["EXEMPTIONS"]` |
+  | `ISIK_CHECKS` | `ISIK["DJANGO"]["CHECKS"]` |
+  | `ISIK_PRIMARY_KEY` | `ISIK["DJANGO"]["PRIMARY_KEY"]` |
+  | `ISIK_SCHEMA_LANGUAGE` | `ISIK["DJANGO"]["SCHEMA_LANGUAGE"]` |
+  | `ISIK_FEATURES` | `ISIK["DJANGO"]["FEATURES"]` |
+  | `ISIK_NOTIFICATIONS` | `ISIK["DJANGO"]["NOTIFICATIONS"]` |
+  | `ISIK_FEATURES_<X>_MODEL` | `ISIK["DJANGO"]["FEATURES"]["<X>_MODEL"]` |
+  | `ISIK_NOTIFICATIONS_<X>_MODEL` | `ISIK["DJANGO"]["NOTIFICATIONS"]["<X>_MODEL"]` |
+  | `HISTORY_CONTEXT_KEYS`, `_VERSION`, `_BUILD` | `ISIK["DJANGO"]["HISTORY"]["CONTEXT_KEYS"]`, `["CONTEXT_VERSION"]`, `["CONTEXT_BUILD"]` |
+  | `HISTORY_REQUEST_ID_HEADER` | `ISIK["DJANGO"]["HISTORY"]["REQUEST_ID_HEADER"]` |
+  | `HISTORY_TASK_DISPATCH_ON_COMMIT` | `ISIK["DJANGO"]["HISTORY"]["TASK_DISPATCH_ON_COMMIT"]` |
+  | `SESSION_HEADER_NAME` | `ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]` |
+  | `DEAD_SESSION_HEADER` | `ISIK["DJANGO"]["SESSIONS"]["DEAD_SESSION_HEADER"]` |
+  | `IDEMPOTENCY_CLAIM_MODEL`, `_BODY_CODEC`, `_LOCK_TIMEOUT`, `_NORMALIZE` | `ISIK["DJANGO"]["IDEMPOTENCY"]["CLAIM_MODEL"]`, `["BODY_CODEC"]`, `["LOCK_TIMEOUT"]`, `["NORMALIZE"]` |
+  | `DRF_PAGINATION_MAX_PAGE_SIZE` | `ISIK["DJANGO"]["DRF"]["PAGINATION_MAX_PAGE_SIZE"]` |
+  | `FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH` | `ISIK["DJANGO"]["FEEDBACK"]["COMMENTS_TIPTAP_SCHEMA_PATH"]` |
+  | `TEMPLATE_FIELDS_DELIMITERS`, `_UNDEFINED`, `_POLICY` | `ISIK["DJANGO"]["TEMPLATED_FIELDS"]["DELIMITERS"]`, `["UNDEFINED"]`, `["POLICY"]` |
+
+  Only the names move: every default stays what it was - `IDEMPOTENCY.LOCK_TIMEOUT` unset is still 10 seconds,
+  `HISTORY.CONTEXT_KEYS` unset still adds no key to the history context - and nothing reads a setting at another
+  time than before.
+
+  The top-level swappable settings still exist - isik sets them from `ISIK`, and migrations keep naming
+  `settings.ISIK_NOTIFICATIONS_NOTICE_MODEL` - so a project's migrations don't change for them. A test overriding
+  an old setting overrides nothing now: `settings.ISIK_NOTIFICATIONS = {...}` becomes
+  `isik_areas(settings).NOTIFICATIONS = {...}`, and `override_settings(ISIK_CHECKS=...)` becomes
+  `override_isik(DJANGO={"CHECKS": ...})`.
+- Every message and `db_comment` naming a setting names its place in `ISIK` - `ISIK['DJANGO']['NOTIFICATIONS']['MAX_ATTEMPTS']`
+  for `ISIK_NOTIFICATIONS' MAX_ATTEMPTS`. Every `id` isik keys says `ISIK['DJANGO']['PRIMARY_KEY']'s` in its
+  `db_comment`, so `makemigrations` writes an `AlterField` for each model of the project's keyed by
+  `UUIDPrimaryKeyModel`, and for `SweepCursor.next_sweep_at` where it's the project's. Django writes a changed
+  `db_comment` on Postgres as an `ALTER COLUMN ... TYPE` to the same type, then a `COMMENT ON`, and Postgres refuses
+  the first on a column a trigger's definition uses - so a project with such triggers on `id` can't stack the
+  `AlterField`, and regenerates the app's migrations to take the new comment into its `CreateModel`. The error is
+  Postgres's about the trigger, not one naming a comment.
+
 ## [0.49.0] - 2026-11-06
 
 ### Added

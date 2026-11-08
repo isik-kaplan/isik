@@ -12,6 +12,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, connections
 from rest_framework import status
 
+from isik.django.conf import isik_with
 from tests.django.apps.idempotency import views
 from tests.django.apps.idempotency.support import client_for, make_user, post
 from tests.testapp.models import Widget
@@ -112,7 +113,7 @@ def test_a_retry_after_a_crash_does_the_work_for_real(gate, alice, key):
 
 @pytest.mark.usefixtures("atomic_requests")
 def test_a_retry_that_runs_out_of_lock_timeout_is_told_to_retry_later(gate, alice, key, settings):
-    settings.IDEMPOTENCY_LOCK_TIMEOUT = 50
+    settings.ISIK = isik_with(DJANGO={"IDEMPOTENCY": {"LOCK_TIMEOUT": 50}})
     first, retry = first_then_retry(gate, alice, key)
 
     retry.join(10)

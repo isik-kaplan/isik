@@ -175,7 +175,7 @@ def build_model(model_name, host_cls, *, fields, base_model, extra_attrs=None, m
             default=new_primary_key,
             verbose_name=gettext_lazy("ID"),
             help_text=gettext_lazy("The row's identifier, assigned when it's created."),
-            db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
+            db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.",
         )
     return mark_generated(type(model_name, (base_model,), attrs), "maker")
 

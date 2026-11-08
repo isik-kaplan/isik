@@ -334,7 +334,7 @@ def exemption_requirements(levels):
     """
     Sets the level of each rule named, `{rule: Requirement}`, replacing what an earlier call set - for a
     project without Django, before what declares exemptions is imported. With Django, the
-    `ISIK_EXEMPTIONS` setting says the same, and a rule named here wins over it.
+    `ISIK['EXEMPTIONS']` setting says the same, and a rule named here wins over it.
 
         exemption_requirements({"isik.settings.question": Requirement.OPTIONAL, "foo.bar": Requirement.OFF})
     """
@@ -349,7 +349,9 @@ def _django_levels():
         return {}
     if not settings.configured:
         return {}
-    return _checked_levels(getattr(settings, "ISIK_EXEMPTIONS", {}), "ISIK_EXEMPTIONS")
+    isik = getattr(settings, "ISIK", None)
+    levels = isik.get("EXEMPTIONS", {}) if isinstance(isik, dict) else {}
+    return _checked_levels(levels, "ISIK['EXEMPTIONS']")
 
 
 def requirement_of(exemption_type):

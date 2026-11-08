@@ -4,14 +4,14 @@ import os
 import pytest
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.test import override_settings
 from hypothesis import given
 from hypothesis import strategies as st
 
 from isik.django.apps.feedback.comments import tiptap
+from isik.django.conf import isik_areas, override_isik
 
 
-SCHEMA_PATH = settings.FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH
+SCHEMA_PATH = settings.TIPTAP_SCHEMA_PATH
 MINIMAL_SCHEMA_PATH = os.path.join(os.path.dirname(SCHEMA_PATH), "tiptap_schema_minimal.json")
 
 
@@ -107,18 +107,19 @@ class TestParseAndCheckErrorCases:
             tiptap.parse_and_check(value, schema_path=SCHEMA_PATH)
 
     def test_no_schema_configured_at_all(self):
-        with override_settings(FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH=None):
+        with override_isik(DJANGO={"FEEDBACK": {"COMMENTS_TIPTAP_SCHEMA_PATH": None}}):
             with pytest.raises(ValidationError) as exc_info:
                 tiptap.parse_and_check(doc(paragraph(text("x"))))
         assert exc_info.value.messages == [
-            "No Tiptap schema configured - set FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH or pass schema_path= explicitly."
+            "No Tiptap schema configured - set ISIK['DJANGO']['FEEDBACK']['COMMENTS_TIPTAP_SCHEMA_PATH'] or pass "
+            "schema_path= explicitly."
         ]
 
     def test_the_setting_not_being_defined_at_all_is_treated_the_same_as_none(self, settings):
         # getattr(settings, "...", None)'s own default has to be an empty/falsy fallback, not
         # missing entirely - a settings module that never defines this at all (as opposed to
         # defining it as None) must still raise ValidationError, not crash with AttributeError.
-        del settings.FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH
+        del isik_areas(settings).FEEDBACK
         with pytest.raises(ValidationError, match="No Tiptap schema configured"):
             tiptap.parse_and_check(doc(paragraph(text("x"))))
 
@@ -129,7 +130,7 @@ class TestParseAndCheckErrorCases:
 
 class TestSchemaPathResolution:
     def test_falls_back_to_the_django_setting_when_no_explicit_path_is_given(self):
-        with override_settings(FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH=SCHEMA_PATH):
+        with override_isik(DJANGO={"FEEDBACK": {"COMMENTS_TIPTAP_SCHEMA_PATH": SCHEMA_PATH}}):
             tiptap._load_schema.cache_clear()
             tiptap.parse_and_check(doc(paragraph(text("hi"))))
         tiptap._load_schema.cache_clear()

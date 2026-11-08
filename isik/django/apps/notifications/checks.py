@@ -40,6 +40,7 @@ from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, So
 from isik.django.apps.notifications.partitions import PartitionSource, _concrete
 from isik.django.apps.notifications.swapping import DEFAULTS as LEDGER_DEFAULTS
 from isik.django.apps.notifications.swapping import KIND_POLICY_MODEL
+from isik.django.conf import swappable_keys
 
 
 LEDGER_APP = "isik.django.apps.notifications"
@@ -68,23 +69,28 @@ def _sent_on(channel):
 
 
 def setting_problems():
-    """The problems with `ISIK_NOTIFICATIONS` and the apps installed."""
+    """The problems with `ISIK['DJANGO']['NOTIFICATIONS']` and the apps installed."""
     problems = []
-    unknown = sorted(set(conf.configured()) - set(conf.DEFAULTS))
+    swappable = swappable_keys([*LEDGER_DEFAULTS, *AUDIENCE_DEFAULTS], "NOTIFICATIONS")
+    unknown = sorted(set(conf.configured()) - set(conf.DEFAULTS) - swappable)
     if unknown:
-        problems.append(_("ISIK_NOTIFICATIONS has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)})
+        problems.append(
+            _("ISIK['DJANGO']['NOTIFICATIONS'] has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)}
+        )
     if conf.setting("RECORD_ATTEMPTS") not in RECORDINGS:
-        problems.append(_("ISIK_NOTIFICATIONS' RECORD_ATTEMPTS is one of all, failures or none."))
+        problems.append(_("ISIK['DJANGO']['NOTIFICATIONS']['RECORD_ATTEMPTS'] is one of all, failures or none."))
     if conf.setting("MAX_ATTEMPTS") < 1:
-        problems.append(_("ISIK_NOTIFICATIONS' MAX_ATTEMPTS is at least 1."))
+        problems.append(_("ISIK['DJANGO']['NOTIFICATIONS']['MAX_ATTEMPTS'] is at least 1."))
     if not conf.setting("BACKOFF"):
-        problems.append(_("ISIK_NOTIFICATIONS' BACKOFF names at least one delay."))
+        problems.append(_("ISIK['DJANGO']['NOTIFICATIONS']['BACKOFF'] names at least one delay."))
     if (conf.setting("PARTITIONS") is None) != (conf.setting("IN_PARTITION") is None):
-        problems.append(_("ISIK_NOTIFICATIONS sets one of PARTITIONS and IN_PARTITION - set both, or neither."))
+        problems.append(
+            _("ISIK['DJANGO']['NOTIFICATIONS'] sets one of PARTITIONS and IN_PARTITION - set both, or neither.")
+        )
     unregistered = [name for name in conf.setting("CHANNELS") if name not in registered]
     if unregistered:
         problems.append(
-            _("ISIK_NOTIFICATIONS' CHANNELS names channels nothing registered: %(names)s.")
+            _("ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] names channels nothing registered: %(names)s.")
             % {"names": ", ".join(unregistered)}
         )
     for name in conf.setting("CHANNELS"):
@@ -94,7 +100,7 @@ def setting_problems():
             except ImportError as missing:
                 # Found now, not at the first fan-out - which would set every notice aside, its other channels too.
                 problems.append(
-                    _("ISIK_NOTIFICATIONS' CHANNELS turns on %(name)s, which can't be loaded: %(error)s")
+                    _("ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on %(name)s, which can't be loaded: %(error)s")
                     % {"name": name, "error": missing}
                 )
     if _sent_on("webhook"):
@@ -102,15 +108,15 @@ def setting_problems():
         if conf.signature_header() is None:
             problems.append(
                 _(
-                    "The webhook channel signs with X-<PROJECT_NAME>-Signature - set ISIK_NOTIFICATIONS' "
-                    "PROJECT_NAME, or name the header in SIGNATURE['header']."
+                    "The webhook channel signs with X-<PROJECT_NAME>-Signature - set "
+                    "ISIK['DJANGO']['NOTIFICATIONS']['PROJECT_NAME'], or name the header in SIGNATURE['header']."
                 )
             )
         elif name and not TOKEN.fullmatch(name):
             problems.append(
                 _(
-                    "ISIK_NOTIFICATIONS' PROJECT_NAME %(name)r can't be part of a header name - use letters, "
-                    "digits and -."
+                    "ISIK['DJANGO']['NOTIFICATIONS']['PROJECT_NAME'] %(name)r can't be part of a header name - use "
+                    "letters, digits and -."
                 )
                 % {"name": name}
             )
@@ -128,25 +134,33 @@ def setting_problems():
                 ipaddress.ip_network(network)
         except (TypeError, ValueError):
             problems.append(
-                _('ISIK_NOTIFICATIONS\' ALLOW_PRIVATE_TARGETS is True, False, or networks such as "10.1.0.0/16".')
+                _(
+                    "ISIK['DJANGO']['NOTIFICATIONS']['ALLOW_PRIVATE_TARGETS'] is True, False, or networks such as "
+                    '"10.1.0.0/16".'
+                )
             )
     default = conf.setting("DEFAULT_PARTITION")
     if default is not None and not isinstance(default, PartitionSource):
         problems.append(
-            _("ISIK_NOTIFICATIONS' DEFAULT_PARTITION is a resolver from isik.django.apps.notifications.partitions.")
+            _(
+                "ISIK['DJANGO']['NOTIFICATIONS']['DEFAULT_PARTITION'] is a resolver from "
+                "isik.django.apps.notifications.partitions."
+            )
         )
     if not isinstance(conf.setting("ACTOR_CONTEXT_KEY"), (str, type(None))):
-        problems.append(_("ISIK_NOTIFICATIONS' ACTOR_CONTEXT_KEY is a history context key, or None."))
+        problems.append(_("ISIK['DJANGO']['NOTIFICATIONS']['ACTOR_CONTEXT_KEY'] is a history context key, or None."))
     keys = conf.setting("NOTICE_CONTEXT_KEYS")
     if isinstance(keys, str) or not all(isinstance(key, str) for key in keys):
-        problems.append(_('ISIK_NOTIFICATIONS\' NOTICE_CONTEXT_KEYS is history context keys, such as ("user",).'))
+        problems.append(
+            _("ISIK['DJANGO']['NOTIFICATIONS']['NOTICE_CONTEXT_KEYS'] is history context keys, such as (\"user\",).")
+        )
     for name, exemption_type in (
         ("FAN_OUT_BY", exemptions.ScheduledElsewhere),
         ("SENDS_INLINE", exemptions.SendsInline),
         ("ENDPOINTS_SHARED", exemptions.SharedEndpoints),
     ):
         try:
-            require_exemption("ISIK_NOTIFICATIONS", name, conf.setting(name), exemption_type)
+            require_exemption("ISIK['DJANGO']['NOTIFICATIONS']", name, conf.setting(name), exemption_type)
         except ImproperlyConfigured as refused:
             problems.append(str(refused))
     problems += _template_problems()
@@ -259,7 +273,7 @@ def _trigger_problems(kind):
         problems.append(
             _(
                 "%(kind)s says nowhere which partition its row belongs to - give it partition=, or set "
-                "ISIK_NOTIFICATIONS' DEFAULT_PARTITION."
+                "ISIK['DJANGO']['NOTIFICATIONS']['DEFAULT_PARTITION']."
             )
             % {"kind": kind.name}
         )
@@ -327,15 +341,20 @@ def _push_problems():
     push = conf.setting("PUSH")
     unknown = sorted(set(push) - set(PUSH_CREDENTIALS))
     if unknown:
-        return [_("ISIK_NOTIFICATIONS' PUSH has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)}]
+        return [
+            _("ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] has keys it doesn't know: %(keys)s.")
+            % {"keys": ", ".join(unknown)}
+        ]
     if not push:
-        return [_("A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials.")]
+        return [
+            _("A kind is sent on push, and ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] holds no APNS or FCM credentials.")
+        ]
     problems = []
     for service, needed in PUSH_CREDENTIALS.items():
         missing = [key for key in needed if service in push and not push[service].get(key)]
         if missing:
             problems.append(
-                _("ISIK_NOTIFICATIONS' PUSH['%(service)s'] is missing %(keys)s.")
+                _("ISIK['DJANGO']['NOTIFICATIONS']['PUSH']['%(service)s'] is missing %(keys)s.")
                 % {"service": service, "keys": ", ".join(missing)}
             )
     return problems
@@ -362,12 +381,16 @@ def kind_problems():
             )
         if kind.scope == Scope.CROSS_PARTITION and not conf.partitioned():
             problems.append(
-                _("%(kind)s is cross-partition, and ISIK_NOTIFICATIONS declares no partitions.") % {"kind": kind.name}
+                _("%(kind)s is cross-partition, and ISIK['DJANGO']['NOTIFICATIONS'] declares no partitions.")
+                % {"kind": kind.name}
             )
         disabled = [name for name in kind.enabled_channels if name not in conf.setting("CHANNELS")]
         if disabled:
             problems.append(
-                _("%(kind)s is sent on %(channels)s, which ISIK_NOTIFICATIONS' CHANNELS doesn't turn on.")
+                _(
+                    "%(kind)s is sent on %(channels)s, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't "
+                    "turn on."
+                )
                 % {"kind": kind.name, "channels": ", ".join(disabled)}
             )
         if kind.source == Source.TRIGGER:
@@ -484,9 +507,10 @@ def shared_endpoint_warnings():
         return []
     return [
         _(
-            "%(model)s is keyed to the user model by %(keys)s, and ISIK_NOTIFICATIONS' ENDPOINT_OWNER_FIELD is "
-            "unset - so every endpoint is sent every user's notices of its kinds. Set it to the owner's key, or "
-            "say why they're the deployment's with ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
+            "%(model)s is keyed to the user model by %(keys)s, and "
+            "ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] is unset - so every endpoint is sent every "
+            "user's notices of its kinds. Set it to the owner's key, or say why they're the deployment's with "
+            "ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
         )
         % {"model": endpoint._meta.label, "keys": ", ".join(keys)}
     ]
@@ -529,8 +553,8 @@ def endpoint_owner_problems(urlconf=None):
     views = dict.fromkeys(routed.view for routed in routed_actions(urlconf) if issubclass(routed.view, OwnedByCaller))
     return [
         _(
-            "%(view)s scopes endpoints by %(field)r, and ISIK_NOTIFICATIONS' ENDPOINT_OWNER_FIELD is %(sending)r - "
-            "set it to %(field)r, or each endpoint is sent notices its owner isn't told of."
+            "%(view)s scopes endpoints by %(field)r, and ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] "
+            "is %(sending)r - set it to %(field)r, or each endpoint is sent notices its owner isn't told of."
         )
         % {"view": view.__name__, "field": view.owner_field, "sending": sending}
         for view in views

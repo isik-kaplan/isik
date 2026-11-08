@@ -305,7 +305,7 @@ def declared_name_problems(app_configs):
     """
     Each model of `app_configs` whose table is named by Django rather than declared - `<app_label>_<model>`,
     the label repeated in the model's name as often as not - and each of its `Meta.indexes` whose name Django
-    generated. The system check `isik.E019`, off unless `ISIK_CHECKS` turns it on, reports them.
+    generated. The system check `isik.E019`, off unless `ISIK['DJANGO']['CHECKS']` turns it on, reports them.
     """
     problems = []
     for config in app_configs:

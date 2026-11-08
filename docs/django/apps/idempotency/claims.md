@@ -48,7 +48,7 @@ handler returned. Use this when responses aren't serialized rows.
 `get_claim_model(model=None)` resolves the model in this order:
 
 1. `model`, which is the view's `idempotency_claim_model`: a model class or `"app_label.Model"`.
-2. The `IDEMPOTENCY_CLAIM_MODEL` setting.
+2. The `ISIK["DJANGO"]["IDEMPOTENCY"]["CLAIM_MODEL"]` setting.
 3. Whichever one of the two claim apps is installed.
 
 If that leaves no model, or both apps are installed with nothing chosen, it raises
@@ -59,7 +59,7 @@ class names a model that stops being there the moment its app leaves `INSTALLED_
 
 ## Your own claim
 
-Subclass one of the abstract claims in your own app and point `IDEMPOTENCY_CLAIM_MODEL` at it. You
+Subclass one of the abstract claims in your own app and point `ISIK["DJANGO"]["IDEMPOTENCY"]["CLAIM_MODEL"]` at it. You
 can add a column, a different owner FK, or your own replay. A claim from scratch subclasses
 `AbstractBaseIdempotencyClaim` and implements:
 
@@ -69,7 +69,7 @@ can add a column, a different owner FK, or your own replay. A claim from scratch
 ## Body codecs
 
 The body goes through a codec: anything with `encode(data) -> str` and `decode(str) -> data`. The
-claim uses its `body_codec` attribute if set, else the `IDEMPOTENCY_BODY_CODEC` setting (a codec, a
+claim uses its `body_codec` attribute if set, else the `ISIK["DJANGO"]["IDEMPOTENCY"]["BODY_CODEC"]` setting (a codec, a
 codec class, or a dotted path to either), else `JSONBodyCodec`, which uses DRF's JSON encoder.
 
 Encrypting bodies at rest is a codec. With `cryptography`'s Fernet, say:
@@ -88,7 +88,7 @@ class EncryptedBodyCodec:
     def decode(self, text):
         return JSONBodyCodec().decode(self.fernet.decrypt(text.encode()))
 
-IDEMPOTENCY_BODY_CODEC = "myproject.codecs.EncryptedBodyCodec"
+ISIK = {"DJANGO": {"IDEMPOTENCY": {"BODY_CODEC": "myproject.codecs.EncryptedBodyCodec"}}}
 ```
 
 ## claim_idempotency_key
@@ -97,7 +97,7 @@ IDEMPOTENCY_BODY_CODEC = "myproject.codecs.EncryptedBodyCodec"
 `(claim, created)`. It must run inside the transaction of the work the key guards. The mixin calls
 it for you, and you'd call it directly only to claim keys outside DRF.
 
-`lock_timeout` comes from the `IDEMPOTENCY_LOCK_TIMEOUT` setting (milliseconds) when the mixin calls
+`lock_timeout` comes from the `ISIK["DJANGO"]["IDEMPOTENCY"]["LOCK_TIMEOUT"]` setting (milliseconds) when the mixin calls
 it - 10 000 (ten seconds) unless set. A retry that runs out gets 409 `idempotency_key_in_flight`,
 telling the client to retry shortly, rather than holding a worker for as long as the first request
 takes. `None` waits indefinitely, which is always correct and costs a blocked worker while it waits. The timeout applies to the claim's insert only.

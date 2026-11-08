@@ -169,8 +169,8 @@ class AbstractSweepCursor(UUIDPrimaryKeyModel):
         blank=True,
         help_text=gettext_lazy("When the next boundary sweep is scheduled for."),
         db_comment=(
-            "When the next boundary sweep is scheduled for, with ISIK_FEATURES' SWEEP next_boundary - none is "
-            "scheduled beside one due no later. Null with interval, and before the first."
+            "When the next boundary sweep is scheduled for, with ISIK['DJANGO']['FEATURES']['SWEEP'] next_boundary - "
+            "none is scheduled beside one due no later. Null with interval, and before the first."
         ),
     )
 

@@ -9,7 +9,7 @@ held rather than followed by habit. `tests/test_primary_keys.py` fails on a mode
    `BaseModel`), or declare the field the same way. Never an `AutoField`, never a natural key: a row
    with a name (a feature, a kind of notice) keys it by `id` and keeps the name `unique`. A model joined
    to another one-to-one has its own `id` beside that key, not the other row's.
-2. **`new_primary_key()` makes a uuid7 unless `ISIK_PRIMARY_KEY` says otherwise.** `ISIK_PRIMARY_KEY` is
+2. **`new_primary_key()` makes a uuid7 unless `ISIK["DJANGO"]["PRIMARY_KEY"]` says otherwise.** `ISIK["DJANGO"]["PRIMARY_KEY"]` is
    a dotted path to a function returning a UUID, and isik's `uuid7` is the default. A migration names
    `new_primary_key`, not the function, so changing the setting needs no migration.
 3. **A key to such a row stores its UUID.** Code with a row's name looks it up by a join

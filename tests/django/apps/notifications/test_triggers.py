@@ -14,6 +14,7 @@ from isik.django.apps.notifications.audience.swapping import get_endpoint_kind_m
 from isik.django.apps.notifications.models import DeliveryAttempt, Notice, NoticeKindPolicy
 from isik.django.apps.notifications.partitions import Column, Connection
 from isik.django.apps.notifications.triggers import NoticeTrigger, VariantGuard, literal
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.testapp.models import EmailUser, Parcel
 
@@ -141,12 +142,12 @@ class TestThePartitionItStores:
         assert NoticeTrigger(kind=self.kind(None))._partition(Parcel) == "NULL"
 
     def test_the_setting_by_default(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"DEFAULT_PARTITION": Connection()}
+        isik_areas(settings).NOTIFICATIONS = {"DEFAULT_PARTITION": Connection()}
 
         assert NoticeTrigger(kind=self.kind(None))._partition(Parcel) == "(current_schema())::text"
 
     def test_the_kinds_own_over_the_setting(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"DEFAULT_PARTITION": Connection()}
+        isik_areas(settings).NOTIFICATIONS = {"DEFAULT_PARTITION": Connection()}
 
         assert NoticeTrigger(kind=self.kind(Column("status")))._partition(Parcel) == (
             '(CASE WHEN TG_OP = \'DELETE\' THEN OLD."status" ELSE NEW."status" END)::text'

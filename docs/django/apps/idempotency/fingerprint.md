@@ -25,7 +25,7 @@ Anything else JSON can't write raises `TypeError` and asks for a normalizer.
 A normalizer is a function of the request that returns anything `canonical_json()` can write. Set
 one:
 
-- **globally** with `IDEMPOTENCY_NORMALIZE`, a callable or a dotted path to one;
+- **globally** with `ISIK["DJANGO"]["IDEMPOTENCY"]["NORMALIZE"]`, a callable or a dotted path to one;
 - **per view** with `idempotency_normalize = fn` on the class;
 - **per action** with `@action(..., idempotency_normalize=fn)`.
 

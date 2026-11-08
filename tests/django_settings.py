@@ -82,7 +82,6 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(os.path.dirname(__file__), "media")
 
-SESSION_HEADER_NAME = "X-Session-Key"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -99,17 +98,31 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "isik.django.drf.spectacular.AutoSchema",
 }
 
-FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "tiptap_schema.json")
+TIPTAP_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "tiptap_schema.json")
 
-ISIK_NOTIFICATIONS = {
-    "PROJECT_NAME": "Testapp",
-    # Where the actor lives - the schema a multi-schema project would say.
-    "NOTICE_CONTEXT_KEYS": ("user", "schema"),
-    "FAN_OUT_BY": ScheduledElsewhere(reason="each test runs the fan-out it needs itself, with no beat or worker"),
+ISIK = {
+    "DJANGO": {
+        "FEEDBACK": {"COMMENTS_TIPTAP_SCHEMA_PATH": TIPTAP_SCHEMA_PATH},
+        "SESSIONS": {"HEADER_NAME": "X-Session-Key"},
+        "NOTIFICATIONS": {
+            "PROJECT_NAME": "Testapp",
+            # Where the actor lives - the schema a multi-schema project would say.
+            "NOTICE_CONTEXT_KEYS": ("user", "schema"),
+            "FAN_OUT_BY": ScheduledElsewhere(
+                reason="each test runs the fan-out it needs itself, with no beat or worker"
+            ),
+        },
+        "FEATURES": {
+            "SETTINGS": "tests.testapp.feature_settings",
+            "GRANT_SOURCES": ("manual", "trial", "subscription"),
+            "OVERRIDES_MODEL": "testapp.UserOverrides",
+        },
+        # A real sender, which isik's pytest plugin makes the locmem one for the run.
+        "SMS": {
+            "default": {
+                "BACKEND": "isik.django.sms.backends.twilio.SMSBackend",
+                "OPTIONS": {"account_sid": "ACtest", "auth_token": "token", "from_": "+14155550100"},
+            },
+        },
+    },
 }
-
-ISIK_FEATURES = {
-    "SETTINGS": "tests.testapp.feature_settings",
-    "GRANT_SOURCES": ("manual", "trial", "subscription"),
-}
-ISIK_FEATURES_OVERRIDES_MODEL = "testapp.UserOverrides"

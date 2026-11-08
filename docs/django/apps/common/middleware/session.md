@@ -1,18 +1,18 @@
 # session
 
 `CookieORHeaderSessionMiddleware` is a `SessionMiddleware` variant that reads the session key from
-either the session cookie or a header (`settings.SESSION_HEADER_NAME`), for APIs consumed by both
+either the session cookie or a header (`ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]`), for APIs consumed by both
 browsers and non-browser clients that can't send cookies.
 
 ```python
 # settings.py
-SESSION_HEADER_NAME = "X-Session-Key"
+ISIK = {"DJANGO": {"SESSIONS": {"HEADER_NAME": "X-Session-Key"}}}
 MIDDLEWARE = ["isik.django.apps.common.middleware.session.CookieORHeaderSessionMiddleware", ...]
 ```
 
 - Raises `SuspiciousOperation` if a request supplies both cookie and header and they disagree —
   silently preferring one could mask a real client bug.
-- Requires `settings.SESSION_HEADER_NAME` to be set; there's no default.
+- Requires `ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]` to be set; there's no default.
 
 ## DeadSessionCookieMiddleware
 
@@ -28,7 +28,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "isik.django.apps.common.middleware.DeadSessionCookieMiddleware",
 ]
-DEAD_SESSION_HEADER = "Session-Expired"   # the default
+ISIK = {"DJANGO": {"SESSIONS": {"ISIK["DJANGO"]["SESSIONS"]["DEAD_SESSION_HEADER"]": "Session-Expired"}}}   # the default
 ```
 
 - Place it after `AuthenticationMiddleware`, which decides whether the request is signed in.

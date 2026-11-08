@@ -8,12 +8,16 @@ unless a project owns them; the overrides model is always the project's own (`Ab
 from django.apps import apps
 from django.conf import settings
 
+from isik.django.conf import give_swappable_settings
+
 
 HOLDER_MODEL = "ISIK_FEATURES_HOLDER_MODEL"
 FEATURE_MODEL = "ISIK_FEATURES_FEATURE_MODEL"
 GRANT_MODEL = "ISIK_FEATURES_GRANT_MODEL"
 SWEEP_MODEL = "ISIK_FEATURES_SWEEP_MODEL"
 OVERRIDES_MODEL = "ISIK_FEATURES_OVERRIDES_MODEL"
+# The ones a project sets - in ISIK['DJANGO']['FEATURES'], keyed by what follows ISIK_FEATURES_.
+SETTABLE = (HOLDER_MODEL, FEATURE_MODEL, GRANT_MODEL, SWEEP_MODEL, OVERRIDES_MODEL)
 # Not a project's to set: the history of isik's grant model is swapped out with it, so this names isik's own while
 # ISIK_FEATURES_GRANT_MODEL does, and the project's grant model once it's swapped - whose history is the project's.
 GRANT_HISTORY_MODEL = "ISIK_FEATURES_GRANT_HISTORY_MODEL"
@@ -26,7 +30,11 @@ DEFAULTS = {
 
 
 def set_defaults():
-    """Gives each swappable setting the project leaves unset its default - the holder the user model's."""
+    """
+    Gives each swappable setting what `ISIK['DJANGO']['FEATURES']` names, else its default - the holder the
+    user model's.
+    """
+    give_swappable_settings("FEATURES", SETTABLE)
     if not hasattr(settings, HOLDER_MODEL):
         setattr(settings, HOLDER_MODEL, settings.AUTH_USER_MODEL)
     for name, default in DEFAULTS.items():

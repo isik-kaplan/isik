@@ -844,6 +844,17 @@ push = [
 sentry = [
     { name = "sentry-sdk" },
 ]
+sms = [
+    { name = "dalf" },
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "django-lifecycle" },
+    { name = "django-object-actions" },
+    { name = "django-pghistory" },
+    { name = "httpx" },
+    { name = "mjml-python" },
+    { name = "whitenoise" },
+]
 templated-fields = [
     { name = "jinja2" },
 ]
@@ -878,12 +889,14 @@ requires-dist = [
     { name = "dalf", marker = "extra == 'drf'" },
     { name = "dalf", marker = "extra == 'notifications'" },
     { name = "dalf", marker = "extra == 'push'" },
+    { name = "dalf", marker = "extra == 'sms'" },
     { name = "django", marker = "extra == 'all'" },
     { name = "django", marker = "extra == 'celery'" },
     { name = "django", marker = "extra == 'django'" },
     { name = "django", marker = "extra == 'drf'" },
     { name = "django", marker = "extra == 'notifications'" },
     { name = "django", marker = "extra == 'push'" },
+    { name = "django", marker = "extra == 'sms'" },
     { name = "django-filter", marker = "extra == 'all'" },
     { name = "django-filter", marker = "extra == 'drf'" },
     { name = "django-lifecycle", marker = "extra == 'all'" },
@@ -892,18 +905,21 @@ requires-dist = [
     { name = "django-lifecycle", marker = "extra == 'drf'" },
     { name = "django-lifecycle", marker = "extra == 'notifications'" },
     { name = "django-lifecycle", marker = "extra == 'push'" },
+    { name = "django-lifecycle", marker = "extra == 'sms'" },
     { name = "django-object-actions", marker = "extra == 'all'" },
     { name = "django-object-actions", marker = "extra == 'celery'" },
     { name = "django-object-actions", marker = "extra == 'django'" },
     { name = "django-object-actions", marker = "extra == 'drf'" },
     { name = "django-object-actions", marker = "extra == 'notifications'" },
     { name = "django-object-actions", marker = "extra == 'push'" },
+    { name = "django-object-actions", marker = "extra == 'sms'" },
     { name = "django-pghistory", marker = "extra == 'all'" },
     { name = "django-pghistory", marker = "extra == 'celery'" },
     { name = "django-pghistory", marker = "extra == 'django'" },
     { name = "django-pghistory", marker = "extra == 'drf'" },
     { name = "django-pghistory", marker = "extra == 'notifications'" },
     { name = "django-pghistory", marker = "extra == 'push'" },
+    { name = "django-pghistory", marker = "extra == 'sms'" },
     { name = "djangorestframework", marker = "extra == 'all'" },
     { name = "djangorestframework", marker = "extra == 'drf'" },
     { name = "drf-spectacular", marker = "extra == 'all'" },
@@ -911,6 +927,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'all'" },
     { name = "httpx", marker = "extra == 'notifications'" },
     { name = "httpx", marker = "extra == 'push'" },
+    { name = "httpx", marker = "extra == 'sms'" },
     { name = "httpx", extras = ["http2"], marker = "extra == 'all'" },
     { name = "httpx", extras = ["http2"], marker = "extra == 'push'" },
     { name = "jinja2", marker = "extra == 'all'" },
@@ -921,6 +938,7 @@ requires-dist = [
     { name = "mjml-python", marker = "extra == 'drf'" },
     { name = "mjml-python", marker = "extra == 'notifications'" },
     { name = "mjml-python", marker = "extra == 'push'" },
+    { name = "mjml-python", marker = "extra == 'sms'" },
     { name = "prosemirror", marker = "extra == 'all'" },
     { name = "prosemirror", marker = "extra == 'tiptap'" },
     { name = "pyjwt", extras = ["crypto"], marker = "extra == 'all'" },
@@ -935,8 +953,9 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'drf'" },
     { name = "whitenoise", marker = "extra == 'notifications'" },
     { name = "whitenoise", marker = "extra == 'push'" },
+    { name = "whitenoise", marker = "extra == 'sms'" },
 ]
-provides-extras = ["all", "celery", "cli", "django", "drf", "notifications", "push", "sentry", "templated-fields", "tiptap"]
+provides-extras = ["all", "celery", "cli", "django", "drf", "notifications", "push", "sentry", "sms", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [

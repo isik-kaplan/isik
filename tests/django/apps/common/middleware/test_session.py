@@ -4,6 +4,7 @@ from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 from django.test import RequestFactory
 
 from isik.django.apps.common.middleware.session import CookieORHeaderSessionMiddleware
+from isik.django.conf import isik_areas, isik_with
 
 
 @pytest.fixture
@@ -23,7 +24,7 @@ def test_reads_the_session_key_from_the_cookie(middleware, rf):
 
 
 def test_reads_the_session_key_from_the_header(middleware, rf):
-    request = rf.get("/", headers={settings.SESSION_HEADER_NAME: "header-key"})
+    request = rf.get("/", headers={settings.ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]: "header-key"})
     middleware.process_request(request)
     assert request.session.session_key == "header-key"
 
@@ -32,7 +33,7 @@ def test_agreeing_cookie_and_header_are_both_accepted(middleware, rf):
     request = rf.get(
         "/",
         HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}=same-key",
-        headers={settings.SESSION_HEADER_NAME: "same-key"},
+        headers={settings.ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]: "same-key"},
     )
     middleware.process_request(request)
     assert request.session.session_key == "same-key"
@@ -42,7 +43,7 @@ def test_disagreeing_cookie_and_header_raise_suspicious_operation(middleware, rf
     request = rf.get(
         "/",
         HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}=cookie-key",
-        headers={settings.SESSION_HEADER_NAME: "header-key"},
+        headers={settings.ISIK["DJANGO"]["SESSIONS"]["HEADER_NAME"]: "header-key"},
     )
     with pytest.raises(SuspiciousOperation, match="^Session key mismatch$"):
         middleware.process_request(request)
@@ -55,9 +56,10 @@ def test_no_cookie_or_header_starts_a_new_anonymous_session(middleware, rf):
 
 
 def test_missing_session_header_name_setting_raises_improperly_configured(settings):
-    del settings.SESSION_HEADER_NAME
+    del isik_areas(settings).SESSIONS
     with pytest.raises(
-        ImproperlyConfigured, match="^CookieORHeaderSessionMiddleware requires settings.SESSION_HEADER_NAME"
+        ImproperlyConfigured,
+        match=r"^CookieORHeaderSessionMiddleware requires ISIK\['DJANGO'\]\['SESSIONS'\]\['HEADER_NAME'\]",
     ):
         CookieORHeaderSessionMiddleware(get_response=lambda request: None)
 
@@ -107,7 +109,7 @@ class TestDeadSessionCookie:
         assert (morsel["path"], morsel["domain"]) == ("/app/", ".example.com")
 
     def test_the_header_is_a_setting(self, settings):
-        settings.DEAD_SESSION_HEADER = "Sign-In-Again"
+        settings.ISIK = isik_with(DJANGO={"SESSIONS": {"DEAD_SESSION_HEADER": "Sign-In-Again"}})
 
         assert self.respond(401)["Sign-In-Again"] == "true"
 

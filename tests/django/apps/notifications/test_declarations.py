@@ -25,6 +25,7 @@ from isik.django.apps.notifications.kinds import Kind, declare_kind, get_kind, m
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import PartitionGone, in_partition
 from isik.django.apps.notifications.sync import mirror_kinds
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.testapp.models import PARCEL_REMINDER, Parcel
 
@@ -56,7 +57,7 @@ class TestTheRegistry:
         assert isinstance(kind.audience, Subscribers)
 
     def test_a_kind_without_channels_takes_the_configured_ones(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox",)}
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox",)}
 
         assert get_kind("parcel_shipped").enabled_channels == ("inbox",)
 
@@ -396,7 +397,7 @@ class TestSwapping:
 
 class TestTheSettings:
     def test_each_has_a_default(self, settings):
-        settings.ISIK_NOTIFICATIONS = None
+        isik_areas(settings).NOTIFICATIONS = None
 
         assert conf.setting("MAX_ATTEMPTS") == 5
         assert conf.setting("REDACTOR") is None
@@ -404,16 +405,16 @@ class TestTheSettings:
         assert conf.partitioned() is False
 
     def test_a_hook_by_its_path(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"REDACTOR": "copy.deepcopy"}
+        isik_areas(settings).NOTIFICATIONS = {"REDACTOR": "copy.deepcopy"}
 
         import copy
 
         assert conf.setting("REDACTOR") is copy.deepcopy
 
     def test_partitioned_takes_both_hooks(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"PARTITIONS": list}
+        isik_areas(settings).NOTIFICATIONS = {"PARTITIONS": list}
         assert conf.partitioned() is False
-        settings.ISIK_NOTIFICATIONS = {"PARTITIONS": list, "IN_PARTITION": "contextlib.nullcontext"}
+        isik_areas(settings).NOTIFICATIONS = {"PARTITIONS": list, "IN_PARTITION": "contextlib.nullcontext"}
         assert conf.partitioned() is True
 
     @pytest.mark.parametrize(
@@ -427,7 +428,7 @@ class TestTheSettings:
         ],
     )
     def test_the_signature_header(self, settings, configured, header):
-        settings.ISIK_NOTIFICATIONS = configured
+        isik_areas(settings).NOTIFICATIONS = configured
 
         assert conf.signature_header() == header
 
@@ -437,7 +438,7 @@ class TestEnteringAPartition:
         def refuse(*args):
             raise AssertionError("a single-partition project asked a partition hook")
 
-        settings.ISIK_NOTIFICATIONS = {"PARTITION_EXISTS": refuse}
+        isik_areas(settings).NOTIFICATIONS = {"PARTITION_EXISTS": refuse}
 
         with in_partition("north") as entered:
             assert entered is None
@@ -451,7 +452,7 @@ class TestEnteringAPartition:
             entered.append(key)
             yield
 
-        settings.ISIK_NOTIFICATIONS = {"PARTITIONS": lambda: ["north"], "IN_PARTITION": enter}
+        isik_areas(settings).NOTIFICATIONS = {"PARTITIONS": lambda: ["north"], "IN_PARTITION": enter}
 
         with in_partition("north"):
             assert entered == ["north"]
@@ -466,7 +467,7 @@ class TestEnteringAPartition:
             entered.append(key)
             yield
 
-        settings.ISIK_NOTIFICATIONS = {"PARTITIONS": lambda: ["north"], "IN_PARTITION": enter}
+        isik_areas(settings).NOTIFICATIONS = {"PARTITIONS": lambda: ["north"], "IN_PARTITION": enter}
 
         with pytest.raises(PartitionGone, match=f"^The partition {key!r} no longer exists.$") as gone:
             with in_partition(key):
@@ -477,7 +478,7 @@ class TestEnteringAPartition:
     @pytest.mark.django_db
     def test_the_projects_existence_check_over_the_list(self, settings):
         asked = []
-        settings.ISIK_NOTIFICATIONS = {
+        isik_areas(settings).NOTIFICATIONS = {
             "PARTITIONS": lambda: ["north"],
             "IN_PARTITION": "contextlib.nullcontext",
             "PARTITION_EXISTS": lambda key: asked.append(key) or key == "south",
@@ -495,7 +496,7 @@ class TestEnteringAPartition:
         from django.db import connection
 
         depths = []
-        settings.ISIK_NOTIFICATIONS = {
+        isik_areas(settings).NOTIFICATIONS = {
             "PARTITIONS": lambda: ["north"],
             "IN_PARTITION": "contextlib.nullcontext",
             "PARTITION_EXISTS": lambda key: depths.append(len(connection.savepoint_ids)) or True,

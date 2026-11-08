@@ -20,6 +20,7 @@ from isik.django.apps.notifications.audience import swapping as audience_swappin
 from isik.django.apps.notifications.audience.helpers import subscribe
 from isik.django.apps.notifications.checks import notification_problems
 from isik.django.apps.notifications.models import DeliveryState
+from isik.django.conf import isik_areas
 from tests_swapped.owned import models as owned
 
 
@@ -158,7 +159,7 @@ def test_the_projects_kind_policy_refuses_a_truncate_as_it_refuses_a_delete():
 
 
 def test_a_retry_and_pruning_on_the_projects_tables(alice, settings):
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "NOTICE_RETENTION": timedelta(0)}
     notice = lose(alice)
     pipeline.fan_out()
     delivery = owned.Delivery.objects.get(notice=notice, channel="inbox")
@@ -231,8 +232,8 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
     key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
     )
-    settings.ISIK_NOTIFICATIONS = {
-        **settings.ISIK_NOTIFICATIONS,
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
         "CHANNELS": ("inbox", "email", "webhook", "push"),
         "PUSH": {"APNS": {"TEAM_ID": "T", "KEY_ID": "K", "KEY": key.decode(), "TOPIC": "com.owned.app"}},
     }

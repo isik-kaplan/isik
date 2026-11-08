@@ -3,12 +3,12 @@
 import hashlib
 import json
 
-from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 from django.http import QueryDict
 from django.utils.module_loading import import_string
 
 from isik._internal.translation import gettext as _
+from isik.django.conf import django_setting
 
 
 def _describe_upload(value):
@@ -16,7 +16,7 @@ def _describe_upload(value):
         raise TypeError(
             _(
                 "Can't fingerprint a value of type %(type)s. Pass a normalizer that turns the body into JSON - "
-                "idempotency_normalize on the view, or IDEMPOTENCY_NORMALIZE."
+                "idempotency_normalize on the view, or ISIK['DJANGO']['IDEMPOTENCY']['NORMALIZE']."
             )
             % {"type": type(value).__name__}
         )
@@ -49,8 +49,8 @@ def canonical_body(request):
 
 
 def configured_normalize():
-    """`IDEMPOTENCY_NORMALIZE` (a callable, or a dotted path to one), else `canonical_body`."""
-    normalize = getattr(settings, "IDEMPOTENCY_NORMALIZE", None) or canonical_body
+    """`ISIK['DJANGO']['IDEMPOTENCY']['NORMALIZE']` (a callable, or a dotted path to one), else `canonical_body`."""
+    normalize = django_setting("IDEMPOTENCY", "NORMALIZE") or canonical_body
     return import_string(normalize) if isinstance(normalize, str) else normalize
 
 

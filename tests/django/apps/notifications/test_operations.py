@@ -23,6 +23,7 @@ from isik.django.apps.common.db import (
 )
 from isik.django.apps.notifications import pipeline, schedule, tasks
 from isik.django.apps.notifications.models import NoticeKindPolicy
+from isik.django.conf import isik_areas
 
 
 def notices(*args):
@@ -112,7 +113,7 @@ class TestTheTasks:
         assert called == ["reap_stranded", "prune_attempts", "prune_notices"]
 
     def test_a_full_batch_starts_another_fan_out(self, monkeypatch, settings, dispatched):
-        settings.ISIK_NOTIFICATIONS = {"BATCH_SIZE": 2}
+        isik_areas(settings).NOTIFICATIONS = {"BATCH_SIZE": 2}
         fanned = iter([2, 1])
         monkeypatch.setattr(pipeline, "fan_out", lambda: next(fanned))
 

@@ -1,6 +1,7 @@
-from django.conf import settings
 from rest_framework import pagination
 from rest_framework.response import Response
+
+from isik.django.conf import django_setting
 
 
 class PageNumberPagination(pagination.PageNumberPagination):
@@ -8,11 +9,11 @@ class PageNumberPagination(pagination.PageNumberPagination):
     max_page_size = None
 
     def get_page_size(self, request):
-        """Cap page_size at settings.DRF_PAGINATION_MAX_PAGE_SIZE (default 1000).
+        """Cap page_size at ISIK['DJANGO']['DRF']['PAGINATION_MAX_PAGE_SIZE'] (default 1000).
 
         Set `max_page_size` on a subclass to override the settings lookup entirely.
         """
-        self.max_page_size = self.max_page_size or getattr(settings, "DRF_PAGINATION_MAX_PAGE_SIZE", 1000)
+        self.max_page_size = self.max_page_size or django_setting("DRF", "PAGINATION_MAX_PAGE_SIZE", 1000)
         return super().get_page_size(request)
 
     def get_paginated_response(self, data):

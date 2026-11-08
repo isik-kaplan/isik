@@ -15,6 +15,7 @@ from isik.django.apps.notifications.checks import kind_problems, setting_problem
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.models import Notice, Policy
 from isik.django.apps.notifications.partitions import Column, Connection, Expression, Follow, PartitionSource
+from isik.django.conf import isik_areas
 from tests.testapp.models import EmailUser, Parcel
 
 
@@ -145,7 +146,10 @@ class TestTheChecksAboutPartitions:
         ]
 
     def test_the_default_resolver_is_checked_for_each_kind_without_one(self, declaring, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DEFAULT_PARTITION": Column("colour")}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "DEFAULT_PARTITION": Column("colour"),
+        }
         flagged = dataclasses.replace(kinds.get_kind("parcel_flagged"), partition=Column("status"))
         declaring(self.shipped(), flagged)
 
@@ -161,15 +165,19 @@ class TestTheChecksAboutPartitions:
         ]
 
     def test_a_default_that_isnt_a_resolver(self, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DEFAULT_PARTITION": "current_schema()"}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "DEFAULT_PARTITION": "current_schema()",
+        }
 
         assert setting_problems() == [
-            "ISIK_NOTIFICATIONS' DEFAULT_PARTITION is a resolver from isik.django.apps.notifications.partitions."
+            "ISIK['DJANGO']['NOTIFICATIONS']['DEFAULT_PARTITION'] is a resolver from "
+            "isik.django.apps.notifications.partitions."
         ]
 
     def test_partitions_with_nowhere_to_read_a_kinds_from(self, declaring, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PARTITIONS": list,
             "IN_PARTITION": nullcontext,
         }
@@ -177,7 +185,7 @@ class TestTheChecksAboutPartitions:
 
         assert kind_problems() == [
             "parcel_shipped says nowhere which partition its row belongs to - give it partition=, or set "
-            "ISIK_NOTIFICATIONS' DEFAULT_PARTITION."
+            "ISIK['DJANGO']['NOTIFICATIONS']['DEFAULT_PARTITION']."
         ]
 
     def test_no_partitions_need_no_resolver(self, declaring):

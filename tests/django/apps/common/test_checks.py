@@ -21,6 +21,7 @@ from isik.django.apps.common.db import models as db_models
 from isik.django.apps.common.db import triggers as db_triggers
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.project import project_app_configs
+from isik.django.conf import isik_areas
 from isik.django.drf.serializers import flattened_singleton_related
 from isik.django.drf.viewsets import preconditions
 from tests.testapp.models import TimestampedNote, Widget
@@ -58,7 +59,7 @@ URLS = "tests.django.apps.common.check_urls"
 
 class TestTheSettings:
     def test_every_check_is_on_by_default(self, settings):
-        settings.ISIK_CHECKS = None
+        isik_areas(settings).CHECKS = None
 
         assert checks.check_options(Check.IDEMPOTENCY) == {
             CheckOption.ENABLED: True,
@@ -69,37 +70,37 @@ class TestTheSettings:
         }
 
     def test_a_checks_entry_overrides_the_defaults(self, settings):
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: {CheckOption.URLCONFS: [URLS]}}
+        isik_areas(settings).CHECKS = {Check.IDEMPOTENCY: {CheckOption.URLCONFS: [URLS]}}
 
         assert checks.check_options(Check.IDEMPOTENCY)[CheckOption.URLCONFS] == [URLS]
         assert checks.check_options(Check.IDEMPOTENCY)[CheckOption.ENABLED] is True
 
     def test_the_defaults_are_never_handed_out_to_be_changed(self, settings):
-        settings.ISIK_CHECKS = None
+        isik_areas(settings).CHECKS = None
 
         checks.check_options(Check.IDEMPOTENCY)[CheckOption.ENABLED] = False
 
         assert checks.check_options(Check.IDEMPOTENCY)[CheckOption.ENABLED] is True
 
     def test_an_entry_that_isnt_a_dict_is_ignored_here_and_reported(self, settings):
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: False}
+        isik_areas(settings).CHECKS = {Check.IDEMPOTENCY: False}
 
         assert checks.check_options(Check.IDEMPOTENCY)[CheckOption.ENABLED] is True
 
     def test_a_string_key_is_ignored_here_and_reported(self, settings):
-        settings.ISIK_CHECKS = {"idempotency": {CheckOption.ENABLED: False}}
+        isik_areas(settings).CHECKS = {"idempotency": {CheckOption.ENABLED: False}}
 
         assert checks.check_options(Check.IDEMPOTENCY)[CheckOption.ENABLED] is True
 
     def test_turned_off_it_reports_nothing(self, settings, monkeypatch):
         monkeypatch.setattr(constraints, "unclassified_validators", lambda: ["a.B.c (one)"])
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.ENABLED: False}}
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.ENABLED: False}}
 
         assert every_validator_says_whether_it_can_hold_at_the_column(app_configs=None) == []
 
     def test_a_severity_changes_the_messages_kind_and_keeps_the_rest(self, settings, monkeypatch):
         monkeypatch.setattr(constraints, "unclassified_validators", lambda: ["a.B.c (one)"])
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: Severity.WARNING}}
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: Severity.WARNING}}
 
         (message,) = every_validator_says_whether_it_can_hold_at_the_column(app_configs=None)
 
@@ -111,7 +112,7 @@ class TestTheSettings:
         assert message.hint.startswith("Give the class")
 
     def test_an_error_severity_makes_a_warning_an_error(self, settings, monkeypatch):
-        settings.ISIK_CHECKS = {Check.PRECONDITION_OPTIONS: {CheckOption.SEVERITY: Severity.ERROR}}
+        isik_areas(settings).CHECKS = {Check.PRECONDITION_OPTIONS: {CheckOption.SEVERITY: Severity.ERROR}}
         monkeypatch.setattr(preconditions, "precondition_option_problems", lambda urlconf: [])
         monkeypatch.setattr(preconditions, "precondition_option_warnings", lambda urlconf: ["undone"])
 
@@ -121,7 +122,7 @@ class TestTheSettings:
 
     def test_a_severity_written_as_a_string_leaves_the_checks_own(self, settings, monkeypatch):
         monkeypatch.setattr(constraints, "unclassified_validators", lambda: ["a.B.c (one)"])
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: "warning"}}
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: "warning"}}
 
         (message,) = every_validator_says_whether_it_can_hold_at_the_column(app_configs=None)
 
@@ -177,13 +178,13 @@ class TestTheSettingsCheck:
         return [message.msg for message in found if message.id == "isik.E012"]
 
     def test_none_is_fine(self, settings):
-        settings.ISIK_CHECKS = None
+        isik_areas(settings).CHECKS = None
 
         assert self.messages() == []
 
     def test_every_option_of_every_check_is_fine(self, settings):
         settings.ROOT_URLCONF = URLS
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.IDEMPOTENCY: {
                 CheckOption.ENABLED: True,
                 CheckOption.SEVERITY: Severity.WARNING,
@@ -195,23 +196,24 @@ class TestTheSettingsCheck:
         assert self.messages() == []
 
     def test_not_a_dict(self, settings):
-        settings.ISIK_CHECKS = [Check.IDEMPOTENCY]
+        isik_areas(settings).CHECKS = [Check.IDEMPOTENCY]
 
         assert self.messages() == [
-            (Error, "isik.E012", "ISIK_CHECKS is [<Check.IDEMPOTENCY: 'idempotency'>], not a dict.")
+            (Error, "isik.E012", "ISIK['DJANGO']['CHECKS'] is [<Check.IDEMPOTENCY: 'idempotency'>], not a dict.")
         ]
 
     @pytest.mark.parametrize("written", ["idempotency", "IDEMPOTENCY"])
     def test_a_check_named_by_a_string(self, settings, written):
-        settings.ISIK_CHECKS = {written: {}}
+        isik_areas(settings).CHECKS = {written: {}}
 
-        assert self.errors() == [f"ISIK_CHECKS names {written!r} as a string - write Check.IDEMPOTENCY."]
+        assert self.errors() == [f"ISIK['DJANGO']['CHECKS'] names {written!r} as a string - write Check.IDEMPOTENCY."]
 
     def test_something_that_isnt_a_check(self, settings):
-        settings.ISIK_CHECKS = {"idempotence": {}}
+        isik_areas(settings).CHECKS = {"idempotence": {}}
 
         assert self.errors() == [
-            "ISIK_CHECKS names 'idempotence', which isn't a Check: Check.VALIDATORS, Check.CONCURRENCY_TOKENS, "
+            "ISIK['DJANGO']['CHECKS'] names 'idempotence', which isn't a Check: Check.VALIDATORS, "
+            "Check.CONCURRENCY_TOKENS, "
             "Check.PRECONDITION_OPTIONS, Check.RELATION_LOCKS, Check.VERSION_READS, Check.IDEMPOTENCY, "
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
@@ -220,69 +222,74 @@ class TestTheSettingsCheck:
         ]
 
     def test_an_entry_not_a_dict(self, settings):
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: False}
+        isik_areas(settings).CHECKS = {Check.IDEMPOTENCY: False}
 
-        assert self.errors() == ["ISIK_CHECKS[Check.IDEMPOTENCY] is False, not a dict."]
+        assert self.errors() == ["ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] is False, not a dict."]
 
     def test_an_option_named_by_a_string(self, settings):
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: {"urlconfs": [URLS], 3: True}}
+        isik_areas(settings).CHECKS = {Check.IDEMPOTENCY: {"urlconfs": [URLS], 3: True}}
 
         assert self.errors() == [
-            "ISIK_CHECKS[Check.IDEMPOTENCY] names 'urlconfs' as a string - write CheckOption.URLCONFS.",
-            "ISIK_CHECKS[Check.IDEMPOTENCY] names 3, which isn't a CheckOption: CheckOption.ENABLED, "
+            "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] names 'urlconfs' as a string - write CheckOption.URLCONFS.",
+            "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] names 3, which isn't a CheckOption: CheckOption.ENABLED, "
             "CheckOption.SEVERITY, CheckOption.URLCONFS, CheckOption.APPS, "
             "CheckOption.INHERITED_FROM_LIBRARIES.",
         ]
 
     def test_an_option_the_check_doesnt_take(self, settings):
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.VALIDATORS: {CheckOption.URLCONFS: [URLS], CheckOption.APPS: []},
             Check.IDEMPOTENCY: {CheckOption.APPS: []},
         }
 
         assert self.errors() == [
-            "ISIK_CHECKS[Check.VALIDATORS] has CheckOption.URLCONFS - it takes CheckOption.ENABLED, "
+            "ISIK['DJANGO']['CHECKS'][Check.VALIDATORS] has CheckOption.URLCONFS - it takes CheckOption.ENABLED, "
             "CheckOption.SEVERITY.",
-            "ISIK_CHECKS[Check.VALIDATORS] has CheckOption.APPS - it takes CheckOption.ENABLED, CheckOption.SEVERITY.",
-            "ISIK_CHECKS[Check.IDEMPOTENCY] has CheckOption.APPS - it takes CheckOption.ENABLED, "
+            "ISIK['DJANGO']['CHECKS'][Check.VALIDATORS] has CheckOption.APPS - it takes CheckOption.ENABLED, "
+            "CheckOption.SEVERITY.",
+            "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] has CheckOption.APPS - it takes CheckOption.ENABLED, "
             "CheckOption.SEVERITY, CheckOption.URLCONFS.",
         ]
 
     @pytest.mark.parametrize("written", ["warning", "WARNING"])
     def test_a_severity_written_as_a_string(self, settings, written):
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: written}}
-
-        assert self.errors() == [f"ISIK_CHECKS[Check.VALIDATORS]'s severity is {written!r} - write Severity.WARNING."]
-
-    def test_a_severity_there_isnt(self, settings):
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: "loud"}}
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: written}}
 
         assert self.errors() == [
-            "ISIK_CHECKS[Check.VALIDATORS]'s severity is 'loud' - write Severity.ERROR, Severity.WARNING."
+            f"ISIK['DJANGO']['CHECKS'][Check.VALIDATORS]'s severity is {written!r} - write Severity.WARNING."
+        ]
+
+    def test_a_severity_there_isnt(self, settings):
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: "loud"}}
+
+        assert self.errors() == [
+            "ISIK['DJANGO']['CHECKS'][Check.VALIDATORS]'s severity is 'loud' - write Severity.ERROR, Severity.WARNING."
         ]
 
     def test_a_severity_of_another_type(self, settings):
-        settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: 2}}
+        isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: 2}}
 
         assert self.errors() == [
-            "ISIK_CHECKS[Check.VALIDATORS]'s severity is 2 - write Severity.ERROR, Severity.WARNING."
+            "ISIK['DJANGO']['CHECKS'][Check.VALIDATORS]'s severity is 2 - write Severity.ERROR, Severity.WARNING."
         ]
 
     def test_urlconfs_leaving_a_served_one_out_is_a_warning(self, settings):
         settings.ROOT_URLCONF = URLS
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["tests.django.drf.preconditions.urls"]}}
+        isik_areas(settings).CHECKS = {
+            Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["tests.django.drf.preconditions.urls"]}
+        }
 
         ((kind, id, msg),) = self.messages()
 
         assert (kind, id) == (CheckWarning, "isik.W003")
-        assert msg == f"ISIK_CHECKS[Check.IDEMPOTENCY] leaves served urlconfs unchecked: {URLS}."
+        assert msg == f"ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] leaves served urlconfs unchecked: {URLS}."
         assert checks.isik_checks_are_configured(None)[0].hint == (
             "Leave out CheckOption.URLCONFS to check every urlconf the project serves."
         )
 
     def test_a_check_turned_off_leaves_nothing_unchecked(self, settings):
         settings.ROOT_URLCONF = URLS
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.IDEMPOTENCY: {
                 CheckOption.ENABLED: False,
                 CheckOption.URLCONFS: ["tests.django.drf.preconditions.urls"],
@@ -293,7 +300,7 @@ class TestTheSettingsCheck:
 
     def test_errors_come_before_warnings(self, settings):
         settings.ROOT_URLCONF = URLS
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["tests.django.drf.preconditions.urls"]},
             Check.VALIDATORS: {CheckOption.SEVERITY: "loud"},
         }
@@ -354,7 +361,7 @@ class TestTheCoverageChecks:
 
     def test_told_to_check_another_urlconf_it_checks_that(self, settings):
         elsewhere = {CheckOption.URLCONFS: ["tests.django.drf.preconditions.urls"]}
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.IDEMPOTENCY: elsewhere,
             Check.PRECONDITIONS: elsewhere,
             Check.NOT_ATOMIC: elsewhere,
@@ -410,7 +417,7 @@ class TestTheHistoryIndexCheck:
     def test_reads_the_apps_it_is_told(self, settings, monkeypatch):
         seen = []
         monkeypatch.setattr(db_history, "history_index_problems", lambda configs: seen.append(configs) or [])
-        settings.ISIK_CHECKS = {Check.HISTORY_INDEXES: {CheckOption.APPS: ["isik_common", "testapp"]}}
+        isik_areas(settings).CHECKS = {Check.HISTORY_INDEXES: {CheckOption.APPS: ["isik_common", "testapp"]}}
 
         checks.every_event_model_indexes_its_streams(app_configs=None)
 
@@ -444,7 +451,7 @@ class TestTheKeptFieldConditionCheck:
     def test_reads_the_apps_it_is_told(self, settings, monkeypatch):
         seen = []
         monkeypatch.setattr(conditions, "kept_field_condition_problems", lambda configs: seen.append(configs) or [])
-        settings.ISIK_CHECKS = {Check.KEPT_FIELD_CONDITIONS: {CheckOption.APPS: ["isik_common"]}}
+        isik_areas(settings).CHECKS = {Check.KEPT_FIELD_CONDITIONS: {CheckOption.APPS: ["isik_common"]}}
 
         checks.no_trigger_condition_compares_a_kept_field(app_configs=None)
 
@@ -491,20 +498,21 @@ class TestTheDocumentationCheck:
         assert (error.id, error.msg) == ("isik.E010", "one")
         assert error.hint == (
             "A field a library's abstract base declares is described with redeclare() "
-            "(isik.django.apps.common.db); ISIK_CHECKS[Check.DOCUMENTATION] says which fields are checked at all."
+            "(isik.django.apps.common.db); ISIK['DJANGO']['CHECKS'][Check.DOCUMENTATION] says which fields are "
+            "checked at all."
         )
         configs, inherited = seen[0]
         assert [config.label for config in configs] == ["testapp"]
         assert inherited is True
 
     def test_exemption_types_is_no_option_of_it(self, settings):
-        settings.ISIK_CHECKS = {Check.DOCUMENTATION: {"exemption_types": []}}
+        isik_areas(settings).CHECKS = {Check.DOCUMENTATION: {"exemption_types": []}}
 
         (error,) = checks.isik_checks_are_configured(None)
 
         assert error.id == "isik.E012"
         assert error.msg.startswith(
-            "ISIK_CHECKS[Check.DOCUMENTATION] names 'exemption_types', which isn't a CheckOption"
+            "ISIK['DJANGO']['CHECKS'][Check.DOCUMENTATION] names 'exemption_types', which isn't a CheckOption"
         )
 
 
@@ -524,7 +532,7 @@ class TestACheckOfIsiks:
 
         check = checks.isik_check(Check.VALIDATORS, Tags.database)(made_here)
         try:
-            settings.ISIK_CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: Severity.WARNING}}
+            isik_areas(settings).CHECKS = {Check.VALIDATORS: {CheckOption.SEVERITY: Severity.WARNING}}
 
             (message,) = check(app_configs=None, databases=["default"])
 
@@ -548,13 +556,13 @@ class TestTheSettingsCheckGoesOn:
         return {message.hint for message in checks.isik_checks_are_configured(None) if message.id == "isik.E012"}
 
     def test_after_an_unknown_check(self, settings):
-        settings.ISIK_CHECKS = {"idempotence": {}, Check.VALIDATORS: {CheckOption.SEVERITY: "loud"}}
+        isik_areas(settings).CHECKS = {"idempotence": {}, Check.VALIDATORS: {CheckOption.SEVERITY: "loud"}}
 
         assert [message.id for message in checks.isik_checks_are_configured(None)] == ["isik.E012", "isik.E012"]
         assert self.hints() == {"See isik.django.apps.common.checks."}
 
     def test_after_an_entry_not_a_dict(self, settings):
-        settings.ISIK_CHECKS = {
+        isik_areas(settings).CHECKS = {
             Check.IDEMPOTENCY: False,
             Check.VALIDATORS: {CheckOption.SEVERITY: "loud", CheckOption.APPS: []},
         }
@@ -568,11 +576,11 @@ class TestTheSettingsCheckGoesOn:
         monkeypatch.setattr(
             urlconfs, "project_urlconfs", lambda urlconf=None: ["a", "b", "c"] if urlconf is None else list(urlconf)
         )
-        settings.ISIK_CHECKS = {Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["b"]}}
+        isik_areas(settings).CHECKS = {Check.IDEMPOTENCY: {CheckOption.URLCONFS: ["b"]}}
 
         (message,) = checks.isik_checks_are_configured(None)
 
-        assert message.msg == "ISIK_CHECKS[Check.IDEMPOTENCY] leaves served urlconfs unchecked: a, c."
+        assert message.msg == "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] leaves served urlconfs unchecked: a, c."
 
 
 @pytest.mark.parametrize(
@@ -598,7 +606,7 @@ def test_a_check_reads_the_urlconfs_it_is_told(settings, monkeypatch, check, mod
         "every_guarded_write_has_a_version_to_read": Check.VERSION_READS,
         "every_exemption_is_seen": Check.EXEMPTIONS,
     }
-    settings.ISIK_CHECKS = {by_check[check]: {CheckOption.URLCONFS: [URLS]}}
+    isik_areas(settings).CHECKS = {by_check[check]: {CheckOption.URLCONFS: [URLS]}}
 
     getattr(checks, check)(app_configs=None)
 
@@ -614,7 +622,7 @@ def test_the_documentation_check_hands_on_inherited_from_libraries(settings, mon
     )
 
     checks.every_field_says_what_it_holds(app_configs=None)
-    settings.ISIK_CHECKS = {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}
+    isik_areas(settings).CHECKS = {Check.DOCUMENTATION: {CheckOption.INHERITED_FROM_LIBRARIES: False}}
     checks.every_field_says_what_it_holds(app_configs=None)
 
     assert seen == [True, False]
@@ -817,7 +825,7 @@ class TestDeclaredNames:
         assert checks.every_name_is_declared(app_configs=None) == []
         seen = []
         monkeypatch.setattr(constraints, "declared_name_problems", lambda configs: seen.append(configs) or ["one"])
-        settings.ISIK_CHECKS = {Check.DECLARED_NAMES: {CheckOption.ENABLED: True}}
+        isik_areas(settings).CHECKS = {Check.DECLARED_NAMES: {CheckOption.ENABLED: True}}
         errors = checks.every_name_is_declared(app_configs=None)
 
         assert [(error.id, error.msg, error.hint) for error in errors] == [

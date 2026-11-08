@@ -24,6 +24,7 @@ from isik.django.apps.common.db import (
     event_model_for,
 )
 from isik.django.apps.common.db import models as base_models
+from isik.django.conf import isik_areas
 from tests.testapp.models import (
     CleanedNote,
     ModifiedColumnNote,
@@ -617,13 +618,13 @@ class TestPrimaryKeys:
         assert base_models.uuid7() > first
 
     def test_the_default_is_a_uuid7(self, settings):
-        if hasattr(settings, "ISIK_PRIMARY_KEY"):
-            del settings.ISIK_PRIMARY_KEY
+        if hasattr(settings, "ISIK['DJANGO']['PRIMARY_KEY']"):
+            del isik_areas(settings).PRIMARY_KEY
 
         assert base_models.new_primary_key().version == 7
 
     def test_the_setting_picks_another(self, settings):
-        settings.ISIK_PRIMARY_KEY = "uuid.uuid4"
+        isik_areas(settings).PRIMARY_KEY = "uuid.uuid4"
 
         assert base_models.new_primary_key().version == 4
 

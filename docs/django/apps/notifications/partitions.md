@@ -16,11 +16,15 @@ With django-tenants, for instance:
 ```python
 from isik.django.apps.notifications.partitions import Connection
 
-ISIK_NOTIFICATIONS = {
-    "PARTITIONS": "acme.tenancy.schema_names",               # the schemas holding people to notify
-    "IN_PARTITION": "django_tenants.utils.schema_context",
-    "PARTITION_EXISTS": "django_tenants.utils.schema_exists",
-    "DEFAULT_PARTITION": Connection(),                       # only if rows live where the connection is
+ISIK = {
+    "DJANGO": {
+        "NOTIFICATIONS": {
+            "PARTITIONS": "acme.tenancy.schema_names",               # the schemas holding people to notify
+            "IN_PARTITION": "django_tenants.utils.schema_context",
+            "PARTITION_EXISTS": "django_tenants.utils.schema_exists",
+            "DEFAULT_PARTITION": Connection(),                       # only if rows live where the connection is
+        },
+    },
 }
 ```
 

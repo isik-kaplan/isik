@@ -1,9 +1,9 @@
 """TemplateDelimiters - which {{ }}/{% %}/{# #} strings a template field's Jinja engine looks for.
-Configurable per field, via settings.TEMPLATE_FIELDS_DELIMITERS, or Jinja's own defaults below."""
+Configurable per field, via ISIK['DJANGO']['TEMPLATED_FIELDS']['DELIMITERS'], or Jinja's own defaults below."""
 
 from dataclasses import asdict, dataclass
 
-from django.conf import settings
+from isik.django.conf import django_setting
 
 
 @dataclass(frozen=True)
@@ -30,8 +30,8 @@ class TemplateDelimiters:
 
 
 def resolve_delimiters(explicit):
-    """explicit -> settings.TEMPLATE_FIELDS_DELIMITERS -> Jinja's own {{ }}/{% %}/{# #} default."""
+    """explicit -> ISIK['DJANGO']['TEMPLATED_FIELDS']['DELIMITERS'] -> Jinja's own {{ }}/{% %}/{# #} default."""
     if explicit is not None:
         return explicit
-    configured = getattr(settings, "TEMPLATE_FIELDS_DELIMITERS", None)
+    configured = django_setting("TEMPLATED_FIELDS", "DELIMITERS")
     return configured if configured is not None else TemplateDelimiters()

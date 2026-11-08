@@ -18,6 +18,7 @@ from isik.django.apps.features.declarations import Default, OnOverrides, declare
 from isik.django.apps.features.models import Feature
 from isik.django.apps.features.operations import SettingInvalid, erase_with_holder, grant, set_setting
 from isik.django.apps.features.sync import mirror_features
+from isik.django.conf import isik_areas
 from isik.django.drf.error_handling import refusal
 from tests.testapp.models import EmailUser
 from tests.testapp.policies import RecentlyProved
@@ -134,7 +135,7 @@ class TestDeclaringAForceSource:
 
 class TestConfiguring:
     def test_nothing_configured(self, settings):
-        del settings.ISIK_FEATURES
+        del isik_areas(settings).FEATURES
 
         assert conf.configured() == {}
         assert conf.setting("GRANT_SOURCES") == ("manual",)
@@ -194,11 +195,11 @@ class TestChecks:
         assert "fresh" in declarations.checked
 
     def test_the_errors_say_the_problem(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDERS": None}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDERS": None}
 
         assert checks.features_can_work(None) == [
             Error(
-                "ISIK_FEATURES has keys it doesn't know: HOLDERS.",
+                "ISIK['DJANGO']['FEATURES'] has keys it doesn't know: HOLDERS.",
                 hint="See isik.django.apps.features.",
                 id="isik.E017",
             )

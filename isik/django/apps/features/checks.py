@@ -15,23 +15,31 @@ from isik.django.apps.common.checks import Check, isik_check
 from isik.django.apps.common.db.history import APPEND_ONLY_TRIGGERS
 from isik.django.apps.features import conf, declarations
 from isik.django.apps.features.bases import AbstractOverrides
-from isik.django.apps.features.swapping import get_grant_model, get_holder_model, get_overrides_model
+from isik.django.apps.features.swapping import SETTABLE, get_grant_model, get_holder_model, get_overrides_model
+from isik.django.conf import swappable_keys
 
 
 def setting_problems():
-    """The problems with `ISIK_FEATURES` and the overrides model."""
+    """The problems with `ISIK['DJANGO']['FEATURES']` and the overrides model."""
     problems = []
-    unknown = sorted(set(conf.configured()) - set(conf.DEFAULTS))
+    unknown = sorted(set(conf.configured()) - set(conf.DEFAULTS) - swappable_keys(SETTABLE, "FEATURES"))
     if unknown:
-        problems.append(_("ISIK_FEATURES has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)})
+        problems.append(
+            _("ISIK['DJANGO']['FEATURES'] has keys it doesn't know: %(keys)s.") % {"keys": ", ".join(unknown)}
+        )
     sweep = conf.setting("SWEEP")
     if sweep not in conf.SWEEPS:
         problems.append(
-            _("ISIK_FEATURES' SWEEP is %(sweep)r - it's one of %(sweeps)s.")
+            _("ISIK['DJANGO']['FEATURES']['SWEEP'] is %(sweep)r - it's one of %(sweeps)s.")
             % {"sweep": sweep, "sweeps": ", ".join(conf.SWEEPS)}
         )
     if sweep == "next_boundary" and importlib.util.find_spec("celery") is None:
-        problems.append(_("ISIK_FEATURES' SWEEP is next_boundary, which schedules each run with Celery - install it."))
+        problems.append(
+            _(
+                "ISIK['DJANGO']['FEATURES']['SWEEP'] is next_boundary, which schedules each run with Celery - "
+                "install it."
+            )
+        )
     overrides = get_overrides_model()
     if declarations.settings and overrides is None:
         problems.append(

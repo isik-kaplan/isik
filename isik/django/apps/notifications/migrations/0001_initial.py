@@ -49,7 +49,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='NoticeKindPolicy',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(db_comment="The kind's name, as its declaration gives it. Never changes.", help_text="The kind's name, as its declaration gives it.", max_length=100, unique=True)),
                 ('policy', models.CharField(choices=[('mandatory', 'Mandatory'), ('default_on', 'On unless turned off'), ('default_off', 'Off unless turned on')], db_comment='mandatory, default_on or default_off - mirrored from the declaration.', help_text='Who gets the kind: everyone its audience names, opted-out aside, or only the opted-in.', max_length=16)),
                 ('scope', models.CharField(choices=[('single_partition', 'One partition'), ('cross_partition', 'Many partitions')], db_comment='single_partition or cross_partition - mirrored from the declaration.', help_text="Whether the kind's audience lives in one partition or many.", max_length=16)),
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('name', models.CharField(db_comment="The kind's name, as its declaration gives it. Never changes.", help_text="The kind's name, as its declaration gives it.", max_length=100)),
                 ('policy', models.CharField(choices=[('mandatory', 'Mandatory'), ('default_on', 'On unless turned off'), ('default_off', 'Off unless turned on')], db_comment='mandatory, default_on or default_off - mirrored from the declaration.', help_text='Who gets the kind: everyone its audience names, opted-out aside, or only the opted-in.', max_length=16)),
                 ('scope', models.CharField(choices=[('single_partition', 'One partition'), ('cross_partition', 'Many partitions')], db_comment='single_partition or cross_partition - mirrored from the declaration.', help_text="Whether the kind's audience lives in one partition or many.", max_length=16)),
@@ -87,7 +87,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PushDelivery',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('device_id', models.CharField(db_comment="The device's primary key, as text, in the delivery's partition. Not a key: it may be forgotten.", help_text="The device's primary key.", max_length=255)),
                 ('user_id', models.CharField(db_comment="The primary key of the user whose device it is, as text, in the delivery's partition.", help_text='The user the device is theirs.', max_length=255)),
             ],
@@ -102,7 +102,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='WebhookDelivery',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('endpoint_id', models.CharField(db_comment="The endpoint's primary key, as text, in the delivery's partition. Not a key: it may be deleted.", help_text="The endpoint's primary key.", max_length=255)),
             ],
             options={
@@ -138,7 +138,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='EmailDelivery',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('address', models.CharField(db_comment="The address it's sent to.", help_text="The address it's sent to.", max_length=254)),
                 ('user_id', models.CharField(blank=True, db_comment='The primary key of the user the address belongs to, as text, or null.', help_text='The user the address belongs to, or none.', max_length=255, null=True)),
                 ('record_key', models.CharField(blank=True, db_comment="record_email()'s key: one email across its sender's tries. Null for one isik sends.", help_text='What its sender named a recorded email by, across its tries - or none.', max_length=255, null=True, unique=True)),
@@ -155,7 +155,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='InboxDelivery',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('user_id', models.CharField(db_comment="The primary key of the user whose inbox it lands in, as text, in the delivery's partition.", help_text='The user whose inbox it lands in.', max_length=255)),
                 ('delivery', models.OneToOneField(db_comment='The delivery this is the target of.', help_text='The delivery this is the target of.', on_delete=django.db.models.deletion.CASCADE, related_name='inbox', to=settings.ISIK_NOTIFICATIONS_DELIVERY_MODEL)),
             ],

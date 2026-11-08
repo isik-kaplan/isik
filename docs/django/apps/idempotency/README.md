@@ -49,7 +49,7 @@ With django-tenants, put the claim app in `TENANT_APPS` (or both lists) to get o
 | same key, same request                           | the first response, plus `Idempotent-Replayed: true` |
 | same key, different method/path/query/body       | 422 `idempotency_key_reused`                         |
 | same key on an action declared no-replay         | 409 `idempotency_key_not_replayable`                 |
-| first request still running past `IDEMPOTENCY_LOCK_TIMEOUT` | 409 `idempotency_key_in_flight`           |
+| first request still running past `ISIK["DJANGO"]["IDEMPOTENCY"]["LOCK_TIMEOUT"]` | 409 `idempotency_key_in_flight`           |
 | replay by reference, row since deleted           | 410 `idempotent_replay_gone`                         |
 
 A key is scoped to the caller (`request.user`). Two callers who pick the same key never meet.

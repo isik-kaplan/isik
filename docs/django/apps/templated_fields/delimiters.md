@@ -1,6 +1,6 @@
 # delimiters
 
-`TemplateDelimiters` is the placeholder syntax a template field's Jinja environment looks for (`{{ }}`/`{% %}`/`{# #}` by default). `resolve_delimiters` picks one: explicit kwarg -> `settings.TEMPLATE_FIELDS_DELIMITERS` -> Jinja's own defaults.
+`TemplateDelimiters` is the placeholder syntax a template field's Jinja environment looks for (`{{ }}`/`{% %}`/`{# #}` by default). `resolve_delimiters` picks one: explicit kwarg -> `ISIK["DJANGO"]["TEMPLATED_FIELDS"]["DELIMITERS"]` -> Jinja's own defaults.
 
 ```python
 from isik.django.apps.templated_fields.delimiters import TemplateDelimiters

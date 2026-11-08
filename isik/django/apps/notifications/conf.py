@@ -1,7 +1,7 @@
 """
-`ISIK_NOTIFICATIONS`, the one setting the notifications apps read - a dict whose keys each have a default:
+`ISIK['DJANGO']['NOTIFICATIONS']`, the one setting the notifications apps read - a dict whose keys each have a default:
 
-    ISIK_NOTIFICATIONS = {
+    ISIK['DJANGO']['NOTIFICATIONS'] = {
         "PROJECT_NAME": "Acme",
         "PARTITIONS": "acme.tenancy.schema_names",
         "IN_PARTITION": "django_tenants.utils.schema_context",
@@ -9,14 +9,15 @@
     }
 
 A hook - `REDACTOR`, `EMAIL_SENDER`, `EMAIL_ADDRESS`, `RECIPIENT_LANGUAGE`, `EMAIL_CONTEXT`,
-`PARTITIONS`, `IN_PARTITION`, `PARTITION_EXISTS` - is a callable or its dotted path. `ISIK_NOTIFICATIONS`
+`PARTITIONS`, `IN_PARTITION`, `PARTITION_EXISTS` - is a callable or its dotted path. `ISIK['DJANGO']['NOTIFICATIONS']`
 keys this module doesn't know are refused by a system check.
 """
 
 from datetime import timedelta
 
-from django.conf import settings
 from django.utils.module_loading import import_string
+
+from isik.django.conf import django_area
 
 
 DEFAULTS = {
@@ -121,8 +122,8 @@ HOOKS = (
 
 
 def configured():
-    """`ISIK_NOTIFICATIONS` as the project set it."""
-    return getattr(settings, "ISIK_NOTIFICATIONS", None) or {}
+    """`ISIK['DJANGO']['NOTIFICATIONS']` as the project set it."""
+    return django_area("NOTIFICATIONS") or {}
 
 
 def setting(name):

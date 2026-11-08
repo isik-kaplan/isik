@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Device',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('platform', models.CharField(choices=[('apns', 'Apple Push Notification service'), ('fcm', 'Firebase Cloud Messaging')], db_comment='The push service its token is for: apns or fcm.', help_text='The service its pushes go through - apns or fcm.', max_length=16)),
@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Endpoint',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('url', models.URLField(db_comment='Where deliveries are POSTed.', help_text='Where deliveries are POSTed.', max_length=2000, validators=[django.core.validators.URLValidator(schemes=('http', 'https'))])),
@@ -57,7 +57,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='EndpointKind',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
             ],
             options={
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='InboxItem',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
                 ('subject_label', models.CharField(blank=True, db_comment="The app_label.Model of the row it's about, or null.", help_text="The model label of the row it's about, or none.", max_length=200, null=True)),
                 ('subject_id', models.CharField(blank=True, db_comment="The primary key of the row it's about, as text, or null.", help_text="The primary key of the row it's about, or none.", max_length=255, null=True)),
@@ -92,7 +92,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Subscription',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
                 ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.')),
             ],

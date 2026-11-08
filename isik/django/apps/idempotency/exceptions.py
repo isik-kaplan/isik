@@ -22,7 +22,8 @@ class IdempotencyKeyNotReplayable(APIException):
 
 
 class IdempotencyKeyInFlight(APIException):
-    """`IDEMPOTENCY_LOCK_TIMEOUT` ran out while the first request with this key was still being served."""
+    """`ISIK['DJANGO']['IDEMPOTENCY']['LOCK_TIMEOUT']` ran out while the first request with this key was still being
+    served."""
 
     status_code = 409
     default_detail = gettext_lazy("A request with this idempotency key is still being served. Retry it shortly.")

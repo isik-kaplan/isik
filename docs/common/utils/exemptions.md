@@ -84,7 +84,7 @@ from isik.common.utils.exemptions import Requirement, exemption_class, exemption
 FooReason = exemption_class("FooReason", rule="foo.bar", why="...", requirement=Requirement.OPTIONAL)
 
 # The project's levels, in Django settings - keyed by rule, a rule covering the kinds of it:
-ISIK_EXEMPTIONS = {"foo.bar": Requirement.STRICT, "isik.settings.question": Requirement.OPTIONAL}
+ISIK = {"EXEMPTIONS": {"foo.bar": Requirement.STRICT, "isik.settings.question": Requirement.OPTIONAL}}
 
 # Without Django, before what declares exemptions is imported (a call wins over the setting):
 exemption_requirements({"isik.settings.question": Requirement.OPTIONAL})
@@ -99,7 +99,7 @@ level:
 - `opted_out(value, FooReason, plain=True)` gives the exemption `value` declares, or None.
 - `enforced(FooReason)` is False when the rule is `OFF`.
 
-isik's own checks keep their own switches (`ISIK_CHECKS`) as well.
+isik's own checks keep their own switches (`ISIK["DJANGO"]["CHECKS"]`) as well.
 
 ## Making one
 

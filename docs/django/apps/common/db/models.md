@@ -112,7 +112,7 @@ with widget.skip_full_clean():
 ## Primary keys
 
 `UUIDPrimaryKeyModel.id` defaults to `new_primary_key()`, which calls the function the
-`ISIK_PRIMARY_KEY` setting names - isik's `uuid7()` when it's unset. Every key isik has comes from it: its
+`ISIK["DJANGO"]["PRIMARY_KEY"]` setting names - isik's `uuid7()` when it's unset. Every key isik has comes from it: its
 own apps' models, every model it makes for a project, and every base a project subclasses - see
 [primary keys](../../../../primary-keys.md). A uuid7 is a time-ordered UUID (RFC 9562): 48 bits of Unix
 milliseconds, then a 42-bit counter, then 32 random bits. New rows land at the end of the key's index
@@ -121,7 +121,7 @@ starts at random each millisecond and counts up within it. A clock stepping back
 it was. A project with another key convention names its own function:
 
 ```python
-ISIK_PRIMARY_KEY = "uuid.uuid4"
+ISIK = {"DJANGO": {"PRIMARY_KEY": "uuid.uuid4"}}
 ```
 
 A model's migration names `new_primary_key`, not the setting, so changing it needs no migration.

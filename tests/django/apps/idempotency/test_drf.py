@@ -6,7 +6,6 @@ shows with two transactions at once - a retry waiting on the first - is in test_
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework.viewsets import ModelViewSet
@@ -14,6 +13,7 @@ from rest_framework.viewsets import ModelViewSet
 from isik.django.apps.idempotency.by_reference.models import IdempotencyClaim
 from isik.django.apps.idempotency.drf import IdempotencyMixin, NoIdempotencyKey, NoReplay
 from isik.django.apps.idempotency.with_body.models import IdempotencyClaimWithBody
+from isik.django.conf import isik_areas, isik_with, override_isik
 from tests.django.apps.idempotency.support import client_for, make_user, post
 from tests.testapp.models import Widget
 
@@ -364,13 +364,13 @@ class TestTheNormalizer:
 
         assert post(client, "/nonce-blind-widgets/", {"name": "bolt", "nonce": 2}, key)[REPLAYED] == "true"
 
-    @override_settings(IDEMPOTENCY_NORMALIZE=name_only)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": name_only}})
     def test_the_configured_one_applies_where_the_view_has_none(self, client, key):
         post(client, "/widgets/", {"name": "bolt", "count": 1}, key)
 
         assert post(client, "/widgets/", {"name": "bolt", "count": 2}, key)[REPLAYED] == "true"
 
-    @override_settings(IDEMPOTENCY_NORMALIZE=name_only)
+    @override_isik(DJANGO={"IDEMPOTENCY": {"NORMALIZE": name_only}})
     def test_the_views_own_wins_over_the_configured_one(self, client, key):
         post(client, "/nonce-blind-widgets/", {"name": "bolt"}, key)
 
@@ -477,7 +477,7 @@ class TestTheLockTimeout:
         return asked
 
     def test_is_ten_seconds_unless_set(self, client, key, asked, settings):
-        del settings.IDEMPOTENCY_LOCK_TIMEOUT
+        del isik_areas(settings).IDEMPOTENCY
 
         post(client, "/widgets/", {"name": "bolt"}, key)
 
@@ -485,7 +485,7 @@ class TestTheLockTimeout:
 
     @pytest.mark.parametrize("value", [None, 250])
     def test_is_the_setting_when_set(self, client, key, asked, settings, value):
-        settings.IDEMPOTENCY_LOCK_TIMEOUT = value
+        settings.ISIK = isik_with(DJANGO={"IDEMPOTENCY": {"LOCK_TIMEOUT": value}})
 
         post(client, "/widgets/", {"name": "bolt"}, key)
 

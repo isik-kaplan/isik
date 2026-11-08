@@ -7,11 +7,15 @@ the user, in a project where each person has their own plan, or an organization.
 ```python
 INSTALLED_APPS = [..., "isik.django.apps.features"]
 
-ISIK_FEATURES_HOLDER_MODEL = "accounts.Organization"     # default: AUTH_USER_MODEL
-ISIK_FEATURES_OVERRIDES_MODEL = "accounts.OrganizationOverrides"
-ISIK_FEATURES = {
-    "SETTINGS": "accounts.feature_settings",              # the module declaring them
-    "GRANT_SOURCES": ("manual", "trial", "subscription"),
+ISIK = {
+    "DJANGO": {
+        "FEATURES": {
+            "SETTINGS": "accounts.feature_settings",              # the module declaring them
+            "GRANT_SOURCES": ("manual", "trial", "subscription"),
+            "HOLDER_MODEL": "accounts.Organization",               # default: AUTH_USER_MODEL
+            "OVERRIDES_MODEL": "accounts.OrganizationOverrides",
+        },
+    },
 }
 ```
 
@@ -106,11 +110,11 @@ merge_beat_schedule(app)              # isik.features.sweep every minute; sweep_
 
 or from a cron, with `manage.py features --sweep`.
 
-That's `ISIK_FEATURES["SWEEP"] = "interval"`, the default: a run every so often, whether a boundary is near
+That's `ISIK["DJANGO"]["FEATURES"]["SWEEP"] = "interval"`, the default: a run every so often, whether a boundary is near
 or not. `"next_boundary"` runs it when one is due instead:
 
 ```python
-ISIK_FEATURES = {"SWEEP": "next_boundary"}                      # SWEEP_LOOKAHEAD: an hour unless set
+ISIK = {"DJANGO": {"FEATURES": {"SWEEP": "next_boundary"}}}                      # SWEEP_LOOKAHEAD: an hour unless set
 
 merge_beat_schedule(app, sweep_every=timedelta(hours=1))        # now only the backstop
 ```
@@ -201,7 +205,7 @@ class OrganizationOverrides(AbstractOverrides):
     """An organization's settings."""
 ```
 
-`ISIK_FEATURES["SETTINGS"]` is imported before the class is built, and each declared setting adds its
+`ISIK["DJANGO"]["FEATURES"]["SETTINGS"]` is imported before the class is built, and each declared setting adds its
 columns: `<name>` (where it's `OnOverrides`), and `<name>_forced`, `<name>_forced_value`,
 `<name>_forced_source` and `<name>_forced_reason`, with a constraint that they're all set or none are.
 Adding a setting is a `makemigrations` in your app. A row is made on the holder's first write; until then
@@ -296,7 +300,7 @@ delete it means. Only the keys declared `ERASE` are erased.
 
 ## Configuration
 
-`ISIK_FEATURES`, every key optional. A hook is a callable or its dotted path.
+`ISIK["DJANGO"]["FEATURES"]`, every key optional. A hook is a callable or its dotted path.
 
 | key | default | |
 |---|---|---|
@@ -313,7 +317,7 @@ delete it means. Only the keys declared `ERASE` are erased.
 
 ## Owning the models
 
-Each model is swappable - `ISIK_FEATURES_FEATURE_MODEL`, `_GRANT_MODEL`, `_SWEEP_MODEL` - on
+Each model is swappable - `"FEATURE_MODEL"`, `"GRANT_MODEL"` and `"SWEEP_MODEL"` in `ISIK["DJANGO"]["FEATURES"]` - on
 `AbstractFeature`, `AbstractFeatureGrant` and `AbstractSweepCursor`, with `get_feature_model()` and so on.
 The overrides model is always yours. isik's own tables are `isik_feature`, `isik_feature_grant` and
 `isik_sweep_cursor`.
@@ -323,10 +327,11 @@ The overrides model is always yours. isik's own tables are `isik_feature`, `isik
 refuses it beside another holder:
 
 ```python
-class OrganizationFeatureGrant(AbstractFeatureGrant):     # its holder key: ISIK_FEATURES_HOLDER_MODEL
+class OrganizationFeatureGrant(AbstractFeatureGrant):     # its holder key: the HOLDER_MODEL
     """An organization's grants."""
 
-ISIK_FEATURES_GRANT_MODEL = "accounts.OrganizationFeatureGrant"
+# settings.py: ISIK["DJANGO"]["FEATURES"]
+"GRANT_MODEL": "accounts.OrganizationFeatureGrant",
 ```
 
 The migration creating the models you own runs before isik's, which points at them - Django resolves a

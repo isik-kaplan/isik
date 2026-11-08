@@ -41,6 +41,7 @@ from isik.django.apps.notifications.models import (
     ShardState,
 )
 from isik.django.apps.notifications.signals import endpoint_parked
+from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
 from tests.django.apps.notifications.test_operations import notices as run_notices
 from tests.django.apps.notifications.test_pipeline import (
@@ -73,8 +74,8 @@ def entered(settings):
         keys.append(key)
         yield
 
-    settings.ISIK_NOTIFICATIONS = {
-        **settings.ISIK_NOTIFICATIONS,
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
         "PARTITIONS": lambda: ["north"],
         "IN_PARTITION": in_partition,
     }
@@ -181,7 +182,7 @@ class TestWhoIsChosen:
 
         monkeypatch.setitem(registered, "recording", None)
         register_channel("recording", Recording)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "CHANNELS": ("recording",)}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("recording",)}
         ship(parcel)
 
         fan_out(django_capture_on_commit_callbacks)
@@ -200,7 +201,11 @@ class TestWhoIsChosen:
             def recipients(self, notice):
                 return [bob]
 
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "PARTITIONS": list, "IN_PARTITION": nullcontext}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "PARTITIONS": list,
+            "IN_PARTITION": nullcontext,
+        }
         notice = ship(parcel)
 
         with redeclared(monkeypatch, "parcel_shipped", audience=ByNotice(), scope=Scope.CROSS_PARTITION):
@@ -269,8 +274,8 @@ class TestFanningOutEveryNotice:
         class Both(InA):
             spans_partitions = True
 
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "PARTITIONS": lambda: ["a"],
             "IN_PARTITION": nullcontext,
         }
@@ -358,7 +363,7 @@ class TestShardDetails:
 
 class TestSendDetails:
     def test_how_long_it_took(self, monkeypatch, shipped, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
         clock = iter([100.0, 102.0])
         monkeypatch.setattr(pipeline.time, "monotonic", lambda: next(clock))
 
@@ -367,7 +372,7 @@ class TestSendDetails:
         assert DeliveryAttempt.objects.get().duration_ms == 2000
 
     def test_the_jitter_is_up_to_a_tenth(self, monkeypatch, settings):
-        settings.ISIK_NOTIFICATIONS = {"BACKOFF": (100,)}
+        isik_areas(settings).NOTIFICATIONS = {"BACKOFF": (100,)}
         asked = []
         monkeypatch.setattr(pipeline.random, "uniform", lambda low, high: asked.append((low, high)) or 0)
 
@@ -426,13 +431,16 @@ class TestReapingOnlyWhatIsStranded:
 class TestPruningDetails:
     def test_a_recent_finished_notice_stays(self, shipped, settings):
         Delivery.objects.filter(notice=shipped).update(state=DeliveryState.SENT)
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "NOTICE_RETENTION": timedelta(hours=1)}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "NOTICE_RETENTION": timedelta(hours=1),
+        }
 
         assert pipeline.prune_notices() == 0
 
     def test_a_notice_goes_with_its_attempts(self, shipped, settings):
-        settings.ISIK_NOTIFICATIONS = {
-            **settings.ISIK_NOTIFICATIONS,
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
             "RECORD_ATTEMPTS": "all",
             "NOTICE_RETENTION": timedelta(0),
         }
@@ -478,7 +486,11 @@ class TestTheWebhookExactly:
         assert Delivery.objects.filter(notice=delivery.notice, channel="webhook").count() == 1
 
     def test_what_is_sent_and_recorded(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all", "ENDPOINT_TIMEOUT": 3}
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "RECORD_ATTEMPTS": "all",
+            "ENDPOINT_TIMEOUT": 3,
+        }
         delivery, endpoint = hooked
 
         pipeline.send(delivery.pk)
@@ -518,7 +530,7 @@ class TestTheWebhookExactly:
         assert (endpoint.consecutive_failures, endpoint.parked_at) == (1, None)
 
     def test_parking_says_which_model_and_endpoint(self, hooked, receiver, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DISABLE_AFTER": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "DISABLE_AFTER": 1}
         receiver.status = 500
         heard = []
 
@@ -535,7 +547,7 @@ class TestTheWebhookExactly:
 
     def test_an_endpoint_parked_already_isnt_parked_again(self, hooked, receiver, settings):
         delivery, endpoint = hooked
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "DISABLE_AFTER": 1}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "DISABLE_AFTER": 1}
         parked_at = timezone.now() - timedelta(days=1)
         get_endpoint_model().objects.filter(pk=endpoint.pk).update(parked_at=parked_at)
         heard = []
@@ -567,7 +579,7 @@ class TestTheOtherChannelsInTheirPartition:
         assert entered == ["north"]
 
     def test_email(self, shipped, entered, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "RECORD_ATTEMPTS": "all"}
 
         pipeline.send(in_north(delivery_on(shipped, "email")).pk)
 

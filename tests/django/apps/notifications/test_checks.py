@@ -21,6 +21,7 @@ from isik.django.apps.notifications.exemptions import SharedEndpoints
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import Connection
+from isik.django.conf import isik_areas
 from tests.testapp.models import WidgetEvent
 
 
@@ -30,37 +31,47 @@ def test_the_test_project_has_none():
 
 class TestTheSettings:
     def test_unknown_keys(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "RETRIES": 3, "COLOR": "red"}
+        isik_areas(settings).NOTIFICATIONS = {
+            "PROJECT_NAME": "Testapp",
+            "RETRIES": 3,
+            "COLOR": "red",
+            # Each swappable model it names is a key it knows.
+            "NOTICE_MODEL": "isik_notifications.Notice",
+            "DEVICE_MODEL": "isik_notifications_audience.Device",
+        }
 
-        assert setting_problems() == ["ISIK_NOTIFICATIONS has keys it doesn't know: COLOR, RETRIES."]
+        assert setting_problems() == ["ISIK['DJANGO']['NOTIFICATIONS'] has keys it doesn't know: COLOR, RETRIES."]
 
     @pytest.mark.parametrize(
         ("configured", "problem"),
         [
-            ({"RECORD_ATTEMPTS": "some"}, "ISIK_NOTIFICATIONS' RECORD_ATTEMPTS is one of all, failures or none."),
-            ({"MAX_ATTEMPTS": 0}, "ISIK_NOTIFICATIONS' MAX_ATTEMPTS is at least 1."),
-            ({"BACKOFF": ()}, "ISIK_NOTIFICATIONS' BACKOFF names at least one delay."),
+            (
+                {"RECORD_ATTEMPTS": "some"},
+                "ISIK['DJANGO']['NOTIFICATIONS']['RECORD_ATTEMPTS'] is one of all, failures or none.",
+            ),
+            ({"MAX_ATTEMPTS": 0}, "ISIK['DJANGO']['NOTIFICATIONS']['MAX_ATTEMPTS'] is at least 1."),
+            ({"BACKOFF": ()}, "ISIK['DJANGO']['NOTIFICATIONS']['BACKOFF'] names at least one delay."),
             (
                 {"PARTITIONS": list},
-                "ISIK_NOTIFICATIONS sets one of PARTITIONS and IN_PARTITION - set both, or neither.",
+                "ISIK['DJANGO']['NOTIFICATIONS'] sets one of PARTITIONS and IN_PARTITION - set both, or neither.",
             ),
             (
                 {"IN_PARTITION": "contextlib.nullcontext"},
-                "ISIK_NOTIFICATIONS sets one of PARTITIONS and IN_PARTITION - set both, or neither.",
+                "ISIK['DJANGO']['NOTIFICATIONS'] sets one of PARTITIONS and IN_PARTITION - set both, or neither.",
             ),
             (
                 {"CHANNELS": ("inbox", "fax", "pigeon")},
-                "ISIK_NOTIFICATIONS' CHANNELS names channels nothing registered: fax, pigeon.",
+                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] names channels nothing registered: fax, pigeon.",
             ),
         ],
     )
     def test_each_invalid_value(self, settings, configured, problem):
-        settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", **configured}
+        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", **configured}
 
         assert problem in setting_problems()
 
     def test_valid_edges(self, settings):
-        settings.ISIK_NOTIFICATIONS = {
+        isik_areas(settings).NOTIFICATIONS = {
             "PROJECT_NAME": "Testapp",
             "RECORD_ATTEMPTS": "all",
             "MAX_ATTEMPTS": 1,
@@ -72,55 +83,66 @@ class TestTheSettings:
         assert setting_problems() == []
 
     def test_webhooks_need_a_signature_header(self, settings):
-        settings.ISIK_NOTIFICATIONS = {}
+        isik_areas(settings).NOTIFICATIONS = {}
 
         assert setting_problems() == [
-            "The webhook channel signs with X-<PROJECT_NAME>-Signature - set ISIK_NOTIFICATIONS' PROJECT_NAME, "
+            "The webhook channel signs with X-<PROJECT_NAME>-Signature - set "
+            "ISIK['DJANGO']['NOTIFICATIONS']['PROJECT_NAME'], "
             "or name the header in SIGNATURE['header']."
         ]
 
     def test_a_named_header_needs_no_project_name(self, settings):
-        settings.ISIK_NOTIFICATIONS = {"SIGNATURE": {"header": "Webhook-Signature"}}
+        isik_areas(settings).NOTIFICATIONS = {"SIGNATURE": {"header": "Webhook-Signature"}}
 
         assert setting_problems() == []
 
     def test_no_kind_sent_by_webhook_needs_no_header(self, settings, declaring):
-        settings.ISIK_NOTIFICATIONS = {}
+        isik_areas(settings).NOTIFICATIONS = {}
         declaring(shipped(channels=("inbox", "email")))
 
         assert setting_problems() == []
         assert "webhook" in conf.setting("CHANNELS")
 
     def test_set_nothing_at_all_with_no_webhook_kinds(self, settings, declaring):
-        del settings.ISIK_NOTIFICATIONS
+        del isik_areas(settings).NOTIFICATIONS
         declaring(shipped(channels=("inbox", "email")))
 
         assert notification_problems() == []
 
     @pytest.mark.parametrize("name", ["Acme Corp", "Açme", "Acme/Corp", "Acme:"])
     def test_a_project_name_a_header_cant_hold(self, settings, name):
-        settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": name}
+        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": name}
 
         assert setting_problems() == [
-            f"ISIK_NOTIFICATIONS' PROJECT_NAME {name!r} can't be part of a header name - use letters, digits and -."
+            f"ISIK['DJANGO']['NOTIFICATIONS']['PROJECT_NAME'] {name!r} can't be part of a header name - use letters, "
+            f"digits and -."
         ]
 
     @pytest.mark.parametrize("name", ["Acme", "acme-corp", "Acme.io", "A_1"])
     def test_a_project_name_that_fits(self, settings, name):
-        settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": name}
+        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": name}
 
         assert setting_problems() == []
 
     @pytest.mark.parametrize(
         ("push", "problems"),
         [
-            ({}, ["A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials."]),
-            ({"APNS": {}, "GCM": {}, "WNS": {}}, ["ISIK_NOTIFICATIONS' PUSH has keys it doesn't know: GCM, WNS."]),
+            (
+                {},
+                [
+                    "A kind is sent on push, and ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] holds no APNS or FCM "
+                    "credentials."
+                ],
+            ),
+            (
+                {"APNS": {}, "GCM": {}, "WNS": {}},
+                ["ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] has keys it doesn't know: GCM, WNS."],
+            ),
             (
                 {"APNS": {"TEAM_ID": "T", "KEY": ""}, "FCM": {}},
                 [
-                    "ISIK_NOTIFICATIONS' PUSH['APNS'] is missing KEY_ID, KEY, TOPIC.",
-                    "ISIK_NOTIFICATIONS' PUSH['FCM'] is missing CREDENTIALS.",
+                    "ISIK['DJANGO']['NOTIFICATIONS']['PUSH']['APNS'] is missing KEY_ID, KEY, TOPIC.",
+                    "ISIK['DJANGO']['NOTIFICATIONS']['PUSH']['FCM'] is missing CREDENTIALS.",
                 ],
             ),
             ({"APNS": {"TEAM_ID": "T", "KEY_ID": "K", "KEY": "pem", "TOPIC": "com.acme"}}, []),
@@ -128,22 +150,22 @@ class TestTheSettings:
         ],
     )
     def test_push_needs_a_services_credentials(self, settings, declaring, push, problems):
-        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": push}
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": push}
         declaring(shipped(channels=("inbox", "push")))
 
         assert setting_problems() == problems
 
     def test_push_problems_are_told_beside_the_rest(self, settings, declaring):
-        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "RECORD_ATTEMPTS": "some"}
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "RECORD_ATTEMPTS": "some"}
         declaring(shipped(channels=("inbox", "push")))
 
         assert setting_problems() == [
-            "ISIK_NOTIFICATIONS' RECORD_ATTEMPTS is one of all, failures or none.",
-            "A kind is sent on push, and ISIK_NOTIFICATIONS' PUSH holds no APNS or FCM credentials.",
+            "ISIK['DJANGO']['NOTIFICATIONS']['RECORD_ATTEMPTS'] is one of all, failures or none.",
+            "A kind is sent on push, and ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] holds no APNS or FCM credentials.",
         ]
 
     def test_no_kind_sent_by_push_needs_no_credentials(self, settings, declaring):
-        settings.ISIK_NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": {"GCM": {}}}
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": {"GCM": {}}}
         declaring(shipped(channels=("inbox",)))
 
         assert setting_problems() == []
@@ -195,8 +217,10 @@ class TestTheKinds:
     def test_a_cross_partition_kind_with_no_partitions(self, declaring, settings):
         declaring(shipped(scope=Scope.CROSS_PARTITION, audience=Spanning()))
 
-        assert kind_problems() == ["parcel_shipped is cross-partition, and ISIK_NOTIFICATIONS declares no partitions."]
-        settings.ISIK_NOTIFICATIONS = {
+        assert kind_problems() == [
+            "parcel_shipped is cross-partition, and ISIK['DJANGO']['NOTIFICATIONS'] declares no partitions."
+        ]
+        isik_areas(settings).NOTIFICATIONS = {
             "PARTITIONS": list,
             "IN_PARTITION": "contextlib.nullcontext",
             "DEFAULT_PARTITION": Connection(),
@@ -204,11 +228,12 @@ class TestTheKinds:
         assert kind_problems() == []
 
     def test_a_channel_the_settings_dont_turn_on(self, declaring, settings):
-        settings.ISIK_NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "CHANNELS": ("inbox",)}
+        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "CHANNELS": ("inbox",)}
         declaring(shipped(channels=("inbox", "email", "webhook")))
 
         assert kind_problems() == [
-            "parcel_shipped is sent on email, webhook, which ISIK_NOTIFICATIONS' CHANNELS doesn't turn on."
+            "parcel_shipped is sent on email, webhook, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn "
+            "on."
         ]
 
     def test_a_kind_on_a_ledger_or_event_model(self, declaring):
@@ -331,12 +356,12 @@ class TestRetiredKinds:
 
     def test_the_check_reports_them_as_warnings(self, settings):
         NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "COLOR": "red"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "COLOR": "red"}
 
         messages = checks.notifications_can_work(app_configs=None, databases=["default"])
 
         assert [(message.id, message.msg) for message in messages] == [
-            ("isik.E014", "ISIK_NOTIFICATIONS has keys it doesn't know: COLOR."),
+            ("isik.E014", "ISIK['DJANGO']['NOTIFICATIONS'] has keys it doesn't know: COLOR."),
             (
                 "isik.W004",
                 "parcel_shipped is declared, and retired - its trigger writes nothing. Remove its declaration.",
@@ -356,15 +381,16 @@ class TestTheReviewsChecks:
 
     @pytest.mark.parametrize("allowed", ["10.0.0.0/8", ["not a network"], 3])
     def test_private_targets_that_arent_networks(self, settings, allowed):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ALLOW_PRIVATE_TARGETS": allowed}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ALLOW_PRIVATE_TARGETS": allowed}
 
         assert setting_problems() == [
-            'ISIK_NOTIFICATIONS\' ALLOW_PRIVATE_TARGETS is True, False, or networks such as "10.1.0.0/16".'
+            "ISIK['DJANGO']['NOTIFICATIONS']['ALLOW_PRIVATE_TARGETS'] is True, False, or networks such as "
+            '"10.1.0.0/16".'
         ]
 
     @pytest.mark.parametrize("allowed", [True, False, ["10.1.0.0/16", "fd00::/8"], ()])
     def test_private_targets_that_are(self, settings, allowed):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ALLOW_PRIVATE_TARGETS": allowed}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ALLOW_PRIVATE_TARGETS": allowed}
 
         assert setting_problems() == []
 
@@ -382,7 +408,7 @@ class TestTheReviewsChecks:
         assert checks._template_problems() == []
 
     def test_a_sender_of_the_projects_needs_none(self, declaring, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "EMAIL_SENDER": print}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "EMAIL_SENDER": print}
         declaring(dataclasses.replace(shipped(), name="no_templates"))
 
         assert checks._template_problems() == []
@@ -509,7 +535,7 @@ class TestRequiringDeclaredKinds:
         assert checks._undeclared_problems() == []
 
     def test_on_a_bare_name_is_refused(self, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "REQUIRE_DECLARED_KINDS": True}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "REQUIRE_DECLARED_KINDS": True}
 
         assert checks._undeclared_problems() == [
             "parcel_routed is a bare name - declare it with declare_kind() in your kinds module, and pass that."
@@ -522,13 +548,14 @@ class TestEndpointOwners:
 
     def test_a_view_scoping_by_an_owner_the_channel_doesnt(self):
         assert checks.endpoint_owner_problems(self.URLS) == [
-            f"{view} scopes endpoints by 'url', and ISIK_NOTIFICATIONS' ENDPOINT_OWNER_FIELD is None - set it to "
+            f"{view} scopes endpoints by 'url', and ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] is None - "
+            f"set it to "
             "'url', or each endpoint is sent notices its owner isn't told of."
             for view in ("OwnedEndpointViewSet", "OwnedDeliveryViewSet")
         ]
 
     def test_the_same_owner_on_both(self, settings):
-        settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "ENDPOINT_OWNER_FIELD": "url"}
+        isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "ENDPOINT_OWNER_FIELD": "url"}
 
         assert checks.endpoint_owner_problems(self.URLS) == []
 
@@ -538,7 +565,7 @@ class TestEndpointOwners:
         assert checks.endpoint_owner_problems(self.URLS) == []
 
     def test_the_check_reports_them_over_its_urlconfs(self, monkeypatch, settings):
-        settings.ISIK_CHECKS = {Check.NOTIFICATIONS: {CheckOption.URLCONFS: [self.URLS]}}
+        isik_areas(settings).CHECKS = {Check.NOTIFICATIONS: {CheckOption.URLCONFS: [self.URLS]}}
         monkeypatch.setattr(checks, "endpoint_owner_problems", lambda urlconf: [f"scoped in {urlconf}"])
 
         messages = checks.notifications_can_work(app_configs=None)
@@ -550,8 +577,9 @@ class TestEndpointOwners:
 
 class TestSharedEndpoints:
     WARNING = (
-        "testapp.Parcel is keyed to the user model by sender, recipient, and ISIK_NOTIFICATIONS' "
-        "ENDPOINT_OWNER_FIELD is unset - so every endpoint is sent every user's notices of its kinds. Set it to "
+        "testapp.Parcel is keyed to the user model by sender, recipient, and "
+        "ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] is unset - so every endpoint is sent every user's "
+        "notices of its kinds. Set it to "
         "the owner's key, or say why they're the deployment's with ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
     )
 
@@ -571,13 +599,16 @@ class TestSharedEndpoints:
         ]
 
     def test_not_once_its_owner_is_named(self, keyed_to_users):
-        keyed_to_users.ISIK_NOTIFICATIONS = {**keyed_to_users.ISIK_NOTIFICATIONS, "ENDPOINT_OWNER_FIELD": "sender"}
+        isik_areas(keyed_to_users).NOTIFICATIONS = {
+            **isik_areas(keyed_to_users).NOTIFICATIONS,
+            "ENDPOINT_OWNER_FIELD": "sender",
+        }
 
         assert checks.shared_endpoint_warnings() == []
 
     def test_not_once_a_reason_says_theyre_shared(self, keyed_to_users):
-        keyed_to_users.ISIK_NOTIFICATIONS = {
-            **keyed_to_users.ISIK_NOTIFICATIONS,
+        isik_areas(keyed_to_users).NOTIFICATIONS = {
+            **isik_areas(keyed_to_users).NOTIFICATIONS,
             "ENDPOINTS_SHARED": SharedEndpoints(reason="sender is who registered it, an audit column, not an owner"),
         }
 
@@ -590,19 +621,23 @@ class TestSharedEndpoints:
         assert checks.shared_endpoint_warnings() == []
 
     def test_a_reason_is_typed(self, keyed_to_users):
-        keyed_to_users.ISIK_NOTIFICATIONS = {**keyed_to_users.ISIK_NOTIFICATIONS, "ENDPOINTS_SHARED": "they're ours"}
+        isik_areas(keyed_to_users).NOTIFICATIONS = {
+            **isik_areas(keyed_to_users).NOTIFICATIONS,
+            "ENDPOINTS_SHARED": "they're ours",
+        }
 
         assert checks.setting_problems() == [
-            "ISIK_NOTIFICATIONS.ENDPOINTS_SHARED takes a SharedEndpoints(reason=...), not a bare string."
+            "ISIK['DJANGO']['NOTIFICATIONS'].ENDPOINTS_SHARED takes a SharedEndpoints(reason=...), not a bare string."
         ]
 
 
 def test_a_channel_that_cant_be_loaded_is_found_at_startup(settings, monkeypatch):
     monkeypatch.setitem(registered, "fax", "tests.nowhere.FaxChannel")
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
 
     assert checks.setting_problems() == [
-        "ISIK_NOTIFICATIONS' CHANNELS turns on fax, which can't be loaded: No module named 'tests.nowhere'"
+        "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on fax, which can't be loaded: No module named "
+        "'tests.nowhere'"
     ]
 
 
@@ -610,6 +645,6 @@ def test_a_channel_registered_by_class_is_loaded_too(settings, monkeypatch):
     from isik.django.apps.notifications.channels.inbox import InboxChannel
 
     monkeypatch.setitem(registered, "fax", InboxChannel)
-    settings.ISIK_NOTIFICATIONS = {**settings.ISIK_NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
+    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
 
     assert checks.setting_problems() == []

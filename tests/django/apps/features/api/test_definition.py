@@ -13,6 +13,7 @@ from isik.django.apps.features import declarations, drf
 from isik.django.apps.features.declarations import Setting
 from isik.django.apps.features.operations import grant
 from isik.django.apps.idempotency.drf import NoIdempotencyKey
+from isik.django.conf import isik_areas
 from isik.django.drf.viewsets.preconditions import NoPrecondition
 
 
@@ -143,8 +144,8 @@ class TestHasFeature:
         grant(alice, "beta", source="manual")
         assert gate.has_permission(self.request_from(alice), None) is True
 
-        settings.ISIK_FEATURES = {
-            **settings.ISIK_FEATURES,
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
             "HOLDER": lambda request: bob if request.user == alice else None,
         }
         assert gate.has_permission(self.request_from(alice), None) is False

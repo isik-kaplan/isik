@@ -100,10 +100,21 @@ class TestLevels:
         assert requirement_of(LooseReason) is Requirement.STRICT
 
     def test_the_django_setting_and_a_call_over_it(self):
-        with override_settings(ISIK_EXEMPTIONS={"tests.foo": Requirement.OPTIONAL}):
+        with override_settings(ISIK={"EXEMPTIONS": {"tests.foo": Requirement.OPTIONAL}}):
             assert requirement_of(FooReason) is Requirement.OPTIONAL
             exemption_requirements({"tests.foo": Requirement.OFF})
             assert requirement_of(FooReason) is Requirement.OFF
+
+    def test_no_isik_setting_is_the_owners_level(self, settings):
+        del settings.ISIK
+
+        assert requirement_of(FooReason) is FooReason.requirement
+
+    @pytest.mark.parametrize("value", [["EXEMPTIONS"], "EXEMPTIONS"])
+    def test_an_isik_setting_that_isnt_a_dict_is_the_owners_level(self, settings, value):
+        settings.ISIK = value
+
+        assert requirement_of(FooReason) is FooReason.requirement
 
     @pytest.mark.parametrize("where", ["call", "setting"])
     def test_a_level_is_a_requirement_never_a_string(self, where):
@@ -115,9 +126,9 @@ class TestLevels:
                 "e.g. Requirement.OPTIONAL."
             )
         else:
-            with override_settings(ISIK_EXEMPTIONS={"tests.foo": "off"}), pytest.raises(TypeError) as raised:
+            with override_settings(ISIK={"EXEMPTIONS": {"tests.foo": "off"}}), pytest.raises(TypeError) as raised:
                 requirement_of(FooReason)
-            assert str(raised.value).startswith("ISIK_EXEMPTIONS gives 'tests.foo' the level 'off'")
+            assert str(raised.value).startswith("ISIK['EXEMPTIONS'] gives 'tests.foo' the level 'off'")
 
     def test_an_owner_gives_a_requirement(self):
         with pytest.raises(TypeError, match=r"^Bad's requirement must be a Requirement, not 'optional'\.$"):
@@ -264,7 +275,7 @@ class TestWithoutDjango:
 
         monkeypatch.setattr(LazySettings, "configured", property(lambda self: False))
 
-        with override_settings(ISIK_EXEMPTIONS={"tests.foo": Requirement.OFF}):
+        with override_settings(ISIK={"EXEMPTIONS": {"tests.foo": Requirement.OFF}}):
             assert requirement_of(FooReason) is Requirement.STRICT
 
 

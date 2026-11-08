@@ -168,7 +168,7 @@ def comments(
     `body` is plain text by default, validated by `comment_min_length`/`comment_max_length`. Pass
     `tiptap=True` to store a Tiptap/ProseMirror JSON document instead - see `comments.tiptap` for
     what that requires and how it's validated; `tiptap_schema_path` overrides
-    `FEEDBACK_COMMENTS_TIPTAP_SCHEMA_PATH` for this call only, in case one comment surface allows
+    `ISIK['DJANGO']['FEEDBACK']['COMMENTS_TIPTAP_SCHEMA_PATH']` for this call only, in case one comment surface allows
     a different node set than another.
 
     `votes()` isn't attached automatically - opt in with

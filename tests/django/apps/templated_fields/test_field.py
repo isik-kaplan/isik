@@ -1,7 +1,6 @@
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.test import override_settings
 
 from isik.django.apps.templated_fields.delimiters import TemplateDelimiters
 from isik.django.apps.templated_fields.field import (
@@ -11,6 +10,7 @@ from isik.django.apps.templated_fields.field import (
     TemplateTextField,
 )
 from isik.django.apps.templated_fields.policy import TemplatePolicy
+from isik.django.conf import override_isik
 from tests.testapp.models import TemplatedPost, default_text_context
 
 
@@ -135,7 +135,7 @@ class TestUndefinedResolution:
         assert field.undefined == "blank"
 
     def test_field_undefined_falls_back_to_the_setting(self):
-        with override_settings(TEMPLATE_FIELDS_UNDEFINED="blank"):
+        with override_isik(DJANGO={"TEMPLATED_FIELDS": {"UNDEFINED": "blank"}}):
             field = TemplateCharField(max_length=500, available=default_text_context)
             assert field.undefined == "blank"
 

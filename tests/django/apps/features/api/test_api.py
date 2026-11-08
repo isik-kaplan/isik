@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 from isik.django.apps.features.drf import defaults_etag
 from isik.django.apps.features.operations import force_setting, grant, revoke, set_setting
 from isik.django.apps.features.resolution import forget
+from isik.django.conf import isik_areas
 from tests.django.apps.features.api import urls
 from tests.testapp.models import UserOverrides
 
@@ -70,7 +71,7 @@ class TestFeatures:
         }
 
     def test_a_grants_source_shown_where_the_project_shows_it(self, alice, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SHOW_GRANT_SOURCE": True}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SHOW_GRANT_SOURCE": True}
         grant(alice, "webhooks", source="subscription", reference="inv-7")
 
         shown = {each["name"]: each for each in client_for(alice).get("/features/").json()}["webhooks"]["grants"][0]
@@ -78,8 +79,8 @@ class TestFeatures:
         assert (shown["source"], shown["reference"]) == ("subscription", "inv-7")
 
     def test_the_features_a_project_lets_a_holder_see(self, alice, settings):
-        settings.ISIK_FEATURES = {
-            **settings.ISIK_FEATURES,
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
             "FEATURES_VISIBLE": lambda request, holder: ["internal_flag"],
         }
 
@@ -153,15 +154,18 @@ class TestListingSettings:
         )
 
     def test_the_feature_it_needs_only_where_the_holder_may_see_it(self, alice, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "FEATURES_VISIBLE": lambda request, holder: []}
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
+            "FEATURES_VISIBLE": lambda request, holder: [],
+        }
 
         listed, _etag = settings_of(client_for(alice))
 
         assert listed["max_endpoints"]["requires_feature"] is None
 
     def test_the_settings_a_project_lets_a_holder_see_and_change(self, alice, settings):
-        settings.ISIK_FEATURES = {
-            **settings.ISIK_FEATURES,
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
             "SETTINGS_VISIBLE": lambda request, holder: ["theme", "staff_note"],
             "MAY_CHANGE_SETTING": lambda request, holder, name: False,
         }
@@ -340,7 +344,7 @@ class TestTheProjectsHooks:
             asked.append(request.user)
             return bob
 
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "HOLDER": holder}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDER": holder}
         grant(bob, "webhooks", source="manual")
 
         listed = {each["name"]: each["held"] for each in client_for(alice).get("/features/").json()}
@@ -360,8 +364,8 @@ class TestTheProjectsHooks:
             asked.append(("may_change", request.user, holder, name))
             return True
 
-        settings.ISIK_FEATURES = {
-            **settings.ISIK_FEATURES,
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
             "FEATURES_VISIBLE": visible,
             "SETTINGS_VISIBLE": visible,
             "MAY_CHANGE_SETTING": may_change,

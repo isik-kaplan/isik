@@ -41,6 +41,7 @@ from isik.django.apps.features.resolution import (
     has_feature,
     held_features,
 )
+from isik.django.conf import isik_areas
 from tests.testapp.models import EmailUser, UserOverrides
 
 
@@ -616,7 +617,7 @@ class TestTheSweep:
 class TestTheNextBoundarySweep:
     @pytest.fixture(autouse=True)
     def next_boundary(self, settings):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "next_boundary"}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": "next_boundary"}
 
     @pytest.fixture
     def scheduled(self, monkeypatch):
@@ -632,7 +633,7 @@ class TestTheNextBoundarySweep:
         return now
 
     def test_with_interval_nothing_is_scheduled(self, settings, alice, scheduled, django_capture_on_commit_callbacks):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP": "interval"}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": "interval"}
         with django_capture_on_commit_callbacks(execute=True):
             grant(alice, "beta", source="trial", starts_at=timezone.now() + timedelta(minutes=5))
 
@@ -685,7 +686,7 @@ class TestTheNextBoundarySweep:
         assert schedule_next_sweep(now - timedelta(minutes=10)) is None
 
     def test_no_further_than_the_lookahead(self, settings, alice, now, scheduled):
-        settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "SWEEP_LOOKAHEAD": timedelta(minutes=15)}
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP_LOOKAHEAD": timedelta(minutes=15)}
         grant(alice, "beta", source="trial", starts_at=now + timedelta(days=30))
 
         assert schedule_next_sweep(now) == now + timedelta(minutes=15)
@@ -928,7 +929,7 @@ def test_grants_and_overrides_are_read_where_they_live(alice, settings, fresh):
         def __exit__(self, *exc):
             return False
 
-    settings.ISIK_FEATURES = {**settings.ISIK_FEATURES, "IN_HOLDER_SCHEMA": lambda: Recorded()}
+    isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "IN_HOLDER_SCHEMA": lambda: Recorded()}
 
     effective(fresh(alice), "theme")
 

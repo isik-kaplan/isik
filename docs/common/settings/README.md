@@ -146,7 +146,7 @@ Where a project makes a settings rule `Requirement.OPTIONAL` (see
 [exemptions](../utils/exemptions.md#how-much-a-rule-asks)), `False` stands for the exemption:
 
 ```python
-ISIK_EXEMPTIONS = {"isik.settings.question": Requirement.OPTIONAL, "isik.settings.environment-variable": Requirement.OPTIONAL}
+ISIK = {"EXEMPTIONS": {"isik.settings.question": Requirement.OPTIONAL, "isik.settings.environment-variable": Requirement.OPTIONAL}}
 
 verbose = Setting(bool, "Show every file", default=False, question=False)   # never asked
 class Server(Settings, env=False): ...                                     # no variables at all

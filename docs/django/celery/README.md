@@ -78,4 +78,4 @@ send_welcome.delay(user.pk)   # inside the request's transaction: sent on commit
 - The cause is read when the task is dispatched, not when the message is sent.
 - Outside any transaction it's sent at once, as `transaction.on_commit` runs its callback at once.
 - On by default. `dispatch_on_commit = False` on a task sends it at once;
-  `HISTORY_TASK_DISPATCH_ON_COMMIT = False` does for every task that leaves it as `None`.
+  `ISIK["DJANGO"]["HISTORY"]["TASK_DISPATCH_ON_COMMIT"] = False` does for every task that leaves it as `None`.

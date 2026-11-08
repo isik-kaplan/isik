@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Article',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('title', models.CharField(max_length=100)),
@@ -56,7 +56,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('body', models.JSONField(db_comment='The comment, as a Tiptap document.', help_text='The comment, as a Tiptap document.', validators=[isik.django.apps.feedback.comments.tiptap.TiptapValidator(max_length=280, min_length=1, schema_path=None)])),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -65,7 +65,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Box',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -91,7 +91,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='BoxItem',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=50)),
             ],
         ),
@@ -101,7 +101,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=50)),
             ],
             options={
@@ -122,7 +122,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Comment',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('body', models.CharField(max_length=200)),
@@ -132,7 +132,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ContextTrackedWidget',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -146,7 +146,7 @@ class Migration(migrations.Migration):
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
                 ('actor_schema', models.TextField(null=True)),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -159,14 +159,14 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ExemptedNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(db_comment=tests.testapp.exemptions.NoComment(reason='a scratch column the tests write and read straight back'), help_text=tests.testapp.exemptions.NoHelpText(reason="the model's own name already says what the text is"), max_length=50)),
             ],
         ),
         migrations.CreateModel(
             name='ForceableSubscription',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
                 ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.')),
                 ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.')),
@@ -185,7 +185,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
                 ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.')),
                 ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.')),
@@ -202,7 +202,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ModifiedColumnNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('text', models.CharField(blank=True, max_length=50)),
                 ('updated_at', models.DateTimeField(db_column='Modified', db_default=django.db.models.functions.datetime.Now(), editable=False)),
@@ -211,7 +211,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='MultiVoteHost',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
             ],
@@ -223,7 +223,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -235,7 +235,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -244,7 +244,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Note',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('body', models.CharField(max_length=200)),
@@ -255,7 +255,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Parcel',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('status', models.CharField(default='packed', max_length=20)),
@@ -266,7 +266,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Post',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('title', models.CharField(max_length=100)),
@@ -278,7 +278,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -291,7 +291,7 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('body', models.TextField(db_comment="The comment's text.", help_text="The comment's text.", validators=[django.core.validators.MinLengthValidator(1)])),
                 ('edited_at', models.DateTimeField(blank=True, db_comment='When its author last edited it - null if never.', help_text='When its author last edited it - empty if never.', null=True)),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -303,7 +303,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -314,7 +314,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -326,7 +326,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -335,7 +335,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostNotesNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('body', models.TextField(db_comment="The note's text.", help_text="The note's text.")),
@@ -350,7 +350,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -362,7 +362,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -374,7 +374,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
                 'abstract': False,
@@ -383,7 +383,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Recorder',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -394,7 +394,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='RevisionedNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(blank=True, max_length=50)),
                 ('revision', models.BigIntegerField(default=1)),
             ],
@@ -402,7 +402,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Roster',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -412,14 +412,14 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='SharedTag',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
             ],
         ),
         migrations.CreateModel(
             name='Shelf',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -432,7 +432,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -445,7 +445,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ShelfItem',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=50)),
                 ('title', models.CharField(blank=True, max_length=50)),
                 ('secret', models.CharField(blank=True, max_length=50)),
@@ -457,7 +457,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=50)),
                 ('title', models.CharField(blank=True, max_length=50)),
                 ('secret', models.CharField(blank=True, max_length=50)),
@@ -470,7 +470,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ShelfLabel',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
         ),
         migrations.CreateModel(
@@ -479,7 +479,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
             ],
             options={
                 'db_table': 'testapp_shelflabel_event',
@@ -489,7 +489,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Site',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -499,7 +499,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='SiteDomain',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('domain', models.CharField(max_length=100)),
@@ -511,7 +511,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Squad',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('version', models.PositiveBigIntegerField(db_comment='How many times the row has changed. A trigger adds one whenever it does.', db_default=1, editable=False, help_text='How many times the row has changed, counting the write that created it.', verbose_name='Version')),
@@ -522,14 +522,14 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='SquadPost',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(max_length=50)),
             ],
         ),
         migrations.CreateModel(
             name='StuckNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(blank=True, max_length=50)),
                 ('revision', models.BigIntegerField(default=1)),
             ],
@@ -537,7 +537,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Tag',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('label', models.CharField(max_length=100)),
@@ -547,7 +547,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TaggedWidget',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -557,7 +557,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Team',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=50)),
@@ -567,7 +567,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TeamBadge',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('title', models.CharField(max_length=50)),
@@ -577,28 +577,28 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TeamCharter',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(max_length=50)),
             ],
         ),
         migrations.CreateModel(
             name='TeamLabel',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('weight', models.IntegerField()),
             ],
         ),
         migrations.CreateModel(
             name='TeamNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('text', models.CharField(max_length=50)),
             ],
         ),
         migrations.CreateModel(
             name='TemplatedPost',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('title', models.CharField(max_length=100)),
@@ -610,7 +610,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Thread',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('title', models.CharField(max_length=100)),
@@ -620,7 +620,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ThreadBookmark',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
             ],
@@ -629,7 +629,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ThreadComment',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('body', models.TextField()),
@@ -640,7 +640,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ThreadNote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('body', models.CharField(max_length=500)),
@@ -650,13 +650,13 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ThreadTopic',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
         ),
         migrations.CreateModel(
             name='ThreadVote',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')])),
@@ -675,7 +675,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='UserOverrides',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('max_endpoints', models.PositiveIntegerField(blank=True, db_comment="The holder's own choice, or none.", default=None, help_text="The holder's own choice, or none.", null=True, validators=[django.core.validators.MaxValueValidator(50)])),
@@ -723,7 +723,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('max_endpoints', models.PositiveIntegerField(blank=True, db_comment="The holder's own choice, or none.", default=None, help_text="The holder's own choice, or none.", null=True, validators=[django.core.validators.MaxValueValidator(50)])),
@@ -777,7 +777,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='VersionedWidget',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('version', models.PositiveBigIntegerField(db_comment='How many times the row has changed. A trigger adds one whenever it does.', db_default=1, editable=False, help_text='How many times the row has changed, counting the write that created it.', verbose_name='Version')),
@@ -788,7 +788,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Widget',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -802,7 +802,7 @@ class Migration(migrations.Migration):
                 ('pgh_id', models.AutoField(primary_key=True, serialize=False)),
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('name', models.CharField(max_length=100)),
@@ -816,7 +816,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='WidgetProfile',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('bio', models.CharField(blank=True, default='', max_length=200)),
@@ -826,7 +826,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='WidgetSettings',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(db_comment="When the row was created, by the database's clock. A trigger refuses any change to it.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row was created, by the database's clock. Never changes.", verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(db_comment="When the row last changed, by the database's clock. Stamped by a trigger whenever the row changes.", db_default=django.db.models.functions.datetime.Now(), db_index=True, editable=False, help_text="When the row last changed, by the database's clock.", verbose_name='Updated At')),
                 ('bio', models.CharField(blank=True, default='', max_length=200)),
@@ -836,7 +836,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='WidgetTag',
             fields=[
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('note', models.CharField(blank=True, max_length=100)),
             ],
         ),
@@ -852,7 +852,7 @@ class Migration(migrations.Migration):
                 ('is_staff', models.BooleanField(default=False, help_text='Designates whether the user can log into this admin site.', verbose_name='staff status')),
                 ('is_active', models.BooleanField(default=True, help_text='Designates whether this user should be treated as active. Unselect this instead of deleting accounts.', verbose_name='active')),
                 ('date_joined', models.DateTimeField(default=django.utils.timezone.now, verbose_name='date joined')),
-                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
                 ('email', models.EmailField(max_length=254, unique=True)),
                 ('groups', models.ManyToManyField(blank=True, help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.', related_name='user_set', related_query_name='user', to='auth.group', verbose_name='groups')),
                 ('manager', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reports', to=settings.AUTH_USER_MODEL)),

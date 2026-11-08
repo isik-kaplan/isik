@@ -1,9 +1,9 @@
 import dataclasses
 
 import pytest
-from django.test import override_settings
 
 from isik.django.apps.templated_fields.policy import TemplateFeature, TemplatePolicy, resolve_policy
+from isik.django.conf import override_isik
 
 
 def test_variables_only_has_no_control_flow_features():
@@ -63,5 +63,5 @@ def test_resolve_policy_falls_back_to_setting_then_standard():
     assert resolve_policy(None) == TemplatePolicy.STANDARD()
 
     custom = TemplatePolicy.VARIABLES_ONLY()
-    with override_settings(TEMPLATE_FIELDS_POLICY=custom):
+    with override_isik(DJANGO={"TEMPLATED_FIELDS": {"POLICY": custom}}):
         assert resolve_policy(None) is custom

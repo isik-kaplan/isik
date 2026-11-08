@@ -6,6 +6,7 @@ from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 
 from isik._internal.translation import gettext as _
+from isik.django.conf import django_setting
 
 
 class CookieORHeaderSessionMiddleware(SessionMiddleware):
@@ -14,14 +15,14 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
     cookie or a header, useful when the same API is consumed by both browsers and
     non-browser clients. Raises if a request supplies both and they disagree.
 
-    Requires settings.SESSION_HEADER_NAME to be set to the header name to read - raises
+    Requires ISIK['DJANGO']['SESSIONS']['HEADER_NAME'] to be set to the header name to read - raises
     ImproperlyConfigured at middleware init time (not on the first request) if it's missing.
     """
 
     def __init__(self, get_response):
-        if not hasattr(settings, "SESSION_HEADER_NAME"):
+        if not django_setting("SESSIONS", "HEADER_NAME"):
             raise ImproperlyConfigured(
-                _("%(middleware)s requires settings.SESSION_HEADER_NAME to be set.")
+                _("%(middleware)s requires ISIK['DJANGO']['SESSIONS']['HEADER_NAME'] to be set.")
                 % {"middleware": self.__class__.__name__}
             )
         super().__init__(get_response)
@@ -33,14 +34,15 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
     @staticmethod
     def get_session_key(request):
         cookie_session_key = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
-        header_session_key = request.headers.get(settings.SESSION_HEADER_NAME)
+        header_session_key = request.headers.get(django_setting("SESSIONS", "HEADER_NAME"))
         if cookie_session_key and header_session_key:
             if cookie_session_key != header_session_key:
                 raise SuspiciousOperation(_("Session key mismatch"))
         return cookie_session_key or header_session_key
 
 
-# Where DeadSessionCookieMiddleware says the cookie was dead, unless DEAD_SESSION_HEADER names another.
+# Where DeadSessionCookieMiddleware says the cookie was dead, unless ISIK['DJANGO']['SESSIONS']['DEAD_SESSION_HEADER']
+# names another.
 DEAD_SESSION_HEADER = "Session-Expired"
 
 
@@ -60,7 +62,8 @@ class DeadSessionCookieMiddleware:
     """
     A 401 or 403 to a request that sent a session cookie, still isn't signed in, and whose session is no
     longer in the store means the cookie is dead - expired, signed out elsewhere, its session rotated
-    away. The response deletes it and says so in a header (`DEAD_SESSION_HEADER`, `Session-Expired`
+    away. The response deletes it and says so in a header (`ISIK['DJANGO']['SESSIONS']['DEAD_SESSION_HEADER']`,
+    `Session-Expired`
     unless set), so a browser stops sending it and a client can tell "sign in again" from "you may not".
 
     A session that still exists is left alone, signed in or not: a sign-in halfway through (a second
@@ -89,5 +92,5 @@ class DeadSessionCookieMiddleware:
                 domain=settings.SESSION_COOKIE_DOMAIN,
                 samesite=settings.SESSION_COOKIE_SAMESITE,
             )
-            response[getattr(settings, "DEAD_SESSION_HEADER", DEAD_SESSION_HEADER)] = "true"
+            response[django_setting("SESSIONS", "DEAD_SESSION_HEADER", DEAD_SESSION_HEADER)] = "true"
         return response

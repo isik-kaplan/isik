@@ -190,7 +190,7 @@ def test_the_base_models_fields_say_what_they_hold():
     assert described(Widget, "id", "created_at", "updated_at") == {
         "id": (
             "The row's identifier, assigned when it's created.",
-            "The row's identifier, assigned when it's created - ISIK_PRIMARY_KEY's.",
+            "The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.",
         ),
         "created_at": (
             "When the row was created, by the database's clock. Never changes.",

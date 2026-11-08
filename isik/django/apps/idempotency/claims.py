@@ -21,6 +21,7 @@ from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import new_primary_key
 from isik.django.apps.idempotency.exceptions import IdempotencyKeyInFlight, IdempotentReplayGone
+from isik.django.conf import django_setting
 
 
 # The app each shipped claim lives in, and the model it is.
@@ -171,10 +172,10 @@ class JSONBodyCodec:
 
 def configured_body_codec():
     """
-    `IDEMPOTENCY_BODY_CODEC` - a codec, a codec class, or a dotted path to either - else
+    `ISIK['DJANGO']['IDEMPOTENCY']['BODY_CODEC']` - a codec, a codec class, or a dotted path to either - else
     `JSONBodyCodec`. A class is instantiated with no arguments.
     """
-    codec = getattr(settings, "IDEMPOTENCY_BODY_CODEC", None) or JSONBodyCodec
+    codec = django_setting("IDEMPOTENCY", "BODY_CODEC") or JSONBodyCodec
     if isinstance(codec, str):
         codec = import_string(codec)
     return codec() if isinstance(codec, type) else codec
@@ -212,15 +213,18 @@ class AbstractIdempotencyClaimWithBody(AbstractBaseIdempotencyClaim):
 def get_claim_model(model=None):
     """
     The claim model to use: `model` (a model or an `"app_label.Model"` string), else
-    `IDEMPOTENCY_CLAIM_MODEL`, else whichever of the two shipped claim apps is installed. Raises
+    `ISIK['DJANGO']['IDEMPOTENCY']['CLAIM_MODEL']`, else whichever of the two shipped claim apps is installed. Raises
     `ImproperlyConfigured` when that leaves none, or both.
     """
-    model = model or getattr(settings, "IDEMPOTENCY_CLAIM_MODEL", None)
+    model = model or django_setting("IDEMPOTENCY", "CLAIM_MODEL")
     if model is None:
         installed = [claim for app, claim in CLAIM_APPS.items() if apps.is_installed(app)]
         if len(installed) != 1:
             raise ImproperlyConfigured(
-                _("Install exactly one of %(apps)s, or set IDEMPOTENCY_CLAIM_MODEL to the claim model to use.")
+                _(
+                    "Install exactly one of %(apps)s, or set ISIK['DJANGO']['IDEMPOTENCY']['CLAIM_MODEL'] to the "
+                    "claim model to use."
+                )
                 % {"apps": " and ".join(CLAIM_APPS)}
             )
         model = installed[0]
