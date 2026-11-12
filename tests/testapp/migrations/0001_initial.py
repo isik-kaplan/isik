@@ -53,8 +53,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ArticleCommentsComment',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('body', models.JSONField(db_comment='The comment, as a Tiptap document.', help_text='The comment, as a Tiptap document.', validators=[isik.django.apps.feedback.comments.tiptap.TiptapValidator(max_length=280, min_length=1, schema_path=None)])),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -167,13 +167,13 @@ class Migration(migrations.Migration):
             name='ForceableSubscription',
             fields=[
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
-                ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
-                ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.')),
-                ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.')),
-                ('forced', models.BooleanField(db_comment='Whether the subscription is forced - forced_enabled then decides, whatever enabled says.', default=False, help_text="Whether staff forced it, so the person can't change it.")),
-                ('forced_enabled', models.BooleanField(blank=True, db_comment='The forced value while forced, else null.', help_text="What it's forced to, while it's forced.", null=True)),
-                ('forced_source', models.CharField(blank=True, db_comment='The declared force source that forced it while forced, else empty.', default='', help_text="The force source that forced it, while it's forced.", max_length=100)),
-                ('forced_reason', models.TextField(blank=True, db_comment='Why it was forced, while forced, else empty.', default='', help_text="Why it was forced, while it's forced.")),
+                ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True, verbose_name='variant')),
+                ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.', verbose_name='enabled')),
+                ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.', verbose_name='chosen')),
+                ('forced', models.BooleanField(db_comment='Whether the subscription is forced - forced_enabled then decides, whatever enabled says.', default=False, help_text="Whether staff forced it, so the person can't change it.", verbose_name='forced')),
+                ('forced_enabled', models.BooleanField(blank=True, db_comment='The forced value while forced, else null.', help_text="What it's forced to, while it's forced.", null=True, verbose_name='forced enabled')),
+                ('forced_source', models.CharField(blank=True, db_comment='The declared force source that forced it while forced, else empty.', default='', help_text="The force source that forced it, while it's forced.", max_length=100, verbose_name='forced source')),
+                ('forced_reason', models.TextField(blank=True, db_comment='Why it was forced, while forced, else empty.', default='', help_text="Why it was forced, while it's forced.", verbose_name='forced reason')),
             ],
             options={
                 'abstract': False,
@@ -186,13 +186,13 @@ class Migration(migrations.Migration):
                 ('pgh_created_at', models.DateTimeField(auto_now_add=True)),
                 ('pgh_label', models.TextField(help_text='The event label.')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", serialize=False, verbose_name='ID')),
-                ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True)),
-                ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.')),
-                ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.')),
-                ('forced', models.BooleanField(db_comment='Whether the subscription is forced - forced_enabled then decides, whatever enabled says.', default=False, help_text="Whether staff forced it, so the person can't change it.")),
-                ('forced_enabled', models.BooleanField(blank=True, db_comment='The forced value while forced, else null.', help_text="What it's forced to, while it's forced.", null=True)),
-                ('forced_source', models.CharField(blank=True, db_comment='The declared force source that forced it while forced, else empty.', default='', help_text="The force source that forced it, while it's forced.", max_length=100)),
-                ('forced_reason', models.TextField(blank=True, db_comment='Why it was forced, while forced, else empty.', default='', help_text="Why it was forced, while it's forced.")),
+                ('variant', models.CharField(blank=True, db_comment="The kind's declared variant this is for, or null for every variant.", help_text="The kind's one variant this is for, or none for every one.", max_length=100, null=True, verbose_name='variant')),
+                ('enabled', models.BooleanField(db_comment='Whether the user gets the kind (and variant).', default=True, help_text='Whether the user gets the kind.', verbose_name='enabled')),
+                ('chosen', models.BooleanField(db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).", default=True, help_text='Whether the person chose this themselves, or only staff forced it.', verbose_name='chosen')),
+                ('forced', models.BooleanField(db_comment='Whether the subscription is forced - forced_enabled then decides, whatever enabled says.', default=False, help_text="Whether staff forced it, so the person can't change it.", verbose_name='forced')),
+                ('forced_enabled', models.BooleanField(blank=True, db_comment='The forced value while forced, else null.', help_text="What it's forced to, while it's forced.", null=True, verbose_name='forced enabled')),
+                ('forced_source', models.CharField(blank=True, db_comment='The declared force source that forced it while forced, else empty.', default='', help_text="The force source that forced it, while it's forced.", max_length=100, verbose_name='forced source')),
+                ('forced_reason', models.TextField(blank=True, db_comment='Why it was forced, while forced, else empty.', default='', help_text="Why it was forced, while it's forced.", verbose_name='forced reason')),
             ],
             options={
                 'db_table': 'testapp_forceablesubscription_event',
@@ -220,8 +220,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='MultiVoteHostHelpfulnessVote',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -232,8 +232,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='MultiVoteHostUpvotesVote',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -276,8 +276,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostBookmarksBookmark',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
@@ -287,8 +287,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostCommentsComment',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('body', models.TextField(db_comment="The comment's text.", help_text="The comment's text.", validators=[django.core.validators.MinLengthValidator(1)])),
                 ('edited_at', models.DateTimeField(blank=True, db_comment='When its author last edited it - null if never.', help_text='When its author last edited it - empty if never.', null=True)),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
@@ -300,8 +300,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostCommentsCommentVotesVote',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -312,8 +312,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostLabelsObjectTag',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
@@ -323,8 +323,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostLabelsTag',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -348,8 +348,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostTopicsObjectTag',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
             options={
@@ -359,8 +359,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostTopicsTag',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -371,8 +371,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PostVotesVote',
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.')),
-                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.')),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_comment='When the row was created.', help_text='When the row was created.', verbose_name='created at')),
+                ('updated_at', models.DateTimeField(auto_now=True, db_comment='When the row last changed.', help_text='When the row last changed.', verbose_name='updated at')),
                 ('value', models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')], db_comment='1 for an upvote, -1 for a downvote.', help_text='1 for an upvote, -1 for a downvote.')),
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -413,7 +413,7 @@ class Migration(migrations.Migration):
             name='SharedTag',
             fields=[
                 ('id', models.UUIDField(db_comment="The row's identifier, assigned when it's created - ISIK['DJANGO']['PRIMARY_KEY']'s.", db_index=True, default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The row's identifier, assigned when it's created.", primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')])),
+                ('name', models.CharField(db_comment="The tag's name, unique in its pool.", help_text="The tag's name, unique in its pool.", max_length=100, unique=True, validators=[django.core.validators.RegexValidator('^[a-zA-Z0-9_.-]+$', 'Tags can only contain letters, numbers, ., - and _.')], verbose_name='name')),
             ],
         ),
         migrations.CreateModel(

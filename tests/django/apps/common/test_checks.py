@@ -12,10 +12,11 @@ from isik.django.apps.common import checks, exemptions
 from isik.django.apps.common.checks import (
     Check,
     CheckOption,
+    Name,
     Severity,
     every_validator_says_whether_it_can_hold_at_the_column,
 )
-from isik.django.apps.common.db import conditions, constraints, documentation
+from isik.django.apps.common.db import conditions, constraints, documentation, names
 from isik.django.apps.common.db import history as db_history
 from isik.django.apps.common.db import models as db_models
 from isik.django.apps.common.db import triggers as db_triggers
@@ -67,6 +68,7 @@ class TestTheSettings:
             CheckOption.URLCONFS: None,
             CheckOption.APPS: None,
             CheckOption.INHERITED_FROM_LIBRARIES: True,
+            CheckOption.NAMES: frozenset(Name),
         }
 
     def test_a_checks_entry_overrides_the_defaults(self, settings):
@@ -158,6 +160,16 @@ class TestTheSettings:
             "urlconfs",
             "apps",
             "inherited_from_libraries",
+            "names",
+        ]
+        assert [name.value for name in Name] == [
+            "table",
+            "index",
+            "related_name",
+            "related_query_name",
+            "through_table",
+            "through_model",
+            "verbose_name",
         ]
         assert [severity.value for severity in Severity] == ["error", "warning"]
 
@@ -233,7 +245,7 @@ class TestTheSettingsCheck:
             "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] names 'urlconfs' as a string - write CheckOption.URLCONFS.",
             "ISIK['DJANGO']['CHECKS'][Check.IDEMPOTENCY] names 3, which isn't a CheckOption: CheckOption.ENABLED, "
             "CheckOption.SEVERITY, CheckOption.URLCONFS, CheckOption.APPS, "
-            "CheckOption.INHERITED_FROM_LIBRARIES.",
+            "CheckOption.INHERITED_FROM_LIBRARIES, CheckOption.NAMES.",
         ]
 
     def test_an_option_the_check_doesnt_take(self, settings):
@@ -763,18 +775,18 @@ class TestIdentifiers:
 
 class TestDeclaredNames:
     @staticmethod
-    def problems(*models):
-        return constraints.declared_name_problems([types.SimpleNamespace(get_models=lambda: list(models))])
+    def problems(*models, **options):
+        return names.declared_name_problems([types.SimpleNamespace(get_models=lambda: list(models))], **options)
 
     @staticmethod
-    def build(name, meta, **fields):
+    def build(name, meta, bases=None, **fields):
         from django.db import models
         from django.test.utils import isolate_apps
 
         with isolate_apps("tests.testapp"):
             return type(
                 name,
-                (models.Model,),
+                bases or (models.Model,),
                 {
                     "__module__": "tests.testapp.models",
                     "Meta": type("Meta", (), {"app_label": "testapp", **meta}),
@@ -782,20 +794,31 @@ class TestDeclaredNames:
                 },
             )
 
+    NAMED = {"db_table": "named", "verbose_name": "named", "verbose_name_plural": "named"}
+
     def test_a_table_django_named(self):
         model = self.build("Plain", {})
 
-        assert self.problems(model) == [
+        assert self.problems(model, names={Name.TABLE}) == [
             "testapp.Plain's table is named by Django, testapp_plain - declare its Meta.db_table."
         ]
 
-    def test_a_declared_table_and_index(self):
+    def test_a_model_declaring_every_name(self):
         from django.db import models
 
+        target = self.build("Target", self.NAMED)
         model = self.build(
             "Named",
-            {"db_table": "named", "indexes": [models.Index(fields=["size"], name="named_size")]},
-            size=models.IntegerField(),
+            {**self.NAMED, "indexes": [models.Index(fields=["size"], name="named_size")]},
+            size=models.IntegerField(verbose_name="size"),
+            target=models.ForeignKey(
+                target,
+                on_delete=models.CASCADE,
+                related_name="named",
+                related_query_name="named",
+                verbose_name="target",
+            ),
+            hidden=models.ForeignKey(target, on_delete=models.CASCADE, related_name="+", verbose_name="hidden"),
         )
 
         assert self.problems(model) == []
@@ -807,38 +830,254 @@ class TestDeclaredNames:
             "Sized", {"db_table": "sized", "indexes": [models.Index(fields=["size"])]}, size=models.IntegerField()
         )
 
-        assert self.problems(model) == [
+        assert self.problems(model, names={Name.INDEX}) == [
             f"testapp.Sized's index {model._meta.indexes[0].name} is named by Django - give it a name."
         ]
 
-    def test_a_table_migrate_never_makes_asks_nothing(self):
+    def test_a_table_migrate_never_makes_asks_for_no_table(self):
         unmanaged = self.build("Elsewhere", {"managed": False})
         proxy = types.SimpleNamespace(_meta=types.SimpleNamespace(managed=True, proxy=True))
 
-        assert self.problems(unmanaged, proxy, self.build("Plain", {})) == [
+        assert self.problems(unmanaged, proxy, self.build("Plain", {}), names={Name.TABLE}) == [
             "testapp.Plain's table is named by Django, testapp_plain - declare its Meta.db_table."
         ]
 
+    def test_relations_naming_nothing(self):
+        from django.db import models
+
+        target = self.build("Target", self.NAMED)
+        model = self.build(
+            "Pointing",
+            self.NAMED,
+            target=models.ForeignKey(target, on_delete=models.CASCADE, verbose_name="target"),
+            one=models.OneToOneField(target, on_delete=models.CASCADE, related_name="one", verbose_name="one"),
+        )
+
+        assert self.problems(model, names={Name.RELATED_NAME, Name.RELATED_QUERY_NAME}) == [
+            "testapp.Pointing.target's related_name is Django's, pointing_set - declare it, \"+\" for no reverse "
+            "accessor.",
+            "testapp.Pointing.target's related_query_name is Django's, pointing - declare it.",
+            "testapp.Pointing.one's related_query_name is Django's, one - declare it.",
+        ]
+
+    def test_a_relation_with_no_reverse_accessor_names_no_query_name(self):
+        from django.db import models
+
+        target = self.build("Target", self.NAMED)
+        model = self.build(
+            "Hiding", self.NAMED, target=models.ForeignKey(target, on_delete=models.CASCADE, related_name="+")
+        )
+
+        assert self.problems(model, names={Name.RELATED_NAME, Name.RELATED_QUERY_NAME}) == []
+
+    def test_default_related_name_names_each_relation(self):
+        from django.db import models
+
+        target = self.build("Target", self.NAMED)
+        model = self.build(
+            "Defaulting",
+            {**self.NAMED, "default_related_name": "defaultings"},
+            target=models.ForeignKey(target, on_delete=models.CASCADE),
+        )
+
+        assert self.problems(model, names={Name.RELATED_NAME}) == []
+        assert self.problems(model, names={Name.RELATED_QUERY_NAME}) == [
+            "testapp.Defaulting.target's related_query_name is Django's, defaultings - declare it."
+        ]
+
+    def test_a_many_to_many_through_a_model_django_makes(self):
+        from django.db import models
+
+        target = self.build("Target", self.NAMED)
+        model = self.build(
+            "Tagged",
+            self.NAMED,
+            tags=models.ManyToManyField(target, related_name="tagged", related_query_name="tagged"),
+            named=models.ManyToManyField(target, related_name="+", db_table="tagged_named", verbose_name="named"),
+        )
+
+        assert self.problems(model, names={Name.THROUGH_TABLE, Name.THROUGH_MODEL}) == [
+            "testapp.Tagged.tags's join table is named by Django, named_tags - declare its db_table.",
+            "testapp.Tagged.tags goes through Tagged_tags, a model Django makes - declare its through model.",
+            "testapp.Tagged.named goes through Tagged_named, a model Django makes - declare its through model.",
+        ]
+
+    def test_a_join_table_alone(self):
+        from django.db import models
+
+        target = self.build("Target", self.NAMED)
+        model = self.build("Listed", self.NAMED, items=models.ManyToManyField(target, related_name="+"))
+
+        assert self.problems(model, names={Name.THROUGH_TABLE}) == [
+            "testapp.Listed.items's join table is named by Django, named_items - declare its db_table."
+        ]
+        assert len(self.problems(model, names={Name.THROUGH_MODEL})) == 1
+
+    def test_a_many_to_many_through_a_declared_model(self):
+        from django.db import models
+        from django.test.utils import isolate_apps
+
+        with isolate_apps("tests.testapp"):
+
+            class Target(models.Model):
+                class Meta:
+                    app_label = "testapp"
+
+            class Joined(models.Model):
+                targets = models.ManyToManyField(Target, through="Join", related_name="+")
+
+                class Meta:
+                    app_label = "testapp"
+
+            class Join(models.Model):
+                joined = models.ForeignKey(Joined, on_delete=models.CASCADE)
+                target = models.ForeignKey(Target, on_delete=models.CASCADE)
+
+                class Meta:
+                    app_label = "testapp"
+
+            assert self.problems(Joined, names={Name.THROUGH_TABLE, Name.THROUGH_MODEL}) == []
+
+    def test_verbose_names_django_made(self):
+        from django.db import models
+
+        model = self.build("OrderLine", {"db_table": "order_line"}, unit_price=models.IntegerField())
+
+        assert self.problems(model, names={Name.VERBOSE_NAME}) == [
+            "testapp.OrderLine's verbose_name is Django's, 'order line' - declare its Meta.verbose_name.",
+            "testapp.OrderLine's verbose_name_plural is Django's, 'order lines' - declare its "
+            "Meta.verbose_name_plural.",
+            "testapp.OrderLine.unit_price's verbose_name is Django's, 'unit price' - declare it.",
+        ]
+
+    def test_a_verbose_name_given_first(self):
+        from django.db import models
+
+        model = self.build("Priced", self.NAMED, price=models.IntegerField("price"))
+
+        assert self.problems(model, names={Name.VERBOSE_NAME}) == []
+
+    def test_only_the_names_asked(self):
+        from django.db import models
+
+        model = self.build("Plain", {}, size=models.IntegerField())
+
+        assert self.problems(model, names=set()) == []
+        assert len(self.problems(model)) == 4
+
+    def test_models_written_elsewhere_are_held_to_tables_and_indexes_alone(self):
+        from django.db import models
+
+        generated = self.build("Generated", {"db_table": "generated"}, size=models.IntegerField())
+        generated.isik_generated = object()
+
+        assert self.problems(generated) == []
+
+    def test_a_field_django_adds_asks_nothing(self):
+        model = self.build("Bare", self.NAMED)
+
+        assert self.problems(model) == []
+
+    def test_a_field_inherited_from_a_library(self):
+        from django.contrib.auth.models import AbstractBaseUser
+
+        model = self.build("Account", self.NAMED, bases=(AbstractBaseUser,))
+        verbose = {Name.VERBOSE_NAME}
+
+        assert self.problems(model, names=verbose) == []
+        # Django names its own; one it left to generate is read as missing.
+        model._meta.get_field("password")._verbose_name = None
+        try:
+            assert self.problems(model, names=verbose, inherited_from_libraries=False) == []
+            assert self.problems(model, names=verbose) == [
+                "testapp.Account.password's verbose_name is Django's, 'password' - declare it."
+            ]
+        finally:
+            model._meta.get_field("password")._verbose_name = "password"
+
     def test_off_unless_asked(self, settings, monkeypatch):
-        monkeypatch.setattr(constraints, "declared_name_problems", lambda configs: ["one"])
+        monkeypatch.setattr(names, "declared_name_problems", lambda configs, **options: ["one"])
 
         assert checks.every_name_is_declared(app_configs=None) == []
         seen = []
-        monkeypatch.setattr(constraints, "declared_name_problems", lambda configs: seen.append(configs) or ["one"])
+        monkeypatch.setattr(
+            names, "declared_name_problems", lambda configs, **options: seen.append((configs, options)) or ["one"]
+        )
         isik_areas(settings).CHECKS = {Check.DECLARED_NAMES: {CheckOption.ENABLED: True}}
         errors = checks.every_name_is_declared(app_configs=None)
 
         assert [(error.id, error.msg, error.hint) for error in errors] == [
-            ("isik.E019", "one", "Declare Meta.db_table, and a name for each Meta.indexes entry.")
+            (
+                "isik.E019",
+                "one",
+                "Declare each name - CheckOption.NAMES says which are held. See isik.django.apps.common.db.names.",
+            )
         ]
-        assert [config.label for config in seen[0]] == ["testapp"]
+        configs, options = seen[0]
+        assert [config.label for config in configs] == ["testapp"]
+        assert options == {"names": frozenset(Name), "inherited_from_libraries": True}
         assert checks.check_options(Check.IDENTIFIERS)[CheckOption.ENABLED] is True
 
-    def test_isiks_own_models_declare_theirs(self):
+    def test_its_options_reach_it(self, settings, monkeypatch):
+        seen = []
+        monkeypatch.setattr(names, "declared_name_problems", lambda configs, **options: seen.append(options) or [])
+        isik_areas(settings).CHECKS = {
+            Check.DECLARED_NAMES: {
+                CheckOption.ENABLED: True,
+                CheckOption.NAMES: {Name.TABLE},
+                CheckOption.INHERITED_FROM_LIBRARIES: False,
+            }
+        }
+
+        checks.every_name_is_declared(app_configs=None)
+
+        assert seen == [{"names": {Name.TABLE}, "inherited_from_libraries": False}]
+
+    def test_isiks_own_models_declare_every_name(self):
         isiks = [config for config in apps.get_app_configs() if config.name.startswith("isik.")]
 
         assert len(isiks) > 4
-        assert constraints.declared_name_problems(isiks) == []
+        assert names.declared_name_problems(isiks) == []
+
+
+class TestTheNamesOption:
+    def errors(self, settings, value):
+        isik_areas(settings).CHECKS = {Check.DECLARED_NAMES: {CheckOption.NAMES: value}}
+        return [error.msg for error in checks.isik_checks_are_configured(None)]
+
+    @pytest.mark.parametrize("value", [{Name.TABLE}, frozenset(Name), [Name.INDEX], (), set()])
+    def test_a_collection_of_names(self, settings, value):
+        assert self.errors(settings, value) == []
+
+    @pytest.mark.parametrize("value", [Name.TABLE, "table", None])
+    def test_one_that_isnt_a_collection(self, settings, value):
+        if value is None:
+            assert self.errors(settings, value) == []
+            return
+        assert self.errors(settings, value) == [
+            f"ISIK['DJANGO']['CHECKS'][Check.DECLARED_NAMES]'s CheckOption.NAMES is {value!r} - a set of Name members."
+        ]
+
+    def test_a_string_where_a_name_belongs(self, settings):
+        assert self.errors(settings, {Name.TABLE, "related_name"}) == [
+            "ISIK['DJANGO']['CHECKS'][Check.DECLARED_NAMES]'s CheckOption.NAMES names 'related_name' as a string - "
+            "write Name.RELATED_NAME."
+        ]
+
+    def test_something_else(self, settings):
+        assert self.errors(settings, [3]) == [
+            "ISIK['DJANGO']['CHECKS'][Check.DECLARED_NAMES]'s CheckOption.NAMES names 3, which isn't a Name: "
+            + ", ".join(f"Name.{name.name}" for name in Name)
+            + "."
+        ]
+
+    def test_another_check_doesnt_take_it(self, settings):
+        isik_areas(settings).CHECKS = {Check.LABELS: {CheckOption.NAMES: {Name.TABLE}}}
+
+        assert [error.msg for error in checks.isik_checks_are_configured(None)] == [
+            "ISIK['DJANGO']['CHECKS'][Check.LABELS] has CheckOption.NAMES - it takes CheckOption.ENABLED, "
+            "CheckOption.SEVERITY."
+        ]
 
 
 class TestMetaInheritance:

@@ -54,6 +54,7 @@ class AbstractBaseIdempotencyClaim(models.Model):
         default=new_primary_key,
         help_text=gettext_lazy("The claim's own identifier."),
         db_comment="The claim's own identifier.",
+        verbose_name=gettext_lazy("ID"),
     )
     claimed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -61,25 +62,30 @@ class AbstractBaseIdempotencyClaim(models.Model):
         related_name="+",
         help_text=gettext_lazy("Who spent the key - a key is only ever compared with its caller's own."),
         db_comment="Who spent the key - a key is only ever compared with its caller's own.",
+        verbose_name=gettext_lazy("claimed by"),
     )
     key = models.UUIDField(
         help_text=gettext_lazy("The Idempotency-Key the caller sent."),
         db_comment="The Idempotency-Key the caller sent.",
+        verbose_name=gettext_lazy("key"),
     )
     fingerprint = models.CharField(
         max_length=64,
         help_text=gettext_lazy("sha256 of the request the key was spent on - its method, path, query and body."),
         db_comment="sha256 of the request the key was spent on - its method, path, query and body.",
+        verbose_name=gettext_lazy("fingerprint"),
     )
     status = models.PositiveSmallIntegerField(
         null=True,
         help_text=gettext_lazy("The status the request was answered with."),
         db_comment="The status the request was answered with. Null only while its request is being served.",
+        verbose_name=gettext_lazy("status"),
     )
     claimed_at = models.DateTimeField(
         default=timezone.now,
         help_text=gettext_lazy("When the key was spent."),
         db_comment="When the key was spent. Nothing expires by it - it is there to delete old claims by.",
+        verbose_name=gettext_lazy("claimed at"),
     )
 
     class Meta:
@@ -142,6 +148,7 @@ class AbstractIdempotencyClaim(AbstractBaseIdempotencyClaim):
         null=True,
         help_text=gettext_lazy("The primary key of the row the response serialized, to serialize it again."),
         db_comment="The primary key of the row the response serialized - null for a response without a body.",
+        verbose_name=gettext_lazy("object id"),
     )
 
     class Meta(AbstractBaseIdempotencyClaim.Meta):
@@ -193,6 +200,7 @@ class AbstractIdempotencyClaimWithBody(AbstractBaseIdempotencyClaim):
         null=True,
         help_text=gettext_lazy("The response body, as its codec wrote it."),
         db_comment="The response body, as its codec wrote it - null for an action that can't be replayed.",
+        verbose_name=gettext_lazy("body"),
     )
 
     body_codec = None

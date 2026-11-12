@@ -44,12 +44,14 @@ class AbstractFeature(UUIDPrimaryKeyModel):
         unique=True,
         help_text=gettext_lazy("The feature's name, as its declaration gives it."),
         db_comment="The feature's name, as its declaration gives it. Never changes.",
+        verbose_name=gettext_lazy("name"),
     )
     created_at = models.DateTimeField(
         db_default=Now(),
         editable=False,
         help_text=gettext_lazy("When it was first declared."),
         db_comment="When the feature was first mirrored from its declaration.",
+        verbose_name=gettext_lazy("created at"),
     )
 
     class Meta:
@@ -75,6 +77,7 @@ class AbstractFeatureGrant(models.Model):
         default=new_primary_key,
         help_text=gettext_lazy("The grant's own identifier."),
         db_comment="The grant's own identifier.",
+        verbose_name=gettext_lazy("ID"),
     )
     holder = models.ForeignKey(
         model_name(HOLDER_MODEL),
@@ -82,6 +85,7 @@ class AbstractFeatureGrant(models.Model):
         related_name="+",
         help_text=gettext_lazy("Who the feature is granted to."),
         db_comment="The holder the feature is granted to. Erased with the holder.",
+        verbose_name=gettext_lazy("holder"),
     )
     feature = models.ForeignKey(
         model_name(FEATURE_MODEL),
@@ -89,11 +93,13 @@ class AbstractFeatureGrant(models.Model):
         related_name="+",
         help_text=gettext_lazy("The feature granted."),
         db_comment="The feature granted.",
+        verbose_name=gettext_lazy("feature"),
     )
     source = models.CharField(
         max_length=64,
         help_text=gettext_lazy("Where the grant came from - a subscription, a trial, by hand."),
         db_comment="One of the project's GRANT_SOURCES.",
+        verbose_name=gettext_lazy("source"),
     )
     reference = models.CharField(
         max_length=255,
@@ -101,17 +107,20 @@ class AbstractFeatureGrant(models.Model):
         default="",
         help_text=gettext_lazy("What the source knows the grant by - an invoice, say."),
         db_comment="The source's own reference for the grant, or empty.",
+        verbose_name=gettext_lazy("reference"),
     )
     starts_at = models.DateTimeField(
         default=timezone.now,
         help_text=gettext_lazy("When it comes into force."),
         db_comment="When the grant comes into force.",
+        verbose_name=gettext_lazy("starts at"),
     )
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When it ends, or none for never."),
         db_comment="When the grant ends, or null for never.",
+        verbose_name=gettext_lazy("expires at"),
     )
     status = models.CharField(
         max_length=16,
@@ -120,12 +129,14 @@ class AbstractFeatureGrant(models.Model):
         db_default=GrantStatus.ACTIVE,
         help_text=gettext_lazy("Whether it stands, or was revoked."),
         db_comment="active, or revoked - once, never undone. When it was revoked is in the grant's history.",
+        verbose_name=gettext_lazy("status"),
     )
     created_at = models.DateTimeField(
         db_default=Now(),
         editable=False,
         help_text=gettext_lazy("When it was granted."),
         db_comment="When the grant was written.",
+        verbose_name=gettext_lazy("created at"),
     )
 
     class Meta:
@@ -148,6 +159,7 @@ class AbstractOverrides(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         related_name="+",
         help_text=gettext_lazy("Whose settings these are."),
         db_comment="The holder these settings are of. Erased with the holder.",
+        verbose_name=gettext_lazy("holder"),
     )
 
     class Meta:
@@ -163,6 +175,7 @@ class AbstractSweepCursor(UUIDPrimaryKeyModel):
     swept_at = models.DateTimeField(
         help_text=gettext_lazy("When the boundary sweep last ran."),
         db_comment="When the boundary sweep last ran - the next one looks at the boundaries since.",
+        verbose_name=gettext_lazy("swept at"),
     )
     next_sweep_at = models.DateTimeField(
         null=True,
@@ -172,6 +185,7 @@ class AbstractSweepCursor(UUIDPrimaryKeyModel):
             "When the next boundary sweep is scheduled for, with ISIK['DJANGO']['FEATURES']['SWEEP'] next_boundary - "
             "none is scheduled beside one due no later. Null with interval, and before the first."
         ),
+        verbose_name=gettext_lazy("next sweep at"),
     )
 
     class Meta:

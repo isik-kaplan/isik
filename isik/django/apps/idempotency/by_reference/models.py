@@ -1,3 +1,4 @@
+from isik._internal.translation import gettext_lazy
 from isik.django.apps.idempotency.claims import AbstractIdempotencyClaim
 
 
@@ -6,3 +7,5 @@ class IdempotencyClaim(AbstractIdempotencyClaim):
 
     class Meta(AbstractIdempotencyClaim.Meta):
         db_table = "isik_idempotency_claim"
+        verbose_name = gettext_lazy("idempotency claim")
+        verbose_name_plural = gettext_lazy("idempotency claims")

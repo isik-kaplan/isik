@@ -52,6 +52,7 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
         max_length=100,
         help_text=gettext_lazy("The kind's name, as its declaration gives it."),
         db_comment="The kind's name, as its declaration gives it. Never changes.",
+        verbose_name=gettext_lazy("name"),
     )
     policy = models.CharField(
         max_length=16,
@@ -60,18 +61,21 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
             "Who gets the kind: everyone its audience names, opted-out aside, or only the opted-in."
         ),
         db_comment="mandatory, default_on or default_off - mirrored from the declaration.",
+        verbose_name=gettext_lazy("policy"),
     )
     scope = models.CharField(
         max_length=16,
         choices=Scope.choices,
         help_text=gettext_lazy("Whether the kind's audience lives in one partition or many."),
         db_comment="single_partition or cross_partition - mirrored from the declaration.",
+        verbose_name=gettext_lazy("scope"),
     )
     source = models.CharField(
         max_length=16,
         choices=Source.choices,
         help_text=gettext_lazy("What writes the kind's notices: a trigger, the application, or record_email()."),
         db_comment="trigger, application or recorded - mirrored from the declaration.",
+        verbose_name=gettext_lazy("source"),
     )
     variants = models.JSONField(
         default=list,
@@ -79,6 +83,7 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
         help_text=gettext_lazy("The variants the kind declares - the only ones a notice or subscription may name."),
         db_comment="The variants the kind declares. A subscription, endpoint kind or inbox item naming another "
         "is refused.",
+        verbose_name=gettext_lazy("variants"),
     )
     status = models.CharField(
         max_length=16,
@@ -88,6 +93,7 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
         help_text=gettext_lazy("Whether the kind still writes notices. A retired kind writes no more."),
         db_comment="active, or retired - once, never undone. A retired kind writes no more notices; when it was "
         "retired is in the row's history.",
+        verbose_name=gettext_lazy("status"),
     )
 
     class Meta:
@@ -113,6 +119,7 @@ class AbstractNotice(models.Model):
         db_default=DatabaseUUID7(),
         help_text=gettext_lazy("The notice's own identifier."),
         db_comment="The notice's own identifier - a uuid7 the database makes, for a notice its trigger writes.",
+        verbose_name=gettext_lazy("ID"),
     )
     kind = models.ForeignKey(
         model_name(KIND_POLICY_MODEL),
@@ -120,6 +127,8 @@ class AbstractNotice(models.Model):
         related_name="notices",
         help_text=gettext_lazy("What kind of thing happened."),
         db_comment="What kind of thing happened.",
+        verbose_name=gettext_lazy("kind"),
+        related_query_name="notices",
     )
     variant = models.CharField(
         max_length=100,
@@ -127,6 +136,7 @@ class AbstractNotice(models.Model):
         blank=True,
         help_text=gettext_lazy("Which of the kind's variants happened, or none."),
         db_comment="Which of the kind's declared variants happened, or null.",
+        verbose_name=gettext_lazy("variant"),
     )
     subject_label = models.CharField(
         max_length=200,
@@ -134,6 +144,7 @@ class AbstractNotice(models.Model):
         blank=True,
         help_text=gettext_lazy("The model label of the row it happened to, or none."),
         db_comment="The app_label.Model of the row it happened to. Null for a notice no row is behind.",
+        verbose_name=gettext_lazy("subject label"),
     )
     subject_id = models.CharField(
         max_length=255,
@@ -141,24 +152,28 @@ class AbstractNotice(models.Model):
         blank=True,
         help_text=gettext_lazy("The primary key of the row it happened to, or none."),
         db_comment="The row's primary key, as text. Not a key: the row may be deleted, and the record stays.",
+        verbose_name=gettext_lazy("subject id"),
     )
     subject_partition = models.TextField(
         null=True,
         blank=True,
         help_text=gettext_lazy("The partition the row it happened to belongs to, or none."),
         db_comment="The partition the subject belongs to. Not a key: a partition may be dropped, and the record stays.",
+        verbose_name=gettext_lazy("subject partition"),
     )
     snapshot = models.JSONField(
         default=dict,
         blank=True,
         help_text=gettext_lazy("The subject's columns the kind allows, as they were after the change."),
         db_comment="The subject's allow-listed columns, as they were after the change. Never another column.",
+        verbose_name=gettext_lazy("snapshot"),
     )
     previous = models.JSONField(
         null=True,
         blank=True,
         help_text=gettext_lazy("The same columns as they were before the change, for an update."),
         db_comment="The allow-listed columns as they were before the change. Null unless the kind keeps them.",
+        verbose_name=gettext_lazy("previous"),
     )
     actor_id = models.CharField(
         max_length=255,
@@ -167,12 +182,14 @@ class AbstractNotice(models.Model):
         db_index=True,
         help_text=gettext_lazy("Who acted, or none - a migration, a command, a scheduled task."),
         db_comment="ACTOR_CONTEXT_KEY of the history context the notice was written in, as text, or null.",
+        verbose_name=gettext_lazy("actor id"),
     )
     context = models.JSONField(
         default=dict,
         blank=True,
         help_text=gettext_lazy("What the history context said that the project keeps on its notices."),
         db_comment="NOTICE_CONTEXT_KEYS of the history context the notice was written in - those it held.",
+        verbose_name=gettext_lazy("context"),
     )
     pgh_context = models.ForeignKey(
         "pghistory.Context",
@@ -182,18 +199,21 @@ class AbstractNotice(models.Model):
         related_name="+",
         help_text=gettext_lazy("The history context of the change - who made it, and from where."),
         db_comment="The pghistory context the change was made in - shared with the event rows it wrote.",
+        verbose_name=gettext_lazy("pgh context"),
     )
     occurred_at = models.DateTimeField(
         db_default=Now(),
         default=timezone.now,
         help_text=gettext_lazy("When it happened."),
         db_comment="When it happened - when its transaction began.",
+        verbose_name=gettext_lazy("occurred at"),
     )
     fanned_out_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When its deliveries were written. Unset, it's waiting to be."),
         db_comment="When its deliveries (or shards) were written. Null is the fan-out queue. Set once.",
+        verbose_name=gettext_lazy("fanned out at"),
     )
 
     class Meta:
@@ -212,6 +232,7 @@ class AbstractFanOutShard(models.Model):
         default=new_primary_key,
         help_text=gettext_lazy("The shard's own identifier."),
         db_comment="The shard's own identifier.",
+        verbose_name=gettext_lazy("ID"),
     )
     notice = models.ForeignKey(
         model_name(NOTICE_MODEL),
@@ -219,6 +240,8 @@ class AbstractFanOutShard(models.Model):
         related_name="shards",
         help_text=gettext_lazy("The notice reaching the partition."),
         db_comment="The notice reaching the partition.",
+        verbose_name=gettext_lazy("notice"),
+        related_query_name="shards",
     )
     partition = models.TextField(
         null=True,
@@ -226,6 +249,7 @@ class AbstractFanOutShard(models.Model):
         help_text=gettext_lazy("The partition's key, or none for a project with no partitions."),
         db_comment="The partition's key, as PARTITIONS gives it - null with none. Not a key: a partition may "
         "be dropped.",
+        verbose_name=gettext_lazy("partition"),
     )
     state = models.CharField(
         max_length=16,
@@ -233,22 +257,26 @@ class AbstractFanOutShard(models.Model):
         default=ShardState.PENDING,
         help_text=gettext_lazy("pending, claimed, finished or abandoned."),
         db_comment="pending, claimed (a worker has it), finished or abandoned.",
+        verbose_name=gettext_lazy("state"),
     )
     attempt_count = models.PositiveIntegerField(
         default=0,
         help_text=gettext_lazy("How many times a worker has claimed it."),
         db_comment="How many times a worker has claimed it.",
+        verbose_name=gettext_lazy("attempt count"),
     )
     next_attempt_at = models.DateTimeField(
         default=timezone.now,
         help_text=gettext_lazy("When it's next due."),
         db_comment="When it's next due to be claimed.",
+        verbose_name=gettext_lazy("next attempt at"),
     )
     claimed_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When a worker last claimed it."),
         db_comment="When a worker last claimed it - reap_stranded takes back one claimed too long ago.",
+        verbose_name=gettext_lazy("claimed at"),
     )
     claimed_by = models.CharField(
         max_length=255,
@@ -256,18 +284,21 @@ class AbstractFanOutShard(models.Model):
         default="",
         help_text=gettext_lazy("The task that last claimed it."),
         db_comment="The id of the task that last claimed it.",
+        verbose_name=gettext_lazy("claimed by"),
     )
     finished_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When its deliveries were written."),
         db_comment="When its deliveries were written, or null.",
+        verbose_name=gettext_lazy("finished at"),
     )
     last_error = models.TextField(
         blank=True,
         default="",
         help_text=gettext_lazy("Why its last claim failed."),
         db_comment="Why its last claim failed, or empty.",
+        verbose_name=gettext_lazy("last error"),
     )
 
     class Meta:
@@ -287,6 +318,7 @@ class AbstractDelivery(models.Model):
         default=new_primary_key,
         help_text=gettext_lazy("The delivery's own identifier - the key a receiver dedupes it by."),
         db_comment="The delivery's own identifier, sent as its Idempotency-Key on every attempt.",
+        verbose_name=gettext_lazy("ID"),
     )
     notice = models.ForeignKey(
         model_name(NOTICE_MODEL),
@@ -294,22 +326,27 @@ class AbstractDelivery(models.Model):
         related_name="deliveries",
         help_text=gettext_lazy("The notice it sends."),
         db_comment="The notice it sends.",
+        verbose_name=gettext_lazy("notice"),
+        related_query_name="deliveries",
     )
     channel = models.CharField(
         max_length=32,
         help_text=gettext_lazy("The channel it goes out on."),
         db_comment="The registered channel it goes out on - inbox, email, webhook, or a project's own.",
+        verbose_name=gettext_lazy("channel"),
     )
     partition = models.TextField(
         null=True,
         blank=True,
         help_text=gettext_lazy("The partition its target lives in, or none."),
         db_comment="The partition its target lives in. Null when the project declares no partitions.",
+        verbose_name=gettext_lazy("partition"),
     )
     target_key = models.CharField(
         max_length=255,
         help_text=gettext_lazy("Its target, as one key - what keeps a notice from reaching one target twice."),
         db_comment="Its target as one opaque key, unique per notice and channel.",
+        verbose_name=gettext_lazy("target key"),
     )
     state = models.CharField(
         max_length=16,
@@ -317,16 +354,19 @@ class AbstractDelivery(models.Model):
         default=DeliveryState.PENDING,
         help_text=gettext_lazy("pending, sending, sent or abandoned."),
         db_comment="pending (due at next_attempt_at), sending, sent or abandoned.",
+        verbose_name=gettext_lazy("state"),
     )
     attempt_count = models.PositiveIntegerField(
         default=0,
         help_text=gettext_lazy("How many times it's been tried."),
         db_comment="How many times it's been tried, in every run.",
+        verbose_name=gettext_lazy("attempt count"),
     )
     attempts_before_run = models.PositiveIntegerField(
         default=0,
         help_text=gettext_lazy("How many times it had been tried when its current run began."),
         db_comment="attempt_count when the current run began - a manual retry starts one. MAX_ATTEMPTS counts from it.",
+        verbose_name=gettext_lazy("attempts before run"),
     )
     retry_trigger = models.CharField(
         max_length=32,
@@ -334,29 +374,34 @@ class AbstractDelivery(models.Model):
         default="",
         help_text=gettext_lazy("What asked for its next attempt, when it wasn't the send task."),
         db_comment="What asked for its next attempt - manual - or empty. The attempt records it, and it's cleared.",
+        verbose_name=gettext_lazy("retry trigger"),
     )
     next_attempt_at = models.DateTimeField(
         default=timezone.now,
         help_text=gettext_lazy("When it's next due."),
         db_comment="When it's next due to be tried.",
+        verbose_name=gettext_lazy("next attempt at"),
     )
     claimed_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When a worker last took it to send."),
         db_comment="When a worker last took it to send - reap_stranded takes back one sending too long.",
+        verbose_name=gettext_lazy("claimed at"),
     )
     sent_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When it was sent."),
         db_comment="When it was sent, or null.",
+        verbose_name=gettext_lazy("sent at"),
     )
     created_at = models.DateTimeField(
         db_default=Now(),
         default=timezone.now,
         help_text=gettext_lazy("When it was written."),
         db_comment="When it was written.",
+        verbose_name=gettext_lazy("created at"),
     )
 
     class Meta:
@@ -372,6 +417,8 @@ def _delivery_key(related_name):
         model_name(DELIVERY_MODEL),
         on_delete=models.CASCADE,
         related_name=related_name,
+        related_query_name=related_name,
+        verbose_name=gettext_lazy("delivery"),
         help_text=gettext_lazy("The delivery this is the target of."),
         db_comment="The delivery this is the target of.",
     )
@@ -385,6 +432,7 @@ class AbstractWebhookDelivery(UUIDPrimaryKeyModel):
         max_length=255,
         help_text=gettext_lazy("The endpoint's primary key."),
         db_comment="The endpoint's primary key, as text, in the delivery's partition. Not a key: it may be deleted.",
+        verbose_name=gettext_lazy("endpoint id"),
     )
 
     class Meta:
@@ -399,6 +447,7 @@ class AbstractEmailDelivery(UUIDPrimaryKeyModel):
         max_length=254,
         help_text=gettext_lazy("The address it's sent to."),
         db_comment="The address it's sent to.",
+        verbose_name=gettext_lazy("address"),
     )
     user_id = models.CharField(
         max_length=255,
@@ -406,6 +455,7 @@ class AbstractEmailDelivery(UUIDPrimaryKeyModel):
         blank=True,
         help_text=gettext_lazy("The user the address belongs to, or none."),
         db_comment="The primary key of the user the address belongs to, as text, or null.",
+        verbose_name=gettext_lazy("user id"),
     )
     record_key = models.CharField(
         max_length=255,
@@ -414,6 +464,7 @@ class AbstractEmailDelivery(UUIDPrimaryKeyModel):
         unique=True,
         help_text=gettext_lazy("What its sender named a recorded email by, across its tries - or none."),
         db_comment="record_email()'s key: one email across its sender's tries. Null for one isik sends.",
+        verbose_name=gettext_lazy("record key"),
     )
 
     class Meta:
@@ -428,6 +479,7 @@ class AbstractInboxDelivery(UUIDPrimaryKeyModel):
         max_length=255,
         help_text=gettext_lazy("The user whose inbox it lands in."),
         db_comment="The primary key of the user whose inbox it lands in, as text, in the delivery's partition.",
+        verbose_name=gettext_lazy("user id"),
     )
 
     class Meta:
@@ -442,11 +494,13 @@ class AbstractPushDelivery(UUIDPrimaryKeyModel):
         max_length=255,
         help_text=gettext_lazy("The device's primary key."),
         db_comment="The device's primary key, as text, in the delivery's partition. Not a key: it may be forgotten.",
+        verbose_name=gettext_lazy("device id"),
     )
     user_id = models.CharField(
         max_length=255,
         help_text=gettext_lazy("The user the device is theirs."),
         db_comment="The primary key of the user whose device it is, as text, in the delivery's partition.",
+        verbose_name=gettext_lazy("user id"),
     )
 
     class Meta:
@@ -462,6 +516,7 @@ class AbstractDeliveryAttempt(models.Model):
         default=new_primary_key,
         help_text=gettext_lazy("The attempt's own identifier."),
         db_comment="The attempt's own identifier.",
+        verbose_name=gettext_lazy("ID"),
     )
     delivery = models.ForeignKey(
         model_name(DELIVERY_MODEL),
@@ -469,51 +524,60 @@ class AbstractDeliveryAttempt(models.Model):
         related_name="attempts",
         help_text=gettext_lazy("The delivery tried."),
         db_comment="The delivery tried.",
+        verbose_name=gettext_lazy("delivery"),
+        related_query_name="attempts",
     )
     attempt_no = models.PositiveIntegerField(
         help_text=gettext_lazy("Which try it was, from 1."),
         db_comment="Which try it was, from 1.",
+        verbose_name=gettext_lazy("attempt no"),
     )
     request = models.JSONField(
         default=dict,
         blank=True,
         help_text=gettext_lazy("What was sent, redacted."),
         db_comment="What was sent, after REDACTOR.",
+        verbose_name=gettext_lazy("request"),
     )
     response = models.JSONField(
         null=True,
         blank=True,
         help_text=gettext_lazy("What came back, redacted and cut short."),
         db_comment="What came back, after REDACTOR, its body cut to MAX_RESPONSE_BYTES. Null when nothing did.",
+        verbose_name=gettext_lazy("response"),
     )
     status_code = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
         help_text=gettext_lazy("The HTTP status that came back, or none."),
         db_comment="The HTTP status that came back. Null for a timeout, a refused connection or a non-HTTP channel.",
+        verbose_name=gettext_lazy("status code"),
     )
     error = models.TextField(
         blank=True,
         default="",
         help_text=gettext_lazy("Why it failed, or nothing."),
         db_comment="Why it failed, or empty.",
+        verbose_name=gettext_lazy("error"),
     )
     succeeded = models.BooleanField(
         help_text=gettext_lazy("Whether it went through."),
         db_comment="Whether it went through.",
+        verbose_name=gettext_lazy("succeeded"),
     )
     started_at = models.DateTimeField(
-        help_text=gettext_lazy("When it began."),
-        db_comment="When it began.",
+        help_text=gettext_lazy("When it began."), db_comment="When it began.", verbose_name=gettext_lazy("started at")
     )
     duration_ms = models.PositiveIntegerField(
         help_text=gettext_lazy("How long it took, in milliseconds."),
         db_comment="How long it took, in milliseconds.",
+        verbose_name=gettext_lazy("duration ms"),
     )
     triggered_by = models.CharField(
         max_length=32,
         help_text=gettext_lazy("What started it - the send task, the reaper, or someone by hand."),
         db_comment="What started it: send, reap_stranded, or manual.",
+        verbose_name=gettext_lazy("triggered by"),
     )
 
     class Meta:

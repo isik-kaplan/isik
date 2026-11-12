@@ -33,6 +33,7 @@ def _variant():
         max_length=100,
         null=True,
         blank=True,
+        verbose_name=gettext_lazy("variant"),
         help_text=gettext_lazy("The kind's one variant this is for, or none for every one."),
         db_comment="The kind's declared variant this is for, or null for every variant.",
     )
@@ -49,6 +50,7 @@ class AbstractSubscription(UUIDPrimaryKeyModel):
         default=True,
         help_text=gettext_lazy("Whether the user gets the kind."),
         db_comment="Whether the user gets the kind (and variant).",
+        verbose_name=gettext_lazy("enabled"),
     )
 
     class Meta:
@@ -71,17 +73,20 @@ class AbstractForceableSubscription(AbstractSubscription):
         default=True,
         help_text=gettext_lazy("Whether the person chose this themselves, or only staff forced it."),
         db_comment="Whether enabled is the person's own choice (false: the row exists only for its force).",
+        verbose_name=gettext_lazy("chosen"),
     )
     forced = models.BooleanField(
         default=False,
         help_text=gettext_lazy("Whether staff forced it, so the person can't change it."),
         db_comment="Whether the subscription is forced - forced_enabled then decides, whatever enabled says.",
+        verbose_name=gettext_lazy("forced"),
     )
     forced_enabled = models.BooleanField(
         null=True,
         blank=True,
         help_text=gettext_lazy("What it's forced to, while it's forced."),
         db_comment="The forced value while forced, else null.",
+        verbose_name=gettext_lazy("forced enabled"),
     )
     forced_source = models.CharField(
         max_length=100,
@@ -89,12 +94,14 @@ class AbstractForceableSubscription(AbstractSubscription):
         default="",
         help_text=gettext_lazy("The force source that forced it, while it's forced."),
         db_comment="The declared force source that forced it while forced, else empty.",
+        verbose_name=gettext_lazy("forced source"),
     )
     forced_reason = models.TextField(
         blank=True,
         default="",
         help_text=gettext_lazy("Why it was forced, while it's forced."),
         db_comment="Why it was forced, while forced, else empty.",
+        verbose_name=gettext_lazy("forced reason"),
     )
 
     class Meta:
@@ -111,6 +118,7 @@ class AbstractInboxItem(UUIDPrimaryKeyModel):
         blank=True,
         help_text=gettext_lazy("The model label of the row it's about, or none."),
         db_comment="The app_label.Model of the row it's about, or null.",
+        verbose_name=gettext_lazy("subject label"),
     )
     subject_id = models.CharField(
         max_length=255,
@@ -118,6 +126,7 @@ class AbstractInboxItem(UUIDPrimaryKeyModel):
         blank=True,
         help_text=gettext_lazy("The primary key of the row it's about, or none."),
         db_comment="The primary key of the row it's about, as text, or null.",
+        verbose_name=gettext_lazy("subject id"),
     )
     actor_id = models.CharField(
         max_length=255,
@@ -125,34 +134,40 @@ class AbstractInboxItem(UUIDPrimaryKeyModel):
         blank=True,
         help_text=gettext_lazy("Who acted, as the notice recorded them, or none."),
         db_comment="The primary key of who acted, copied from the notice, or null. Not shown to the recipient.",
+        verbose_name=gettext_lazy("actor id"),
     )
     context = models.JSONField(
         default=dict,
         blank=True,
         help_text=gettext_lazy("The history context the notice kept, beside who acted."),
         db_comment="The notice's context, copied from it. Not shown to the recipient.",
+        verbose_name=gettext_lazy("context"),
     )
     payload = models.JSONField(
         default=dict,
         blank=True,
         help_text=gettext_lazy("What the notice carried."),
         db_comment="What the notice carried: its snapshot, and previous when it kept one.",
+        verbose_name=gettext_lazy("payload"),
     )
     read_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When the user read it."),
         db_comment="When the user read it, or null.",
+        verbose_name=gettext_lazy("read at"),
     )
     delivery_id = models.UUIDField(
         unique=True,
         help_text=gettext_lazy("The delivery that put it here."),
         db_comment="The ledger delivery that put it here - unique, so a delivery lands once however often it's tried.",
+        verbose_name=gettext_lazy("delivery id"),
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text=gettext_lazy("When it landed."),
         db_comment="When it landed.",
+        verbose_name=gettext_lazy("created at"),
     )
 
     class Meta:
@@ -176,11 +191,13 @@ class AbstractEndpoint(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         validators=[URLValidator(schemes=WEBHOOK_SCHEMES)],
         help_text=gettext_lazy("Where deliveries are POSTed."),
         db_comment="Where deliveries are POSTed.",
+        verbose_name=gettext_lazy("url"),
     )
     secret = models.CharField(
         max_length=255,
         help_text=gettext_lazy("The secret every delivery is signed with."),
         db_comment="The secret every delivery is signed with.",
+        verbose_name=gettext_lazy("secret"),
     )
     secret_previous = models.CharField(
         max_length=255,
@@ -188,22 +205,26 @@ class AbstractEndpoint(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         blank=True,
         help_text=gettext_lazy("The secret being rotated out - deliveries are signed with it too until it's cleared."),
         db_comment="The secret being rotated out, or null. While it's set, deliveries carry a signature by each.",
+        verbose_name=gettext_lazy("secret previous"),
     )
     is_active = models.BooleanField(
         default=True,
         help_text=gettext_lazy("Whether deliveries are sent to it."),
         db_comment="Whether deliveries are sent to it.",
+        verbose_name=gettext_lazy("is active"),
     )
     consecutive_failures = models.PositiveIntegerField(
         default=0,
         help_text=gettext_lazy("How many deliveries in a row have failed."),
         db_comment="How many attempts in a row have failed. DISABLE_AFTER of them park it.",
+        verbose_name=gettext_lazy("consecutive failures"),
     )
     parked_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When it was parked for failing - nothing is sent to it until it's unparked."),
         db_comment="When it was parked for failing, or null. Nothing is sent to a parked endpoint.",
+        verbose_name=gettext_lazy("parked at"),
     )
 
     class Meta:
@@ -242,11 +263,13 @@ class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         choices=Platform.choices,
         help_text=gettext_lazy("The service its pushes go through - apns or fcm."),
         db_comment="The push service its token is for: apns or fcm.",
+        verbose_name=gettext_lazy("platform"),
     )
     token = models.CharField(
         max_length=4096,
         help_text=gettext_lazy("The token its push service gave the app on it."),
         db_comment="The push service's token for the install - unique with platform.",
+        verbose_name=gettext_lazy("token"),
     )
     environment = models.CharField(
         max_length=16,
@@ -254,6 +277,7 @@ class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         default=PushEnvironment.PRODUCTION,
         help_text=gettext_lazy("Which APNs issued its token - sandbox for a development build."),
         db_comment="production or sandbox: which APNs host its pushes go to. FCM ignores it.",
+        verbose_name=gettext_lazy("environment"),
     )
     app_id = models.CharField(
         max_length=255,
@@ -261,17 +285,20 @@ class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         default="",
         help_text=gettext_lazy("The app's bundle identifier, where it isn't the project's one."),
         db_comment="The APNs topic - the app's bundle id - or empty for PUSH['APNS']['TOPIC'].",
+        verbose_name=gettext_lazy("app id"),
     )
     is_active = models.BooleanField(
         default=True,
         help_text=gettext_lazy("Whether pushes are sent to it."),
         db_comment="Whether pushes are sent to it - false once its push service said the token is dead.",
+        verbose_name=gettext_lazy("is active"),
     )
     last_seen_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=gettext_lazy("When the app on it last registered."),
         db_comment="When the app last registered its token, or null.",
+        verbose_name=gettext_lazy("last seen at"),
     )
 
     class Meta:

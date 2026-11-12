@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-12
+
+### Added
+
+- `Check.DECLARED_NAMES` (`isik.E019`) holds a project's models to every name it declares, each kind a `Name`
+  member in `CheckOption.NAMES` - every one by default: `TABLE` and `INDEX`, as before, and `RELATED_NAME`,
+  `RELATED_QUERY_NAME`, `THROUGH_TABLE` (a many-to-many's join table), `THROUGH_MODEL` (a many-to-many going
+  through a model of the project's) and `VERBOSE_NAME` (a model's `verbose_name` and `verbose_name_plural`, and
+  each field's). It takes `CheckOption.INHERITED_FROM_LIBRARIES` too, like `Check.DOCUMENTATION`. Every name but
+  a table's and an index's is held of the models a project writes - Django's, isik's and pghistory's generated
+  models are their generators' to name. It stays off until a project turns it on.
+- Every field of isik's abstract bases and models declares its `verbose_name`, every relation its
+  `related_query_name`, and every model its `verbose_name_plural` - each the name Django gave it, so a project's
+  models on them are held only to their own names. `IdempotencyClaimWithBody`'s plural reads "idempotency claims
+  with body".
+
+### Breaking
+
+- `declared_name_problems()` moved to `isik.django.apps.common.db.names`, and takes `names` and
+  `inherited_from_libraries`.
+- A project with `Check.DECLARED_NAMES` on is held to the new names too, unless its `CheckOption.NAMES` lists
+  `{Name.TABLE, Name.INDEX}` alone.
+- isik's migrations name each field's `verbose_name` and relation's `related_query_name`, so `makemigrations`
+  writes an `AlterField` for each field a project's models inherit from isik's bases. Neither changes the
+  database.
+
 ## [0.50.0] - 2026-11-08
 
 ### Added

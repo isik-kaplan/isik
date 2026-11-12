@@ -16,8 +16,10 @@ not a fault) and `CheckOption.SEVERITY` (a `Severity`, default the check's own).
 views takes `CheckOption.URLCONFS` - every urlconf the project serves by default (`project_urlconfs()`),
 and a warning, `isik.W003`, names each served one it is told to skip. A check over models takes
 `CheckOption.APPS`, app labels - the project's own apps by default (`project_app_configs()`).
-`Check.DOCUMENTATION` also takes `CheckOption.INHERITED_FROM_LIBRARIES` - True by default; False leaves
-out the fields a model inherits unchanged from a library's abstract base. Anything else in
+`Check.DOCUMENTATION` and `Check.DECLARED_NAMES` also take `CheckOption.INHERITED_FROM_LIBRARIES` - True by
+default; False leaves out the fields a model inherits unchanged from a library's abstract base.
+`Check.DECLARED_NAMES` takes `CheckOption.NAMES` too, the set of `Name` members it holds a project's models
+to - every one by default. Anything else in
 `ISIK['DJANGO']['CHECKS']` - a string where an enum belongs included - is an error, `isik.E012`.
 
 | check                      | id                     | what it refuses                                              |
@@ -40,7 +42,7 @@ out the fields a model inherits unchanged from a library's abstract base. Anythi
 | Check.LABELS               | isik.E016              | a notice kind, feature or setting that can't say what it is  |
 | Check.FEATURES             | isik.E017              | a features setting or declaration that can't work            |
 | Check.IDENTIFIERS          | isik.E018              | a table, column, constraint or index name Postgres would cut |
-| Check.DECLARED_NAMES       | isik.E019 (off)        | a table or index the project's models leave Django to name   |
+| Check.DECLARED_NAMES       | isik.E019 (off)        | each name of CheckOption.NAMES Django generates for a model  |
 | Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
 | Check.CONSTRAINT_MESSAGES  | isik.E021              | a constraint answering a violation with only its name        |
 
@@ -100,6 +102,19 @@ class CheckOption(Enum):
     URLCONFS = "urlconfs"
     APPS = "apps"
     INHERITED_FROM_LIBRARIES = "inherited_from_libraries"
+    NAMES = "names"
+
+
+class Name(Enum):
+    """A name Django generates for a model that leaves it unset - what `CheckOption.NAMES` holds."""
+
+    TABLE = "table"
+    INDEX = "index"
+    RELATED_NAME = "related_name"
+    RELATED_QUERY_NAME = "related_query_name"
+    THROUGH_TABLE = "through_table"
+    THROUGH_MODEL = "through_model"
+    VERBOSE_NAME = "verbose_name"
 
 
 class Severity(Enum):
@@ -131,7 +146,7 @@ CHECKS = {
     Check.LABELS: (),
     Check.FEATURES: (),
     Check.IDENTIFIERS: (CheckOption.APPS,),
-    Check.DECLARED_NAMES: (CheckOption.APPS,),
+    Check.DECLARED_NAMES: (CheckOption.APPS, CheckOption.INHERITED_FROM_LIBRARIES, CheckOption.NAMES),
     Check.META_INHERITANCE: (CheckOption.APPS,),
     Check.CONSTRAINT_MESSAGES: (CheckOption.APPS,),
 }
@@ -145,6 +160,7 @@ DEFAULTS = {
     CheckOption.URLCONFS: None,
     CheckOption.APPS: None,
     CheckOption.INHERITED_FROM_LIBRARIES: True,
+    CheckOption.NAMES: frozenset(Name),
 }
 
 
@@ -236,6 +252,7 @@ def _entry_problems(check, options):
                     "takes": ", ".join(f"CheckOption.{each.name}" for each in takes),
                 }
             )
+    problems.extend(_names_problems(options.get(CheckOption.NAMES), where))
     severity = options.get(CheckOption.SEVERITY)
     if severity is not None and not isinstance(severity, Severity):
         member = _as_member(severity, Severity)
@@ -250,6 +267,16 @@ def _entry_problems(check, options):
             }
         )
     return problems
+
+
+def _names_problems(names, where):
+    if names is None:
+        return []
+    if not isinstance(names, (set, frozenset, list, tuple)):
+        return [
+            _("%(where)s's CheckOption.NAMES is %(value)r - a set of Name members.") % {"where": where, "value": names}
+        ]
+    return [_key_problem(name, Name, f"{where}'s CheckOption.NAMES") for name in names if not isinstance(name, Name)]
 
 
 def _blind_spots(check, options):
@@ -585,11 +612,16 @@ def every_name_fits_postgres(options, **kwargs):
 
 @isik_check(Check.DECLARED_NAMES, Tags.models)
 def every_name_is_declared(options, **kwargs):
-    """A project naming its own tables and indexes holds every model to it - the next one added included."""
-    from isik.django.apps.common.db.constraints import declared_name_problems
+    """A project declaring its own names holds every model to it - the next one added included."""
+    from isik.django.apps.common.db.names import declared_name_problems
 
-    hint = _("Declare Meta.db_table, and a name for each Meta.indexes entry.")
-    return [Error(problem, hint=hint, id="isik.E019") for problem in declared_name_problems(_project_configs(options))]
+    hint = _("Declare each name - CheckOption.NAMES says which are held. See isik.django.apps.common.db.names.")
+    problems = declared_name_problems(
+        _project_configs(options),
+        names=options[CheckOption.NAMES],
+        inherited_from_libraries=options[CheckOption.INHERITED_FROM_LIBRARIES],
+    )
+    return [Error(problem, hint=hint, id="isik.E019") for problem in problems]
 
 
 @isik_check(Check.META_INHERITANCE, Tags.models)

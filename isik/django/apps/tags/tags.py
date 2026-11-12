@@ -83,6 +83,7 @@ class AbstractTag(UUIDPrimaryKeyModel):
         validators=_default_name_validators(),
         help_text=gettext_lazy("The tag's name, unique in its pool."),
         db_comment="The tag's name, unique in its pool.",
+        verbose_name=gettext_lazy("name"),
     )
 
     objects = TagManager()

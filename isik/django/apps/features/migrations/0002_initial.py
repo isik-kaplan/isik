@@ -24,17 +24,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='featuregrant',
             name='holder',
-            field=models.ForeignKey(db_comment='The holder the feature is granted to. Erased with the holder.', help_text='Who the feature is granted to.', on_delete=isik.django.apps.features.bases.ERASE, related_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment='The holder the feature is granted to. Erased with the holder.', help_text='Who the feature is granted to.', on_delete=isik.django.apps.features.bases.ERASE, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='holder'),
         ),
         migrations.AddField(
             model_name='featuregrantevent',
             name='feature',
-            field=models.ForeignKey(db_comment='The feature granted.', db_constraint=False, help_text='The feature granted.', on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', related_query_name='+', to=settings.ISIK_FEATURES_FEATURE_MODEL),
+            field=models.ForeignKey(db_comment='The feature granted.', db_constraint=False, help_text='The feature granted.', on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', related_query_name='+', to=settings.ISIK_FEATURES_FEATURE_MODEL, verbose_name='feature'),
         ),
         migrations.AddField(
             model_name='featuregrantevent',
             name='holder',
-            field=models.ForeignKey(db_comment='The holder the feature is granted to. Erased with the holder.', db_constraint=False, help_text='Who the feature is granted to.', on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', related_query_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment='The holder the feature is granted to. Erased with the holder.', db_constraint=False, help_text='Who the feature is granted to.', on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', related_query_name='+', to=settings.AUTH_USER_MODEL, verbose_name='holder'),
         ),
         migrations.AddField(
             model_name='featuregrantevent',

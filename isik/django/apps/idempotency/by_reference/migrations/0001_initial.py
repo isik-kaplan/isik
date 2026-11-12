@@ -16,16 +16,13 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='IdempotencyClaim',
             fields=[
-                ('id', models.UUIDField(db_comment="The claim's own identifier.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The claim's own identifier.", primary_key=True, serialize=False)),
-                ('key', models.UUIDField(db_comment='The Idempotency-Key the caller sent.', help_text='The Idempotency-Key the caller sent.')),
-                ('fingerprint', models.CharField(db_comment='sha256 of the request the key was spent on - its method, path, query and body.', help_text='sha256 of the request the key was spent on - its method, path, query and body.', max_length=64)),
-                ('status', models.PositiveSmallIntegerField(db_comment='The status the request was answered with. Null only while its request is being served.', help_text='The status the request was answered with.', null=True)),
-                ('claimed_at', models.DateTimeField(db_comment='When the key was spent. Nothing expires by it - it is there to delete old claims by.', default=django.utils.timezone.now, help_text='When the key was spent.')),
-                ('object_id', models.CharField(db_comment='The primary key of the row the response serialized - null for a response without a body.', help_text='The primary key of the row the response serialized, to serialize it again.', max_length=255, null=True)),
+                ('id', models.UUIDField(db_comment="The claim's own identifier.", default=isik.django.apps.common.db.models.new_primary_key, editable=False, help_text="The claim's own identifier.", primary_key=True, serialize=False, verbose_name='ID')),
+                ('key', models.UUIDField(db_comment='The Idempotency-Key the caller sent.', help_text='The Idempotency-Key the caller sent.', verbose_name='key')),
+                ('fingerprint', models.CharField(db_comment='sha256 of the request the key was spent on - its method, path, query and body.', help_text='sha256 of the request the key was spent on - its method, path, query and body.', max_length=64, verbose_name='fingerprint')),
+                ('status', models.PositiveSmallIntegerField(db_comment='The status the request was answered with. Null only while its request is being served.', help_text='The status the request was answered with.', null=True, verbose_name='status')),
+                ('claimed_at', models.DateTimeField(db_comment='When the key was spent. Nothing expires by it - it is there to delete old claims by.', default=django.utils.timezone.now, help_text='When the key was spent.', verbose_name='claimed at')),
+                ('object_id', models.CharField(db_comment='The primary key of the row the response serialized - null for a response without a body.', help_text='The primary key of the row the response serialized, to serialize it again.', max_length=255, null=True, verbose_name='object id')),
             ],
-            options={
-                'db_table': 'isik_idempotency_claim',
-                'abstract': False,
-            },
+            options={'db_table': 'isik_idempotency_claim', 'abstract': False, 'verbose_name': 'idempotency claim', 'verbose_name_plural': 'idempotency claims'},
         ),
     ]

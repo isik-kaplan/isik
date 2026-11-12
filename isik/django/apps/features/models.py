@@ -16,6 +16,7 @@ class Feature(AbstractFeature):
         db_table = "isik_feature"
         swappable = FEATURE_MODEL
         verbose_name = gettext_lazy("feature")
+        verbose_name_plural = gettext_lazy("features")
 
 
 # Its history says when each grant was revoked - swapped out with it.
@@ -26,6 +27,7 @@ class FeatureGrant(AbstractFeatureGrant):
         on_delete=ERASE,
         related_name="+",
         help_text=gettext_lazy("Who the feature is granted to."),
+        verbose_name=gettext_lazy("holder"),
         db_comment="The holder the feature is granted to. Erased with the holder.",
     )
 
@@ -33,6 +35,7 @@ class FeatureGrant(AbstractFeatureGrant):
         db_table = "isik_feature_grant"
         swappable = GRANT_MODEL
         verbose_name = gettext_lazy("feature grant")
+        verbose_name_plural = gettext_lazy("feature grants")
 
 
 history_swapped_with(FeatureGrant, GRANT_MODEL)
@@ -43,3 +46,4 @@ class SweepCursor(AbstractSweepCursor):
         db_table = "isik_sweep_cursor"
         swappable = SWEEP_MODEL
         verbose_name = gettext_lazy("sweep cursor")
+        verbose_name_plural = gettext_lazy("sweep cursors")

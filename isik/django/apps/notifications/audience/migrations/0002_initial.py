@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='device',
             name='user',
-            field=models.ForeignKey(db_comment='The user signed in on the device.', help_text='Whose device it is.', on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment='The user signed in on the device.', help_text='Whose device it is.', on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='user'),
         ),
         pgtrigger.migrations.AddTrigger(
             model_name='endpoint',
@@ -35,32 +35,32 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='endpointkind',
             name='endpoint',
-            field=models.ForeignKey(db_comment='The endpoint wanting the kind.', help_text='The endpoint wanting the kind.', on_delete=django.db.models.deletion.CASCADE, related_name='kinds', to=settings.ISIK_NOTIFICATIONS_ENDPOINT_MODEL),
+            field=models.ForeignKey(db_comment='The endpoint wanting the kind.', help_text='The endpoint wanting the kind.', on_delete=django.db.models.deletion.CASCADE, related_name='kinds', related_query_name='kinds', to=settings.ISIK_NOTIFICATIONS_ENDPOINT_MODEL, verbose_name='endpoint'),
         ),
         migrations.AddField(
             model_name='endpointkind',
             name='kind',
-            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL),
+            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL, verbose_name='kind'),
         ),
         migrations.AddField(
             model_name='inboxitem',
             name='kind',
-            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL),
+            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL, verbose_name='kind'),
         ),
         migrations.AddField(
             model_name='inboxitem',
             name='user',
-            field=models.ForeignKey(db_comment="The user it's for.", help_text="The user it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment="The user it's for.", help_text="The user it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='user'),
         ),
         migrations.AddField(
             model_name='subscription',
             name='kind',
-            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL),
+            field=models.ForeignKey(db_comment="The kind it's for.", help_text="The kind it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.ISIK_NOTIFICATIONS_KIND_POLICY_MODEL, verbose_name='kind'),
         ),
         migrations.AddField(
             model_name='subscription',
             name='user',
-            field=models.ForeignKey(db_comment="The user it's for.", help_text="The user it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment="The user it's for.", help_text="The user it's for.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='user'),
         ),
         migrations.AlterUniqueTogether(
             name='device',

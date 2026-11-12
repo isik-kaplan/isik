@@ -20,6 +20,7 @@ def _kind():
         model_name(KIND_POLICY_MODEL),
         on_delete=models.CASCADE,
         related_name="+",
+        verbose_name=gettext_lazy("kind"),
         help_text=gettext_lazy("The kind it's for."),
         db_comment="The kind it's for.",
     )
@@ -30,6 +31,7 @@ def _user():
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="+",
+        verbose_name=gettext_lazy("user"),
         help_text=gettext_lazy("The user it's for."),
         db_comment="The user it's for.",
     )
@@ -43,6 +45,7 @@ class Subscription(AbstractSubscription):
         db_table = "isik_subscription"
         swappable = "ISIK_NOTIFICATIONS_SUBSCRIPTION_MODEL"
         verbose_name = gettext_lazy("subscription")
+        verbose_name_plural = gettext_lazy("subscriptions")
 
 
 class InboxItem(AbstractInboxItem):
@@ -53,6 +56,7 @@ class InboxItem(AbstractInboxItem):
         db_table = "isik_inbox_item"
         swappable = "ISIK_NOTIFICATIONS_INBOX_ITEM_MODEL"
         verbose_name = gettext_lazy("inbox item")
+        verbose_name_plural = gettext_lazy("inbox items")
 
 
 class Endpoint(AbstractEndpoint):
@@ -60,6 +64,7 @@ class Endpoint(AbstractEndpoint):
         db_table = "isik_endpoint"
         swappable = ENDPOINT_MODEL
         verbose_name = gettext_lazy("endpoint")
+        verbose_name_plural = gettext_lazy("endpoints")
 
 
 class EndpointKind(AbstractEndpointKind):
@@ -69,6 +74,8 @@ class EndpointKind(AbstractEndpointKind):
         related_name="kinds",
         help_text=gettext_lazy("The endpoint wanting the kind."),
         db_comment="The endpoint wanting the kind.",
+        verbose_name=gettext_lazy("endpoint"),
+        related_query_name="kinds",
     )
     kind = _kind()
 
@@ -76,6 +83,7 @@ class EndpointKind(AbstractEndpointKind):
         db_table = "isik_endpoint_kind"
         swappable = "ISIK_NOTIFICATIONS_ENDPOINT_KIND_MODEL"
         verbose_name = gettext_lazy("endpoint kind")
+        verbose_name_plural = gettext_lazy("endpoint kinds")
 
 
 class Device(AbstractDevice):
@@ -85,9 +93,11 @@ class Device(AbstractDevice):
         related_name="+",
         help_text=gettext_lazy("Whose device it is."),
         db_comment="The user signed in on the device.",
+        verbose_name=gettext_lazy("user"),
     )
 
     class Meta(AbstractDevice.Meta):
         db_table = "isik_device"
         swappable = "ISIK_NOTIFICATIONS_DEVICE_MODEL"
         verbose_name = gettext_lazy("device")
+        verbose_name_plural = gettext_lazy("devices")

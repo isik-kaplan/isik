@@ -22,10 +22,16 @@ class DefaultMakerBase(models.Model):
     """Fallback base for a generated model when no `base_model=`/`<SETTING>` applies."""
 
     created_at = models.DateTimeField(
-        auto_now_add=True, help_text=gettext_lazy("When the row was created."), db_comment="When the row was created."
+        auto_now_add=True,
+        help_text=gettext_lazy("When the row was created."),
+        db_comment="When the row was created.",
+        verbose_name=gettext_lazy("created at"),
     )
     updated_at = models.DateTimeField(
-        auto_now=True, help_text=gettext_lazy("When the row last changed."), db_comment="When the row last changed."
+        auto_now=True,
+        help_text=gettext_lazy("When the row last changed."),
+        db_comment="When the row last changed.",
+        verbose_name=gettext_lazy("updated at"),
     )
 
     class Meta:

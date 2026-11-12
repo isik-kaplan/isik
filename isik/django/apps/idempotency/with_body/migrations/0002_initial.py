@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='idempotencyclaimwithbody',
             name='claimed_by',
-            field=models.ForeignKey(db_comment="Who spent the key - a key is only ever compared with its caller's own.", help_text="Who spent the key - a key is only ever compared with its caller's own.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(db_comment="Who spent the key - a key is only ever compared with its caller's own.", help_text="Who spent the key - a key is only ever compared with its caller's own.", on_delete=django.db.models.deletion.CASCADE, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='claimed by'),
         ),
         migrations.AddConstraint(
             model_name='idempotencyclaimwithbody',

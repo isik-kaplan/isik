@@ -173,9 +173,8 @@ them - `QuerySet.update()`, `bulk_create`, two requests racing past the check - 
 - `Check.IDENTIFIERS` (`isik.E018`) refuses any table, column, constraint or index name of the
   project's models longer than 63 characters, at startup, rather than letting `migrate` write one
   Postgres will cut.
-- `Check.DECLARED_NAMES` (`isik.E019`), off unless `ISIK["DJANGO"]["CHECKS"]` turns it on, holds a project that
-  names its own tables and indexes to it: a model with no `Meta.db_table`, or a `Meta.indexes` entry
-  Django named, is an error. A copy of a schema (django-tenants' `clone_schema`) keeps CHECK, primary key
+- `Check.DECLARED_NAMES` (`isik.E019`), off unless `ISIK["DJANGO"]["CHECKS"]` turns it on, holds a project's
+  models to the names it declares - tables, indexes, related names and more ([names](names.md)). A copy of a schema (django-tenants' `clone_schema`) keeps CHECK, primary key
   and foreign key names, but renames a UNIQUE over several columns whatever named it.
 - A `CHECK` evaluating to `NULL` is satisfied, so a nullable column needs no special arm.
 - The check reads `field._validators` — what a model actually passed. Django appends its own from

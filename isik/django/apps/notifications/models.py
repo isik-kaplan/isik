@@ -29,6 +29,7 @@ class NoticeKindPolicy(AbstractNoticeKindPolicy):
         db_table = "isik_notice_kind_policy"
         swappable = "ISIK_NOTIFICATIONS_KIND_POLICY_MODEL"
         verbose_name = gettext_lazy("notice kind")
+        verbose_name_plural = gettext_lazy("notice kinds")
 
 
 history_swapped_with(NoticeKindPolicy, KIND_POLICY_MODEL)
@@ -39,6 +40,7 @@ class Notice(AbstractNotice):
         db_table = "isik_notice"
         swappable = "ISIK_NOTIFICATIONS_NOTICE_MODEL"
         verbose_name = gettext_lazy("notice")
+        verbose_name_plural = gettext_lazy("notices")
 
 
 class FanOutShard(AbstractFanOutShard):
@@ -46,6 +48,7 @@ class FanOutShard(AbstractFanOutShard):
         db_table = "isik_fan_out_shard"
         swappable = "ISIK_NOTIFICATIONS_FAN_OUT_SHARD_MODEL"
         verbose_name = gettext_lazy("fan-out shard")
+        verbose_name_plural = gettext_lazy("fan-out shards")
 
 
 class Delivery(AbstractDelivery):
@@ -93,6 +96,7 @@ class DeliveryAttempt(AbstractDeliveryAttempt):
         db_table = "isik_delivery_attempt"
         swappable = "ISIK_NOTIFICATIONS_DELIVERY_ATTEMPT_MODEL"
         verbose_name = gettext_lazy("delivery attempt")
+        verbose_name_plural = gettext_lazy("delivery attempts")
 
 
 __all__ = [
