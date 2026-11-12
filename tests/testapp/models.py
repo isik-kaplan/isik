@@ -35,6 +35,7 @@ from isik.django.apps.common.db import (
 )
 from isik.django.apps.common.db.concurrency import ConcurrencyParts, ConcurrencyToken
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
+from isik.django.apps.common.db.scopes import ScopedForeignKey, ScopedModel
 from isik.django.apps.common.fields.generic_foreign_key import AutoGenericForeignKey
 from isik.django.apps.common.forcing import declare_force_source
 from isik.django.apps.features.bases import ERASE, AbstractOverrides
@@ -802,3 +803,51 @@ class UserOverrides(AbstractOverrides):
         help_text="Whose settings these are.",
         db_comment="The holder these settings are of. Erased with the holder.",
     )
+
+
+class Campaign(UUIDPrimaryKeyModel):
+    """A scope rows belong to - the second boundary a project keeps inside its tenant's schema."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class CampaignScoped(ScopedModel):
+    """The base of every row belonging to a campaign."""
+
+    scope_field = "campaign"
+    campaign = models.ForeignKey(Campaign, on_delete=models.PROTECT, related_name="+", help_text="Its campaign.")
+
+    class Meta:
+        abstract = True
+
+
+class Attempt(UUIDPrimaryKeyModel, CampaignScoped):
+    """A row in a campaign, others in it key to."""
+
+    door = models.CharField(max_length=20)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class AttemptResponse(UUIDPrimaryKeyModel, CampaignScoped):
+    """A row keyed to an attempt in its own campaign - the database refuses one in another."""
+
+    attempt = ScopedForeignKey(
+        Attempt,
+        on_delete=models.PROTECT,
+        related_name="responses",
+        help_text="The attempt it answers.",
+        db_comment="The attempt it answers - in its campaign.",
+        deferrable=models.Deferrable.DEFERRED,
+    )
+    follow_up = ScopedForeignKey(
+        Attempt, on_delete=models.SET_NULL, null=True, related_name="+", help_text="The attempt it led to."
+    )
+    answer = models.CharField(max_length=20)
+
+    class Meta:
+        app_label = "testapp"

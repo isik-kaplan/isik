@@ -45,6 +45,7 @@ to - every one by default. Anything else in
 | Check.DECLARED_NAMES       | isik.E019 (off)        | each name of CheckOption.NAMES Django generates for a model  |
 | Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
 | Check.CONSTRAINT_MESSAGES  | isik.E021              | a constraint answering a violation with only its name        |
+| Check.SCOPED_KEYS          | isik.E025              | a plain key between two models in one scope                  |
 
 These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
 swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
@@ -92,6 +93,7 @@ class Check(Enum):
     DECLARED_NAMES = "declared_names"
     META_INHERITANCE = "meta_inheritance"
     CONSTRAINT_MESSAGES = "constraint_messages"
+    SCOPED_KEYS = "scoped_keys"
 
 
 class CheckOption(Enum):
@@ -149,6 +151,7 @@ CHECKS = {
     Check.DECLARED_NAMES: (CheckOption.APPS, CheckOption.INHERITED_FROM_LIBRARIES, CheckOption.NAMES),
     Check.META_INHERITANCE: (CheckOption.APPS,),
     Check.CONSTRAINT_MESSAGES: (CheckOption.APPS,),
+    Check.SCOPED_KEYS: (CheckOption.APPS,),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
@@ -622,6 +625,15 @@ def every_name_is_declared(options, **kwargs):
         inherited_from_libraries=options[CheckOption.INHERITED_FROM_LIBRARIES],
     )
     return [Error(problem, hint=hint, id="isik.E019") for problem in problems]
+
+
+@isik_check(Check.SCOPED_KEYS, Tags.models)
+def every_key_in_a_scope_stays_in_it(options, **kwargs):
+    """A key between two models scoped by one field is a ScopedForeignKey - the next one added included."""
+    from isik.django.apps.common.db.scopes import scoped_key_problems
+
+    hint = _("See isik.django.apps.common.db.scopes.")
+    return [Error(problem, hint=hint, id="isik.E025") for problem in scoped_key_problems(_project_configs(options))]
 
 
 @isik_check(Check.META_INHERITANCE, Tags.models)

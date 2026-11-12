@@ -447,6 +447,26 @@ class TestVersionedModel:
         assert not triggers_of(fresh_model("AbstractVersioned", VersionedModel, abstract=True))
 
 
+class TestAnUnmanagedModel:
+    """
+    An unmanaged model's storage is something else's - a view, a foreign table, a legacy table - so it registers
+    no row triggers, which Postgres refuses outright on a view.
+    """
+
+    @isolate_apps("tests.testapp")
+    def test_registers_none(self):
+        for base in (DatabaseTimestampsModel, VersionedModel, TimestampedNote):
+            unmanaged = fresh_model("ViewNow", base, managed=False)
+
+            assert triggers_of(unmanaged) == set()
+
+    @isolate_apps("tests.testapp")
+    def test_a_managed_one_beside_it_still_does(self):
+        assert {"protect_created_at", "stamp_updated_at"} <= triggers_of(
+            fresh_model("TableNow", DatabaseTimestampsModel, managed=True)
+        )
+
+
 class TestAProxy:
     """A proxy shares its concrete model's table, whose triggers it doesn't register a second time."""
 
@@ -820,8 +840,16 @@ class TestARelationMovingItsOwner:
 
 def test_a_column_strategy_owner_keeping_neither_is_updated_by_its_key(monkeypatch):
     monkeypatch.setattr(CleanedNote, "concurrency_strategy", "column", raising=False)
-    key = SimpleNamespace(target_field=SimpleNamespace(column="id"), column="note_id")
+    key = SimpleNamespace(to_fields=[None], column="note_id")
 
     trigger = base_models._relation_lock_trigger(CleanedNote, "notes", key)
 
     assert 'UPDATE "testapp_cleanednote" SET "id" = "id" WHERE "id" = NEW."note_id";' in trigger.func
+
+
+def test_a_key_naming_its_to_field_is_matched_on_that_column():
+    key = SimpleNamespace(to_fields=["kind"], column="note_kind")
+
+    trigger = base_models._relation_lock_trigger(CleanedNote, "notes", key)
+
+    assert '"kind" = NEW."note_kind"' in trigger.func

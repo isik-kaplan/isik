@@ -12,9 +12,10 @@ from django.apps import apps as django_apps
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models, transaction
 from django.db.models import options as model_options
-from django.db.models.fields.related import lazy_related_operation
+from django.db.models.fields.related import lazy_related_operation, resolve_relation
 from django.db.models.functions import Now
 from django.db.models.signals import class_prepared
+from django.db.models.utils import make_model_tuple
 from django.utils.module_loading import import_string
 from django_lifecycle import (
     AFTER_CREATE,
@@ -499,8 +500,10 @@ def _register_triggers(sender, **kwargs):
     # and nothing here does (they declare their own Meta for app_label/ordering/etc.). Attaching
     # via pgtrigger.register() on every concrete subclass instead needs no such cooperation - Django
     # sends class_prepared for concrete models only. Not a proxy, though: it shares its concrete model's
-    # table, whose triggers are already there - registering them again under the same names is refused.
-    if sender._meta.proxy:
+    # table, whose triggers are already there - registering them again under the same names is refused. Nor an
+    # unmanaged model: its storage is something else's - a view, a foreign table, a legacy table - and a row
+    # trigger there is the owner's to declare, or one Postgres refuses outright on a view.
+    if sender._meta.proxy or not sender._meta.managed:
         return
     if issubclass(sender, DatabaseTimestampsModel):
         pgtrigger.register(*_timestamp_triggers(sender))(sender)
@@ -532,7 +535,11 @@ def _relation_lock_trigger(owner, name, owner_key):
     a model pointing at `owner` - where `owner_key` is the column naming the owner row.
     """
     quote = connection.ops.quote_name
-    table, key = quote(owner._meta.db_table), quote(owner_key.target_field.column)
+    # The owner's column the key references - its pk unless the key names a to_field - read off the owner, as a
+    # through model's key may not have resolved its target yet.
+    (to_field,) = owner_key.to_fields
+    target = owner._meta.get_field(to_field) if to_field else owner._meta.pk
+    table, key = quote(owner._meta.db_table), quote(target.column)
     owner_row = f"{key} = %s.{quote(owner_key.column)}"
     if getattr(owner, "concurrency_strategy", None) == "column":
         # The column strategy: an UPDATE of the owner row moving its database-kept fields forward, as
@@ -577,8 +584,23 @@ def _register_relation_lock(owner, name, table, owner_key):
     relation_locks.append((owner, name, proxy, trigger))
 
 
+def _owner_key(owner, through, relation):
+    """
+    The through model's key to `owner`: the one `through_fields` names, else the first whose target names it. A
+    through model the project declares may not have resolved its keys' targets yet - they're read as named.
+    """
+    if relation.remote_field.through_fields:
+        return through._meta.get_field(relation.remote_field.through_fields[0])
+    wanted = (owner._meta.app_label, owner._meta.model_name)
+    return next(
+        field
+        for field in through._meta.fields
+        if field.many_to_one and make_model_tuple(resolve_relation(through, field.remote_field.model)) == wanted
+    )
+
+
 def _lock_many_to_many(owner, _related, through, relation):
-    _register_relation_lock(owner, relation.name, through, through._meta.get_field(relation.m2m_field_name()))
+    _register_relation_lock(owner, relation.name, through, _owner_key(owner, through, relation))
 
 
 def _lock_pointing_key(table, owner, key):

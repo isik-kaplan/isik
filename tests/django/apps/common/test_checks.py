@@ -153,6 +153,7 @@ class TestTheSettings:
             "declared_names",
             "meta_inheritance",
             "constraint_messages",
+            "scoped_keys",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -230,7 +231,7 @@ class TestTheSettingsCheck:
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
             "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE, "
-            "Check.CONSTRAINT_MESSAGES."
+            "Check.CONSTRAINT_MESSAGES, Check.SCOPED_KEYS."
         ]
 
     def test_an_entry_not_a_dict(self, settings):

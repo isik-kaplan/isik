@@ -9,6 +9,6 @@ DRF (Django REST Framework) helpers: error translation, filters, pagination, per
 - [permissions.md](permissions.md) - `ReadOnly`, `is_owner`, `user_property`, `object_property`, `guarding` (field- and action-scoped permissions), and other permission factories
 - [schema.md](schema.md) - `FakeSerializer`/`FakeErrorSerializer` for ad hoc response shapes
 - [spectacular.md](spectacular.md) - `AutoSchema` fixing `HistoryMixin`/`ConditionalSerializerMixin`/`PreconditionMixin`/`IdempotencyMixin`'s schema gaps, `enum_name_overrides()`, and `SpectacularAPIView` pinned to one language
-- [serializers/](serializers/README.md) - `BaseSerializer`/`BaseModelSerializer`, model↔serializer registry, conditional include/only/exclude, create-only fields, Meta-combining, request context helpers, the concurrency-token field
+- [serializers/](serializers/README.md) - `BaseSerializer`/`BaseModelSerializer`, model↔serializer registry, conditional include/only/exclude, create-only fields, Meta-combining, request context helpers, the concurrency-token field, `ScopedRelatedField` (a `ScopedForeignKey` on the wire)
 - [utils/](utils/README.md) - current-user defaults, lazy relation fields, related-count field
 - [viewsets/](viewsets/README.md) - `BaseViewSet`/`BaseModelViewSet`, request policies, per-action serializer class, filterset/ordering wiring, protected-destroy handling, model↔viewset registry, ETag / If-Match preconditions

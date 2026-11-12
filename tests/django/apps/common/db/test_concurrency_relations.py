@@ -3,6 +3,7 @@
 import hashlib
 import threading
 import time
+import types
 import uuid
 
 import pytest
@@ -323,6 +324,85 @@ class TestTheLockTriggers:
         ((owner, relation, proxy, trigger),) = base_models.relation_locks
         assert (owner.__name__, relation) == (f"Early{suffix}", "later")
         assert f'= NEW."early{suffix}_id"' in trigger.func
+
+    def test_a_through_model_of_its_own_whose_keys_are_named_by_strings(self, monkeypatch):
+        # The project's through model declares its keys by name - resolved after the lock is registered.
+        monkeypatch.setattr(base_models, "relation_locks", [])
+        suffix = uuid.uuid4().hex[:8]
+
+        @isolate_apps("tests.testapp")
+        def define():
+            from django.db import models
+
+            def meta(**options):
+                return type("Meta", (), {"app_label": "testapp", **options})
+
+            type(
+                f"Owner{suffix}",
+                (models.Model,),
+                {
+                    "__module__": __name__,
+                    "Meta": meta(),
+                    "tags": models.ManyToManyField(f"Tag{suffix}", through=f"Join{suffix}", related_name="+"),
+                    "concurrency_relations": ("tags",),
+                },
+            )
+            type(f"Tag{suffix}", (models.Model,), {"__module__": __name__, "Meta": meta()})
+            type(
+                f"Join{suffix}",
+                (models.Model,),
+                {
+                    "__module__": __name__,
+                    "Meta": meta(),
+                    "tag": models.ForeignKey(f"Tag{suffix}", on_delete=models.CASCADE, related_name="+"),
+                    "holder": models.ForeignKey(f"testapp.Owner{suffix}", on_delete=models.CASCADE, related_name="+"),
+                },
+            )
+
+        define()
+
+        ((owner, relation, proxy, trigger),) = base_models.relation_locks
+        assert (owner.__name__, relation) == (f"Owner{suffix}", "tags")
+        assert '= NEW."holder_id"' in trigger.func
+
+    def test_a_through_model_keyed_to_the_swappable_user(self, monkeypatch):
+        from django.conf import settings as django_settings
+
+        monkeypatch.setattr(base_models, "relation_locks", [])
+        suffix = uuid.uuid4().hex[:8]
+        from django.apps import apps
+
+        user = apps.get_model(django_settings.AUTH_USER_MODEL)
+
+        @isolate_apps("tests.testapp")
+        def define():
+            from django.db import models
+
+            meta = type("Meta", (), {"app_label": user._meta.app_label})
+            membership = type(
+                f"Membership{suffix}",
+                (models.Model,),
+                {
+                    "__module__": __name__,
+                    "Meta": meta,
+                    "person": models.ForeignKey(
+                        django_settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+                    ),
+                    "group": models.ForeignKey("auth.Group", on_delete=models.CASCADE, related_name="+"),
+                },
+            )
+            relation = models.ManyToManyField("auth.Group", through=f"Membership{suffix}", related_name="+")
+            return base_models._owner_key(user, membership, relation)
+
+        assert define().name == "person"
+
+    def test_through_fields_name_the_owners_key(self):
+        from django.db import models
+
+        relation = models.ManyToManyField("auth.Group", through="x", through_fields=("second", "first"))
+        through = types.SimpleNamespace(_meta=types.SimpleNamespace(get_field=lambda name: f"field {name}"))
+
+        assert base_models._owner_key(None, through, relation) == "field second"
 
     def test_a_model_swapped_out_gets_none(self, monkeypatch, settings):
         # It has no table, and the model its key points at may not be in a migration's state yet.

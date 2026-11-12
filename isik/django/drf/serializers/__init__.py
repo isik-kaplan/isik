@@ -17,10 +17,12 @@ from isik.django.drf.serializers.history import generic_history_serializer
 from isik.django.drf.serializers.meta_combining import MetaCombiningMixin
 from isik.django.drf.serializers.registry import ModelSerializerRegistryMixin, SerializerRegistryExemption
 from isik.django.drf.serializers.request_context import RequestContextMixin
+from isik.django.drf.serializers.scoped_related import ScopedRelatedField
 from isik.django.drf.serializers.write_only import WriteOnlyFieldsMixin
 
 
 __all__ = [
+    "ScopedRelatedField",
     "BaseModelSerializer",
     "BaseSerializer",
     "ConcurrencyTokenField",

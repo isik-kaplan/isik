@@ -303,7 +303,8 @@ def identifier_problems(app_configs):
 def _identifiers(model):
     yield _("table"), model._meta.db_table
     for field in model._meta.local_fields:
-        yield _("column"), field.column
+        if field.column is not None:
+            yield _("column"), field.column
     for constraint in model._meta.constraints:
         yield _("constraint"), constraint.name
     for index in model._meta.indexes:

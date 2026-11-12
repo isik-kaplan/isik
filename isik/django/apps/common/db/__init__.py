@@ -26,6 +26,7 @@ from isik.django.apps.common.db.models import (
     uuid7,
 )
 from isik.django.apps.common.db.orm import get_object_or_none, starts_with, with_python_defaults
+from isik.django.apps.common.db.scopes import ScopedForeignKey, ScopedForeignKeyConstraint, ScopedModel
 from isik.django.apps.common.db.triggers import (
     ProtectTruncate,
     allow_truncate,
@@ -35,6 +36,9 @@ from isik.django.apps.common.db.triggers import (
 
 
 __all__ = [
+    "ScopedForeignKey",
+    "ScopedForeignKeyConstraint",
+    "ScopedModel",
     "APPEND_ONLY_TRIGGERS",
     "BaseModel",
     "NoViolationMessage",

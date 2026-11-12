@@ -240,19 +240,34 @@ def _overrides_columns(model):
     constraints = []
     for setting in declared.settings.values():
         name = setting.name
+        # Each column named from the setting's label - the project names the setting, isik the columns it makes.
+        called = setting.label or name.replace("_", " ")
         if isinstance(setting.own, declared.OnOverrides):
-            model.add_to_class(name, _nullable(setting.field, gettext_lazy("The holder's own choice, or none.")))
+            model.add_to_class(
+                name,
+                _nullable(
+                    setting.field,
+                    gettext_lazy("The holder's own choice, or none."),
+                    setting.field._verbose_name or called,
+                ),
+            )
         model.add_to_class(
             f"{name}_forced",
             models.BooleanField(
                 default=False,
                 db_default=False,
+                verbose_name=lazy_format("%(setting)s forced", setting=called),
                 help_text=gettext_lazy("Whether it's forced, so the holder can't change it."),
                 db_comment=f"Whether {name} is forced - {name}_forced_value then decides.",
             ),
         )
         model.add_to_class(
-            f"{name}_forced_value", _nullable(setting.field, gettext_lazy("What it's forced to, while forced."))
+            f"{name}_forced_value",
+            _nullable(
+                setting.field,
+                gettext_lazy("What it's forced to, while forced."),
+                lazy_format("%(setting)s forced value", setting=called),
+            ),
         )
         model.add_to_class(
             f"{name}_forced_source",
@@ -260,6 +275,7 @@ def _overrides_columns(model):
                 max_length=100,
                 null=True,
                 blank=True,
+                verbose_name=lazy_format("%(setting)s forced source", setting=called),
                 help_text=gettext_lazy("The force source that forced it, while forced."),
                 db_comment=f"The declared force source that forced {name}, else null.",
             ),
@@ -269,6 +285,7 @@ def _overrides_columns(model):
             models.TextField(
                 null=True,
                 blank=True,
+                verbose_name=lazy_format("%(setting)s forced reason", setting=called),
                 help_text=gettext_lazy("Why it was forced, while forced."),
                 db_comment=f"Why {name} was forced, else null.",
             ),
@@ -311,10 +328,11 @@ def _overrides_columns(model):
     model._meta.original_attrs["constraints"] = model._meta.constraints
 
 
-def _nullable(field, help_text):
+def _nullable(field, help_text, verbose_name):
     column = field.clone()
     column.null, column.blank, column.default, column.db_default = True, True, None, models.NOT_PROVIDED
     column.help_text, column.db_comment = help_text, str(help_text)
+    column.verbose_name = column._verbose_name = verbose_name
     return column
 
 

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-12
+
+### Added
+
+- `ScopedModel` and `ScopedForeignKey` (`isik.django.apps.common.db`): rows the database keeps in one scope - a
+  campaign, a workspace. A `ScopedModel` names its `scope_field` and is unique on `(scope, id)`. A
+  `ScopedForeignKey` to another model scoped by the same field is one foreign key over `(scope, <name>_id)`,
+  referencing the target's `(scope, id)`, deferrable where `deferrable` says - with its `<name>_id` column, an
+  index on `(scope, <name>_id)`, and the ORM's relation: traversal, `select_related`, reverse accessors, and the
+  scope set from the target on assignment. `ScopedForeignKeyConstraint` is the foreign key itself, added once
+  every table of its migration exists, and validated by `full_clean()`. `refresh_from_db()` reads a key's target
+  again with its columns, on Django 5.2 too.
+- `ScopedRelatedField` (`isik.django.drf.serializers`): a `ScopedForeignKey` in a serializer, read from its
+  column and written as an id looked up in the request's scope.
+- `Check.SCOPED_KEYS` (`isik.E025`): a plain key between two models scoped by the same field, a scoped key to a
+  model scoped by another or keyed by something other than a UUID, and a scoped model naming no scope field.
+
+### Fixed
+
+- An unmanaged model on `BaseModel` - a view, a foreign table, a legacy table mapped read-only - registers none
+  of isik's row triggers (`protect_created_at`, `stamp_updated_at`, `bump_version`). Its storage is something
+  else's, and on a view Postgres refused the BEFORE UPDATE trigger at `pgtrigger install`.
+- The columns the features app makes on a project's overrides model are named - `<name>_forced`, `_forced_value`,
+  `_forced_source` and `_forced_reason` from the setting's `label`, else its name in words, and the setting's own
+  column from its field's `verbose_name`, else the label - so `isik.E019`'s `Name.VERBOSE_NAME` holds them, and the
+  project needn't. `makemigrations` writes an `AlterField` for each, with no SQL.
+- `concurrency_relations` naming a many-to-many through a model the project declares - the through model
+  `Check.DECLARED_NAMES`' `Name.THROUGH_MODEL` asks for - failed every command as the models loaded: the lock was
+  registered before the through model's key to its owner had resolved its target, so Django found no key to the
+  owner. isik finds that key by the target it names, and reads the column it references off the owner.
+- `isik.E018` measures the columns a model has - a field with no column of its own, a `ForeignObject`, raised a
+  `TypeError` there.
+
 ## [0.51.0] - 2026-11-12
 
 ### Added

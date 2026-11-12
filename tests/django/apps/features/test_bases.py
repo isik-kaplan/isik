@@ -1,5 +1,7 @@
 """What each features base gives the project's concrete model when it's prepared: its columns, constraints, triggers."""
 
+import dataclasses
+
 from django.db import models
 from django.test.utils import isolate_apps
 
@@ -137,6 +139,36 @@ class TestTheOverridesColumns:
         ]
         assert Isolated._meta.constraints == expected
         assert Isolated._meta.original_attrs["constraints"] == expected
+
+    @isolate_apps("tests.testapp")
+    def test_each_column_is_named_from_the_settings_label(self, monkeypatch):
+        labelled = dataclasses.replace(
+            a_setting("limit", models.IntegerField(default=3), OnOverrides()), label="Endpoint limit"
+        )
+        named = dataclasses.replace(
+            a_setting("note_text", models.TextField(null=True, verbose_name="Own note"), OnOverrides()), label=None
+        )
+        monkeypatch.setattr(declarations, "settings", {"limit": labelled, "note_text": named})
+
+        class Named(AbstractOverrides):
+            class Meta:
+                app_label = "testapp"
+                db_table = "named"
+
+        names = {field.name: str(field.verbose_name) for field in Named._meta.local_fields}
+        assert {name: value for name, value in names.items() if name.startswith(("limit", "note_text"))} == {
+            "limit": "Endpoint limit",
+            "limit_forced": "Endpoint limit forced",
+            "limit_forced_value": "Endpoint limit forced value",
+            "limit_forced_source": "Endpoint limit forced source",
+            "limit_forced_reason": "Endpoint limit forced reason",
+            "note_text": "Own note",
+            "note_text_forced": "note text forced",
+            "note_text_forced_value": "note text forced value",
+            "note_text_forced_source": "note text forced source",
+            "note_text_forced_reason": "note text forced reason",
+        }
+        assert all(field._verbose_name is not None for field in Named._meta.local_fields if field.name != "id")
 
 
 class TestTheLedgerTriggers:
