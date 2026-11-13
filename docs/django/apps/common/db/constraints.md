@@ -85,6 +85,7 @@ Enforcing it at the column takes the escape hatch away, and does it silently.
 
 A field with `choices` gets `IN (...)`, admitting null where the column is nullable and the empty
 string where it is `blank` — refusing either would refuse what the field was declared to allow.
+A field's retired values ([choices](choices.md)) are in it too, beside its choices.
 
 ### A callable `choices` is a snapshot
 

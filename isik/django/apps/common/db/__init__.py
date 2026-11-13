@@ -1,4 +1,5 @@
 from isik.django.apps.common.db import lookups  # noqa: F401
+from isik.django.apps.common.db.choices import ChoiceRules, EnumField, with_choice_rules
 from isik.django.apps.common.db.constraints import NoViolationMessage, fitted_name
 from isik.django.apps.common.db.fields import IfUnset, if_unset, redeclare
 from isik.django.apps.common.db.history import (
@@ -41,6 +42,9 @@ __all__ = [
     "ScopedModel",
     "APPEND_ONLY_TRIGGERS",
     "BaseModel",
+    "ChoiceRules",
+    "EnumField",
+    "with_choice_rules",
     "NoViolationMessage",
     "ProtectTruncate",
     "allow_truncate",

@@ -16,7 +16,7 @@ from isik.django.apps.common.db.scopes import (
     ScopedModel,
     scoped_key_problems,
 )
-from tests.testapp.models import Attempt, AttemptResponse, Campaign
+from tests.testapp.models import Attempt, AttemptResponse, Campaign, Code, CodedAttempt
 
 
 pytestmark = pytest.mark.django_db
@@ -266,10 +266,70 @@ class TestDeclaring:
         assert "editable" not in AttemptResponse._meta.get_field("attempt").deconstruct()[3]
         assert list(forms.modelform_factory(AttemptResponse, fields="__all__").base_fields) == ["campaign", "answer"]
 
-    def test_from_and_to_fields_are_its_own(self):
-        key = ScopedForeignKey(Attempt, on_delete=models.CASCADE, from_fields=["x"], to_fields=["y"])
+    def test_from_and_to_fields_set_once_on_a_model(self):
+        key = ScopedForeignKey(Attempt, on_delete=models.CASCADE)
 
         assert (key.from_fields, key.to_fields) == ([], [])
+
+    @pytest.mark.parametrize(
+        ("given", "message"),
+        [
+            ({"to_fields": "id"}, "A ScopedForeignKey's from_fields and to_fields are tuples of field names."),
+            ({"to_fields": ()}, "A ScopedForeignKey's from_fields and to_fields are tuples of field names."),
+            (
+                {"to_fields": ["id"], "from_fields": "x_id"},
+                "A ScopedForeignKey's from_fields and to_fields are tuples of field names.",
+            ),
+            (
+                {"to_fields": ["id"], "from_fields": ()},
+                "A ScopedForeignKey's from_fields and to_fields are tuples of field names.",
+            ),
+            (
+                {"from_fields": ["x_id"]},
+                "A ScopedForeignKey's from_fields name its own field for each of to_fields, in their order.",
+            ),
+            (
+                {"from_fields": ["x_id"], "to_fields": ["id", "kind"]},
+                "A ScopedForeignKey's from_fields name its own field for each of to_fields, in their order.",
+            ),
+        ],
+    )
+    def test_from_and_to_fields_refused(self, given, message):
+        with pytest.raises(TypeError) as raised:
+            ScopedForeignKey(Attempt, on_delete=models.CASCADE, **given)
+
+        assert str(raised.value) == message
+
+    @pytest.mark.parametrize(
+        ("given", "message"),
+        [
+            (
+                {"to_fields": ["id", "kind"], "from_fields": ["code", "kind"]},
+                "Keyed.code's from_fields start with its own column, code_id.",
+            ),
+            (
+                {"to_fields": ["id", "campaign"]},
+                "Keyed.code leads its key with its scope, campaign - from_fields and to_fields name the rest.",
+            ),
+            (
+                {"to_fields": ["id", "kind"], "from_fields": ["code_id", "campaign"]},
+                "Keyed.code leads its key with its scope, campaign - from_fields and to_fields name the rest.",
+            ),
+        ],
+    )
+    def test_from_and_to_fields_refused_on_a_model(self, given, message):
+        with pytest.raises(TypeError) as raised, isolate_apps("tests.testapp"):
+
+            class Keyed(ScopedModel):
+                scope_field = "campaign"
+                campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="+")
+                kind = models.CharField(max_length=10)
+                code = ScopedForeignKey(Code, on_delete=models.CASCADE, related_name="+", **given)
+
+                class Meta:
+                    app_label = "testapp"
+
+        assert str(raised.value) == message
 
     def test_inherited_from_an_abstract_base_once(self):
         with isolate_apps("tests.testapp"):
@@ -508,7 +568,88 @@ class TestTheCheck:
         return scoped_key_problems([types.SimpleNamespace(get_models=lambda: list(models_))])
 
     def test_the_test_projects_scoped_models(self):
-        assert self.problems(Attempt, AttemptResponse, Campaign) == []
+        assert self.problems(Attempt, AttemptResponse, Campaign, Code, CodedAttempt) == []
+
+    @staticmethod
+    def keyed_to(*target_meta, uuid_kind=False, **key):
+        """A model keying to a `Target` whose Meta holds `target_meta` - `(name, value)` pairs."""
+        with isolate_apps("tests.testapp"):
+
+            class Target(ScopedModel):
+                id = models.UUIDField(primary_key=True)
+                scope_field = "campaign"
+                campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="+")
+                kind = models.UUIDField() if uuid_kind else models.CharField(max_length=10)
+
+                Meta = type("Meta", (), {"app_label": "testapp", **dict(target_meta)})
+
+            class Keyed(ScopedModel):
+                scope_field = "campaign"
+                campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="+")
+                kind = models.CharField(max_length=10)
+                target = ScopedForeignKey(Target, on_delete=models.CASCADE, related_name="+", **key)
+
+                class Meta:
+                    app_label = "testapp"
+
+        return Keyed
+
+    def test_a_key_to_columns_no_unique_constraint_holds(self):
+        keyed = self.keyed_to(to_fields=["id", "kind"])
+
+        assert self.problems(keyed) == [
+            "testapp.Keyed.target references testapp.Target's (campaign, id, kind), which no unique constraint of "
+            "testapp.Target holds - add models.UniqueConstraint(fields=['campaign', 'id', 'kind'], "
+            "name='testapp_target_id_kind_in_scope') to its Meta.constraints."
+        ]
+
+    @pytest.mark.parametrize(
+        "meta",
+        [
+            ("unique_together", [("kind", "id", "campaign")]),
+            ("constraints", [models.UniqueConstraint(fields=["kind", "campaign", "id"], name="held")]),
+        ],
+    )
+    def test_a_key_to_columns_a_unique_constraint_holds(self, meta):
+        assert self.problems(self.keyed_to(meta, to_fields=["id", "kind"])) == []
+
+    @pytest.mark.parametrize(
+        "unique",
+        [
+            models.UniqueConstraint(
+                fields=["campaign", "id", "kind"], name="late", deferrable=models.Deferrable.DEFERRED
+            ),
+            models.UniqueConstraint(fields=["campaign", "id", "kind"], name="some", condition=models.Q(kind="a")),
+            models.UniqueConstraint(models.F("campaign"), models.F("id"), models.F("kind"), name="expressed"),
+            models.UniqueConstraint(fields=["campaign", "id"], name="narrower"),
+        ],
+    )
+    def test_a_unique_constraint_postgres_cant_reference(self, unique):
+        problems = self.problems(self.keyed_to(("constraints", [unique]), to_fields=["id", "kind"]))
+
+        assert [problem.split(" holds - ")[0] for problem in problems] == [
+            "testapp.Keyed.target references testapp.Target's (campaign, id, kind), which no unique constraint of "
+            "testapp.Target"
+        ]
+
+    def test_a_key_naming_fields_that_arent_there(self):
+        keyed = self.keyed_to(to_fields=["id", "sort"], from_fields=["target_id", "order"])
+
+        assert self.problems(keyed) == [
+            "testapp.Keyed.target names order, sort, which neither it nor testapp.Target has."
+        ]
+
+    def test_a_key_holding_something_else_in_its_column(self):
+        keyed = self.keyed_to(to_fields=["kind"])
+
+        assert self.problems(keyed) == [
+            "testapp.Keyed.target holds testapp.Target.kind in its UUID column, and it isn't a UUID."
+        ]
+
+    def test_a_key_holding_another_uuid_in_its_column(self):
+        keyed = self.keyed_to(("unique_together", [("campaign", "kind")]), uuid_kind=True, to_fields=["kind"])
+
+        assert self.problems(keyed) == []
 
     def test_a_plain_key_between_two_models_in_one_scope(self):
         with isolate_apps("tests.testapp"):
@@ -657,6 +798,11 @@ class TestAKeyBuiltNow:
 
         return Built, Built._meta.get_field("order_line"), Built._meta.get_field("order_line_id")
 
+    def test_to_fields_name_its_own_fields_alike(self):
+        model, key, column = self.build(on_delete=models.CASCADE, to_fields=("id", "door"))
+
+        assert (key.from_fields, key.to_fields) == (["campaign", "order_line_id", "door"], ["campaign", "id", "door"])
+
     def test_its_column(self):
         model, key, column = self.build(on_delete=models.CASCADE, help_text="The line.", db_comment="A line.")
 
@@ -753,3 +899,100 @@ class TestTheConstraintsReferences:
         assert scoped_key_problems([types.SimpleNamespace(get_models=lambda: [Campaign, Unnamed])]) == [
             "testapp.Unnamed is a ScopedModel naming no scope_field - name the field its scope is."
         ]
+
+
+class TestAKeyToAnyUnique:
+    """`CodedAttempt.code` references `Code`'s `(campaign, id, kind)` - the scope and the kind kept with the key."""
+
+    @pytest.fixture
+    def door(self, north):
+        return Code.objects.create(campaign=north, kind="door")
+
+    @pytest.fixture
+    def call(self, north):
+        return Code.objects.create(campaign=north, kind="call")
+
+    def test_its_related_fields(self):
+        code, follow = CodedAttempt._meta.get_field("code"), CodedAttempt._meta.get_field("follow_code")
+
+        assert (code.from_fields, code.to_fields) == (["campaign", "code_id", "kind"], ["campaign", "id", "kind"])
+        assert (code.referencing, code.referenced) == (("code_id", "kind"), ("id", "kind"))
+        assert (follow.from_fields, follow.to_fields) == (
+            ["campaign", "follow_code_id", "follow_kind"],
+            ["campaign", "id", "kind"],
+        )
+        assert (follow.referencing, follow.referenced) == (("follow_code_id", "follow_kind"), ("id", "kind"))
+        default = AttemptResponse._meta.get_field("attempt")
+        assert (default.referencing, default.referenced) == (("attempt_id",), ("id",))
+
+    def test_deconstructed(self):
+        code = CodedAttempt._meta.get_field("code").deconstruct()[3]
+        follow = CodedAttempt._meta.get_field("follow_code").deconstruct()[3]
+
+        assert (code["to_fields"], "from_fields" in code) == (("id", "kind"), False)
+        assert (follow["to_fields"], follow["from_fields"]) == (("id", "kind"), ("follow_code_id", "follow_kind"))
+
+    def test_its_constraint_and_index(self):
+        key = constraint(CodedAttempt, "testapp_codedattempt_code_in_scope")
+        index = next(each for each in CodedAttempt._meta.indexes if each.name == "testapp_02aff938_code_in_scope")
+
+        assert (key.fields, key.to, key.to_fields) == (
+            ("campaign", "code_id", "kind"),
+            "testapp.Code",
+            ("campaign", "id", "kind"),
+        )
+        assert index.fields == ["campaign", "code_id", "kind"]
+
+    def test_assigning_the_code_sets_its_scope_and_kind(self, north, door):
+        attempt = CodedAttempt(code=door)
+
+        assert (attempt.campaign_id, attempt.code_id, attempt.kind) == (north.pk, door.pk, "door")
+        attempt.follow_code = door
+        assert (attempt.follow_code_id, attempt.follow_kind) == (door.pk, "door")
+
+    def test_a_kind_the_code_doesnt_have_is_refused(self, north, door):
+        attempt = CodedAttempt.objects.create(code=door)
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            CodedAttempt.objects.filter(pk=attempt.pk).update(kind="call")
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Code.objects.filter(pk=door.pk).update(kind="call")
+
+    def test_full_clean_refuses_a_kind_the_code_doesnt_have(self, north, door):
+        attempt = CodedAttempt(code=door)
+        attempt.kind = "call"
+
+        with pytest.raises(ValidationError) as refused:
+            attempt.full_clean()
+
+        assert refused.value.messages == ["The code is in another scope, or isn't there."]
+
+    def test_traversal(self, north, door, call):
+        attempt = CodedAttempt.objects.create(code=door, follow_code=call)
+
+        assert list(door.attempts.all()) == [attempt]
+        assert CodedAttempt.objects.select_related("code").get(code=door).code == door
+        assert list(CodedAttempt.objects.filter(follow_code=call)) == [attempt]
+
+    def test_set_null_nulls_its_column(self, north, door, call):
+        attempt = CodedAttempt.objects.create(code=door, follow_code=call)
+
+        call.delete()
+
+        attempt.refresh_from_db()
+        assert (attempt.follow_code_id, attempt.follow_kind, attempt.follow_code) == (None, "call", None)
+
+    def test_refreshing_an_extra_column_forgets_the_row(self, north, door):
+        attempt = CodedAttempt.objects.create(code=door)
+        assert attempt.code == door
+
+        attempt.refresh_from_db(fields=["kind"])
+
+        assert "code" not in attempt._state.fields_cache
+
+    def test_postgres_holds_it(self):
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, CodedAttempt._meta.db_table)
+
+        assert constraints["testapp_codedattempt_code_in_scope"]["columns"] == ["campaign_id", "code_id", "kind"]
+        assert constraints["testapp_codedattempt_code_in_scope"]["foreign_key"] == ("testapp_code", "campaign_id")

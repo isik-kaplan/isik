@@ -27,11 +27,13 @@ from isik.django.apps.common.db import (
     BaseModel,
     ContextField,
     DatabaseTimestampsModel,
+    EnumField,
     FullCleanOnSaveModel,
     ReprModel,
     UUIDPrimaryKeyModel,
     VersionedModel,
     track_events,
+    with_choice_rules,
 )
 from isik.django.apps.common.db.concurrency import ConcurrencyParts, ConcurrencyToken
 from isik.django.apps.common.db.constraints import as_condition, no_database_form, python_only_validator
@@ -848,6 +850,69 @@ class AttemptResponse(UUIDPrimaryKeyModel, CampaignScoped):
         Attempt, on_delete=models.SET_NULL, null=True, related_name="+", help_text="The attempt it led to."
     )
     answer = models.CharField(max_length=20)
+
+    class Meta:
+        app_label = "testapp"
+
+
+class Code(UUIDPrimaryKeyModel, CampaignScoped):
+    """A row in a campaign of one kind - a key to it can hold its kind too."""
+
+    kind = models.CharField(max_length=10, help_text="What it codes.")
+
+    class Meta:
+        app_label = "testapp"
+        constraints = [
+            models.UniqueConstraint(fields=["campaign", "id", "kind"], name="testapp_code_id_kind_in_scope"),
+        ]
+
+
+class CodedAttempt(UUIDPrimaryKeyModel, CampaignScoped):
+    """A row keyed to a code in its campaign, holding the code's kind - the database keeps the two agreeing."""
+
+    kind = models.CharField(max_length=10, help_text="Its code's kind.")
+    code = ScopedForeignKey(
+        Code, on_delete=models.PROTECT, to_fields=("id", "kind"), related_name="attempts", help_text="Its code."
+    )
+    follow_kind = models.CharField(max_length=10, null=True, blank=True, help_text="Its follow-up code's kind.")
+    follow_code = ScopedForeignKey(
+        Code,
+        on_delete=models.SET_NULL,
+        null=True,
+        to_fields=("id", "kind"),
+        from_fields=("follow_code_id", "follow_kind"),
+        related_name="+",
+        help_text="The code it led to.",
+    )
+
+    class Meta:
+        app_label = "testapp"
+
+
+class Stage(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    REVIEW = "review", "In review"
+    PUBLISHED = "published", "Published"
+
+
+class Manuscript(UUIDPrimaryKeyModel, FullCleanOnSaveModel):
+    """A row whose choices are held to how they change: a retired stage, the moves between stages, a level."""
+
+    stage = EnumField(
+        Stage,
+        default=Stage.DRAFT,
+        retired=("legacy",),
+        transitions={
+            Stage.DRAFT: {Stage.REVIEW},
+            Stage.REVIEW: {Stage.PUBLISHED, Stage.DRAFT},
+            "legacy": {Stage.PUBLISHED},
+        },
+    )
+    level = with_choice_rules(
+        models.IntegerField(choices=[(1, "Low"), (2, "High")], null=True, blank=True),
+        transitions={None: {1}, 1: {2}, 2: {1, None}},
+    )
+    title = models.CharField(max_length=20, blank=True)
 
     class Meta:
         app_label = "testapp"

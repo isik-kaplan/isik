@@ -9,7 +9,7 @@ from uuid import UUID
 
 import pgtrigger
 from django.apps import apps as django_apps
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import connection, models, transaction
 from django.db.models import options as model_options
 from django.db.models.fields.related import lazy_related_operation, resolve_relation
@@ -206,6 +206,10 @@ class VersionedModel(models.Model):
         abstract = True
 
 
+def _ruled_fields(model):
+    return [field for field in model._meta.concrete_fields if getattr(field, "choice_rules", None) is not None]
+
+
 class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models.Model):
     """
     `save()` runs `full_clean()` and django-lifecycle's hooks, in that model's order: BEFORE_* hooks,
@@ -240,6 +244,7 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
             if not self.SKIP_FULL_CLEAN:
                 self.full_clean()
             save(*args, **kwargs)
+            self._remember_choices(kwargs.get("update_fields"))
             return
 
         self._clear_watched_fk_model_cache()
@@ -266,6 +271,7 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
             kwargs["update_fields"] = self._widen_update_fields(requested_update_fields, before_hooks)
 
         save(*args, **kwargs)
+        self._remember_choices(kwargs.get("update_fields"))
         self._run_hooked_methods(AFTER_SAVE, **kwargs)
 
         if is_new:
@@ -290,6 +296,40 @@ class FullCleanOnSaveModel(SkippableValidatorsMixin, LifecycleModelMixin, models
         for key, val in kwargs.items():
             setattr(self, key, val)
         return self.save(_skip_hooks=skip_hooks, update_fields=update_fields)
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._remember_choices()
+        return instance
+
+    def refresh_from_db(self, using=None, fields=None, from_queryset=None):
+        super().refresh_from_db(using=using, fields=fields, from_queryset=from_queryset)
+        self._remember_choices(fields)
+
+    def _remember_choices(self, names=None):
+        # What the row holds for each field with choice rules, as last read or written - the value an update
+        # moves it from. Kept apart from django-lifecycle's initial state, which moves on only at commit.
+        stored = self.__dict__.setdefault("_stored_choices", {})
+        for field in _ruled_fields(type(self)):
+            if field.attname in self.__dict__ and (names is None or {field.name, field.attname} & set(names)):
+                stored[field.name] = self.__dict__[field.attname]
+
+    def clean_fields(self, exclude=None):
+        exclude = set(exclude or ())
+        ruled = [field for field in _ruled_fields(type(self)) if field.name not in exclude]
+        errors = {}
+        try:
+            super().clean_fields(exclude=exclude | {field.name for field in ruled})
+        except ValidationError as error:
+            errors = error.update_error_dict(errors)
+        for field in ruled:
+            try:
+                setattr(self, field.attname, field.choice_rules.clean(field, getattr(self, field.attname), self))
+            except ValidationError as error:
+                errors[field.name] = error.error_list
+        if errors:
+            raise ValidationError(errors)
 
     def _field_values(self):
         return {field.name: getattr(self, field.attname) for field in self._meta.concrete_fields}

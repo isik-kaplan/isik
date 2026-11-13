@@ -46,6 +46,7 @@ to - every one by default. Anything else in
 | Check.META_INHERITANCE     | isik.E020              | a Meta dropping an abstract base's Meta options              |
 | Check.CONSTRAINT_MESSAGES  | isik.E021              | a constraint answering a violation with only its name        |
 | Check.SCOPED_KEYS          | isik.E025              | a plain key between two models in one scope                  |
+| Check.CHOICE_RULES         | isik.E026              | choice rules on a model that can't hold them                 |
 
 These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
 swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
@@ -94,6 +95,7 @@ class Check(Enum):
     META_INHERITANCE = "meta_inheritance"
     CONSTRAINT_MESSAGES = "constraint_messages"
     SCOPED_KEYS = "scoped_keys"
+    CHOICE_RULES = "choice_rules"
 
 
 class CheckOption(Enum):
@@ -152,6 +154,7 @@ CHECKS = {
     Check.META_INHERITANCE: (CheckOption.APPS,),
     Check.CONSTRAINT_MESSAGES: (CheckOption.APPS,),
     Check.SCOPED_KEYS: (CheckOption.APPS,),
+    Check.CHOICE_RULES: (CheckOption.APPS,),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
@@ -634,6 +637,15 @@ def every_key_in_a_scope_stays_in_it(options, **kwargs):
 
     hint = _("See isik.django.apps.common.db.scopes.")
     return [Error(problem, hint=hint, id="isik.E025") for problem in scoped_key_problems(_project_configs(options))]
+
+
+@isik_check(Check.CHOICE_RULES, Tags.models)
+def every_choice_rule_is_held(options, **kwargs):
+    """A field's retired values and transitions hold on a managed FullCleanOnSaveModel, and nowhere else."""
+    from isik.django.apps.common.db.choices import choice_rule_problems
+
+    hint = _("Base the model on FullCleanOnSaveModel, or see isik.django.apps.common.db.choices.")
+    return [Error(problem, hint=hint, id="isik.E026") for problem in choice_rule_problems(_project_configs(options))]
 
 
 @isik_check(Check.META_INHERITANCE, Tags.models)

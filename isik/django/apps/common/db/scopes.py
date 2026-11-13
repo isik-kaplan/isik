@@ -51,7 +51,7 @@ class ScopedModel(models.Model):
         super().refresh_from_db(using=using, fields=fields, from_queryset=from_queryset)
         # A key has no column, so Django before 6.0 keeps the row it last read - forget it with its columns.
         for key in scoped_keys(type(self)):
-            if fields is None or {key.name, key.scope, key.column_name} & set(fields):
+            if fields is None or {key.name, *key.from_fields} & set(fields):
                 self._state.fields_cache.pop(key.cache_name, None)
 
 
@@ -151,6 +151,11 @@ class ScopedForeignKey(models.ForeignObject):
     (`models.Deferrable`), when the database checks it: at each statement unless set. `scope` names the scope
     field; it's the model's `scope_field` unless given.
 
+    `to_fields` names the target's fields the key references after the scope - its id unless given, any of its
+    fields when given, the first held by `<name>_id`: `to_fields=("id", "kind")` references `(scope, id, kind)`,
+    which a unique constraint of the target's holds. `from_fields` names the key's own field for each,
+    `<name>_id` first - the same names as `to_fields` after it unless given.
+
     Its column is a field of its own, `<name>_id`, a `UUIDField` - every model isik keys has a UUID key - and the
     key sets it, and the scope, when assigned.
     """
@@ -162,21 +167,39 @@ class ScopedForeignKey(models.ForeignObject):
             raise TypeError(
                 _("A ScopedForeignKey takes CASCADE, PROTECT, RESTRICT, SET_NULL or DO_NOTHING as its on_delete.")
             )
+        to_fields = kwargs.pop("to_fields", None)
+        from_fields = kwargs.pop("from_fields", None)
+        if any(isinstance(given, str) or given == () for given in (to_fields, from_fields)):
+            raise TypeError(_("A ScopedForeignKey's from_fields and to_fields are tuples of field names."))
+        if from_fields is not None and (to_fields is None or len(from_fields) != len(to_fields)):
+            raise TypeError(
+                _("A ScopedForeignKey's from_fields name its own field for each of to_fields, in their order.")
+            )
         # Made first, so a model inheriting the key from an abstract base copies the column before the key.
         # The comment is the column's: the key has no column of its own to say it on.
         self.column_field = models.UUIDField(
             null=null, blank=null, editable=False, db_comment=kwargs.pop("db_comment", None)
         )
-        kwargs.pop("from_fields", None)
-        kwargs.pop("to_fields", None)
         kwargs.setdefault("editable", False)
         super().__init__(to, on_delete, from_fields=[], to_fields=[], null=null, blank=null, **kwargs)
         self.scope = scope
         self.deferrable = deferrable
+        self.key_to_fields = None if to_fields is None else tuple(to_fields)
+        self.key_from_fields = None if from_fields is None else tuple(from_fields)
 
     @property
     def column_name(self):
         return f"{self.name}_id"
+
+    @property
+    def referenced(self):
+        """The target's fields the key references after the scope - its `to_fields`, or its id."""
+        return self.key_to_fields or ("id",)
+
+    @property
+    def referencing(self):
+        """The key's own fields, one for each of `referenced` - its `from_fields`, or `<name>_id` and the same names."""
+        return self.key_from_fields or (self.column_name, *self.referenced[1:])
 
     def contribute_to_class(self, cls, name):
         scope = self.scope or getattr(cls, "scope_field", None)
@@ -189,20 +212,38 @@ class ScopedForeignKey(models.ForeignObject):
                 % {"model": cls.__name__, "field": name}
             )
         self.scope = scope
-        self.from_fields = [scope, f"{name}_id"]
-        self.to_fields = [scope, None]
-        if not any(field.name == f"{name}_id" for field in cls._meta.local_fields):
+        own = f"{name}_id"
+        if self.key_from_fields and self.key_from_fields[0] != own:
+            raise TypeError(
+                _("%(model)s.%(field)s's from_fields start with its own column, %(column)s.")
+                % {"model": cls.__name__, "field": name, "column": own}
+            )
+        if scope in (self.key_to_fields or ()) or scope in (self.key_from_fields or ()):
+            raise TypeError(
+                _(
+                    "%(model)s.%(field)s leads its key with its scope, %(scope)s - from_fields and to_fields name "
+                    "the rest."
+                )
+                % {"model": cls.__name__, "field": name, "scope": scope}
+            )
+        self.from_fields = [scope, own, *(self.key_from_fields or self.referenced)[1:]]
+        self.to_fields = [scope, *(self.key_to_fields or (None,))]
+        if not any(field.name == own for field in cls._meta.local_fields):
             column = self.column_field
             column.verbose_name = column._verbose_name = lazy_format(
                 "%(name)s id", name=self.verbose_name or name.replace("_", " ")
             )
             column.help_text = self.help_text
-            cls.add_to_class(f"{name}_id", column)
+            cls.add_to_class(own, column)
         super().contribute_to_class(cls, name)
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
         del kwargs["from_fields"], kwargs["to_fields"]
+        if self.key_to_fields is not None:
+            kwargs["to_fields"] = self.key_to_fields
+        if self.key_from_fields is not None:
+            kwargs["from_fields"] = self.key_from_fields
         kwargs.pop("blank", None)
         # Not editable is its default; editable is the one to say.
         if self.editable:
@@ -249,9 +290,9 @@ def _hold_rows_in_scope(sender, **kwargs):
         constraints.append(
             ScopedForeignKeyConstraint(
                 name=fitted_name(table, f"{key.name}_in_scope"),
-                fields=[key.scope, key.column_name],
+                fields=[key.scope, *key.referencing],
                 to=_label(sender, key.remote_field.model),
-                to_fields=[key.scope, "id"],
+                to_fields=[key.scope, *key.referenced],
                 deferrable=key.deferrable,
                 violation_error_message=lazy_format(
                     "The %(field)s is in another scope, or isn't there.", field=key.verbose_name
@@ -260,7 +301,7 @@ def _hold_rows_in_scope(sender, **kwargs):
         )
         indexes.append(
             models.Index(
-                fields=[key.scope, key.column_name],
+                fields=[key.scope, *key.referencing],
                 name=fitted_name(table, f"{key.name}_in_scope", limit=models.Index.max_name_length),
             )
         )
@@ -310,7 +351,7 @@ def _key_problems(model, field):
                 _("%(model)s.%(field)s keys to %(target)s, whose id isn't a UUID - key it by new_primary_key().")
                 % {**where, "target": target._meta.label}
             ]
-        return []
+        return _target_problems(model, field, target)
     if field.name != model.scope_field and target_scope is not None and target_scope == model.scope_field:
         return [
             _(
@@ -322,12 +363,54 @@ def _key_problems(model, field):
     return []
 
 
+def _target_problems(model, field, target):
+    where = {"model": model._meta.label, "field": field.name, "target": target._meta.label}
+    missing = [name for name in field.referencing[1:] if not _has_field(model, name)] + [
+        name for name in field.referenced if not _has_field(target, name)
+    ]
+    if missing:
+        return [
+            _("%(model)s.%(field)s names %(names)s, which neither it nor %(target)s has.")
+            % {**where, "names": ", ".join(missing)}
+        ]
+    if not isinstance(target._meta.get_field(field.referenced[0]), models.UUIDField):
+        return [
+            _("%(model)s.%(field)s holds %(target)s.%(name)s in its UUID column, and it isn't a UUID.")
+            % {**where, "name": field.referenced[0]}
+        ]
+    columns = {field.scope, *field.referenced}
+    unique = [set(fields) for fields in target._meta.unique_together] + [
+        set(constraint.fields)
+        for constraint in target._meta.total_unique_constraints
+        if constraint.deferrable is None and constraint.fields
+    ]
+    if columns in unique:
+        return []
+    fields = [field.scope, *field.referenced]
+    name = fitted_name(target._meta.db_table, "_".join([*field.referenced, "in_scope"]))
+    return [
+        _(
+            "%(model)s.%(field)s references %(target)s's (%(columns)s), which no unique constraint of %(target)s "
+            "holds - add models.UniqueConstraint(fields=%(fields)r, name=%(name)r) to its Meta.constraints."
+        )
+        % {**where, "columns": ", ".join(fields), "fields": fields, "name": name}
+    ]
+
+
+def _has_field(model, name):
+    try:
+        model._meta.get_field(name)
+    except FieldDoesNotExist:
+        return False
+    return True
+
+
 def scoped_key_problems(app_configs):
     """
     The problems with the scoped models of `app_configs`, one sentence each: a `ScopedModel` naming no scope field,
     a plain `ForeignKey` or `OneToOneField` between two models scoped by the same field, and a `ScopedForeignKey`
-    to a model scoped by another field, or keyed by something other than a UUID. The system check `isik.E025`
-    reports them.
+    to a model scoped by another field, keyed by something other than a UUID, naming a field that isn't there, or
+    referencing columns no unique constraint of its target holds. The system check `isik.E025` reports them.
     """
     problems = []
     for config in app_configs:

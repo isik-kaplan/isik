@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-13
+
+### Breaking
+
+- `ScopedForeignKey` honors `to_fields` and `from_fields`, which it took before only to set aside: a key given
+  them references the columns they name. A string, an empty tuple, `from_fields` without `to_fields` or of
+  another length, `from_fields` not starting with `<name>_id`, or either naming the scope is a `TypeError`.
+
+### Added
+
+- `EnumField` and `with_choice_rules` (`isik.django.apps.common.db`): a field's choices held to how they change.
+  `retired` values are out of the field's choices and kept by a row already holding one; nothing writes one anew.
+  `transitions` are the moves an update makes from one value to another, null among them on a nullable field. Both
+  hold in `full_clean()` (`retired_choice`, `invalid_transition`) and at the column, through the field's CHECK,
+  which admits the retired values, and a `<field>_choice_rules` trigger. `EnumField(enum, ...)` is a `TextChoices`
+  enum's `CharField`, as long as its longest value, or an `IntegerChoices` enum's `IntegerField`, its migration the
+  plain field's. `with_choice_rules(field, ...)` gives any field with choices its rules.
+- `ScopedForeignKey(..., to_fields=("id", "kind"))` references any unique column set of its target after the
+  scope - `(scope, <name>_id, kind)` to `(scope, id, kind)`, so a row's copy of its target's `kind` can't drift
+  from it. `from_fields` names the key's own fields for them, the same names unless given. Its constraint and
+  index take every column; assigning the key sets each. isik never declares the target's unique constraint:
+  `isik.E025` refuses a key whose columns no unique constraint of the target holds - naming the
+  `UniqueConstraint` to add - a field it names that isn't there, and a first `to_fields` that isn't a UUID.
+- `Check.CHOICE_RULES` (`isik.E026`): choice rules on a model other than a managed, concrete
+  `FullCleanOnSaveModel`.
+
 ## [0.52.0] - 2026-11-12
 
 ### Added

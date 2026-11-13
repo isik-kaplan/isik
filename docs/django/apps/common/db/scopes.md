@@ -60,6 +60,44 @@ to the code.
 
 Every model isik keys has a UUID id, and so does every target of a `ScopedForeignKey` - `isik.E025` holds it.
 
+### A key to another unique set of columns
+
+`to_fields` names the target's fields the key references after the scope - its id unless given. A row holding
+a copy of a column of its target - a kind, a status, a version - keeps the copy agreeing with it when the key
+references that column too:
+
+```python
+class ConversationCode(BaseModel, CampaignScoped):
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["campaign", "id", "kind"], name="conversationcode_id_kind_in_scope"),
+        ]
+
+class Attempt(BaseModel, CampaignScoped):
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    code = ScopedForeignKey("codes.ConversationCode", on_delete=models.PROTECT, to_fields=("id", "kind"))
+```
+
+`Attempt.code` is `FOREIGN KEY (campaign, code_id, kind) REFERENCES conversationcode (campaign, id, kind)` - an
+attempt's code is in its campaign, and of its kind. A rule over the kind is then a `CheckConstraint` on the
+attempt's own columns.
+
+- The first of `to_fields` is what `<name>_id` holds - a `UUIDField` of the target's.
+- `from_fields` names the key's own field for each of `to_fields`, `<name>_id` first:
+  `from_fields=("follow_code_id", "follow_kind")`. Unless given, they're `<name>_id` and `to_fields`' names after
+  it. The model declares them, all but `<name>_id`.
+- Neither names the scope - it leads both.
+- The key's constraint and index are over every column; assigning `attempt.code = code` sets each.
+
+The target declares the unique constraint over `(scope, *to_fields)` itself - isik doesn't. Postgres references
+a unique constraint over exactly the key's columns, in any order - a wider one, or one with a condition, an
+expression or `deferrable`, doesn't do. So a target keyed both ways holds two: `(scope, id)`, every scoped
+model's, and `(scope, id, kind)`. `makemigrations` puts the constraint in the target's migration, and the key's
+in the migration that adds the key, which depends on the target app's latest - so a unique constraint generated
+with the key, or before it, is there when the key is added.
+
 ## On the wire
 
 `ScopedRelatedField` (`isik.django.drf.serializers`) is the key in a serializer, the target's id on the wire as a
@@ -102,6 +140,9 @@ A project whose rows each belong to a user writes `scopes=lambda request: reques
 - a `ScopedModel` names its `scope_field`, a field it has;
 - a key between two models scoped by the same field is a `ScopedForeignKey` - a plain `ForeignKey` or
   `OneToOneField` there is an error, the next one added included;
-- a `ScopedForeignKey`'s target is scoped by its field, and keyed by a UUID.
+- a `ScopedForeignKey`'s target is scoped by its field, and keyed by a UUID;
+- the fields its `from_fields` and `to_fields` name are there, and the first of `to_fields` is a UUID;
+- a unique constraint of the target holds the columns it references - the error names the
+  `models.UniqueConstraint(...)` to add to the target's `Meta.constraints`.
 
 A key from a scoped model to a model with no scope - a lookup table, the user - is a plain `ForeignKey`.

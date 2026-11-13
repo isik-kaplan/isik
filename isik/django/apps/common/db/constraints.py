@@ -25,6 +25,7 @@ import hashlib
 import inspect
 from contextlib import contextmanager
 
+import pgtrigger
 from django.core import validators as django_validators
 from django.db import connection, models
 from django.db.models.signals import class_prepared
@@ -34,6 +35,7 @@ from django.utils.deconstruct import deconstructible
 from isik._internal.translation import gettext as _
 from isik._internal.translation import lazy_format, translate_text
 from isik.common.utils.exemptions import Exemption, makes_own_exemptions
+from isik.django.apps.common.db.choices import choice_rules_trigger
 from isik.django.apps.common.db.models import FullCleanOnSaveModel
 
 
@@ -323,6 +325,9 @@ def _choices_condition(field):
     list by definition - a constraint refusing either refuses what the field was declared to allow.
     """
     allowed = [value for value, _label in field.flatchoices if value is not None]
+    # A retired value stays storable: the rows holding one keep it, and the field's trigger refuses it anew.
+    if (rules := getattr(field, "choice_rules", None)) is not None:
+        allowed += rules.retired
     condition = models.Q(**{f"{field.name}__in": allowed})
     if field.null:
         condition |= models.Q(**{f"{field.name}__isnull": True})
@@ -378,10 +383,15 @@ def constrain(model):
     if model._meta.abstract or model._meta.proxy or not issubclass(model, FullCleanOnSaveModel):
         return
     have = {constraint.name for constraint in model._meta.constraints}
+    triggers = {trigger.name for trigger in getattr(model._meta, "triggers", ())}
     wanted = []
     for field in model._meta.concrete_fields:
         if field.choices:
             wanted.append(_from_choices(field))
+        if getattr(field, "choice_rules", None) is not None and model._meta.managed:
+            trigger = choice_rules_trigger(field)
+            if trigger.name not in triggers:
+                pgtrigger.register(trigger)(model)
         wanted.append(_from_validators(field))
     wanted = [constraint for constraint in wanted if constraint is not None and constraint.name not in have]
     if not wanted:
