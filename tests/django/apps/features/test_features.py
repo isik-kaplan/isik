@@ -9,7 +9,7 @@ from celery import Celery
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, ProgrammingError, connection, models, transaction
 from django.db.models import ProtectedError
-from django.test.utils import CaptureQueriesContext
+from django.test.utils import CaptureQueriesContext, isolate_apps
 from django.utils import timezone
 
 from isik.django.apps.common.forcing import ForceRefused
@@ -39,7 +39,9 @@ from isik.django.apps.features.resolution import (
     effective_expression,
     features_at,
     has_feature,
+    has_feature_expression,
     held_features,
+    holds_every_feature,
 )
 from isik.django.conf import isik_areas
 from tests.testapp.models import EmailUser, UserOverrides
@@ -295,6 +297,147 @@ class TestResolving:
 
         annotated = EmailUser.objects.filter(pk=alice.pk).annotate(value=effective_expression("token_lifetime_days"))
         assert annotated.get().value == 45
+
+
+class TestHoldingEveryFeature:
+    """`HOLDS_EVERY_FEATURE` - holders holding every declared feature with no grant, in Python and SQL alike."""
+
+    EVERY = {"webhooks", "long_lived_tokens", "beta", "internal_flag"}
+
+    @pytest.fixture(params=["field", "q", "q_asked"])
+    def declared(self, request, settings):
+        every = {"field": "is_staff", "q": models.Q(username="alice"), "q_asked": models.Q(username__iexact="ALICE")}
+        every = every[request.param]
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": every}
+        return request.param
+
+    @pytest.fixture
+    def platform(self, alice):
+        EmailUser.objects.filter(pk=alice.pk).update(is_staff=True)
+        alice.refresh_from_db()
+        return alice
+
+    def test_unset_holds_nothing_of_its_own(self, platform):
+        assert holds_every_feature(platform) is False
+        assert resolution.every_feature_condition() is None
+        assert held_features(platform) == set()
+
+    def test_every_declared_feature(self, declared, platform, bob, fresh):
+        assert (holds_every_feature(platform), holds_every_feature(bob)) == (True, False)
+        assert held_features(platform) == self.EVERY
+        assert features_at(platform) == features_at(platform, timezone.now() - timedelta(days=1)) == self.EVERY
+        assert has_feature(platform, "webhooks") is True
+        assert (held_features(fresh(bob)), features_at(bob)) == (set(), set())
+
+    def test_every_setting_resolves_as_unlocked(self, declared, platform, fresh):
+        set_setting(platform, "token_lifetime_days", 120)
+
+        assert effective(fresh(platform), "token_lifetime_days") == Effective(120, "own")
+        assert effective(fresh(platform), "max_endpoints").origin == "default"
+
+    def test_a_field_is_read_off_the_holder(self, settings, platform, django_assert_num_queries):
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": "is_staff"}
+        unsaved = EmailUser(username="new", is_staff=True)
+
+        with django_assert_num_queries(0):
+            assert has_feature(platform, "beta") is True
+            assert holds_every_feature(unsaved) is True
+
+    def test_grants_loaded_with_it_dont_narrow_it(self, declared, platform):
+        grant(platform, "beta", source="manual")
+        loaded = with_grants_loaded(EmailUser.objects.get(pk=platform.pk))
+
+        assert held_features(loaded) == self.EVERY
+
+    @pytest.mark.parametrize(
+        "every",
+        [
+            models.Q(is_staff=True),
+            models.Q(username__exact="alice"),
+            models.Q(manager_id=None),
+            ~models.Q(username="alice"),
+            models.Q(username="bob") | models.Q(is_staff=True),
+            models.Q(username="bob") | models.Q(is_staff=False),
+            models.Q(username="alice") & models.Q(is_staff=False),
+            models.Q(username="alice") ^ models.Q(is_staff=True),
+            models.Q(username="alice") ^ models.Q(is_staff=False),
+            models.Q(username="alice") ^ models.Q(is_staff=True) ^ models.Q(is_superuser=False),
+            models.Q(models.Q(username="bob") | models.Q(username="alice"), is_superuser=False),
+        ],
+    )
+    def test_a_q_on_its_own_columns_is_read_off_the_holder(self, settings, every, platform, django_assert_num_queries):
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": every}
+        in_sql = EmailUser.objects.filter(pk=platform.pk).filter(every).exists()
+
+        with django_assert_num_queries(0):
+            assert holds_every_feature(platform) is in_sql
+            assert holds_every_feature(EmailUser(username="alice", is_staff=True)) is in_sql
+
+    @pytest.mark.parametrize(
+        "every",
+        [
+            models.Q(username__iexact="ALICE"),
+            models.Q(username=models.F("username")),
+            models.Q(pk=models.F("pk")),
+            models.Q(models.Q(is_staff=True), username__startswith="ali"),
+            models.Q(),
+        ],
+    )
+    def test_any_other_q_asks_the_row_once(self, settings, every, platform, django_assert_num_queries):
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": every}
+
+        with django_assert_num_queries(1):
+            assert holds_every_feature(platform) is True
+            assert holds_every_feature(platform) is True
+        with django_assert_num_queries(0):
+            assert holds_every_feature(EmailUser(username="alice", is_staff=True)) is False
+
+    def test_a_deferred_column_asks_the_row(self, settings, platform, django_assert_num_queries):
+        isik_areas(settings).FEATURES = {
+            **isik_areas(settings).FEATURES,
+            "HOLDS_EVERY_FEATURE": models.Q(is_staff=True),
+        }
+        deferred = EmailUser.objects.only("username").get(pk=platform.pk)
+
+        with django_assert_num_queries(1):
+            assert holds_every_feature(deferred) is True
+        assert "is_staff" in deferred.get_deferred_fields()
+
+    @isolate_apps("tests.testapp")
+    def test_a_column_with_its_own_collation_is_left_to_the_database(self):
+        class Collated(models.Model):
+            name = models.CharField(max_length=10, db_collation="C")
+            other = models.CharField(max_length=10)
+
+            class Meta:
+                app_label = "testapp"
+
+        row = Collated(name="a", other="a")
+
+        assert resolution._read_lookup(row, "name", "a") is None
+        assert resolution._read_lookup(row, "other", "a") is True
+
+    def test_a_grant_to_it_tells_nothing(self, declared, platform, heard):
+        grant(platform, "long_lived_tokens", source="manual")
+
+        assert heard == []
+
+    def test_in_sql_as_in_python(self, declared, platform, bob, fresh):
+        set_setting(platform, "token_lifetime_days", 200)
+        set_setting(bob, "token_lifetime_days", 120)
+        grant(bob, "beta", source="manual")
+        holders = EmailUser.objects.filter(pk__in=[platform.pk, bob.pk])
+
+        for name in ("token_lifetime_days", "max_endpoints"):
+            annotated = dict(holders.annotate(value=effective_expression(name)).values_list("pk", "value"))
+            assert annotated == {user.pk: effective(fresh(user), name).value for user in (platform, bob)}, name
+        for feature in self.EVERY:
+            filtered = set(holders.filter(has_feature_expression(feature)).values_list("pk", flat=True))
+            assert filtered == {user.pk for user in (platform, bob) if has_feature(fresh(user), feature)}, feature
+        assert set(holders.filter(has_feature_expression("beta")).values_list("pk", flat=True)) == {
+            platform.pk,
+            bob.pk,
+        }
 
 
 class TestWriting:

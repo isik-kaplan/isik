@@ -66,7 +66,11 @@ The values a row already holding one keeps, out of the field's choices:
 - the field's CHECK admits them beside its choices, so `migrate` keeps the rows holding them;
 - an insert never takes one, and an update never moves a row to one;
 - a row holding one saves with any other change, and moves off it where `transitions` lists the move;
-- forms, serializers and the schema offer the field's choices - the retired values are out of them.
+- forms and serializers offer the field's choices - the retired values are out of them;
+- the OpenAPI schema says both: under isik's `AutoSchema`, a response's field is `oneOf` the field's enum and
+  the retired values, listed again as `x-retired`, since a row holding one reads back with it - a generated
+  client's type has room for it. A request's field is the enum alone, with drf-spectacular's
+  `COMPONENT_SPLIT_REQUEST` on - off, one component describes both, as the response.
 
 Retiring a value is moving it from the choices to `retired`. `makemigrations` writes the CHECK and the trigger
 in one migration. Dropping it from `retired` too, once no row holds it, narrows the CHECK in the next.

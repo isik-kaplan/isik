@@ -20,6 +20,9 @@ DEFAULTS = {
     # A context manager entered around every read and write of grants and overrides - where those rows live
     # (a platform schema, say). None enters nothing.
     "IN_HOLDER_SCHEMA": None,
+    # The holders holding every declared feature without a grant - the platform's own row, say, which buys nothing
+    # of itself: a Q over the holder model, or the name of a boolean field of it. None: every feature is a grant's.
+    "HOLDS_EVERY_FEATURE": None,
     # The sources a grant may name - a subscription, a trial, a hand-made grant.
     "GRANT_SOURCES": ("manual",),
     # Whether the features view shows a grant's source and reference to the holder.

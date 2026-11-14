@@ -9,7 +9,11 @@ What a setting is for a holder, and why - `effective(holder, name)`:
 `has_feature(holder, feature)` answers from the same cache, kept on the holder instance for as long as it lives -
 one request, say - so a list of rows asks the database once per holder, and not at all for what the caller loaded
 with it: its overrides row by `select_related`, its grants by `prefetch_related` - each with its feature.
-`effective_expression(name)` gives the same answer in SQL, for annotating and filtering holders.
+`effective_expression(name)` gives the same answer in SQL, for annotating and filtering holders, and
+`has_feature_expression(feature)` the same as `has_feature()`.
+
+A holder `HOLDS_EVERY_FEATURE` names - the platform's own row, say - holds every declared feature without a
+grant, in each of these.
 """
 
 from contextlib import nullcontext
@@ -77,8 +81,73 @@ def revoked_after(at):
 
 def features_at(holder, when=None):
     """The names of the features in force for `holder` at `when` (now, unless given) - past or to come, as the
-    grants now say."""
+    grants now say; every declared one for a holder `HOLDS_EVERY_FEATURE` names."""
+    if holds_every_feature(holder):
+        return set(declarations.features)
     return set(live_grants(when).filter(holder=holder).values_list("feature__name", flat=True))
+
+
+def every_feature_condition():
+    """`HOLDS_EVERY_FEATURE` as a `Q` over the holder model - a field named is the field true - or None, unset."""
+    declared = conf.setting("HOLDS_EVERY_FEATURE")
+    if declared is None or isinstance(declared, models.Q):
+        return declared
+    return models.Q(**{declared: True})
+
+
+def holds_every_feature(holder):
+    """
+    Whether `HOLDS_EVERY_FEATURE` names `holder` - a field, read off it; a `Q` of exact lookups on the holder's
+    loaded columns, read off it too; any other `Q`, asked of the holder's row once, and kept with the rest of its
+    cache - an unsaved holder holding none of those.
+    """
+    declared = conf.setting("HOLDS_EVERY_FEATURE")
+    if declared is None:
+        return False
+    if not isinstance(declared, models.Q):
+        return bool(getattr(holder, declared))
+    cache = _cache(holder)
+    if "every" not in cache:
+        read = _read_off(holder, declared)
+        if read is None:
+            rows = type(holder)._default_manager.filter(pk=holder.pk)
+            read = not holder._state.adding and rows.filter(declared).exists()
+        cache["every"] = read
+    return cache["every"]
+
+
+def _read_off(holder, q):
+    """
+    `q` answered from `holder` as loaded - each lookup `name=value` or `name__exact=value` on a column of its own
+    that isn't deferred, with no collation of its own, `value` no expression - or None, where one isn't, or `q` is
+    empty.
+    """
+    answers = [
+        _read_off(holder, child) if isinstance(child, models.Q) else _read_lookup(holder, *child)
+        for child in q.children
+    ]
+    if not answers or None in answers:
+        return None
+    if q.connector == models.Q.OR:
+        answer = any(answers)
+    elif q.connector == models.Q.XOR:
+        answer = sum(answers) % 2 == 1
+    else:
+        answer = all(answers)
+    return answer != q.negated
+
+
+def _read_lookup(holder, lookup, value):
+    name = lookup.removesuffix("__exact")
+    field = next((field for field in holder._meta.concrete_fields if field.attname == name), None)
+    if (
+        field is None
+        or name in holder.get_deferred_fields()
+        or getattr(field, "db_collation", None)
+        or hasattr(value, "resolve_expression")
+    ):
+        return None
+    return field.to_python(getattr(holder, name)) == field.to_python(value)
 
 
 def _cache(holder):
@@ -89,7 +158,7 @@ def _cache(holder):
 def _held(holder):
     cache = _cache(holder)
     if "features" not in cache:
-        cache["features"] = _prefetched_features(holder)
+        cache["features"] = set(declarations.features) if holds_every_feature(holder) else _prefetched_features(holder)
     if cache["features"] is None:
         with in_holder_schema():
             cache["features"] = features_at(holder)
@@ -272,21 +341,31 @@ def effective_expression(name):
     value = Coalesce(own, models.Value(setting.default, output_field=setting.field))
     branches = [models.When(models.Exists(forced), then=models.Subquery(forced.values(f"{name}_forced_value")))]
     if setting.feature is not None:
-        grants = (
-            get_grant_model()
-            ._default_manager.filter(
-                holder=models.OuterRef("pk"),
-                feature__name=setting.feature,
-                status=GrantStatus.ACTIVE,
-                starts_at__lte=Now(),
-            )
-            .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=Now()))
-        )
         bound = setting.without_feature
         if isinstance(bound, declarations.LOCKING):
             missing = models.Value(bound.locked(setting.default), output_field=setting.field)
         else:
             clamp = Least if isinstance(bound, declarations.AtMost) else Greatest
             missing = clamp(value, models.Value(bound.bound))
-        branches.append(models.When(~models.Exists(grants), then=missing))
+        branches.append(models.When(~has_feature_expression(setting.feature), then=missing))
     return models.Case(*branches, default=value)
+
+
+def has_feature_expression(feature):
+    """
+    `has_feature(holder, feature)` as SQL over the holder model - a `Q` for `filter()`, or `annotate()` wrapped in
+    `ExpressionWrapper(..., output_field=BooleanField())`: a grant of it in force now, or `HOLDS_EVERY_FEATURE`.
+    """
+    grants = (
+        get_grant_model()
+        ._default_manager.filter(
+            holder=models.OuterRef("pk"),
+            feature__name=str(feature),
+            status=GrantStatus.ACTIVE,
+            starts_at__lte=Now(),
+        )
+        .filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=Now()))
+    )
+    held = models.Q(models.Exists(grants))
+    every = every_feature_condition()
+    return held if every is None else held | every

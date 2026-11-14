@@ -62,7 +62,7 @@ msgstr ""
 msgid "%(count)d exemption call(s) or type(s) weren't loaded, so the listing isn't complete."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:160
+#: isik/django/apps/features/checks.py:178
 #, python-format
 msgid "%(feature)s unlocks no setting and nothing checks it - give a setting feature=, or check it with HasFeature or requires_feature()."
 msgstr ""
@@ -424,7 +424,7 @@ msgstr ""
 msgid "%(model)s has no concurrency token."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:98
+#: isik/django/apps/features/checks.py:116
 #, python-format
 msgid "%(model)s has no history - it's what says when each grant was revoked, and the sweep reads it. Track it with @track_events()."
 msgstr ""
@@ -460,12 +460,12 @@ msgstr ""
 msgid "%(model)s isn't a model of votes(), comments(), notes() or bookmarks()"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:52
+#: isik/django/apps/features/checks.py:53
 #, python-format
 msgid "%(model)s isn't an AbstractOverrides."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:57
+#: isik/django/apps/features/checks.py:58
 #, python-format
 msgid "%(model)s keeps forced settings and has no history - who forced one, when and why is gone once it's released. Track it with @track_events()."
 msgstr ""
@@ -550,12 +550,12 @@ msgstr ""
 msgid "%(model)s's constraint %(name)s says only that it is violated - give it a violation_error_message, or NoViolationMessage(reason=...) why not."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:66
+#: isik/django/apps/features/checks.py:67
 #, python-format
 msgid "%(model)s's grants are of %(granted)s, and ISIK_FEATURES_HOLDER_MODEL is %(holder)s - declare a grant model of your own on AbstractFeatureGrant and name it in ISIK_FEATURES_GRANT_MODEL."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:110
+#: isik/django/apps/features/checks.py:128
 #, python-format
 msgid "%(model)s's history can be edited - when a grant was revoked has to stay as written. Keep it append-only."
 msgstr ""
@@ -565,17 +565,17 @@ msgstr ""
 msgid "%(model)s's history has ContextFields named like its own tracked fields: %(names)s - name them otherwise, or leave those fields out of the history."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:106
+#: isik/django/apps/features/checks.py:124
 #, python-format
 msgid "%(model)s's history leaves out status - track it."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:118
+#: isik/django/apps/features/checks.py:136
 #, python-format
 msgid "%(model)s's history records no update changing status - a revoke would leave no time."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:80
+#: isik/django/apps/features/checks.py:81
 #, python-format
 msgid "%(model)s's holder key cascades - its rows refuse a delete, and their history would outlive them; on_delete=ERASE erases both."
 msgstr ""
@@ -735,7 +735,7 @@ msgstr ""
 msgid "%(name)s is %(value)s, above the recommended safe limit of %(soft_max)s - this may take a long time"
 msgstr ""
 
-#: isik/django/apps/features/operations.py:226
+#: isik/django/apps/features/operations.py:229
 #, python-format
 msgid "%(name)s is forced, so it can't be changed."
 msgstr ""
@@ -775,7 +775,7 @@ msgstr ""
 msgid "%(name)s needs %(other)s"
 msgstr ""
 
-#: isik/django/apps/features/operations.py:228
+#: isik/django/apps/features/operations.py:231
 #, python-format
 msgid "%(name)s needs a feature you don't have."
 msgstr ""
@@ -950,7 +950,7 @@ msgstr ""
 msgid "%(setting)s and %(other)s would both be %(name)s"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:146
+#: isik/django/apps/features/checks.py:164
 #, python-format
 msgid "%(setting)s could be null - a setting always has a value, so its field takes no null=True and its default isn't None."
 msgstr ""
@@ -990,7 +990,7 @@ msgstr ""
 msgid "%(setting)s resolves as %(field)s, its own value's field - a save would keep a forced value as the holder's own. Keep the own value in a field of another name."
 msgstr ""
 
-#: isik/django/apps/features/resolution.py:253
+#: isik/django/apps/features/resolution.py:322
 #, python-format
 msgid "%(setting)s resolves as %(model)s.%(name)s, which is a field of its - name another attribute."
 msgstr ""
@@ -1000,12 +1000,12 @@ msgstr ""
 msgid "%(setting)s would be %(name)s, which the command already is"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:154
+#: isik/django/apps/features/checks.py:172
 #, python-format
 msgid "%(setting)s's own value is the holder's %(field)s, which %(model)s has no field called."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:105
+#: isik/django/apps/features/operations.py:106
 #, python-format
 msgid "%(source)s isn't one of GRANT_SOURCES."
 msgstr ""
@@ -1558,7 +1558,7 @@ msgstr ""
 msgid "Add PreconditionMixin (BaseModelViewSet has it) with the method in precondition_methods, or exempt the action in precondition_exempt_actions."
 msgstr ""
 
-#: isik/django/drf/spectacular.py:143
+#: isik/django/drf/spectacular.py:144
 #, python-format
 msgid "Always %(code)s."
 msgstr ""
@@ -1918,6 +1918,11 @@ msgstr ""
 msgid "ISIK['DJANGO']['FEATURES'] has keys it doesn't know: %(keys)s."
 msgstr ""
 
+#: isik/django/apps/features/checks.py:99
+#, python-format
+msgid "ISIK['DJANGO']['FEATURES']['HOLDS_EVERY_FEATURE'] is %(declared)r - it's a Q over %(model)s, or the name of a boolean field of it."
+msgstr ""
+
 #: isik/django/apps/features/checks.py:33
 #, python-format
 msgid "ISIK['DJANGO']['FEATURES']['SWEEP'] is %(sweep)r - it's one of %(sweeps)s."
@@ -2118,7 +2123,7 @@ msgstr ""
 msgid "No exemption type or policy exempts from %(rule)r."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:103
+#: isik/django/apps/features/operations.py:104
 #, python-format
 msgid "No feature called %(name)s is declared."
 msgstr ""
@@ -2146,7 +2151,7 @@ msgstr ""
 msgid "No question used the answers for %(keys)s."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:67
+#: isik/django/apps/features/operations.py:68
 #, python-format
 msgid "No setting called %(name)s is declared."
 msgstr ""
@@ -2210,7 +2215,7 @@ msgstr ""
 msgid "On unless turned off"
 msgstr ""
 
-#: isik/django/drf/spectacular.py:144
+#: isik/django/drf/spectacular.py:145
 #, python-format
 msgid "One of %(codes)s."
 msgstr ""
@@ -2351,6 +2356,10 @@ msgstr ""
 msgid "Retired %(kind)s."
 msgstr ""
 
+#: isik/django/drf/spectacular.py:171
+msgid "Retired - only a row already holding one has it, and nothing writes it anew."
+msgstr ""
+
 #: isik/django/apps/common/checks.py:507
 #, python-format
 msgid "Run makemigrations and migrate - the trigger is in the migrations of %(app)s."
@@ -2400,7 +2409,7 @@ msgstr ""
 msgid "See isik.django.apps.common.db.scopes."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:185
+#: isik/django/apps/features/checks.py:203
 msgid "See isik.django.apps.features."
 msgstr ""
 
@@ -2488,7 +2497,7 @@ msgstr ""
 msgid "Session key mismatch"
 msgstr ""
 
-#: isik/django/apps/features/checks.py:46
+#: isik/django/apps/features/checks.py:47
 msgid "Settings are declared, and ISIK_FEATURES_OVERRIDES_MODEL names no model to keep them in - declare one on AbstractOverrides."
 msgstr ""
 
@@ -2696,7 +2705,7 @@ msgstr ""
 msgid "The endpoint's primary key."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:172
+#: isik/django/apps/features/checks.py:190
 #, python-format
 msgid "The feature %(name)s has no label - give it label=."
 msgstr ""
@@ -2873,7 +2882,7 @@ msgstr ""
 msgid "The service its pushes go through - apns or fcm."
 msgstr ""
 
-#: isik/django/apps/features/checks.py:176
+#: isik/django/apps/features/checks.py:194
 #, python-format
 msgid "The setting %(name)s has no label - give it label=."
 msgstr ""

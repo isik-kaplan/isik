@@ -91,6 +91,35 @@ guard(org)                                # raises FeatureMissing (code "feature
 A feature never implies a permission - check both. `isik.E017` refuses a feature that unlocks no setting
 and that neither `HasFeature` nor `requires_feature()` checks: a feature nothing reads.
 
+`has_feature_expression(feature)` is `has_feature()` as a database expression, for filtering holders:
+`Organization.objects.filter(has_feature_expression("webhooks"))`.
+
+### Holding every feature
+
+A grant records what a holder was given - a subscription, a trial. A holder that's given nothing and still
+holds every feature - the platform's own organization, a customer of nobody - is named by `HOLDS_EVERY_FEATURE`:
+
+```python
+"FEATURES": {
+    "HOLDS_EVERY_FEATURE": Q(schema_name="public"),   # a Q over the holder model
+    # or "is_platform" - a boolean field of it, a GeneratedField among them
+}
+```
+
+A holder it names holds every declared feature, with no grant row: `has_feature()`, `held_features()`,
+`features_at()`, `effective()` - every setting resolves as unlocked - and in SQL, `effective_expression()` and
+`has_feature_expression()`. A grant to it, or a revoke, moves nothing, and tells nothing.
+
+- A field is read off the holder - no query, and a list of holders asks nothing more.
+- A `Q` of exact lookups on the holder's own columns - `Q(schema_name="public")`, `name__exact`, `~`, `|`, `&`
+  and `^` of them, a key by its column (`owner_id=...`) - is read off the holder as loaded: no query, an unsaved
+  holder too. A column the holder was loaded without (`only()`/`defer()`), a column with a `db_collation` of its
+  own, or a value that's an expression is asked of the row instead.
+- Any other `Q` - a relation, another lookup - is asked of the holder's row once, and kept with its cache: one
+  query per holder, and none for an unsaved one, which holds none.
+
+`isik.E017` refuses anything else: a field that isn't boolean, a name that isn't a field.
+
 ### When a grant starts or ends
 
 A grant crossing its `starts_at` or `expires_at` changes what a holder has with no row written, so
@@ -307,6 +336,7 @@ delete it means. Only the keys declared `ERASE` are erased.
 | `SETTINGS` | `None` | the module declaring the settings |
 | `HOLDER` | `None` | `f(request)` - the holder a request is about; `request.user` by default |
 | `IN_HOLDER_SCHEMA` | `None` | a context manager entered around every read and write of grants and overrides - where they live |
+| `HOLDS_EVERY_FEATURE` | `None` | the holders holding every feature with no grant - a `Q` over the holder model, or a boolean field's name |
 | `GRANT_SOURCES` | `("manual",)` | the sources a grant may name |
 | `SHOW_GRANT_SOURCE` | `False` | whether `GET features/` shows a grant's source and reference |
 | `FEATURES_VISIBLE`, `SETTINGS_VISIBLE` | `None` | `f(request, holder)` - the names the views show; every one declared visible by default |

@@ -23,6 +23,7 @@ from isik.django.apps.features.resolution import (
     features_at,
     forget,
     held_features,
+    holds_every_feature,
     in_holder_schema,
     live_grants,
     resolved,
@@ -119,15 +120,17 @@ def grant(holder, feature, *, source, reference="", starts_at=None, expires_at=N
             # In force as it's written: told now. A start still to come is the sweep's.
             forget(holder)
             held = held_features(holder)
-            _tell_crossing(holder, name, held - _held_only_by(made, name), held)
+            _tell_crossing(holder, name, held - _held_only_by(holder, made, name), held)
         if made.starts_at > made.created_at or made.expires_at is not None:
             # Once it's committed, so the run it schedules finds it.
             transaction.on_commit(schedule_next_sweep)
     return made
 
 
-def _held_only_by(made, name):
-    """{name}, made's feature, where no grant but `made` holds it now - else nothing."""
+def _held_only_by(holder, made, name):
+    """{name}, made's feature, where nothing but `made` holds it now - no other grant, nor HOLDS_EVERY_FEATURE."""
+    if holds_every_feature(holder):
+        return set()
     others = live_grants().filter(holder=made.holder_id, feature=made.feature_id).exclude(pk=made.pk)
     return set() if others.exists() else {name}
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-14
+
+### Added
+
+- `ISIK['DJANGO']['FEATURES']['HOLDS_EVERY_FEATURE']`: the holders holding every declared feature with no grant -
+  the platform's own row, a customer of nobody. A `Q` over the holder model, or the name of a boolean field of it.
+  `has_feature()`, `held_features()`, `features_at()` and `effective()` answer so, and so do `effective_expression()`
+  and the new `has_feature_expression(feature)` - `has_feature()` as SQL, to filter holders by. A grant or revoke
+  to such a holder tells nothing. `isik.E017` refuses a value that's neither. A `Q` of exact lookups on the
+  holder's loaded columns is read off the holder, with no query; any other is asked of its row once.
+
+### Fixed
+
+- A choice field reading a model field with retired values (`with_choice_rules`) described its response as the
+  field's choices alone, so a generated client's type had no room for the retired value a row still holds. Under
+  isik's `AutoSchema` the response is `oneOf` the field's enum and the retired values, listed again as
+  `x-retired`; a request is the enum alone, with `COMPONENT_SPLIT_REQUEST`.
+
 ## [0.53.0] - 2026-11-13
 
 ### Breaking

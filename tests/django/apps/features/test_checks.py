@@ -49,6 +49,41 @@ class TestTheSettingsCheck:
 
         assert checks.setting_problems() == ["ISIK['DJANGO']['FEATURES'] has keys it doesn't know: HOLDERS, SWEEPS."]
 
+    @pytest.mark.parametrize("declared", [None, models.Q(username="alice"), "is_staff"])
+    def test_holds_every_feature_naming_holders(self, settings, declared):
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": declared}
+
+        assert checks.setting_problems() == []
+
+    @pytest.mark.parametrize("declared", ["username", "nowhere", "groups", 5])
+    def test_holds_every_feature_naming_nothing_it_can_read(self, settings, declared):
+        isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "HOLDS_EVERY_FEATURE": declared}
+
+        assert checks.setting_problems() == [
+            f"ISIK['DJANGO']['FEATURES']['HOLDS_EVERY_FEATURE'] is {declared!r} - it's a Q over testapp.EmailUser, "
+            "or the name of a boolean field of it."
+        ]
+
+    def test_holds_every_feature_naming_a_generated_boolean(self, monkeypatch):
+        with isolate_apps("tests.testapp"):
+
+            class Holder(models.Model):
+                schema = models.CharField(max_length=20)
+                platform = models.GeneratedField(
+                    expression=models.Q(schema="public"), output_field=models.BooleanField(), db_persist=True
+                )
+                named = models.GeneratedField(
+                    expression=models.F("schema"), output_field=models.CharField(max_length=20), db_persist=True
+                )
+
+                class Meta:
+                    app_label = "testapp"
+
+        monkeypatch.setattr(checks, "get_holder_model", lambda: Holder)
+
+        assert checks._every_feature_problems("platform") == []
+        assert len(checks._every_feature_problems("named")) == 1
+
     @pytest.mark.parametrize("sweep", ["interval", "next_boundary"])
     def test_either_sweep(self, settings, sweep):
         isik_areas(settings).FEATURES = {**isik_areas(settings).FEATURES, "SWEEP": sweep}

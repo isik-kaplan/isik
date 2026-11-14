@@ -8,6 +8,7 @@ from enum import Enum
 from itertools import zip_longest
 
 from django import forms
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Choices
 from django_filters import ChoiceFilter
 from drf_spectacular.openapi import AutoSchema as _BaseAutoSchema
@@ -16,7 +17,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse
 from rest_framework import serializers
 
-from isik._internal.translation import lazy_format
+from isik._internal.translation import gettext_lazy, lazy_format
 from isik.common.utils.strings import snake_to_pascal
 from isik.django.apps.common.db.concurrency import concurrency_field_name
 from isik.django.apps.common.generated import generated_models
@@ -167,6 +168,24 @@ _error_serializers = weakref.WeakKeyDictionary()
 _UNDECLARED = object()
 
 
+_RETIRED_DESCRIPTION = gettext_lazy("Retired - only a row already holding one has it, and nothing writes it anew.")
+
+
+def _retired_values(field):
+    """The retired values of the model field a serializer's choice field reads, if it has choice rules."""
+    if not isinstance(field, serializers.ChoiceField) or isinstance(field, serializers.MultipleChoiceField):
+        return ()
+    model = getattr(getattr(field.parent, "Meta", None), "model", None)
+    if model is None or len(field.source_attrs) != 1:
+        return ()
+    try:
+        model_field = model._meta.get_field(field.source_attrs[0])
+    except FieldDoesNotExist:
+        return ()
+    rules = getattr(model_field, "choice_rules", None)
+    return rules.retired if rules is not None else ()
+
+
 class AutoSchema(_BaseAutoSchema):
     """
     drf-spectacular `AutoSchema` fixing two gaps that are properties of isik's own mixins, not of
@@ -209,7 +228,24 @@ class AutoSchema(_BaseAutoSchema):
     when `idempotency_key_required`), its 422 (the key spent on another request) and its 409 (the
     first request still being served, or - for an action in `idempotency_no_replay_actions` - its
     response not to be sent again). An exempt action documents none of it.
+
+    A choice field reading a model field with retired values (`with_choice_rules`) answers with a choice or a
+    retired value - its response schema is `oneOf` the field's enum and the retired values, which `x-retired`
+    lists too. A request takes the field's choices alone.
     """
+
+    def _map_serializer_field(self, field, direction, bypass_extensions=False):
+        schema = super()._map_serializer_field(field, direction, bypass_extensions=bypass_extensions)
+        retired = _retired_values(field) if direction == "response" else ()
+        if not retired:
+            return schema
+        # A row already holding a retired value reads back with it - one of the field's choices, or one of these.
+        choices = {key: schema.pop(key) for key in ("type", "enum") if key in schema}
+        return {
+            **schema,
+            "oneOf": [choices, {**choices, "enum": list(retired), "description": str(_RETIRED_DESCRIPTION)}],
+            "x-retired": list(retired),
+        }
 
     def _is_list_view(self, serializer=None):
         if getattr(self.view, "action", None) in _HISTORY_ACTIONS or self._is_own_list():

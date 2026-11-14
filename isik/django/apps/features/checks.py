@@ -40,6 +40,7 @@ def setting_problems():
                 "install it."
             )
         )
+    problems += _every_feature_problems(conf.setting("HOLDS_EVERY_FEATURE"))
     overrides = get_overrides_model()
     if declarations.settings and overrides is None:
         problems.append(
@@ -84,6 +85,23 @@ def setting_problems():
                 % {"model": model._meta.label}
             )
     return problems
+
+
+def _every_feature_problems(declared):
+    """What keeps `HOLDS_EVERY_FEATURE` from naming holders: anything but None, a `Q`, or a boolean field's name."""
+    if declared is None or isinstance(declared, models.Q):
+        return []
+    holder = get_holder_model()
+    field = next((field for field in holder._meta.concrete_fields if field.name == declared), None)
+    if field is not None and isinstance(getattr(field, "output_field", field), models.BooleanField):
+        return []
+    return [
+        _(
+            "ISIK['DJANGO']['FEATURES']['HOLDS_EVERY_FEATURE'] is %(declared)r - it's a Q over %(model)s, or the name "
+            "of a boolean field of it."
+        )
+        % {"declared": declared, "model": holder._meta.label}
+    ]
 
 
 def grant_history_problems(grants):
