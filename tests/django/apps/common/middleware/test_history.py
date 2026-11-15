@@ -1,3 +1,5 @@
+import uuid
+
 import pghistory
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -7,6 +9,7 @@ from django.test import RequestFactory
 
 from isik.django.apps.common.db.history import open_history_context
 from isik.django.apps.common.middleware import HistoryContextMiddleware
+from isik.django.apps.common.middleware.history import is_uuid
 from isik.django.conf import isik_with
 from tests.testapp.models import EmailUser, Widget, WidgetEvent
 
@@ -14,6 +17,12 @@ from tests.testapp.models import EmailUser, Widget, WidgetEvent
 @pytest.fixture
 def rf():
     return RequestFactory()
+
+
+@pytest.fixture(autouse=True)
+def unanswered(settings):
+    # The views here return what they saw, not a response - so nothing is answered with an id, but where a test asks.
+    settings.ISIK = isik_with(DJANGO={"HISTORY": {"RETURN_REQUEST_ID": False}})
 
 
 def serve(request, view, middleware_class=HistoryContextMiddleware):
@@ -159,23 +168,66 @@ class TestOptionalKeys:
             "isn't set."
         )
 
-    def test_the_request_id_a_proxy_sent(self, rf, settings):
+    def test_the_request_id_is_made_here_for_each_request(self, rf, settings):
         settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
+        sent = str(uuid.uuid4())
 
-        assert self.seen(rf, **{"X-Request-ID": "abc"})["request_id"] == "abc"
+        first, second = self.seen(rf, **{"X-Request-ID": sent})["request_id"], self.seen(rf)["request_id"]
 
-    def test_the_request_id_header_is_a_setting(self, rf, settings):
-        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
+        assert first != second and sent not in (first, second)
+        assert uuid.UUID(first).version == 7
+
+    def test_the_correlation_id_a_proxy_sent(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id", "correlation_id"]}})
+        sent = "0123456789abcdef0123456789abcdef"
+
+        seen = self.seen(rf, **{"X-Request-ID": sent})
+
+        assert seen["correlation_id"] == sent != seen["request_id"]
+
+    def test_with_none_sent_the_correlation_id_is_the_requests_own(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id", "correlation_id"]}})
+
+        seen = self.seen(rf)
+
+        assert seen["correlation_id"] == seen["request_id"]
+
+    @pytest.mark.parametrize("sent", ["abc", "x" * 5000, "0123456789abcdef0123456789abcde\n", ""])
+    def test_an_id_that_isnt_one_is_replaced(self, rf, settings, sent):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id", "correlation_id"]}})
+
+        seen = self.seen(rf, **{"X-Request-ID": sent})
+
+        assert seen["correlation_id"] == seen["request_id"]
+
+    def test_the_header_is_a_setting(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["correlation_id"]}})
         settings.ISIK = isik_with(DJANGO={"HISTORY": {"REQUEST_ID_HEADER": "X-Trace"}})
+        sent = str(uuid.uuid4())
 
-        assert self.seen(rf, **{"X-Trace": "abc"})["request_id"] == "abc"
+        assert self.seen(rf, **{"X-Trace": sent, "X-Request-ID": str(uuid.uuid4())})["correlation_id"] == sent
 
-    def test_a_request_id_is_made_when_none_was_sent(self, rf, settings):
-        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id"]}})
+    @pytest.mark.parametrize(
+        "valid", [lambda value: value.startswith("req-"), "tests.django.apps.common.middleware.test_history.starts_req"]
+    )
+    def test_what_an_id_is_is_a_setting(self, rf, settings, valid):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["correlation_id"], "REQUEST_ID_VALID": valid}})
 
-        first, second = self.seen(rf)["request_id"], self.seen(rf)["request_id"]
+        assert self.seen(rf, **{"X-Request-ID": "req-7"})["correlation_id"] == "req-7"
+        assert self.seen(rf, **{"X-Request-ID": str(uuid.uuid4())})["correlation_id"].startswith("req-") is False
 
-        assert len(first) == 32 and first != second
+    def test_the_sentry_trace(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["trace_id"]}})
+        trace = "771a43a4192642f0b136d5159a501700"
+
+        assert self.seen(rf, **{"sentry-trace": f"{trace}-a3d6c0f2b3e8f1d2-1"})["trace_id"] == trace
+        assert self.seen(rf, **{"sentry-trace": "nonsense"})["trace_id"] is None
+        assert self.seen(rf)["trace_id"] is None
+
+    def test_ids_named_alone_are_the_only_ones_kept(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["trace_id"]}})
+
+        assert set(self.seen(rf)) == {"url", "user", "trace_id"}
 
     def test_an_unknown_key_is_refused(self, settings):
         settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["version", "sha", "commit"]}})
@@ -186,7 +238,8 @@ class TestOptionalKeys:
 
         assert (
             str(raised.value)
-            == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names commit, sha - it takes version, build, request_id."
+            == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names commit, sha - it takes version, build, request_id, "
+            "correlation_id, trace_id."
         )
 
     def test_the_version_needs_its_setting(self, settings):
@@ -199,3 +252,64 @@ class TestOptionalKeys:
             str(raised.value) == "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names version, and "
             "ISIK['DJANGO']['HISTORY']['CONTEXT_VERSION'] isn't set."
         )
+
+
+def starts_req(value):
+    return value.startswith("req-")
+
+
+class TestEveryRequestsIds:
+    def test_every_request_carries_them_whatever_its_method(self, rf, settings):
+        settings.PGHISTORY_MIDDLEWARE_METHODS = ("POST",)
+        sent = str(uuid.uuid4())
+
+        seen = serve(rf.get("/", headers={"X-Request-ID": sent}), lambda request: request)
+
+        assert seen.correlation_id == sent
+        assert uuid.UUID(seen.request_id).version == 7
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_the_response_answers_with_the_correlation_id(self, rf, settings, method):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"RETURN_REQUEST_ID": True}})
+        settings.PGHISTORY_MIDDLEWARE_METHODS = ("POST",)
+        sent = str(uuid.uuid4())
+        request = getattr(rf, method)("/", headers={"X-Request-ID": sent})
+        request.user = AnonymousUser()
+
+        assert serve(request, lambda request: HttpResponse())["X-Request-ID"] == sent
+
+    def test_answered_by_default_under_the_header_set(self, rf, settings):
+        history = {**settings.ISIK["DJANGO"]["HISTORY"], "REQUEST_ID_HEADER": "X-Trace"}
+        del history["RETURN_REQUEST_ID"]
+        settings.ISIK = {**settings.ISIK, "DJANGO": {**settings.ISIK["DJANGO"], "HISTORY": history}}
+        request = rf.post("/")
+        request.user = AnonymousUser()
+
+        response = serve(request, lambda request: HttpResponse())
+
+        assert response["X-Trace"] == request.correlation_id == request.request_id
+        assert "X-Request-ID" not in response
+
+    def test_not_answered_when_turned_off(self, rf):
+        request = rf.post("/")
+        request.user = AnonymousUser()
+
+        assert "X-Request-ID" not in serve(request, lambda request: HttpResponse())
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("0123456789abcdef0123456789abcdef", True),
+        ("12345678-1234-5678-1234-567812345678", True),
+        ("{12345678-1234-5678-1234-567812345678}", False),
+        ("{12345678-1234-5678-1234-567812345678", False),
+        ("12345678-1234-5678-1234-56781234567", False),
+        ("0123456789abcdef0123456789abcde\n", False),
+        (" 0123456789abcdef0123456789abcdef", False),
+        ("urn:uuid:12345678-1234-5678-1234-567812345678", False),
+        ("not-a-uuid", False),
+    ],
+)
+def test_is_uuid(value, expected):
+    assert is_uuid(value) is expected
