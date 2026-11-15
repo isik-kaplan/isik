@@ -49,6 +49,9 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
 - [django/apps/notifications/](django/apps/notifications/README.md) - notices written by a trigger in
   the changing transaction, fanned out to the inbox, email, webhooks and phones (`notifications` extra;
   `push` for phones)
+- [django/apps/sync/](django/apps/sync/README.md) - offline sync's server: a change log a trigger
+  writes in the changing transaction, a per-person feed of it with snapshots, and a batched push through
+  each model's own REST view (`sync` extra)
 - [django/apps/templated_fields/](django/apps/templated_fields/README.md) - model fields storing
   a sandboxed Jinja template, rendered on demand against a caller-supplied context
 

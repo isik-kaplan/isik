@@ -51,6 +51,7 @@ from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy, Source
 from isik.django.apps.notifications.partitions import Follow
+from isik.django.apps.sync.declarations import Memberships, syncs
 from isik.django.apps.tags.tags import AbstractTag, TaggableMixin, tags
 from isik.django.apps.templated_fields import TemplateCharField, TemplatePolicy, TemplateTextField
 from tests.testapp.exemptions import NoComment, NoHelpText
@@ -914,3 +915,102 @@ class Manuscript(UUIDPrimaryKeyModel, FullCleanOnSaveModel):
 
     class Meta:
         app_label = "testapp"
+
+
+# The models the sync protocol's fixtures sync - tasks and projects scoped by their owner, notes by a team.
+
+
+class SyncTeam(UUIDPrimaryKeyModel):
+    name = models.CharField(max_length=100, blank=True, help_text="The team's name.", db_comment="The team's name.")
+
+
+class SyncTeamMembership(UUIDPrimaryKeyModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sync_team_memberships",
+        help_text="Who is in the team.",
+        db_comment="Who is in the team.",
+    )
+    team = models.ForeignKey(
+        SyncTeam,
+        on_delete=models.CASCADE,
+        related_name="sync_memberships",
+        help_text="The team.",
+        db_comment="The team.",
+    )
+    active = models.BooleanField(
+        default=True,
+        help_text="Whether it puts its user in the team.",
+        db_comment="Whether it puts its user in the team.",
+    )
+
+
+@syncs("projects", scope="owner")
+class SyncProject(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="synced_projects",
+        help_text="Whose project it is.",
+        db_comment="Whose project it is.",
+    )
+    name = models.CharField(max_length=100, help_text="The project's name.", db_comment="The project's name.")
+
+
+@syncs("tasks", scope="owner")
+class SyncTask(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="synced_tasks",
+        help_text="Whose task it is.",
+        db_comment="Whose task it is.",
+    )
+    title = models.CharField(max_length=100, help_text="What to do.", db_comment="What to do.")
+    done = models.BooleanField(default=False, help_text="Whether it's done.", db_comment="Whether it's done.")
+    project = models.ForeignKey(
+        SyncProject,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sync_tasks",
+        help_text="The project it's part of.",
+        db_comment="The project it's part of.",
+    )
+
+    class Meta:
+        indexes = [models.Index(fields=["done", "title"], name="testapp_synctask_done_title")]
+
+
+@syncs(
+    "notes",
+    scope="team",
+    kind="team",
+    memberships=Memberships("testapp.SyncTeamMembership", user="user", scope="team", condition=models.Q(active=True)),
+)
+class SyncNote(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
+    team = models.ForeignKey(
+        SyncTeam,
+        on_delete=models.CASCADE,
+        related_name="sync_notes",
+        help_text="The team's note.",
+        db_comment="The team.",
+    )
+    body = models.TextField(blank=True, help_text="What it says.", db_comment="What it says.")
+
+
+@syncs("boards", scope="owner")
+class SyncBoard(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
+    """A synced row whose version covers a relation - its teams."""
+
+    concurrency_relations = ("teams",)
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sync_boards",
+        help_text="Whose board it is.",
+        db_comment="Whose board it is.",
+    )
+    teams = models.ManyToManyField(SyncTeam, blank=True, related_name="sync_boards", help_text="Its teams.")

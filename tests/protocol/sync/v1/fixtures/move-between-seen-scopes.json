@@ -1,0 +1,114 @@
+{
+  "name": "move-between-seen-scopes",
+  "description": "A row moved between two scopes the user sees collapses to one upsert under the new scope.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [
+      "team:0190a000-0000-7000-8000-b00000000007",
+      "team:0190a000-0000-7000-8000-b00000000008"
+    ],
+    "rows": {
+      "notes": [
+        {
+          "id": "0190a000-0000-7000-8000-300000000001",
+          "team": "0190a000-0000-7000-8000-b00000000007",
+          "body": "note 0"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "notes",
+              "id": "0190a000-0000-7000-8000-300000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-300000000001",
+                "team": "0190a000-0000-7000-8000-b00000000007",
+                "body": "note 0"
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "act": {
+        "update": {
+          "model": "notes",
+          "id": "0190a000-0000-7000-8000-300000000001",
+          "set": {
+            "team": "0190a000-0000-7000-8000-b00000000008"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "upsert",
+              "model": "notes",
+              "id": "0190a000-0000-7000-8000-300000000001",
+              "etag": "$etag:a2",
+              "data": {
+                "id": "0190a000-0000-7000-8000-300000000001",
+                "team": "0190a000-0000-7000-8000-b00000000008",
+                "body": "note 0"
+              }
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

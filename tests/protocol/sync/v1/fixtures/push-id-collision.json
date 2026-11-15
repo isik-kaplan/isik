@@ -1,0 +1,62 @@
+{
+  "name": "push-id-collision",
+  "description": "A create naming an id that already exists, under a fresh key, is a 409.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "x1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "x1",
+              "status": 409,
+              "errors": "$any"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

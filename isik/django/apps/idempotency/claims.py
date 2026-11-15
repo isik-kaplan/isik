@@ -1,6 +1,6 @@
 """
-The claim models (abstract), get_claim_model(), claim_idempotency_key() and the body codecs - see
-each one's own docstring.
+The claim models (abstract), get_claim_model(), claim_idempotency_key(), prune_claims() and the body codecs -
+see each one's own docstring.
 """
 
 import json
@@ -237,6 +237,23 @@ def get_claim_model(model=None):
             )
         model = installed[0]
     return apps.get_model(model) if isinstance(model, str) else model
+
+
+def prune_claims(model=None, batch=None):
+    """
+    Deletes the claims spent longer ago than `ISIK['DJANGO']['IDEMPOTENCY']['RETENTION']` - none when it's None - up
+    to `batch` of them, every one when it's None, of `model` (see `get_claim_model()`). A key whose claim is gone
+    runs afresh, so a retry arriving after it does the work again. Returns how many it deleted.
+    """
+    retention = django_setting("IDEMPOTENCY", "RETENTION")
+    if retention is None:
+        return 0
+    claims = get_claim_model(model)._default_manager
+    old = claims.filter(claimed_at__lt=timezone.now() - retention).order_by("claimed_at").values_list("pk", flat=True)
+    if batch is not None:
+        old = old[:batch]
+    deleted, _ = claims.filter(pk__in=list(old)).delete()
+    return deleted
 
 
 @contextmanager

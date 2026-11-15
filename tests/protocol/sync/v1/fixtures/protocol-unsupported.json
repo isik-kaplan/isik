@@ -1,0 +1,83 @@
+{
+  "name": "protocol-unsupported",
+  "description": "A missing or unknown protocol version is refused on every endpoint, naming the supported ones.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {}
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "2"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "sync_protocol_unsupported",
+          "supported": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "sync_protocol_unsupported",
+          "supported": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "2"
+        },
+        "body": {
+          "entries": []
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "sync_protocol_unsupported",
+          "supported": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/capabilities",
+        "headers": {
+          "Isik-Sync-Protocol": "2"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "sync_protocol_unsupported",
+          "supported": [
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

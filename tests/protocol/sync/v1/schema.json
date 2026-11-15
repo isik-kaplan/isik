@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/isik-kaplan/isik-ts/protocol/sync/v1/schema.json",
+  "title": "Isik sync protocol, version 1",
+  "$defs": {
+    "Scope": { "type": "string", "pattern": "^[^:]+:.+$" },
+    "ETag": { "type": "string", "minLength": 1 },
+    "Row": { "type": "object" },
+    "XSync": {
+      "type": "object",
+      "required": ["protocol", "model", "path", "primary_key", "scope", "columns", "indexed", "hash"],
+      "additionalProperties": false,
+      "properties": {
+        "protocol": { "const": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "/$" },
+        "primary_key": { "type": "string" },
+        "scope": {
+          "type": "object",
+          "required": ["kind", "field"],
+          "additionalProperties": false,
+          "properties": { "kind": { "type": "string", "minLength": 1 }, "field": { "type": "string" } }
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["string", "integer", "number", "boolean", "uuid", "datetime", "date", "json"]
+          }
+        },
+        "indexed": {
+          "type": "array",
+          "items": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        },
+        "hash": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Change": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "model", "id", "etag", "data"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "upsert" },
+            "model": { "type": "string" },
+            "id": { "type": "string" },
+            "etag": { "$ref": "#/$defs/ETag" },
+            "data": { "$ref": "#/$defs/Row" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "model", "id"],
+          "additionalProperties": false,
+          "properties": { "op": { "const": "delete" }, "model": { "type": "string" }, "id": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "required": ["op", "scope"],
+          "additionalProperties": false,
+          "properties": { "op": { "enum": ["scope_granted", "scope_revoked"] }, "scope": { "$ref": "#/$defs/Scope" } }
+        },
+        {
+          "type": "object",
+          "required": ["op", "scope", "model"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["snapshot_begin", "snapshot_end"] },
+            "scope": { "oneOf": [{ "$ref": "#/$defs/Scope" }, { "type": "null" }] },
+            "model": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "ChangesResponse": {
+      "type": "object",
+      "required": ["changes", "cursor", "has_more"],
+      "additionalProperties": false,
+      "properties": {
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/Change" } },
+        "cursor": { "type": "string", "minLength": 1 },
+        "has_more": { "type": "boolean" }
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "required": ["protocol", "push"],
+      "properties": {
+        "protocol": { "const": 1 },
+        "push": {
+          "type": "object",
+          "required": ["backend", "max_entries", "max_bytes"],
+          "properties": {
+            "backend": { "type": "string" },
+            "max_entries": { "type": ["integer", "null"], "minimum": 1 },
+            "max_bytes": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        }
+      }
+    },
+    "PushEntry": {
+      "type": "object",
+      "required": ["key", "method", "model", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "method": { "enum": ["POST", "PATCH", "PUT", "DELETE"] },
+        "model": { "type": "string" },
+        "id": { "type": "string" },
+        "body": { "type": "object" },
+        "if_match": { "$ref": "#/$defs/ETag" }
+      }
+    },
+    "PushRequest": {
+      "type": "object",
+      "required": ["entries"],
+      "additionalProperties": false,
+      "properties": { "entries": { "type": "array", "items": { "$ref": "#/$defs/PushEntry" } } }
+    },
+    "PushResult": {
+      "type": "object",
+      "required": ["key", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "status": { "type": "integer", "minimum": 200, "maximum": 599 },
+        "etag": { "$ref": "#/$defs/ETag" },
+        "data": { "$ref": "#/$defs/Row" },
+        "current": { "$ref": "#/$defs/Row" },
+        "errors": {}
+      }
+    },
+    "PushResponse": {
+      "type": "object",
+      "required": ["results"],
+      "additionalProperties": false,
+      "properties": { "results": { "type": "array", "items": { "$ref": "#/$defs/PushResult" } } }
+    },
+    "ProtocolUnsupported": {
+      "type": "object",
+      "required": ["code", "supported"],
+      "properties": {
+        "code": { "const": "sync_protocol_unsupported" },
+        "supported": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "CursorExpired": {
+      "type": "object",
+      "required": ["code"],
+      "properties": { "code": { "const": "sync_cursor_expired" } }
+    },
+    "PushTooLarge": {
+      "type": "object",
+      "required": ["code", "max_entries", "max_bytes"],
+      "properties": {
+        "code": { "const": "sync_push_too_large" },
+        "max_entries": { "type": ["integer", "null"] },
+        "max_bytes": { "type": ["integer", "null"] }
+      }
+    },
+    "Fixture": {
+      "type": "object",
+      "required": ["name", "description", "given", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "given": {
+          "type": "object",
+          "required": ["user", "memberships", "rows"],
+          "additionalProperties": false,
+          "properties": {
+            "user": { "type": ["string", "null"] },
+            "memberships": { "type": "array", "items": { "$ref": "#/$defs/Scope" } },
+            "rows": {
+              "type": "object",
+              "additionalProperties": { "type": "array", "items": { "$ref": "#/$defs/Row" } }
+            },
+            "push": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "max_entries": { "type": "integer" }, "max_bytes": { "type": "integer" } }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["request", "response"],
+                "additionalProperties": false,
+                "properties": {
+                  "request": {
+                    "type": "object",
+                    "required": ["method", "path"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "method": { "enum": ["GET", "POST"] },
+                      "path": { "type": "string" },
+                      "query": { "type": "object", "additionalProperties": { "type": "string" } },
+                      "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+                      "body": {}
+                    }
+                  },
+                  "response": {
+                    "type": "object",
+                    "required": ["status"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "status": { "type": "integer" },
+                      "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+                      "body": {}
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["act"],
+                "additionalProperties": false,
+                "properties": {
+                  "act": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 1,
+                    "properties": {
+                      "create": {
+                        "type": "object",
+                        "required": ["model", "row"],
+                        "properties": { "model": { "type": "string" }, "row": { "$ref": "#/$defs/Row" } }
+                      },
+                      "update": {
+                        "type": "object",
+                        "required": ["model", "id", "set"],
+                        "properties": {
+                          "model": { "type": "string" },
+                          "id": { "type": "string" },
+                          "set": { "type": "object" }
+                        }
+                      },
+                      "delete": {
+                        "type": "object",
+                        "required": ["model", "id"],
+                        "properties": { "model": { "type": "string" }, "id": { "type": "string" } }
+                      },
+                      "grant": {
+                        "type": "object",
+                        "required": ["scope"],
+                        "properties": { "scope": { "$ref": "#/$defs/Scope" } }
+                      },
+                      "revoke": {
+                        "type": "object",
+                        "required": ["scope"],
+                        "properties": { "scope": { "$ref": "#/$defs/Scope" } }
+                      },
+                      "expire": { "type": "object", "maxProperties": 0 }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "isik.django.apps.notifications",
     "isik.django.apps.notifications.audience",
     "isik.django.apps.features",
+    "isik.django.apps.sync",
     "tests.testapp",
 ]
 

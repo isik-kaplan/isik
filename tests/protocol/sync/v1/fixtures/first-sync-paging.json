@@ -1,0 +1,210 @@
+{
+  "name": "first-sync-paging",
+  "description": "A first sync is a full snapshot, ordered by model then id, spanning pages; another user's rows never appear; the end comes with the last row; a repeat of a quiet cursor is a 304.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        },
+        {
+          "id": "0190a000-0000-7000-8000-100000000002",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 1",
+          "done": false,
+          "project": null
+        },
+        {
+          "id": "0190a000-0000-7000-8000-100000000003",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 2",
+          "done": false,
+          "project": null
+        },
+        {
+          "id": "0190a000-0000-7000-8000-900000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000002",
+          "title": "task 3",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000002",
+              "etag": "$etag:b",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000002",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 1",
+                "done": false,
+                "project": null
+              }
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000003",
+              "etag": "$etag:c",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000003",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 2",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:2",
+          "limit": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1",
+          "ETag": "$feed:1"
+        },
+        "body": {
+          "changes": [],
+          "cursor": "$cursor:3",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:3",
+          "limit": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1",
+          "ETag": "$feed:2"
+        },
+        "body": {
+          "changes": [],
+          "cursor": "$cursor:3",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1",
+          "If-None-Match": "$feed:2"
+        },
+        "query": {
+          "cursor": "$cursor:3",
+          "limit": "2"
+        }
+      },
+      "response": {
+        "status": 304,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        }
+      }
+    }
+  ]
+}

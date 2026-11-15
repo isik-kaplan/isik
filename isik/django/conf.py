@@ -11,6 +11,7 @@
             "NOTIFICATIONS": {"PROJECT_NAME": "Acme"},
             "SMS": {"default": {"BACKEND": "isik.django.sms.backends.console.SMSBackend"}},
             "IDEMPOTENCY": {"CLAIM_MODEL": "idempotency_by_reference.IdempotencyClaim"},
+            "SYNC": {"RETENTION": timedelta(days=60)},
         },
     }
 
@@ -29,8 +30,8 @@ SETTING = "ISIK"
 
 # {key: what it holds} - ISIK's own keys, and those of ISIK['DJANGO'].
 KEYS = {"EXEMPTIONS": "rule levels", "DJANGO": "isik.django's areas"}
-# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS and SMS check
-# their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
+# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS, SMS and SYNC
+# check their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
 AREA_KEYS = {
     "HISTORY": (
         "CONTEXT_KEYS",
@@ -42,12 +43,12 @@ AREA_KEYS = {
         "TASK_DISPATCH_ON_COMMIT",
     ),
     "SESSIONS": ("HEADER_NAME", "DEAD_SESSION_HEADER"),
-    "IDEMPOTENCY": ("CLAIM_MODEL", "BODY_CODEC", "LOCK_TIMEOUT", "NORMALIZE"),
+    "IDEMPOTENCY": ("CLAIM_MODEL", "BODY_CODEC", "LOCK_TIMEOUT", "NORMALIZE", "RETENTION"),
     "DRF": ("PAGINATION_MAX_PAGE_SIZE",),
     "FEEDBACK": ("COMMENTS_TIPTAP_SCHEMA_PATH",),
     "TEMPLATED_FIELDS": ("DELIMITERS", "UNDEFINED", "POLICY"),
 }
-DJANGO_AREAS = ("CHECKS", "PRIMARY_KEY", "SCHEMA_LANGUAGE", "FEATURES", "NOTIFICATIONS", "SMS", *AREA_KEYS)
+DJANGO_AREAS = ("CHECKS", "PRIMARY_KEY", "SCHEMA_LANGUAGE", "FEATURES", "NOTIFICATIONS", "SMS", "SYNC", *AREA_KEYS)
 
 
 def configured():

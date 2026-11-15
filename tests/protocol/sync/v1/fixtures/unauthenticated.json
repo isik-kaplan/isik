@@ -1,0 +1,38 @@
+{
+  "name": "unauthenticated",
+  "description": "Without a session the feed and push answer 401.",
+  "given": {
+    "user": null,
+    "memberships": [],
+    "rows": {}
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        }
+      },
+      "response": {
+        "status": 401
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": []
+        }
+      },
+      "response": {
+        "status": 401
+      }
+    }
+  ]
+}

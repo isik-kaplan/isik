@@ -1,0 +1,208 @@
+{
+  "name": "push-replay",
+  "description": "Resending a whole batch whose keys were all spent returns the stored results.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "r1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000005",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "r2",
+              "method": "PATCH",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "done": true
+              },
+              "if_match": "$etag:a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "r1",
+              "status": 201,
+              "etag": "$etag:n1",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "r2",
+              "status": 200,
+              "etag": "$etag:a2",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": true,
+                "project": null
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "r1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000005",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "r2",
+              "method": "PATCH",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "done": true
+              },
+              "if_match": "$etag:a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "r1",
+              "status": 201,
+              "etag": "$etag:n1",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "r2",
+              "status": 200,
+              "etag": "$etag:a2",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": true,
+                "project": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

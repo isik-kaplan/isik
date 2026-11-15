@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import models
 
 from isik.django.apps.common.db.history import track_events
-from isik.django.apps.common.db.models import UUIDPrimaryKeyModel
+from isik.django.apps.common.db.models import DatabaseTimestampsModel, UUIDPrimaryKeyModel
 from isik.django.apps.features import bases as features
 from isik.django.apps.features.audiences import HolderPeople
 from isik.django.apps.notifications import bases
@@ -17,6 +17,8 @@ from isik.django.apps.notifications.audiences import Field
 from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy
+from isik.django.apps.sync.bases import AbstractSyncLogEntry
+from isik.django.apps.sync.declarations import Memberships, syncs
 
 
 def table(name):
@@ -170,3 +172,16 @@ notifies(
     audience=HolderPeople(),
     channels={Channel.INBOX: Policy.MANDATORY} | dict.fromkeys((Channel.EMAIL, Channel.WEBHOOK), Policy.NEVER),
 )(FeatureGrant)
+
+
+# The sync log the project's own, and a model synced by organization into it.
+
+
+class SyncLogEntry(AbstractSyncLogEntry):
+    Meta = table("sync_log")
+
+
+@syncs("folders", scope="organization", memberships=Memberships(Membership, user="user", scope="organization"))
+class Folder(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="folders")
+    name = models.CharField(max_length=50)

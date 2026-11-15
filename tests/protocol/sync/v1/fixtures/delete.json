@@ -1,0 +1,121 @@
+{
+  "name": "delete",
+  "description": "A deleted row arrives as a delete with no data; another user's deletion never appears.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        },
+        {
+          "id": "0190a000-0000-7000-8000-900000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000002",
+          "title": "task 3",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "act": {
+        "delete": {
+          "model": "tasks",
+          "id": "0190a000-0000-7000-8000-100000000001"
+        }
+      }
+    },
+    {
+      "act": {
+        "delete": {
+          "model": "tasks",
+          "id": "0190a000-0000-7000-8000-900000000001"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "delete",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001"
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

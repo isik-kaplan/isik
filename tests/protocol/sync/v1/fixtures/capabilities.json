@@ -1,0 +1,37 @@
+{
+  "name": "capabilities",
+  "description": "The server advertises the push limits the project configured, null where unset.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {},
+    "push": {
+      "max_entries": 50
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/capabilities",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "protocol": 1,
+          "push": {
+            "backend": "$any",
+            "max_entries": 50,
+            "max_bytes": null
+          }
+        }
+      }
+    }
+  ]
+}

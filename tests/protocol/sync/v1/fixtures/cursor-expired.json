@@ -1,0 +1,153 @@
+{
+  "name": "cursor-expired",
+  "description": "A cursor past retention is a 410; pulling without one serves a fresh full snapshot.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "act": {
+        "update": {
+          "model": "tasks",
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "set": {
+            "title": "b"
+          }
+        }
+      }
+    },
+    {
+      "act": {
+        "expire": {}
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 410,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "code": "sync_cursor_expired"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a2",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "b",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

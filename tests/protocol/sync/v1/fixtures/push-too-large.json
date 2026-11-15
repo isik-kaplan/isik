@@ -1,0 +1,112 @@
+{
+  "name": "push-too-large",
+  "description": "A batch over the configured limit is a 413 carrying the limits.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {},
+    "push": {
+      "max_entries": 1
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "l1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "l2",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000002",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000002",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 1",
+                "done": false,
+                "project": null
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 413,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "code": "sync_push_too_large",
+          "max_entries": 1,
+          "max_bytes": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "l1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "l1",
+              "status": 201,
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

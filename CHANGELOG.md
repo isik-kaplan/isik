@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-11-15
+
+### Added
+
+- `isik.django.apps.sync` (`pip install isik[sync]`), offline sync's server, speaking isik's sync protocol
+  version 1 and passing every one of its fixtures (pinned in `tests/protocol/sync/v1`):
+  - `syncs(name=None, *, scope, kind=None, memberships=None, viewset=None, indexed=None)` declares a model
+    synced, scoped by a field - a key to the user model for a person's own rows - and `Memberships(model, user=,
+    scope=, condition=None)` how people join a scope, a row coming to meet the condition granting it and one
+    ceasing to revoking it.
+  - The sync log, written by triggers in the transaction making each change - `upsert` and `delete` of a row,
+    `old_scope` when one moves, `scope_granted` and `scope_revoked` for a person - and holding no row data. Its
+    position is (`xid`, `seq`), served only below the watermark - the lowest transaction id still open in the
+    database - so a cursor never passes a change that commits late. `AbstractSyncLogEntry` and
+    `ISIK['DJANGO']['SYNC']['LOG_MODEL']` for a project owning it; `get_sync_log_model()`.
+  - A synced model's version may cover relations: each covered relation's table gets a trigger logging the
+    synced row whenever one of its rows changes.
+  - `SyncViewSet`, which a project routes: `GET capabilities`; `GET changes`, a page of a person's changes with
+    full, scope and model snapshots, collapsing, a signed cursor, 304 on `If-None-Match` and 410 past retention,
+    each row read through its model's own viewset; and `POST push`, a batch of queued writes run by a
+    `PushBackend` - isik's `ViewPushBackend` running each entry through its model's REST view, in a transaction
+    of its own, with its own history context (`sync_entry`) - 413 over `MAX_ENTRIES` or `MAX_BYTES`, and
+    `THROTTLE_SCOPE` counting entries.
+  - `ClientPrimaryKeyMixin`, a create taking the id its client made, 409 `primary_key_taken` for one taken;
+    `PerEntryThrottle`, a view's throttle push runs for each entry.
+  - `add_sync_extensions`, a drf-spectacular postprocessing hook adding `x-sync` to each synced model's
+    component schema.
+  - `prune_sync_log(batch=None)`, `sync_feed_lag()`, and `ISIK['DJANGO']['SYNC']`'s `RETENTION`,
+    `OFFLINE_PERIOD`, `PAGE_LIMIT`, `LAG_WARNING` and `PUSH` - every limit None, none, unless set.
+  - `isik.E027` (`Check.SYNC`), refusing a sync setting or declaration that can't work.
+- `ISIK['DJANGO']['IDEMPOTENCY']['RETENTION']` and `prune_claims(model=None, batch=None)`, deleting the claims
+  spent longer ago.
+
 ## [0.55.0] - 2026-11-15
 
 ### Breaking

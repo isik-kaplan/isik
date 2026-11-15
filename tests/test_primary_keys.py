@@ -16,6 +16,7 @@ PROJECTS_OWN = {
     "testapp.Team_members": "a plain many-to-many's table, which Django makes and keys",
     "testapp.Squad_members": "a plain many-to-many's table, which Django makes and keys",
     "testapp.Roster_tags": "a plain many-to-many's table, which Django makes and keys",
+    "testapp.SyncBoard_teams": "a plain many-to-many's table, which Django makes and keys",
     "testapp.EmailUser_groups": "PermissionsMixin's many-to-many, whose table Django makes and keys",
     "testapp.EmailUser_user_permissions": "PermissionsMixin's many-to-many, whose table Django makes and keys",
 }

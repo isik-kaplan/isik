@@ -1,0 +1,117 @@
+{
+  "name": "push-parent-and-child",
+  "description": "Entries run in order, so a child may follow its parent's create in the same batch; a child whose parent failed earlier in the batch fails too.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {}
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "c1",
+              "method": "POST",
+              "model": "projects",
+              "id": "0190a000-0000-7000-8000-200000000001",
+              "body": {
+                "id": "0190a000-0000-7000-8000-200000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "name": "p"
+              }
+            },
+            {
+              "key": "c2",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000004",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000004",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 3",
+                "done": false,
+                "project": "0190a000-0000-7000-8000-200000000001"
+              }
+            },
+            {
+              "key": "c3",
+              "method": "POST",
+              "model": "projects",
+              "id": "0190a000-0000-7000-8000-200000000002",
+              "body": {
+                "id": "0190a000-0000-7000-8000-200000000002",
+                "owner": "0190a000-0000-7000-8000-a00000000001"
+              }
+            },
+            {
+              "key": "c4",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000005",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "child",
+                "done": false,
+                "project": "0190a000-0000-7000-8000-200000000002"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "c1",
+              "status": 201,
+              "etag": "$etag:p",
+              "data": {
+                "id": "0190a000-0000-7000-8000-200000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "name": "p"
+              }
+            },
+            {
+              "key": "c2",
+              "status": 201,
+              "etag": "$etag:t",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000004",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 3",
+                "done": false,
+                "project": "0190a000-0000-7000-8000-200000000001"
+              }
+            },
+            {
+              "key": "c3",
+              "status": 400,
+              "errors": {
+                "name": "$any"
+              }
+            },
+            {
+              "key": "c4",
+              "status": 400,
+              "errors": {
+                "project": "$any"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

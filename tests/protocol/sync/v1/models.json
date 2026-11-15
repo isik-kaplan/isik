@@ -1,0 +1,55 @@
+{
+  "tasks": {
+    "protocol": 1,
+    "model": "tasks",
+    "path": "/api/tasks/",
+    "primary_key": "id",
+    "scope": {
+      "kind": "user",
+      "field": "owner"
+    },
+    "columns": {
+      "id": "uuid",
+      "owner": "uuid",
+      "title": "string",
+      "done": "boolean",
+      "project": "uuid"
+    },
+    "indexed": [["owner"], ["project"], ["done", "title"]],
+    "hash": "$hash:tasks"
+  },
+  "projects": {
+    "protocol": 1,
+    "model": "projects",
+    "path": "/api/projects/",
+    "primary_key": "id",
+    "scope": {
+      "kind": "user",
+      "field": "owner"
+    },
+    "columns": {
+      "id": "uuid",
+      "owner": "uuid",
+      "name": "string"
+    },
+    "indexed": [["owner"]],
+    "hash": "$hash:projects"
+  },
+  "notes": {
+    "protocol": 1,
+    "model": "notes",
+    "path": "/api/notes/",
+    "primary_key": "id",
+    "scope": {
+      "kind": "team",
+      "field": "team"
+    },
+    "columns": {
+      "id": "uuid",
+      "team": "uuid",
+      "body": "string"
+    },
+    "indexed": [["team"]],
+    "hash": "$hash:notes"
+  }
+}

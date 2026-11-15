@@ -1,0 +1,118 @@
+{
+  "name": "scope-revoked",
+  "description": "A revoked scope arrives as one scope_revoked, not a delete per row.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [
+      "team:0190a000-0000-7000-8000-b00000000007"
+    ],
+    "rows": {
+      "notes": [
+        {
+          "id": "0190a000-0000-7000-8000-300000000001",
+          "team": "0190a000-0000-7000-8000-b00000000007",
+          "body": "note 0"
+        },
+        {
+          "id": "0190a000-0000-7000-8000-300000000002",
+          "team": "0190a000-0000-7000-8000-b00000000007",
+          "body": "note 1"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "notes",
+              "id": "0190a000-0000-7000-8000-300000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-300000000001",
+                "team": "0190a000-0000-7000-8000-b00000000007",
+                "body": "note 0"
+              }
+            },
+            {
+              "op": "upsert",
+              "model": "notes",
+              "id": "0190a000-0000-7000-8000-300000000002",
+              "etag": "$etag:b",
+              "data": {
+                "id": "0190a000-0000-7000-8000-300000000002",
+                "team": "0190a000-0000-7000-8000-b00000000007",
+                "body": "note 1"
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "act": {
+        "revoke": {
+          "scope": "team:0190a000-0000-7000-8000-b00000000007"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "scope_revoked",
+              "scope": "team:0190a000-0000-7000-8000-b00000000007"
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

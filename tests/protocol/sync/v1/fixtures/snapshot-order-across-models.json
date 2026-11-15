@@ -1,0 +1,86 @@
+{
+  "name": "snapshot-order-across-models",
+  "description": "A full snapshot orders rows by model name, then id.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        }
+      ],
+      "projects": [
+        {
+          "id": "0190a000-0000-7000-8000-200000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "name": "p"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "projects",
+              "id": "0190a000-0000-7000-8000-200000000001",
+              "etag": "$etag:p",
+              "data": {
+                "id": "0190a000-0000-7000-8000-200000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "name": "p"
+              }
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:t",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

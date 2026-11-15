@@ -1,0 +1,146 @@
+{
+  "name": "scope-revoked-mid-snapshot",
+  "description": "A scope revoked while its snapshot is open ends it with scope_revoked and no snapshot_end.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "notes": [
+        {
+          "id": "0190a000-0000-7000-8000-300000000001",
+          "team": "0190a000-0000-7000-8000-b00000000007",
+          "body": "note 0"
+        },
+        {
+          "id": "0190a000-0000-7000-8000-300000000002",
+          "team": "0190a000-0000-7000-8000-b00000000007",
+          "body": "note 1"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "act": {
+        "grant": {
+          "scope": "team:0190a000-0000-7000-8000-b00000000007"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:1",
+          "limit": "1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "scope_granted",
+              "scope": "team:0190a000-0000-7000-8000-b00000000007"
+            },
+            {
+              "op": "snapshot_begin",
+              "scope": "team:0190a000-0000-7000-8000-b00000000007",
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "notes",
+              "id": "0190a000-0000-7000-8000-300000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-300000000001",
+                "team": "0190a000-0000-7000-8000-b00000000007",
+                "body": "note 0"
+              }
+            }
+          ],
+          "cursor": "$cursor:2",
+          "has_more": true
+        }
+      }
+    },
+    {
+      "act": {
+        "revoke": {
+          "scope": "team:0190a000-0000-7000-8000-b00000000007"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "cursor": "$cursor:2",
+          "limit": "1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "scope_revoked",
+              "scope": "team:0190a000-0000-7000-8000-b00000000007"
+            }
+          ],
+          "cursor": "$cursor:3",
+          "has_more": false
+        }
+      }
+    }
+  ]
+}

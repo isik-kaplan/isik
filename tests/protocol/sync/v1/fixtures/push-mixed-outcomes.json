@@ -1,0 +1,188 @@
+{
+  "name": "push-mixed-outcomes",
+  "description": "One batch, mixed outcomes: each entry gets its own result in entry order, and a failure sinks nothing else. A 412 carries the current row and its etag.",
+  "given": {
+    "user": "0190a000-0000-7000-8000-a00000000001",
+    "memberships": [],
+    "rows": {
+      "tasks": [
+        {
+          "id": "0190a000-0000-7000-8000-100000000001",
+          "owner": "0190a000-0000-7000-8000-a00000000001",
+          "title": "task 0",
+          "done": false,
+          "project": null
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/sync/changes",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "query": {
+          "limit": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "changes": [
+            {
+              "op": "snapshot_begin",
+              "scope": null,
+              "model": null
+            },
+            {
+              "op": "upsert",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "etag": "$etag:a",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "op": "snapshot_end",
+              "scope": null,
+              "model": null
+            }
+          ],
+          "cursor": "$cursor:1",
+          "has_more": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/sync/push",
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "entries": [
+            {
+              "key": "m1",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000005",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "m2",
+              "method": "PATCH",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000001",
+              "body": {
+                "title": "mine"
+              },
+              "if_match": "\"stale\""
+            },
+            {
+              "key": "m3",
+              "method": "POST",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000004",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000004",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "m4",
+              "method": "PATCH",
+              "model": "tasks",
+              "id": "0190a000-0000-7000-8000-100000000003",
+              "body": {
+                "title": "x"
+              },
+              "if_match": "\"any\""
+            },
+            {
+              "key": "m5",
+              "method": "POST",
+              "model": "nope",
+              "id": "0190a000-0000-7000-8000-100000000002",
+              "body": {
+                "id": "0190a000-0000-7000-8000-100000000002"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Isik-Sync-Protocol": "1"
+        },
+        "body": {
+          "results": [
+            {
+              "key": "m1",
+              "status": 201,
+              "etag": "$etag:n1",
+              "data": {
+                "id": "0190a000-0000-7000-8000-100000000005",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "new",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "m2",
+              "status": 412,
+              "etag": "$etag:a",
+              "current": {
+                "id": "0190a000-0000-7000-8000-100000000001",
+                "owner": "0190a000-0000-7000-8000-a00000000001",
+                "title": "task 0",
+                "done": false,
+                "project": null
+              }
+            },
+            {
+              "key": "m3",
+              "status": 400,
+              "errors": {
+                "title": "$any"
+              }
+            },
+            {
+              "key": "m4",
+              "status": 404,
+              "errors": "$any"
+            },
+            {
+              "key": "m5",
+              "status": 404,
+              "errors": {
+                "code": "sync_model_unknown"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

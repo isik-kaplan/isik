@@ -20,7 +20,11 @@ filling it. A missing column is a decision.
 - `fingerprint` - `request_fingerprint()` of the request that spent the key.
 - `status` - the status it was answered with. Null only while its request is being served, which no
   other transaction can see.
-- `claimed_at` - when the claim was made. Useful for deleting old claims. Nothing expires on its own.
+- `claimed_at` - when the claim was made. Nothing expires on its own: `prune_claims(model=None, batch=None)`
+  deletes the claims spent longer ago than `ISIK['DJANGO']['IDEMPOTENCY']['RETENTION']` (a timedelta; None, the
+  default, keeps every one) - up to `batch` of them, every one when it's None - and returns how many. A key whose
+  claim is gone runs afresh, so keep claims longer than a retry can arrive: an offline client's queued writes
+  among them, which `isik.E027` holds `RETENTION` to - see [sync](../sync/README.md#settings).
 
 `UNIQUE (claimed_by, key)` is the whole mechanism - see [README.md](README.md#how-it-works). It's added to
 every concrete claim when the class is prepared, named `<table>_key`, rather than declared in the base's
