@@ -83,6 +83,7 @@ COMPONENTS = {
         ({"type": "array", "items": {}}, "json"),
         ({}, "json"),
         ({"type": ["string", "null"]}, "string"),
+        ({"type": ["null", "integer"]}, "integer"),
         ({"type": ["null"]}, "json"),
         ({"$ref": "#/components/schemas/StateEnum"}, "string"),
         ({"allOf": [{"$ref": "#/components/schemas/StateEnum"}]}, "string"),

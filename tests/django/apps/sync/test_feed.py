@@ -224,3 +224,150 @@ class TestRowsAPersonCantSee:
         cursor = caught_up(client)
         support.update("tasks", task(1)["id"], {"done": True})
         assert ops(pulled(client, cursor=cursor)) == [("delete", "tasks", task(1)["id"])]
+
+
+BOB = "0190a000-0000-7000-8000-a00000000002"
+OTHER_TEAM = "0190a000-0000-7000-8000-b00000000008"
+
+
+@pytest.fixture
+def other():
+    opened = connection.copy()
+    opened.ensure_connection()
+    opened.set_autocommit(False)
+    yield opened
+    opened.rollback()
+    opened.close()
+
+
+def write_in(opened, number):
+    with opened.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO testapp_synctask (id, owner_id, title, done, created_at, updated_at) "
+            "VALUES (%s, %s, %s, false, now(), now())",
+            [task(number)["id"], ALICE, f"t{number}"],
+        )
+
+
+class TestAgainstConcurrentTransactions:
+    def test_a_change_committed_after_one_still_open_waits_for_it(self, client, other):
+        cursor = caught_up(client)
+        write_in(other, 1)
+        support.create("tasks", task(2))
+
+        held = pulled(client, cursor=cursor)
+        assert ops(held) == []
+        other.commit()
+        assert ops(pulled(client, cursor=held["cursor"])) == [
+            ("upsert", "tasks", task(1)["id"]),
+            ("upsert", "tasks", task(2)["id"]),
+        ]
+
+    def test_changes_come_by_transaction_then_by_when_they_were_made(self, client, other):
+        cursor = caught_up(client)
+        write_in(other, 1)
+        support.create("tasks", task(2))
+        write_in(other, 3)
+        other.commit()
+
+        assert [change["id"] for change in pulled(client, cursor=cursor, limit=2)["changes"]] == [
+            task(1)["id"],
+            task(3)["id"],
+        ]
+
+
+class TestScopes:
+    def test_a_revoked_scope_and_a_change_after_it_both_come(self, client):
+        support.grant(ALICE, f"team:{TEAM}")
+        support.create("tasks", task(1))
+        cursor = caught_up(client)
+        support.revoke(ALICE, f"team:{TEAM}")
+        support.update("tasks", task(1)["id"], {"done": True})
+
+        assert ops(pulled(client, cursor=cursor)) == [
+            ("scope_revoked", None, f"team:{TEAM}"),
+            ("upsert", "tasks", task(1)["id"]),
+        ]
+
+    def test_another_person_s_grant_isn_t_theirs(self, client):
+        cursor = caught_up(client)
+        support.grant(BOB, f"team:{TEAM}")
+
+        assert ops(pulled(client, cursor=cursor)) == []
+
+    def test_a_scope_s_snapshot_holds_that_scope_s_rows_alone(self, client):
+        support.grant(ALICE, f"team:{OTHER_TEAM}")
+        support.create("notes", {"id": "0190a000-0000-7000-8000-300000000001", "team": OTHER_TEAM, "body": "x"})
+        support.create("notes", {"id": "0190a000-0000-7000-8000-300000000002", "team": TEAM, "body": "y"})
+        cursor = caught_up(client)
+        support.grant(ALICE, f"team:{TEAM}")
+
+        assert ops(pulled(client, cursor=cursor)) == [
+            ("scope_granted", None, f"team:{TEAM}"),
+            ("snapshot_begin", None, f"team:{TEAM}"),
+            ("upsert", "notes", "0190a000-0000-7000-8000-300000000002"),
+            ("snapshot_end", None, f"team:{TEAM}"),
+        ]
+
+
+class TestAPage:
+    def test_a_limit_spans_one_snapshot_and_the_next(self, client):
+        for number in range(1, 4):
+            support.create("tasks", task(number))
+
+        page = pulled(client, limit=4, snapshot="tasks")
+        assert [op for op, _, _ in ops(page)] == [
+            "snapshot_begin",
+            "upsert",
+            "upsert",
+            "upsert",
+            "snapshot_end",
+            "snapshot_begin",
+            "upsert",
+        ]
+        assert page["has_more"] is True
+
+    def test_a_cursor_at_where_pruning_cut_is_still_good(self, client):
+        support.create("tasks", task(1))
+        cursor = caught_up(client)
+        support.update("tasks", task(1)["id"], {"done": True})
+        cursor = pulled(client, cursor=cursor)["cursor"]
+        support.expire()
+
+        assert ops(pulled(client, cursor=cursor)) == []
+
+    def test_a_different_page_has_a_different_etag_and_isn_t_not_modified(self, client):
+        cursor = caught_up(client)
+        quiet = client.get("/sync/changes", {"cursor": cursor}, headers=HEADERS)
+        support.create("tasks", task(1))
+        changed = client.get("/sync/changes", {"cursor": cursor}, headers={**HEADERS, "If-None-Match": quiet["ETag"]})
+
+        assert changed.status_code == 200
+        assert changed["ETag"] != quiet["ETag"]
+
+    def test_not_modified_says_its_etag(self, client):
+        cursor = caught_up(client)
+        quiet = client.get("/sync/changes", {"cursor": cursor}, headers=HEADERS)
+        again = client.get("/sync/changes", {"cursor": cursor}, headers={**HEADERS, "If-None-Match": quiet["ETag"]})
+
+        assert (again.status_code, again["ETag"]) == (304, quiet["ETag"])
+
+    def test_a_row_is_shown_as_retrieve_shows_it(self, client, monkeypatch):
+        from rest_framework import serializers
+
+        from tests.testapp.models import SyncTask
+
+        class Titles(serializers.ModelSerializer):
+            class Meta:
+                model = SyncTask
+                fields = ["id", "title"]
+
+        monkeypatch.setattr(TaskViewSet, "serializer_class_action_map", {"retrieve": Titles})
+        support.create("tasks", task(1))
+
+        assert pulled(client)["changes"][1]["data"] == {"id": task(1)["id"], "title": "t1"}
+
+    def test_another_person_s_tasks_aren_t_read(self, client):
+        support.create("tasks", task(1, owner=BOB))
+
+        assert ops(pulled(client)) == [("snapshot_begin", None, None), ("snapshot_end", None, None)]

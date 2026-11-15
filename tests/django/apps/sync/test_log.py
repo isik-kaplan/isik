@@ -194,3 +194,54 @@ class TestTheLag:
             warn_of_lag()
 
         assert caplog.messages == []
+
+
+@pytest.mark.django_db(transaction=True)
+class TestInterleavedTransactions:
+    """A transaction writing before and after another's commit: positions order by transaction, then sequence."""
+
+    @pytest.fixture
+    def interleaved(self, other):
+        """(A, 1), (B, 2), (B, 3), (A, 4) by sequence - A the older transaction, committed last."""
+        open_write(other, 1)
+        support.create_many("tasks", [task(2), task(3)])
+        with other.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO testapp_synctask (id, owner_id, title, done, created_at, updated_at) "
+                "VALUES (%s, %s, 't', false, now(), now())",
+                [task(4)["id"], ALICE],
+            )
+        other.commit()
+        return list(get_sync_log_model().objects.order_by("seq").values_list("object_id", "xid", "seq"))
+
+    def test_the_last_position_is_the_younger_transaction_s_last(self, interleaved):
+        [_, _, (_, younger, last), _] = interleaved
+
+        assert last_position(watermark()) == Position(younger, last)
+
+    def test_pruning_a_batch_cuts_after_the_older_transaction(self, interleaved):
+        [(_, older, _), _, _, (_, _, its_last)] = interleaved
+        with override_isik(DJANGO={"SYNC": {"RETENTION": timedelta(microseconds=1)}}):
+            assert prune_sync_log(batch=2) == 2
+
+        assert horizon() == Position(older, its_last)
+
+    def test_pruning_everything_cuts_after_the_younger(self, interleaved):
+        [_, _, (_, younger, last), _] = interleaved
+        with override_isik(DJANGO={"SYNC": {"RETENTION": timedelta(microseconds=1)}}):
+            assert prune_sync_log() == 4
+
+        assert horizon() == Position(younger, last)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pruning_with_nothing_new_leaves_the_mark_as_it_is():
+    support.create("tasks", task(1))
+    with override_isik(DJANGO={"SYNC": {"RETENTION": timedelta(microseconds=1)}}):
+        prune_sync_log()
+        mark = get_sync_log_model().objects.get()
+
+        assert prune_sync_log() == 0
+        assert prune_sync_log(batch=1) == 0
+
+    assert get_sync_log_model().objects.get().pk == mark.pk

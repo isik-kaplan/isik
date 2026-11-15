@@ -78,6 +78,7 @@ class TestAnEntrysHistoryContext:
                 inner = runtime._tracker.value
             assert runtime._tracker.value is outer
 
+        assert isinstance(inner.id, uuid.UUID)
         assert inner.id != outer.id
         assert inner.metadata == {"user": "alice", "sync_entry": 3}
         assert outer.metadata == {"user": "alice"}
@@ -275,21 +276,40 @@ class TestPushsThrottle:
             assert client.post("/sync/push", {"entries": []}, format="json", headers=HEADERS).status_code == 200
         assert client.post("/sync/push", [], format="json", headers=HEADERS).status_code == 429
 
-    def test_forgets_what_s_older_than_its_period(self, client, monkeypatch):
-        moments = iter([0, 0, 61])
+    def test_forgets_what_s_its_period_old(self, client, monkeypatch):
+        moments = iter([0, 0, 60])
         monkeypatch.setattr("rest_framework.throttling.SimpleRateThrottle.timer", lambda self: next(moments))
 
         assert pushed(client, created("a", 1), created("b", 2), created("c", 3)).status_code == 200
         assert pushed(client, created("d", 4)).status_code == 429
         assert pushed(client, created("d", 4)).status_code == 200
 
+    def test_counts_each_person_s_apart(self, client):
+        assert pushed(client, created("a", 1), created("b", 2), created("c", 3)).status_code == 200
+        bob = APIClient()
+        bob.force_authenticate(support.user("0190a000-0000-7000-8000-a00000000002"))
+
+        assert pushed(bob, created("d", 4)).status_code == 200
+
     def test_the_feed_and_capabilities_aren_t_push_s(self, client):
         for _ in range(4):
             assert client.get("/sync/capabilities", headers=HEADERS).status_code == 200
 
 
+class HostRealm(SessionAuthentication):
+    def authenticate_header(self, request):
+        return f'Host realm="{request.get_host()}"'
+
+
 @pytest.mark.django_db
 class TestTheEndpoints:
+    def test_answer_a_stranger_with_how_their_authentication_asks(self, monkeypatch):
+        monkeypatch.setattr(SyncViewSet, "authentication_classes", [HostRealm])
+        with override_settings(ROOT_URLCONF="tests.testapp.sync_urls"):
+            response = APIClient().get("/sync/changes", headers=HEADERS)
+
+        assert (response.status_code, response["WWW-Authenticate"]) == (401, 'Host realm="testserver"')
+
     def test_answer_a_stranger_401_however_they_d_authenticate(self, monkeypatch):
         monkeypatch.setattr(SyncViewSet, "authentication_classes", [SessionAuthentication])
         with override_settings(ROOT_URLCONF="tests.testapp.sync_urls"):
@@ -305,3 +325,87 @@ class TestTheEndpoints:
 
 def test_the_module_reads_its_backend_from_the_setting():
     assert pushing.ACTIONS["PATCH"] == ("patch", "partial_update")
+
+
+@pytest.mark.django_db
+class TestAnEntryAsItsRestWrite:
+    def test_a_create_without_an_id_in_its_body_takes_the_entry_s(self, client):
+        entry = created()
+        response = pushed(client, entry)
+
+        assert response.json()["results"][0]["status"] == 201
+        assert str(SyncTask.objects.get().pk) == entry["id"]
+
+    def test_a_create_without_a_body_is_refused_as_an_empty_create(self, client):
+        entry = {"key": "k", "method": "POST", "model": "tasks", "id": TASK}
+
+        assert set(pushed(client, entry).json()["results"][0]["errors"]) == {"owner", "title"}
+
+    @pytest.mark.parametrize("query", ["", "?trace=1"])
+    def test_its_key_replays_through_rest_as_the_same_write(self, client, query):
+        support.create("tasks", {"id": TASK, "owner": ALICE, "title": "t"})
+        etag = client.get(f"/api/tasks/{TASK}/")["ETag"]
+        entry = {"key": str(uuid.uuid4()), "method": "PATCH", "model": "tasks", "id": TASK, "body": {"done": True}}
+        client.post(f"/sync/push{query}", {"entries": [{**entry, "if_match": etag}]}, format="json", headers=HEADERS)
+        create_key = str(uuid.uuid4())
+        pushed(client, {**created(create_key, 2)})
+
+        patched = client.patch(
+            f"/api/tasks/{TASK}/",
+            {"done": True},
+            format="json",
+            headers={"Idempotency-Key": entry["key"], "If-Match": etag},
+        )
+        made = client.post(
+            "/api/tasks/",
+            {"id": created(number=2)["id"], "owner": ALICE, "title": "t"},
+            format="json",
+            headers={"Idempotency-Key": create_key},
+        )
+
+        assert (patched.status_code, patched["Idempotent-Replayed"]) == (200, "true")
+        assert (made.status_code, made["Idempotent-Replayed"]) == (201, "true")
+
+    def test_an_entry_of_a_model_routed_nowhere_still_runs(self, monkeypatch):
+        seen = []
+        making = pushing.sub_request
+        monkeypatch.setattr(pushing, "sub_request", lambda *args: seen.append(args[2]) or making(*args))
+        client = APIClient()
+        client.force_authenticate(support.user(ALICE))
+        with override_settings(ROOT_URLCONF="tests.testapp.sync_urls_push_only"):
+            pushed(client, created())
+            pushed(client, {"key": "p", "method": "PATCH", "model": "tasks", "id": created()["id"], "body": {}})
+
+        assert seen == ["/tasks/", f"/tasks/{created()['id']}/"]
+
+    def test_entries_are_routed_by_the_push_s_own_urlconf(self, client, monkeypatch):
+        asked = []
+        enumerator = pushing.EndpointEnumerator
+
+        def recording(urlconf=None):
+            asked.append(urlconf)
+            return enumerator(urlconf=urlconf)
+
+        monkeypatch.setattr(pushing, "EndpointEnumerator", recording)
+        backend = ViewPushBackend({})
+        request = Request(RequestFactory().post("/sync/push"))
+        request._request.urlconf = "tests.testapp.sync_urls"
+        request.user, request.auth = support.user(ALICE), None
+        backend.run(request, [])
+        del request._request.urlconf
+        backend.run(request, [])
+
+        assert asked == ["tests.testapp.sync_urls", None]
+
+    def test_each_entry_runs_in_a_history_context_of_its_place(self, client, monkeypatch):
+        places = []
+        context = pushing.entry_context
+
+        def recording(index):
+            places.append(index)
+            return context(index)
+
+        monkeypatch.setattr(pushing, "entry_context", recording)
+        pushed(client, created("a", 1), created("b", 2))
+
+        assert places == [0, 1]

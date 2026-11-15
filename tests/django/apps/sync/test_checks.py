@@ -12,7 +12,7 @@ from isik.django.apps.sync import checks, declarations
 from isik.django.apps.sync.checks import model_problems, setting_problems, sync_can_work, sync_problems
 from isik.django.apps.sync.declarations import Memberships
 from isik.django.conf import override_isik
-from tests.testapp.models import SyncNote, SyncTask
+from tests.testapp.models import SyncBoard, SyncNote, SyncTask
 from tests.testapp.sync_views import NoteSerializer, TaskSerializer, TaskViewSet
 
 
@@ -125,17 +125,44 @@ class Nested(serializers.ModelSerializer):
         fields = ["owner", "title"]
 
 
+class Bare(serializers.ModelSerializer):
+    class Meta:
+        model = SyncTask
+        fields = ["title"]
+
+
+class Plain(serializers.ModelSerializer):
+    class Meta:
+        model = SyncTask
+        fields = ["id", "owner", "title"]
+
+
+class TwiceNested(serializers.ModelSerializer):
+    owner = NoteSerializer()
+    project = NoteSerializer()
+
+    class Meta:
+        model = SyncTask
+        fields = ["id", "owner", "project"]
+
+
 class TestTheDeclarations:
     def test_a_scope_that_isn_t_a_field(self, declared):
+        declared(SyncBoard, scope="nothing")
         declared(SyncTask, scope="nothing")
 
-        assert model_problems() == ["testapp.SyncTask is scoped by 'nothing', which isn't a field."]
+        assert model_problems() == [
+            "testapp.SyncBoard is scoped by 'nothing', which isn't a field.",
+            "testapp.SyncTask is scoped by 'nothing', which isn't a field.",
+        ]
 
     def test_a_scope_that_isn_t_a_key_needs_a_kind(self, declared):
+        declared(SyncBoard, scope="color")
         declared(SyncTask, scope="title")
 
         assert model_problems() == [
-            "testapp.SyncTask is scoped by title, which isn't a key - say its kind: syncs(kind=...)."
+            "testapp.SyncBoard is scoped by color, which isn't a key - say its kind: syncs(kind=...).",
+            "testapp.SyncTask is scoped by title, which isn't a key - say its kind: syncs(kind=...).",
         ]
 
     def test_a_kind_is_a_plain_name(self, declared):
@@ -229,6 +256,24 @@ class TestTheDeclarations:
             "scope.",
             "testapp.SyncTask is synced, and Nested creates its rows under ids of its own - give it "
             "ClientPrimaryKeyMixin, so a client offline can make a row's id.",
+        ]
+
+    def test_the_retrieve_representation_is_read_and_the_create_serializer(self, monkeypatch):
+        monkeypatch.setattr(TaskViewSet, "serializer_class_action_map", {"retrieve": Bare, "create": Plain})
+
+        assert model_problems() == [
+            "testapp.SyncTask is synced, and its REST representation leaves out id, owner - a client needs its key "
+            "and its scope.",
+            "testapp.SyncTask is synced, and Plain creates its rows under ids of its own - give it "
+            "ClientPrimaryKeyMixin, so a client offline can make a row's id.",
+        ]
+
+    def test_two_nested_are_named(self, monkeypatch):
+        monkeypatch.setattr(TaskViewSet, "serializer_class_action_map", {"retrieve": TwiceNested})
+
+        assert model_problems() == [
+            "testapp.SyncTask is synced, and its REST representation nests owner, project - keep keys as ids, "
+            "nothing nested."
         ]
 
     def test_the_task_serializer_is_what_a_synced_model_needs(self):

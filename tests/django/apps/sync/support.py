@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from isik.django.apps.sync.log import prune_sync_log
 from isik.django.conf import override_isik
@@ -46,6 +47,12 @@ def _values(name, row):
 
 def create(name, row):
     return MODELS[name].objects.create(**_values(name, row))
+
+
+def create_many(name, rows):
+    """Creates `rows` in one transaction."""
+    with transaction.atomic():
+        return [create(name, row) for row in rows]
 
 
 def update(name, pk, changes):
