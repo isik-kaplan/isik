@@ -1,3 +1,5 @@
+import logging
+
 import pghistory
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
@@ -9,6 +11,9 @@ from isik.django.apps.common.db.context_columns import UUID_PATTERN
 from isik.django.apps.common.db.history import _open_history_context
 from isik.django.apps.common.db.models import uuid7
 from isik.django.conf import django_setting
+
+
+logger = logging.getLogger(__name__)
 
 
 # The keys a project may add to every request's context by naming them in ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'].
@@ -106,7 +111,10 @@ class HistoryContextMiddleware(HistoryMiddleware):
         if not hasattr(request, "request_id"):
             header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
             request.request_id = str(uuid7())
-            request.correlation_id = well_formed(request.headers.get(header)) or request.request_id
+            sent = request.headers.get(header)
+            request.correlation_id = well_formed(sent) or request.request_id
+            if sent and request.correlation_id != sent:
+                logger.debug("%s %r isn't an id REQUEST_ID_VALID takes; the request's own id is used.", header, sent)
 
     def __call__(self, request):
         self.identify(request)

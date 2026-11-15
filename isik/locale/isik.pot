@@ -2119,12 +2119,12 @@ msgstr ""
 msgid "ISIK['DJANGO']['FEATURES']['SWEEP'] is next_boundary, which schedules each run with Celery - install it."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:79
+#: isik/django/apps/common/middleware/history.py:84
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(key)s, and ISIK['DJANGO']['HISTORY']['%(setting)s'] isn't set."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:73
+#: isik/django/apps/common/middleware/history.py:78
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(unknown)s - it takes %(known)s."
 msgstr ""
