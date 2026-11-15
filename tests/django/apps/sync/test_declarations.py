@@ -189,9 +189,14 @@ class TestScopes:
 class TestRelationParents:
     @isolate_apps("tests.testapp")
     def test_a_covered_relation_gets_a_proxy_logging_its_synced_row(self, own_registry, monkeypatch):
+        from isik.django.apps.common import generated
+        from isik.django.apps.common.db import models as base_models
         from isik.django.apps.common.generated import generated_models
         from isik.django.apps.sync.triggers import ParentLogTrigger
 
+        # The throwaway model's relation lock and proxies are registered where isik keeps its own - put back after.
+        monkeypatch.setattr(base_models, "relation_locks", list(base_models.relation_locks))
+        monkeypatch.setattr(generated, "_generated", dict(generated._generated))
         monkeypatch.setattr(declarations, "PARENT_LOGS", [])
         label = throwaway()
         model = syncs("covering", scope="owner")(
