@@ -3,6 +3,7 @@ The notifications pipeline end to end with every model the project's own - the f
 isik's defaults can't see: a table named by isik's default where the configured model belongs.
 """
 
+import dataclasses
 import uuid
 from datetime import timedelta
 
@@ -15,11 +16,11 @@ from django.core.management import call_command
 from django.db import IntegrityError, ProgrammingError, connection, transaction
 from django.utils import timezone
 
-from isik.django.apps.notifications import pipeline, swapping, tasks
+from isik.django.apps.notifications import kinds, pipeline, swapping, tasks
 from isik.django.apps.notifications.audience import swapping as audience_swapping
 from isik.django.apps.notifications.audience.helpers import subscribe
 from isik.django.apps.notifications.checks import notification_problems
-from isik.django.apps.notifications.models import DeliveryState
+from isik.django.apps.notifications.models import DeliveryState, Policy
 from isik.django.conf import isik_areas
 from tests_swapped.owned import models as owned
 
@@ -227,16 +228,27 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
     from cryptography.hazmat.primitives.asymmetric import ec
 
     from isik.django.apps.notifications.audience.helpers import register_device
-    from isik.django.apps.notifications.channels import push
+    from isik.django.apps.notifications.channels import Channel, push
 
     key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
     )
     isik_areas(settings).NOTIFICATIONS = {
         **isik_areas(settings).NOTIFICATIONS,
-        "CHANNELS": ("inbox", "email", "webhook", "push"),
+        "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK, Channel.PUSH),
         "PUSH": {"APNS": {"TEAM_ID": "T", "KEY_ID": "K", "KEY": key.decode(), "TOPIC": "com.owned.app"}},
     }
+    # Sent by push too, now that push is on.
+    monkeypatch.setattr(
+        kinds,
+        "declared",
+        [
+            dataclasses.replace(kind, channels={**kind.channels, Channel.PUSH: Policy.DEFAULT_ON})
+            if kind.name == "package_lost"
+            else kind
+            for kind in kinds.declared
+        ],
+    )
     sent = []
     monkeypatch.setattr(
         push,

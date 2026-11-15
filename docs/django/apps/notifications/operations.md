@@ -112,9 +112,9 @@ stopped running raises no error anywhere; report this from your health check.
 
 ## `manage.py notices`
 
-Lists every declared kind - its source, model, trigger, condition, variants, audience, policy, scope,
-channels and snapshot - and where the declarations and the policy rows differ: declared with no row
-(run `migrate`), a row no declaration makes, declared and retired. `--format json`, and `--retire
+Lists every declared kind - its source, model, trigger, condition, variants, audience, scope, channels
+with each one's policy, and snapshot - and where the declarations and the policy rows differ: declared with
+no row (run `migrate`), a row no declaration makes, declared and retired. `--format json`, and `--retire
 <kind>` (see [kinds.md](kinds.md)).
 
 ## Tests

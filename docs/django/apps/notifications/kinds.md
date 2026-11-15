@@ -13,12 +13,17 @@ around as the object, never retyped as a string:
 ```python
 # notices.py
 PARCEL_FLAGGED = declare_kind("parcel_flagged", variants=("lost", "damaged"))
-REMINDER = declare_kind("reminder", variants=("daily", "weekly"), audience=Subscribers, policy=Policy.DEFAULT_OFF)
+REMINDER = declare_kind(
+    "reminder",
+    variants=("daily", "weekly"),
+    audience=Subscribers,
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_OFF) | {Channel.WEBHOOK: Policy.NEVER},
+)
 ```
 
 `declare_kind()` returns a `KindName` - a string, so anything storing it stores the name - carrying the
 variants it declares. A kind written by a trigger gets its behavior from `notifies()`, given that name; one
-the application raises gets it right there, from `audience` and `policy`. `isik.E014` holds the two steps
+the application raises gets it right there, from `audience` and `channels`. `isik.E014` holds the two steps
 to each other: a declared kind nothing writes, a `notifies()` writing other variants than its declaration
 names, or a name declared twice, is refused. A one-file project may give `notifies()` a bare name instead,
 declaring the kind there and then - unless `REQUIRE_DECLARED_KINDS` is on, which refuses one.
@@ -69,9 +74,12 @@ On the model the kind watches:
     snapshot=["status", "sender"],                       # the only columns the notice carries
     previous=False,                                      # True: the same columns as they were, on an update
     audience=Field("sender"),
-    policy=Policy.DEFAULT_OFF,
+    channels={                                           # required - every channel CHANNELS turns on
+        Channel.INBOX: Policy.DEFAULT_OFF,
+        Channel.EMAIL: Policy.DEFAULT_OFF,
+        Channel.WEBHOOK: Policy.MANDATORY,
+    },
     scope=Scope.SINGLE_PARTITION,                        # default
-    channels=("inbox", "email", "webhook"),              # default: every CHANNELS one
     partition=None,                                      # a resolver - see partitions.md
     sensitive=None,                                      # {field: SensitiveSnapshotField(reason=...)}
 )
@@ -84,6 +92,8 @@ trigger is in your app's migration, like any pgtrigger trigger.
 
 - **`on` has no default.** A kind writing a notice on every save of its row is a choice to make, not one
   to fall into.
+- **`channels` names every channel `CHANNELS` turns on**, each with its policy (see
+  [the policy on each channel](#the-policy-on-each-channel)).
 - **`snapshot` is an allow-list, and it's required to say what leaves the row.** A column it doesn't
   name never reaches the ledger - a secret column on the model stays where it is. The notice's
   `snapshot` holds each named field's column (a foreign key's id under the field's name).
@@ -100,9 +110,41 @@ trigger is in your app's migration, like any pgtrigger trigger.
 - The notice carries the change's pghistory context (`pgh_context`), the same one its event rows carry.
 - A **retired** kind's trigger writes nothing.
 
+## The policy on each channel
+
+A kind's `channels` maps each channel `CHANNELS` turns on to the `Policy` it's sent there under:
+
+| policy | on that channel |
+|---|---|
+| `Policy.MANDATORY` | everyone its audience names, whatever their subscriptions say |
+| `Policy.DEFAULT_ON` | everyone its audience names, but those turning it off |
+| `Policy.DEFAULT_OFF` | only those its audience names who turn it on |
+| `Policy.NEVER` | no one - the kind never goes out on it |
+
+So one kind is mandatory by email and a person's choice in the inbox, and a kind meant for people alone
+says so for the webhook:
+
+```python
+channels={Channel.EMAIL: Policy.MANDATORY, Channel.INBOX: Policy.DEFAULT_ON, Channel.WEBHOOK: Policy.NEVER}
+# one policy on several channels, every channel still named:
+channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.MANDATORY) | {Channel.WEBHOOK: Policy.NEVER}
+```
+
+Each key is a `ChannelName`: isik's own as `Channel.INBOX`, `Channel.EMAIL`, `Channel.WEBHOOK` and
+`Channel.PUSH` (from `isik.django.apps.notifications.channels`), a project's own as `register_channel()`
+returned it - so a misspelt channel is a name your editor and linter catch, and `isik.E014` names a key
+written as plain text.
+
+Every channel is named, `Policy.NEVER` included: what a kind does on each channel is read in its
+declaration, a webhook's among them, and a channel added to `CHANNELS` later is decided for each kind before
+startup passes - `isik.E014` names every kind that leaves it unnamed. A channel no person chooses on - a
+webhook, whose endpoints choose their kinds - takes `Policy.MANDATORY` or `Policy.NEVER`; a channel says
+which it is with `chosen_by_people` (see [your own channel](channels.md#your-own)). An endpoint
+asking for a kind whose webhook policy is `Policy.NEVER` is refused.
+
 ## Application-sourced: `raise_notice()`
 
-For something no row change shows - a password reset, a reminder - declared with its audience and policy
+For something no row change shows - a password reset, a reminder - declared with its audience and channels
 (`REMINDER` above):
 
 ```python
@@ -199,16 +241,20 @@ from isik.django.apps.notifications.kinds import PushContent, PushDataField
 - `ttl` - how long the service keeps trying a phone that's off; None leaves it to the service.
 - `badge=True` - the app's badge, set to the user's unread inbox items.
 
-**Push turned on by deployment.** A kind leaving `channels` out is sent on every channel `CHANNELS` turns
-on, push among them where it is - so it needs nothing. A kind naming its channels names push only where
-`CHANNELS` has it, since naming a channel that isn't on is refused at startup:
+**Push turned on by deployment.** A kind's channels name exactly the channels `CHANNELS` turns on, so a
+kind sent by push where push is on names it with its policy there, and the rest of the time leaves it out:
 
 ```python
 from isik.django.apps.notifications import conf
 
-PUSH = ("push",) if "push" in conf.setting("CHANNELS") else ()
+PUSH = {Channel.PUSH: Policy.DEFAULT_ON} if Channel.PUSH in conf.setting("CHANNELS") else {}
 
-@notifies(TOKEN_CREATED, ..., channels=("inbox", *PUSH), push=PushContent(private=True))
+@notifies(
+    TOKEN_CREATED,
+    ...,
+    channels={Channel.INBOX: Policy.DEFAULT_ON, Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: Policy.NEVER, **PUSH},
+    push=PushContent(private=True),
+)
 ```
 
 ## What the checks refuse
@@ -216,9 +262,12 @@ PUSH = ("push",) if "push" in conf.setting("CHANNELS") else ()
 `isik.E014`, at startup:
 
 - a kind declared twice
-- a policy that isn't a `Policy`
+- a kind's `channels` other than `{ChannelName: Policy}` - a key written as plain text, or a policy that
+  isn't a `Policy`
+- a channel `CHANNELS` turns on that a kind's `channels` leaves unnamed, and a channel it names that
+  `CHANNELS` leaves off
+- `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF` on a channel no person chooses on - a webhook's
 - a single-partition kind whose audience spans partitions; a cross-partition one with no partitions
-- a kind sent on a channel `CHANNELS` doesn't turn on
 - a channel `CHANNELS` turns on that can't be loaded - a broken `notifications` extra, say - found at
   startup rather than by the first fan-out, which would set every notice aside
 - a kind declared on a ledger model or a pghistory event model - a loop, or a copy of what pghistory wrote

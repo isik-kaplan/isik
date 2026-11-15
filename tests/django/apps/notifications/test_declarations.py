@@ -19,8 +19,16 @@ from isik.django.apps.notifications.audience import (
     swapping,
 )
 from isik.django.apps.notifications.audience.bases import AbstractSubscription
-from isik.django.apps.notifications.audience.helpers import mark_read, subscribe, unread, unsubscribe
+from isik.django.apps.notifications.audience.helpers import (
+    ChannelNotChosen,
+    KindIsMandatory,
+    mark_read,
+    subscribe,
+    unread,
+    unsubscribe,
+)
 from isik.django.apps.notifications.audiences import LIVE, Audience, Field, Subscribers
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import Kind, declare_kind, get_kind, matching_variant, notifies, raise_notice
 from isik.django.apps.notifications.models import Notice, NoticeKindPolicy, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import PartitionGone, in_partition
@@ -37,16 +45,18 @@ class TestTheRegistry:
     def test_a_trigger_kind(self):
         kind = get_kind("parcel_flagged")
 
-        assert (kind.model, kind.source, kind.policy, kind.scope) == (
-            Parcel,
-            Source.TRIGGER,
-            Policy.DEFAULT_OFF,
-            Scope.SINGLE_PARTITION,
-        )
+        assert (kind.model, kind.source, kind.scope) == (Parcel, Source.TRIGGER, Scope.SINGLE_PARTITION)
+        assert kind.channels == {
+            Channel.INBOX: Policy.DEFAULT_OFF,
+            Channel.EMAIL: Policy.DEFAULT_OFF,
+            Channel.WEBHOOK: Policy.MANDATORY,
+        }
         assert list(kind.variants) == ["lost", "damaged"]
         assert kind.trigger_name == "notify_parcel_flagged"
         assert kind.declared_in == "testapp.Parcel"
         assert kind.enabled_channels == ("inbox", "email", "webhook")
+        assert kind.chosen_channels == ("inbox", "email")
+        assert (kind.policy_on("webhook"), kind.policy_on("push")) == (Policy.MANDATORY, Policy.NEVER)
 
     def test_an_application_kind(self):
         kind = get_kind(PARCEL_REMINDER)
@@ -56,10 +66,11 @@ class TestTheRegistry:
         assert (kind.source, kind.variants, kind.model) == (Source.APPLICATION, ("daily", "weekly"), None)
         assert isinstance(kind.audience, Subscribers)
 
-    def test_a_kind_without_channels_takes_the_configured_ones(self, settings):
-        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox",)}
+    def test_a_kind_is_sent_on_each_channel_it_names_with_a_policy_other_than_never(self):
+        routed = get_kind("parcel_routed")
 
-        assert get_kind("parcel_shipped").enabled_channels == ("inbox",)
+        assert (routed.enabled_channels, routed.chosen_channels) == (("inbox",), ())
+        assert get_kind("parcel_shipped").chosen_channels == ("inbox", "email")
 
     def test_an_unknown_name(self):
         assert get_kind("nothing") is None
@@ -67,12 +78,15 @@ class TestTheRegistry:
     def test_the_last_declaration_of_a_name_wins(self, monkeypatch):
         monkeypatch.setattr(kinds, "declared", [])
         monkeypatch.setattr(kinds, "vocabulary", [])
-        declare_kind("twice", audience=Subscribers(), policy=Policy.MANDATORY)
-        declare_kind("twice", audience=Subscribers(), policy=Policy.DEFAULT_ON, channels=["inbox"])
+        declare_kind("twice", audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY})
+        declare_kind("twice", audience=Subscribers(), channels={Channel.INBOX: Policy.DEFAULT_ON})
 
         first, second = kinds.declared
         assert get_kind("twice") is second
-        assert (first.policy, second.channels) == (Policy.MANDATORY, ("inbox",))
+        assert (first.channels, second.channels) == (
+            {Channel.INBOX: Policy.MANDATORY},
+            {Channel.INBOX: Policy.DEFAULT_ON},
+        )
         assert kinds.vocabulary == ["twice", "twice"]
 
     def test_declaring_only_the_vocabulary_writes_no_behavior(self, monkeypatch):
@@ -91,7 +105,7 @@ class TestTheRegistry:
         # Named afresh each run: pgtrigger's registry outlives isolate_apps, and a test may run twice.
         name = f"Opened{uuid.uuid4().hex[:8]}"
         declare = notifies(
-            name.lower(), audience=Subscribers(), policy=Policy.MANDATORY, on=pgtrigger.Insert, channels=["inbox"]
+            name.lower(), audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY}, on=pgtrigger.Insert
         )
         box = declare(
             type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
@@ -262,11 +276,78 @@ class TestSubscribing:
         with pytest.raises(
             ValueError,
             match=(
-                "^alice@example.com has a subscription to every variant of parcel_flagged - unsubscribe it before "
-                "naming one.$"
+                "^alice@example.com has a subscription to parcel_flagged covering this one - unsubscribe it before "
+                "naming this one.$"
             ),
         ):
             subscribe(alice, "parcel_flagged", "lost")
+
+    def test_to_one_channel(self, alice):
+        subscription = subscribe(alice, "parcel_flagged", channel="email", enabled=False)
+
+        assert (subscription.variant, subscription.channel, subscription.enabled) == (None, "email", False)
+        assert self.rows(alice) == [("parcel_flagged", None, False)]
+
+    def test_to_every_channel_replaces_the_ones_named(self, alice):
+        subscribe(alice, "parcel_flagged", channel="email")
+        subscribe(alice, "parcel_flagged", "lost", channel="inbox")
+        subscribe(alice, "parcel_flagged", "damaged", channel="inbox")
+
+        subscribe(alice, "parcel_flagged", enabled=False)
+
+        assert list(get_subscription_model().objects.values_list("variant", "channel", "enabled")) == [
+            (None, None, False)
+        ]
+
+    def test_to_a_variant_on_every_channel_replaces_that_variants_channels_alone(self, alice):
+        subscribe(alice, "parcel_flagged", "lost", channel="email")
+        subscribe(alice, "parcel_flagged", "damaged", channel="email")
+
+        subscribe(alice, "parcel_flagged", "lost")
+
+        assert sorted(get_subscription_model().objects.values_list("variant", "channel"), key=str) == [
+            ("damaged", "email"),
+            ("lost", None),
+        ]
+
+    @pytest.mark.parametrize(
+        ("first", "second"), [(("lost", None), (None, "email")), ((None, "email"), ("lost", "email"))]
+    )
+    def test_beside_one_covering_it_or_part_of_it_is_refused(self, alice, first, second):
+        subscribe(alice, "parcel_flagged", first[0], channel=first[1])
+
+        with pytest.raises(ValueError, match="covering this one"):
+            subscribe(alice, "parcel_flagged", second[0], channel=second[1])
+        assert get_subscription_model().objects.count() == 1
+
+    @pytest.mark.parametrize(
+        ("kind", "channel"), [("parcel_flagged", "webhook"), ("parcel_routed", "inbox"), ("parcel_flagged", "fax")]
+    )
+    def test_to_a_channel_the_kind_leaves_no_choice_on_is_refused(self, alice, kind, channel):
+        with pytest.raises(
+            ChannelNotChosen,
+            match=f"^{kind} leaves no choice on {channel} - it's mandatory there, or never sent there.$",
+        ) as refused:
+            subscribe(alice, kind, channel=channel)
+        assert refused.value.code == "channel_not_chosen"
+
+    def test_to_a_kind_leaving_no_choice_on_any_channel_is_refused(self, alice):
+        with pytest.raises(
+            KindIsMandatory,
+            match="^parcel_routed leaves no choice on any channel - it reaches everyone it's for, wherever it's sent.$",
+        ) as refused:
+            subscribe(alice, "parcel_routed")
+        assert refused.value.code == "kind_mandatory"
+
+    def test_unsubscribing_from_one_channel_or_all(self, alice):
+        subscribe(alice, "parcel_flagged", "lost", channel="inbox")
+        subscribe(alice, "parcel_flagged", "lost", channel="email")
+        subscribe(alice, "parcel_flagged", "damaged", channel="email")
+
+        assert unsubscribe(alice, "parcel_flagged", channel="email") == 2
+        assert list(get_subscription_model().objects.values_list("variant", "channel")) == [("lost", "inbox")]
+        assert unsubscribe(alice, "parcel_flagged", "lost", channel="email") == 0
+        assert unsubscribe(alice, "parcel_flagged", "lost", channel="inbox") == 1
 
     def test_a_kind_by_its_policy_row(self, alice):
         subscribe(alice, NoticeKindPolicy.objects.get(name="parcel_shipped"), enabled=False)
@@ -386,9 +467,11 @@ class TestSwapping:
         )
 
         flagged, shipped = kind_named("parcel_flagged").pk, kind_named("parcel_shipped").pk
-        assert [str(row) for row in (subscription, every, endpoint, wanted, item)] == [
-            f"{flagged}:lost",
-            f"{shipped}:*",
+        by_channel = subscribe(alice, "parcel_flagged", "damaged", channel="email")
+        assert [str(row) for row in (subscription, every, by_channel, endpoint, wanted, item)] == [
+            f"{flagged}:lost:*",
+            f"{shipped}:*:*",
+            f"{flagged}:damaged:email",
             "https://x.example/",
             f"{shipped}:*",
             f"{shipped}:testapp.Parcel:7",
@@ -514,19 +597,25 @@ class TestTheMirror:
     def test_each_declared_kind_has_its_row(self):
         rows = {row.name: row for row in NoticeKindPolicy.objects.all()}
 
-        assert (rows["parcel_flagged"].policy, rows["parcel_flagged"].variants) == ("default_off", ["lost", "damaged"])
+        assert (rows["parcel_flagged"].channels, rows["parcel_flagged"].variants) == (
+            {"inbox": "default_off", "email": "default_off", "webhook": "mandatory"},
+            ["lost", "damaged"],
+        )
         assert (rows["parcel_reminder"].source, rows["parcel_reminder"].scope) == ("application", "single_partition")
 
     def test_it_brings_a_row_up_to_date_and_deletes_none(self, monkeypatch):
-        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(policy="mandatory", variants=["x"])
-        NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(channels={"inbox": "never"}, variants=["x"])
+        NoticeKindPolicy.objects.create(name="gone", scope="single_partition", source="trigger")
         NoticeKindPolicy.objects.filter(name="parcel_reminder").update(status="retired")
 
         rows = mirror_kinds()
 
         assert {row.name for row in rows} == set(kinds.kinds())
         shipped = NoticeKindPolicy.objects.get(name="parcel_shipped")
-        assert (shipped.policy, shipped.variants) == ("default_on", [])
+        assert (shipped.channels, shipped.variants) == (
+            {"inbox": "default_on", "email": "default_on", "webhook": "mandatory"},
+            [],
+        )
         assert NoticeKindPolicy.objects.filter(name="gone").exists()
         assert NoticeKindPolicy.objects.get(name="parcel_reminder").status == "retired"
         assert str(shipped) == "parcel_shipped"
@@ -541,7 +630,7 @@ def test_a_notice_reads_as_its_kinds_key_and_its_own(parcel):
 
 
 def test_the_kind_dataclass_defaults():
-    kind = Kind(name="k", audience=Subscribers(), policy=Policy.MANDATORY)
+    kind = Kind(name="k", audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY})
 
     assert (kind.scope, kind.source, kind.snapshot, kind.previous, kind.partition) == (
         Scope.SINGLE_PARTITION,

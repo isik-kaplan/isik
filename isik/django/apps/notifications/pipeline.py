@@ -25,7 +25,7 @@ from isik._internal.translation import gettext as _
 from isik.django.apps.notifications import conf
 from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audience.swapping import get_subscription_model
-from isik.django.apps.notifications.channels import Outcome, get_channel
+from isik.django.apps.notifications.channels import Channel, Outcome, get_channel
 from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
 from isik.django.apps.notifications.kinds import _retired, checked_kind, get_kind, matching_variant, write_notice
 from isik.django.apps.notifications.partitions import PartitionGone, in_partition
@@ -55,23 +55,34 @@ def backoff(attempts):
 
 def chosen_users(notice, kind):
     """
-    The users `notice` is for: its audience's, less those its policy and their subscriptions leave out - each as
-    `gets()` decides. A person has one row matching a variant at most, which `VariantGuard` holds them to.
+    {channel: the users `notice` is for on it} - each channel its kind is sent on, with its audience's users less
+    those its policy there and their subscriptions leave out, each as `gets()` decides. The audience and the
+    subscriptions are read once, for every channel. A person has one row matching a variant and a channel at most,
+    which `VariantGuard` holds them to.
     """
     users = list(kind.audience.recipients(notice))
-    if kind.policy == Policy.MANDATORY:
-        return users
-    subscriptions = matching_variant(
-        get_subscription_model()._default_manager.filter(kind_id=notice.kind_id), notice.variant
+    # None read where no person chooses: every channel it's sent on is mandatory.
+    subscriptions = (
+        matching_variant(get_subscription_model()._default_manager.filter(kind_id=notice.kind_id), notice.variant)
+        if kind.chosen_channels
+        else ()
     )
-    rows = {row.user_id: row for row in subscriptions}
-    return [user for user in users if gets(rows.get(user.pk), kind.policy)]
+    rows = {(row.user_id, row.channel): row for row in subscriptions}
+    return {channel: _chosen_on(users, rows, channel, kind.policy_on(channel)) for channel in kind.enabled_channels}
+
+
+def _chosen_on(users, rows, channel, policy):
+    """`users` who get it on `channel`, under `policy` there - their row for the channel, else for every channel."""
+    if policy == Policy.MANDATORY:
+        return users
+    return [user for user in users if gets(rows.get((user.pk, channel), rows.get((user.pk, None))), policy)]
 
 
 def gets(subscription, policy):
     """
-    Whether a person gets a notice of a kind with `policy`, `subscription` being their row matching it, or None - the
-    one answer the fan-out and every view give: a force, else their own choice, else the policy.
+    Whether a person gets a notice of a kind with `policy` on a channel, `subscription` being their row matching it
+    there, or None - the one answer the fan-out and every view give: a force, else their own choice, else the
+    policy. `Policy.NEVER` is never asked: a channel the kind never goes out on isn't visited.
     """
     if policy == Policy.MANDATORY:
         return True
@@ -89,10 +100,9 @@ def is_forced(subscription):
 def targets(notice, kind, partition):
     """[(channel name, Target)] - every target `notice` reaches in `partition`, read inside it."""
     with in_partition(partition):
-        users = chosen_users(notice, kind)
         return [
             (name, target)
-            for name in kind.enabled_channels
+            for name, users in chosen_users(notice, kind).items()
             for target in get_channel(name).targets(notice, kind, users)
         ]
 
@@ -479,7 +489,7 @@ def _recorded(kind, outcome, *, started_at, started, address, user, variant, abo
             )
             delivery = get_delivery_model()._default_manager.create(
                 notice=notice,
-                channel="email",
+                channel=Channel.EMAIL,
                 partition=partition,
                 target_key=f"email:{address.lower()}",
                 attempt_count=1,

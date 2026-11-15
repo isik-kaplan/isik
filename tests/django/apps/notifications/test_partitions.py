@@ -11,6 +11,7 @@ from django.test.utils import isolate_apps
 
 from isik.django.apps.notifications import kinds
 from isik.django.apps.notifications.audiences import Field
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.checks import kind_problems, setting_problems
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.models import Notice, Policy
@@ -27,7 +28,7 @@ def kind(**changes):
         **{
             "name": "k",
             "audience": Field("sender"),
-            "policy": Policy.MANDATORY,
+            "channels": {Channel.INBOX: Policy.MANDATORY},
             "model": Parcel,
             "on": pgtrigger.Update,
             **changes,

@@ -91,7 +91,9 @@ def read(response, deadline):
 class WebhookChannel(Channel):
     """POSTs to every active, unparked endpoint wanting the notice's kind and variant - whoever the audience is."""
 
-    name = "webhook"
+    name = Channel.WEBHOOK
+    # An endpoint's kinds are its own choice; a person's subscription reaches none.
+    chosen_by_people = False
 
     def targets(self, notice, kind, users):
         from isik.django.apps.notifications.kinds import matching_variant

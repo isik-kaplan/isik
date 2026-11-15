@@ -2,6 +2,7 @@
 built again at test time, since what runs at import can't be checked any other way."""
 
 import uuid
+from types import MappingProxyType
 
 import pgtrigger
 import pytest
@@ -19,6 +20,7 @@ from isik.django.apps.notifications.audience import models as audience_models
 from isik.django.apps.notifications.audience.helpers import _kind_name
 from isik.django.apps.notifications.audiences import Field, Subscribers
 from isik.django.apps.notifications.bases import _delivery_key
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import Kind, SensitiveSnapshotField, declare_kind, notifies
 from isik.django.apps.notifications.management.commands.notices import Command
 from isik.django.apps.notifications.models import NoticeKindPolicy, Policy, Scope, Source
@@ -105,14 +107,13 @@ class TestDeclaring:
         declare = notifies(
             name.lower(),
             audience=audience,
-            policy=Policy.MANDATORY,
+            channels={Channel.INBOX: Policy.MANDATORY, Channel.EMAIL: Policy.NEVER},
             on=pgtrigger.Update,
             condition=condition,
             variants={"v": None},
             snapshot=["state"],
             previous=True,
             scope=Scope.CROSS_PARTITION,
-            channels=["inbox", "email"],
             partition=partition,
             sensitive={"state": SensitiveSnapshotField(reason="a state is a word, never a secret, whatever it says")},
         )
@@ -124,11 +125,10 @@ class TestDeclaring:
         assert kind == Kind(
             name=name.lower(),
             audience=audience,
-            policy=Policy.MANDATORY,
+            channels={Channel.INBOX: Policy.MANDATORY, Channel.EMAIL: Policy.NEVER},
             scope=Scope.CROSS_PARTITION,
             source=Source.TRIGGER,
             variants={"v": None},
-            channels=("inbox", "email"),
             model=model,
             on=pgtrigger.Update,
             condition=condition,
@@ -146,9 +146,13 @@ class TestDeclaring:
         name = f"Said{uuid.uuid4().hex[:8]}"
         texts = {"label": "Said", "description": "What it says.", "message": "It said.", "title": "Saying"}
 
-        notifies(name.lower(), audience=Subscribers(), policy=Policy.DEFAULT_ON, on=pgtrigger.Delete, **texts)(
-            type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
-        )
+        notifies(
+            name.lower(),
+            audience=Subscribers(),
+            channels={Channel.INBOX: Policy.DEFAULT_ON},
+            on=pgtrigger.Delete,
+            **texts,
+        )(type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})}))
 
         assert kinds.text_of(name.lower()) == kinds.KindText(**texts)
 
@@ -167,31 +171,47 @@ class TestDeclaring:
         monkeypatch.setattr(kinds, "declared", [])
         name = f"Plain{uuid.uuid4().hex[:8]}"
         audience = Subscribers()
-        model = notifies(name.lower(), audience=audience, policy=Policy.DEFAULT_ON, on=pgtrigger.Delete)(
-            type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
-        )
+        model = notifies(
+            name.lower(), audience=audience, channels={Channel.INBOX: Policy.DEFAULT_ON}, on=pgtrigger.Delete
+        )(type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})}))
 
         [kind] = kinds.declared
-        assert (kind.scope, kind.source, kind.variants, kind.channels, kind.condition, kind.previous) == (
+        assert (kind.scope, kind.source, kind.variants, kind.condition, kind.previous) == (
             Scope.SINGLE_PARTITION,
             Source.TRIGGER,
             {},
             None,
-            None,
             False,
         )
-        assert (kind.partition, kind.snapshot, kind.model, kind.audience, kind.policy) == (
+        assert (kind.partition, kind.snapshot, kind.model, kind.audience, kind.channels) == (
             None,
             (),
             model,
             audience,
-            Policy.DEFAULT_ON,
+            {Channel.INBOX: Policy.DEFAULT_ON},
         )
         assert (str(kind.on), kind.sensitive) == (str(pgtrigger.Delete), {})
 
     def test_notifies_has_no_default_for_what_it_watches(self):
-        with pytest.raises(TypeError, match="on"):
-            notifies("k", audience=Subscribers(), policy=Policy.MANDATORY)
+        with pytest.raises(TypeError, match="'on'"):
+            notifies("k", audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY})
+
+    def test_channels_are_kept_as_a_dict_of_their_own_or_as_given(self, monkeypatch):
+        monkeypatch.setattr(kinds, "declared", [])
+        monkeypatch.setattr(kinds, "vocabulary", [])
+        given = {Channel.INBOX: Policy.MANDATORY}
+
+        declare_kind("mapped", audience=Subscribers, channels=MappingProxyType(given))
+        declare_kind("listed", audience=Subscribers, channels=("inbox",))
+
+        mapped, listed = kinds.get_kind("mapped"), kinds.get_kind("listed")
+        assert (type(mapped.channels), mapped.channels) == (dict, given)
+        # Anything else as it was given, for the check to name.
+        assert listed.channels == ("inbox",)
+
+    def test_notifies_has_no_default_for_its_channels(self):
+        with pytest.raises(TypeError, match="'channels'"):
+            notifies("k", audience=Subscribers(), on=pgtrigger.Insert)
 
     def test_declare_kind_keeps_every_argument(self, monkeypatch):
         monkeypatch.setattr(kinds, "declared", [])
@@ -201,10 +221,9 @@ class TestDeclaring:
         name = declare_kind(
             "k",
             audience=audience,
-            policy=Policy.DEFAULT_OFF,
+            channels={Channel.INBOX: Policy.DEFAULT_OFF},
             variants=["a"],
             scope=Scope.CROSS_PARTITION,
-            channels=["inbox"],
         )
 
         assert (name, name.variants) == ("k", ("a",))
@@ -212,13 +231,12 @@ class TestDeclaring:
         assert kind == Kind(
             name="k",
             audience=audience,
-            policy=Policy.DEFAULT_OFF,
+            channels={Channel.INBOX: Policy.DEFAULT_OFF},
             scope=Scope.CROSS_PARTITION,
             source=Source.APPLICATION,
             variants=("a",),
-            channels=("inbox",),
         )
-        declare_kind("plain", audience=Subscribers, policy=Policy.MANDATORY)
+        declare_kind("plain", audience=Subscribers, channels={Channel.INBOX: Policy.MANDATORY})
         assert kinds.get_kind("plain").scope == Scope.SINGLE_PARTITION
         assert isinstance(kinds.get_kind("plain").audience, Subscribers)
 
@@ -316,9 +334,13 @@ class TestDeclaringAPush:
         name = f"Pushed{uuid.uuid4().hex[:8]}"
         content = kinds.PushContent(private=True, data={"state": kinds.PushDataField(reason=self.REASON)})
 
-        notifies(name.lower(), audience=Subscribers(), policy=Policy.DEFAULT_ON, on=pgtrigger.Delete, push=content)(
-            type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
-        )
+        notifies(
+            name.lower(),
+            audience=Subscribers(),
+            channels={Channel.INBOX: Policy.DEFAULT_ON},
+            on=pgtrigger.Delete,
+            push=content,
+        )(type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})}))
 
         assert kinds.declared[0].push == content
 
@@ -327,7 +349,7 @@ class TestDeclaringAPush:
             notifies(
                 "loud",
                 audience=Subscribers(),
-                policy=Policy.DEFAULT_ON,
+                channels={Channel.INBOX: Policy.DEFAULT_ON},
                 on=pgtrigger.Delete,
                 push=kinds.PushContent(collapse="id"),
             )
@@ -337,8 +359,8 @@ class TestDeclaringAPush:
         monkeypatch.setattr(kinds, "vocabulary", [])
         content = kinds.PushContent(collapse="subject", badge=True)
 
-        declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=content)
-        declare_kind("plain", audience=Subscribers(), policy=Policy.MANDATORY)
+        declare_kind("k", audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY}, push=content)
+        declare_kind("plain", audience=Subscribers(), channels={Channel.INBOX: Policy.MANDATORY})
 
         assert (kinds.get_kind("k").push, kinds.get_kind("plain").push) == (content, kinds.PushContent())
 
@@ -346,7 +368,12 @@ class TestDeclaringAPush:
         monkeypatch.setattr(kinds, "declared", [])
 
         with pytest.raises(ImproperlyConfigured, match=r"^k\.push\.data takes"):
-            declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=kinds.PushContent(data=["x"]))
+            declare_kind(
+                "k",
+                audience=Subscribers(),
+                channels={Channel.INBOX: Policy.MANDATORY},
+                push=kinds.PushContent(data=["x"]),
+            )
 
     def test_it_collapses_by_kind_or_subject_alone(self, monkeypatch):
         monkeypatch.setattr(kinds, "declared", [])
@@ -354,7 +381,12 @@ class TestDeclaringAPush:
         with pytest.raises(
             ImproperlyConfigured, match=r"^k's push collapses by 'id' - it takes kind, subject or None\.$"
         ):
-            declare_kind("k", audience=Subscribers(), policy=Policy.MANDATORY, push=kinds.PushContent(collapse="id"))
+            declare_kind(
+                "k",
+                audience=Subscribers(),
+                channels={Channel.INBOX: Policy.MANDATORY},
+                push=kinds.PushContent(collapse="id"),
+            )
         assert kinds.declared == []
 
     def test_a_recorded_kind_has_none(self, monkeypatch):
@@ -410,7 +442,7 @@ class TestAnAudienceByItsClass:
         monkeypatch.setattr(kinds, "declared", [])
         name = f"Classed{uuid.uuid4().hex[:8]}"
 
-        notifies(name.lower(), audience=Subscribers, policy=Policy.MANDATORY, on=pgtrigger.Insert)(
+        notifies(name.lower(), audience=Subscribers, channels={Channel.INBOX: Policy.MANDATORY}, on=pgtrigger.Insert)(
             type(name, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
         )
 
@@ -421,7 +453,7 @@ class TestAnAudienceByItsClass:
         vocabulary, declared = list(kinds.vocabulary), list(kinds.declared)
 
         with pytest.raises(TypeError):
-            declare_kind("k", audience=Field, policy=Policy.MANDATORY)
+            declare_kind("k", audience=Field, channels={Channel.INBOX: Policy.MANDATORY})
 
         assert (kinds.vocabulary, kinds.declared) == (vocabulary, declared)
 
@@ -432,7 +464,13 @@ class TestAnAudienceByItsClass:
         named = declare_kind(f"named{uuid.uuid4().hex[:8]}", variants=("a",))
         model_name = f"Named{uuid.uuid4().hex[:8]}"
 
-        notifies(named, audience=Subscribers, policy=Policy.MANDATORY, on=pgtrigger.Insert, variants={"a": None})(
+        notifies(
+            named,
+            audience=Subscribers,
+            channels={Channel.INBOX: Policy.MANDATORY},
+            on=pgtrigger.Insert,
+            variants={"a": None},
+        )(
             type(
                 model_name,
                 (models.Model,),

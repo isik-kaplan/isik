@@ -41,11 +41,20 @@ def _variant():
 
 class AbstractSubscription(UUIDPrimaryKeyModel):
     """
-    A user's deviation from a kind's policy: turning a default-on kind off, or a default-off kind on - for
-    every variant, or one. A user with none gets the kind's default.
+    A user's deviation from a kind's policy on a channel: turning it off where it's default-on, or on where it's
+    default-off - for every variant, or one, and every channel the kind leaves to them, or one. A user with none
+    gets the kind's default on each.
     """
 
     variant = _variant()
+    channel = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("The one channel this is for, or none for every channel the kind leaves to you."),
+        db_comment="The channel this is for, or null for every channel the kind leaves to the person's choice.",
+        verbose_name=gettext_lazy("channel"),
+    )
     enabled = models.BooleanField(
         default=True,
         help_text=gettext_lazy("Whether the user gets the kind."),
@@ -57,7 +66,7 @@ class AbstractSubscription(UUIDPrimaryKeyModel):
         abstract = True
 
     def __str__(self):
-        return f"{self.kind_id}:{self.variant or '*'}"
+        return f"{self.kind_id}:{self.variant or '*'}:{self.channel or '*'}"
 
 
 class AbstractForceableSubscription(AbstractSubscription):
@@ -308,12 +317,12 @@ class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         return f"{self.platform}:{self.token[:12]}"
 
 
-# {base: (the field owning a row, beside "kind" and "variant", or None)} - the owner makes the
-# no-variant row exclusive with the rest of its owner's rows for a kind.
+# {base: (the field owning a row, beside "kind" and "variant", or None; whether a row names a channel)} - the
+# owner makes a row covering others exclusive with the rest of its owner's rows for a kind.
 GUARDED = {
-    AbstractSubscription: "user",
-    AbstractEndpointKind: "endpoint",
-    AbstractInboxItem: None,
+    AbstractSubscription: ("user", True),
+    AbstractEndpointKind: ("endpoint", False),
+    AbstractInboxItem: (None, False),
 }
 
 
@@ -327,16 +336,16 @@ def _guard(sender, **kwargs):
         # name reaches nothing but an error, and a schema copied whole renames a unique over two columns anyway.
         sender._meta.unique_together = (*sender._meta.unique_together, ("platform", "token"))
         sender._meta.original_attrs["unique_together"] = sender._meta.unique_together
-    for base, owner in GUARDED.items():
+    for base, (owner, channel) in GUARDED.items():
         if not issubclass(sender, base):
             continue
-        pgtrigger.register(VariantGuard(name="guard_variant", owner=owner))(sender)
+        pgtrigger.register(VariantGuard(name="guard_variant", owner=owner, channel=channel))(sender)
         if owner:
             # A new list: one inherited from a parent Meta is that Meta's own.
             sender._meta.constraints = [
                 *sender._meta.constraints,
                 models.UniqueConstraint(
-                    fields=[owner, "kind", "variant"],
+                    fields=[owner, "kind", "variant", *(("channel",) if channel else ())],
                     nulls_distinct=False,
                     name=fitted_name(sender._meta.db_table, "once"),
                 ),

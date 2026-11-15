@@ -13,11 +13,19 @@ class KindStatus(models.TextChoices):
 
 
 class Policy(models.TextChoices):
-    """Who gets a kind: everyone its audience names, everyone but those opting out, or only those opting in."""
+    """
+    Who gets a kind on one channel: everyone its audience names, everyone but those opting out, only those opting
+    in - or no one, the kind never going out on it.
+    """
 
     MANDATORY = "mandatory", gettext_lazy("Mandatory")
     DEFAULT_ON = "default_on", gettext_lazy("On unless turned off")
     DEFAULT_OFF = "default_off", gettext_lazy("Off unless turned on")
+    NEVER = "never", gettext_lazy("Never")
+
+
+# The policies a person chooses within - on unless they turn it off, or off unless they turn it on.
+CHOSEN = (Policy.DEFAULT_ON, Policy.DEFAULT_OFF)
 
 
 class Scope(models.TextChoices):

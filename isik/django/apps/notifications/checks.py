@@ -9,6 +9,7 @@ database has no policy row for.
 
 import ipaddress
 import re
+from collections.abc import Mapping
 
 import pgtrigger
 from django.apps import apps
@@ -34,9 +35,9 @@ from isik.django.apps.notifications.audience.swapping import (
     get_endpoint_model,
     get_subscription_model,
 )
-from isik.django.apps.notifications.channels import get_channel, registered
+from isik.django.apps.notifications.channels import Channel, ChannelName, get_channel, registered
 from isik.django.apps.notifications.channels.email import send_from_mjml_templates, send_from_templates
-from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, Source
+from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy, Scope, Source
 from isik.django.apps.notifications.partitions import PartitionSource, _concrete
 from isik.django.apps.notifications.swapping import DEFAULTS as LEDGER_DEFAULTS
 from isik.django.apps.notifications.swapping import KIND_POLICY_MODEL
@@ -87,6 +88,15 @@ def setting_problems():
         problems.append(
             _("ISIK['DJANGO']['NOTIFICATIONS'] sets one of PARTITIONS and IN_PARTITION - set both, or neither.")
         )
+    untyped = [name for name in conf.setting("CHANNELS") if not isinstance(name, ChannelName)]
+    if untyped:
+        problems.append(
+            _(
+                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] names %(names)s by plain text - name each as "
+                "Channel.EMAIL does, or by the ChannelName register_channel() returned."
+            )
+            % {"names": ", ".join(untyped)}
+        )
     unregistered = [name for name in conf.setting("CHANNELS") if name not in registered]
     if unregistered:
         problems.append(
@@ -103,7 +113,7 @@ def setting_problems():
                     _("ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on %(name)s, which can't be loaded: %(error)s")
                     % {"name": name, "error": missing}
                 )
-    if _sent_on("webhook"):
+    if _sent_on(Channel.WEBHOOK):
         name = conf.setting("PROJECT_NAME")
         if conf.signature_header() is None:
             problems.append(
@@ -120,7 +130,7 @@ def setting_problems():
                 )
                 % {"name": name}
             )
-    if _sent_on("push"):
+    if _sent_on(Channel.PUSH):
         problems += _push_problems()
     if apps.is_installed(AUDIENCE_APP) != apps.is_installed(LEDGER_APP):
         alone, missing = (AUDIENCE_APP, LEDGER_APP) if apps.is_installed(AUDIENCE_APP) else (LEDGER_APP, AUDIENCE_APP)
@@ -221,7 +231,7 @@ def _template_problems():
     problems = []
     for kind in declarations.kinds().values():
         # A recorded kind's email is rendered and sent by its caller.
-        if "email" not in kind.enabled_channels or kind.source == Source.RECORDED:
+        if Channel.EMAIL not in kind.enabled_channels or kind.source == Source.RECORDED:
             continue
         for name in ("subject.txt", "body.txt"):
             try:
@@ -360,6 +370,72 @@ def _push_problems():
     return problems
 
 
+def _channel_problems(kind):
+    """
+    What's wrong with `kind`'s channels: a mapping of every channel `CHANNELS` turns on, and those alone, each to a
+    `Policy` - one a person chooses within only on a channel people choose on.
+    """
+    if not isinstance(kind.channels, Mapping):
+        return [
+            _("%(kind)s's channels are {channel: Policy}, not %(channels)r.")
+            % {"kind": kind.name, "channels": kind.channels}
+        ]
+    problems = []
+    untyped = [channel for channel in kind.channels if not isinstance(channel, ChannelName)]
+    if untyped:
+        problems.append(
+            _(
+                "%(kind)s's channels name %(channels)s by plain text - name each as Channel.EMAIL does, or by the "
+                "ChannelName register_channel() returned."
+            )
+            % {"kind": kind.name, "channels": ", ".join(untyped)}
+        )
+    invalid = [channel for channel, policy in kind.channels.items() if policy not in Policy.values]
+    if invalid:
+        problems.append(
+            _("%(kind)s gives %(channels)s something other than a Policy.")
+            % {"kind": kind.name, "channels": ", ".join(invalid)}
+        )
+    configured = conf.setting("CHANNELS")
+    unnamed = [channel for channel in configured if channel not in kind.channels]
+    if unnamed:
+        problems.append(
+            _(
+                "%(kind)s says nothing of %(channels)s - its channels name every channel "
+                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on, Policy.NEVER where it never goes out."
+            )
+            % {"kind": kind.name, "channels": ", ".join(unnamed)}
+        )
+    unconfigured = [channel for channel in kind.channels if channel not in configured]
+    if unconfigured:
+        problems.append(
+            _("%(kind)s names %(channels)s, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn on.")
+            % {"kind": kind.name, "channels": ", ".join(unconfigured)}
+        )
+    unchosen = [
+        channel
+        for channel, policy in kind.channels.items()
+        if policy in CHOSEN and channel not in unconfigured and not _chosen_by_people(channel)
+    ]
+    if unchosen:
+        problems.append(
+            _(
+                "%(kind)s leaves %(channels)s to each person's choice, and no person chooses there - "
+                "Policy.MANDATORY or Policy.NEVER."
+            )
+            % {"kind": kind.name, "channels": ", ".join(unchosen)}
+        )
+    return problems
+
+
+def _chosen_by_people(name):
+    """Whether people choose on the channel `name` - True for one that can't be loaded, which CHANNELS' check names."""
+    try:
+        return get_channel(name).chosen_by_people
+    except (ImportError, LookupError):
+        return True
+
+
 def kind_problems():
     """The problems with each declared kind."""
     problems = _vocabulary_problems() + _undeclared_problems()
@@ -370,10 +446,11 @@ def kind_problems():
         # Recorded, a kind is sent by its caller: no audience, scope or channel of isik's is in it.
         if kind.source == Source.RECORDED:
             continue
-        if kind.policy not in Policy.values:
-            problems.append(
-                _("%(kind)s's policy is a Policy, not %(policy)r.") % {"kind": kind.name, "policy": kind.policy}
-            )
+        channel_problems = _channel_problems(kind)
+        if channel_problems:
+            # Whatever else reads its channels reads them as they're declared, and they aren't yet.
+            problems += channel_problems
+            continue
         if kind.scope == Scope.SINGLE_PARTITION and kind.audience.spans_partitions:
             problems.append(
                 _("%(kind)s is single-partition, and its audience %(audience)s spans partitions.")
@@ -383,15 +460,6 @@ def kind_problems():
             problems.append(
                 _("%(kind)s is cross-partition, and ISIK['DJANGO']['NOTIFICATIONS'] declares no partitions.")
                 % {"kind": kind.name}
-            )
-        disabled = [name for name in kind.enabled_channels if name not in conf.setting("CHANNELS")]
-        if disabled:
-            problems.append(
-                _(
-                    "%(kind)s is sent on %(channels)s, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't "
-                    "turn on."
-                )
-                % {"kind": kind.name, "channels": ", ".join(disabled)}
             )
         if kind.source == Source.TRIGGER:
             problems += _trigger_problems(kind)
@@ -482,7 +550,7 @@ def inline_send_warnings():
     """Tasks run inline and a fan-out follows a write, so a webhook is sent inside the writing request."""
     if conf.setting("SENDS_INLINE") or not (hooks.runs_inline() and hooks.started_after_writes()):
         return []
-    if not _sent_on("webhook"):
+    if not _sent_on(Channel.WEBHOOK):
         return []
     return [
         _(
@@ -531,7 +599,7 @@ def kind_text_problems():
                 _("%(kind)s has no label - a client listing kinds can only show its name. Give it label=.")
                 % {"kind": name}
             )
-        if kind is not None and "inbox" in kind.enabled_channels and text.message is None:
+        if kind is not None and Channel.INBOX in kind.enabled_channels and text.message is None:
             problems.append(
                 _("%(kind)s is sent to the inbox with no message - its items read as data. Give it message=.")
                 % {"kind": name}

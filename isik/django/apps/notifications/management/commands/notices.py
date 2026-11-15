@@ -21,9 +21,8 @@ def describe(kind):
         "condition": str(kind.condition.resolve(kind.model)) if kind.condition is not None else None,
         "variants": list(kind.variants),
         "audience": str(kind.audience) if kind.audience is not None else None,
-        "policy": str(kind.policy),
         "scope": str(kind.scope),
-        "channels": list(kind.enabled_channels),
+        "channels": {channel: str(policy) for channel, policy in kind.policies.items()},
         "snapshot": list(kind.snapshot),
     }
 
@@ -39,6 +38,13 @@ def drift():
         ),
         "retired": sorted(name for name, status in rows.items() if name in declared and status == KindStatus.RETIRED),
     }
+
+
+def _shown(value):
+    """`value` as a line shows it - a list's items, a mapping's `key=value` pairs, each comma-separated."""
+    if isinstance(value, dict):
+        return ", ".join(f"{key}={each}" for key, each in value.items())
+    return ", ".join(value) if isinstance(value, list) else value
 
 
 def _until_done(step):
@@ -97,7 +103,7 @@ class Command(BaseCommand):
             self.stdout.write(kind["kind"])
             for key, value in kind.items():
                 if key != "kind" and value not in (None, []):
-                    self.stdout.write(f"  {key}: {', '.join(value) if isinstance(value, list) else value}")
+                    self.stdout.write(f"  {key}: {_shown(value)}")
         labels = {
             "unmirrored": _("Declared, with no policy row - run migrate"),
             "undeclared": _("A policy row no declaration makes - retire it"),

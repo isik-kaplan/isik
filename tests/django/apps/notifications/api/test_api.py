@@ -133,6 +133,7 @@ class TestSubscriptions:
             "id": str(row.pk),
             "kind": "parcel_flagged",
             "variant": "lost",
+            "channel": None,
             "enabled": True,
             "forced": False,
             "forced_enabled": None,
@@ -156,9 +157,30 @@ class TestSubscriptions:
         assert answered.status_code == 400
         assert answered.json() == {
             "variant": [
-                "alice@example.com has a subscription to every variant of parcel_flagged - unsubscribe it before "
-                "naming one."
+                "alice@example.com has a subscription to parcel_flagged covering this one - unsubscribe it before "
+                "naming this one."
             ]
+        }
+
+    def test_setting_one_channel(self, alice):
+        answered = client_for(alice).post(
+            "/subscriptions/", {"kind": "parcel_flagged", "channel": "email", "enabled": False}, format="json"
+        )
+
+        assert (answered.status_code, answered.json()["channel"]) == (201, "email")
+        assert list(get_subscription_model().objects.values_list("variant", "channel", "enabled")) == [
+            (None, "email", False)
+        ]
+
+    def test_a_channel_the_kind_leaves_no_choice_on_cant_be_chosen(self, alice):
+        answered = client_for(alice).post(
+            "/subscriptions/", {"kind": "parcel_flagged", "channel": "webhook"}, format="json"
+        )
+
+        assert answered.status_code == 409
+        assert answered.json() == {
+            "detail": "parcel_flagged leaves no choice on webhook - it's mandatory there, or never sent there.",
+            "code": "channel_not_chosen",
         }
 
     def test_an_undeclared_variant_or_kind_is_refused(self, alice):
@@ -179,13 +201,14 @@ class TestSubscriptions:
     def test_a_mandatory_kind_cant_be_chosen(self, alice):
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
-        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(channels={"inbox": "mandatory"})
 
         answered = client_for(alice).post("/subscriptions/", {"kind": "parcel_flagged"}, format="json")
 
         assert answered.status_code == 409
         assert answered.json() == {
-            "detail": "parcel_flagged is mandatory - it reaches everyone it's for.",
+            "detail": "parcel_flagged leaves no choice on any channel - it reaches everyone it's for, wherever it's "
+            "sent.",
             "code": "kind_mandatory",
         }
 
@@ -209,9 +232,11 @@ class TestSubscriptions:
         from isik.django.apps.notifications.models import NoticeKindPolicy
 
         NoticeKindPolicy.objects.create(
-            name="undeclared", policy="default_on", scope="single_partition", source="trigger"
+            name="undeclared", channels={"inbox": "default_on"}, scope="single_partition", source="trigger"
         )
-        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(
+            channels={"inbox": "mandatory", "email": "never"}
+        )
 
         listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
 
@@ -227,19 +252,33 @@ class TestSubscriptions:
             "kind": "parcel_flagged",
             "label": "Parcel flagged",
             "description": None,
-            "policy": "default_off",
             "variants": ["lost", "damaged"],
-            "channels": ["inbox", "email", "webhook"],
-            "may_change": True,
-            "enabled": False,
-            "enabled_variants": {"lost": False, "damaged": False},
-            "forced": False,
-            "forced_enabled": None,
-            "forced_variants": [],
-            "forced_reason": None,
+            "channels": {
+                channel: {
+                    "policy": policy,
+                    "may_change": may_change,
+                    "enabled": enabled,
+                    "enabled_variants": {"lost": enabled, "damaged": enabled},
+                    "forced": False,
+                    "forced_enabled": None,
+                    "forced_variants": [],
+                    "forced_reason": None,
+                }
+                for channel, policy, may_change, enabled in [
+                    ("inbox", "default_off", True, False),
+                    ("email", "default_off", True, False),
+                    ("webhook", "mandatory", False, True),
+                ]
+            },
         }
-        assert (listed["parcel_reminder"]["policy"], listed["parcel_reminder"]["may_change"]) == ("mandatory", False)
-        assert listed["parcel_reminder"]["enabled"] is True
+        reminder = listed["parcel_reminder"]["channels"]
+        assert [
+            (channel, state["policy"], state["may_change"], state["enabled"]) for channel, state in reminder.items()
+        ] == [
+            ("inbox", "mandatory", False, True),
+            ("email", "never", False, False),
+        ]
+        assert reminder["email"]["enabled_variants"] == {"daily": False, "weekly": False}
 
     def test_one_kind_by_its_name(self, alice):
         assert client_for(alice).get("/kinds/parcel_shipped/").json()["description"] == (
@@ -297,6 +336,27 @@ class TestEndpoints:
         assert answered.json() == {
             "kinds": [
                 "parcel_flagged is wanted for every variant and for some - name it once, with no variant, for all."
+            ]
+        }
+        assert not get_endpoint_model().objects.filter(url="https://hooks.example/new").exists()
+
+    def test_a_kind_never_sent_to_webhooks_is_refused(self, alice):
+        from isik.django.apps.notifications.models import NoticeKindPolicy
+
+        # Never sent there, as declared - or not named for it at all.
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(channels={"inbox": "default_on"})
+        wanted = [{"kind": "parcel_routed"}, {"kind": "parcel_flagged"}, {"kind": "parcel_shipped"}]
+
+        answered = client_for(alice).post(
+            "/endpoints/", {"url": "https://hooks.example/new", "kinds": wanted}, format="json", **keyed()
+        )
+
+        assert answered.status_code == 400
+        assert answered.json() == {
+            "kinds": [
+                {"kind": ["parcel_routed isn't sent to webhooks."]},
+                {"kind": ["parcel_flagged isn't sent to webhooks."]},
+                {},
             ]
         }
         assert not get_endpoint_model().objects.filter(url="https://hooks.example/new").exists()

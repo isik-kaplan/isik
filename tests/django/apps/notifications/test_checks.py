@@ -10,7 +10,8 @@ from django.db import DatabaseError
 from isik.django.apps.common.checks import Check, CheckOption
 from isik.django.apps.notifications import checks, conf, kinds
 from isik.django.apps.notifications.audiences import Audience, Field, Subscribers
-from isik.django.apps.notifications.channels import registered
+from isik.django.apps.notifications.channels import Channel, ChannelName, registered
+from isik.django.apps.notifications.channels.webhook import WebhookChannel
 from isik.django.apps.notifications.checks import (
     kind_problems,
     notification_problems,
@@ -60,8 +61,13 @@ class TestTheSettings:
                 "ISIK['DJANGO']['NOTIFICATIONS'] sets one of PARTITIONS and IN_PARTITION - set both, or neither.",
             ),
             (
-                {"CHANNELS": ("inbox", "fax", "pigeon")},
+                {"CHANNELS": (Channel.INBOX, ChannelName("fax"), ChannelName("pigeon"))},
                 "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] names channels nothing registered: fax, pigeon.",
+            ),
+            (
+                {"CHANNELS": ("inbox", Channel.EMAIL, "webhook")},
+                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] names inbox, webhook by plain text - name each as "
+                "Channel.EMAIL does, or by the ChannelName register_channel() returned.",
             ),
         ],
     )
@@ -98,14 +104,14 @@ class TestTheSettings:
 
     def test_no_kind_sent_by_webhook_needs_no_header(self, settings, declaring):
         isik_areas(settings).NOTIFICATIONS = {}
-        declaring(shipped(channels=("inbox", "email")))
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.EMAIL)))
 
         assert setting_problems() == []
         assert "webhook" in conf.setting("CHANNELS")
 
     def test_set_nothing_at_all_with_no_webhook_kinds(self, settings, declaring):
         del isik_areas(settings).NOTIFICATIONS
-        declaring(shipped(channels=("inbox", "email")))
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.EMAIL)))
 
         assert notification_problems() == []
 
@@ -150,14 +156,14 @@ class TestTheSettings:
         ],
     )
     def test_push_needs_a_services_credentials(self, settings, declaring, push, problems):
-        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": push}
-        declaring(shipped(channels=("inbox", "push")))
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX, Channel.PUSH), "PUSH": push}
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.PUSH, every=(Channel.INBOX, Channel.PUSH))))
 
         assert setting_problems() == problems
 
     def test_push_problems_are_told_beside_the_rest(self, settings, declaring):
-        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "RECORD_ATTEMPTS": "some"}
-        declaring(shipped(channels=("inbox", "push")))
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX, Channel.PUSH), "RECORD_ATTEMPTS": "some"}
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.PUSH, every=(Channel.INBOX, Channel.PUSH))))
 
         assert setting_problems() == [
             "ISIK['DJANGO']['NOTIFICATIONS']['RECORD_ATTEMPTS'] is one of all, failures or none.",
@@ -165,8 +171,8 @@ class TestTheSettings:
         ]
 
     def test_no_kind_sent_by_push_needs_no_credentials(self, settings, declaring):
-        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": ("inbox", "push"), "PUSH": {"GCM": {}}}
-        declaring(shipped(channels=("inbox",)))
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX, Channel.PUSH), "PUSH": {"GCM": {}}}
+        declaring(shipped(channels=sent_on(Channel.INBOX, every=(Channel.INBOX, Channel.PUSH))))
 
         assert setting_problems() == []
 
@@ -181,6 +187,11 @@ class TestTheSettings:
 
 def shipped(**changes):
     return dataclasses.replace(kinds.get_kind("parcel_shipped"), **changes)
+
+
+def sent_on(*channels, every=(Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK)):
+    """{channel: Policy} - each of `channels` default-on, and the rest of `every` channel never."""
+    return dict.fromkeys(every, Policy.NEVER) | dict.fromkeys(channels, Policy.DEFAULT_ON)
 
 
 class Spanning(Audience):
@@ -198,9 +209,102 @@ class TestTheKinds:
         ]
 
     def test_a_policy_not_a_policy(self, declaring):
-        declaring(shipped(policy="sometimes"))
+        declaring(
+            shipped(channels={Channel.INBOX: "sometimes", Channel.EMAIL: None, Channel.WEBHOOK: Policy.MANDATORY})
+        )
 
-        assert kind_problems() == ["parcel_shipped's policy is a Policy, not 'sometimes'."]
+        assert kind_problems() == ["parcel_shipped gives inbox, email something other than a Policy."]
+
+    @pytest.mark.parametrize("channels", [("inbox", "email", "webhook"), None, "inbox"])
+    def test_channels_not_a_mapping(self, declaring, channels):
+        declaring(shipped(channels=channels))
+
+        # Nothing else of it is read while its channels are anything but declared.
+        assert kind_problems() == [f"parcel_shipped's channels are {{channel: Policy}}, not {channels!r}."]
+        assert (shipped(channels=channels).enabled_channels, shipped(channels=channels).policy_on("inbox")) == (
+            (),
+            Policy.NEVER,
+        )
+
+    def test_a_channel_named_by_plain_text(self, declaring):
+        declaring(shipped(channels={"inbox": Policy.DEFAULT_ON, Channel.EMAIL: Policy.NEVER, "webhook": Policy.NEVER}))
+
+        assert kind_problems() == [
+            "parcel_shipped's channels name inbox, webhook by plain text - name each as Channel.EMAIL does, or by the "
+            "ChannelName register_channel() returned."
+        ]
+
+    def test_a_configured_channel_it_says_nothing_of(self, declaring):
+        declaring(shipped(channels={Channel.INBOX: Policy.DEFAULT_ON}))
+
+        assert kind_problems() == [
+            "parcel_shipped says nothing of email, webhook - its channels name every channel "
+            "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on, Policy.NEVER where it never goes out."
+        ]
+
+    @pytest.mark.parametrize("policy", [Policy.DEFAULT_ON, Policy.DEFAULT_OFF])
+    def test_a_choice_on_a_channel_no_person_chooses_on(self, declaring, policy):
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.EMAIL) | {"webhook": policy}))
+
+        assert kind_problems() == [
+            "parcel_shipped leaves webhook to each person's choice, and no person chooses there - Policy.MANDATORY "
+            "or Policy.NEVER."
+        ]
+
+    def test_a_choice_on_a_channel_the_settings_dont_turn_on_is_told_as_that_alone(self, declaring, settings):
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX,)}
+        declaring(shipped(channels={Channel.INBOX: Policy.DEFAULT_ON, Channel.WEBHOOK: Policy.DEFAULT_ON}))
+
+        assert kind_problems() == [
+            "parcel_shipped names webhook, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn on."
+        ]
+
+    def test_each_channel_no_person_chooses_on_is_named(self, declaring, settings, monkeypatch):
+        pager = ChannelName("pager")
+        monkeypatch.setitem(registered, pager, WebhookChannel)
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX, Channel.WEBHOOK, pager)}
+        declaring(
+            shipped(
+                channels={
+                    Channel.INBOX: Policy.DEFAULT_ON,
+                    Channel.WEBHOOK: Policy.DEFAULT_ON,
+                    pager: Policy.DEFAULT_OFF,
+                }
+            )
+        )
+
+        assert kind_problems() == [
+            "parcel_shipped leaves webhook, pager to each person's choice, and no person chooses there - "
+            "Policy.MANDATORY or Policy.NEVER."
+        ]
+
+    def test_channel_problems_are_told_beside_the_rest_for_every_kind(self, declaring):
+        broken = shipped(channels=None)
+        declaring(broken, broken, dataclasses.replace(broken, name="other"))
+
+        assert kind_problems() == [
+            "parcel_shipped is declared more than once.",
+            "parcel_shipped's channels are {channel: Policy}, not None.",
+            "other's channels are {channel: Policy}, not None.",
+        ]
+
+    @pytest.mark.parametrize("policy", [Policy.MANDATORY, Policy.NEVER])
+    def test_a_channel_no_person_chooses_on_takes_what_no_one_chooses(self, declaring, policy):
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.EMAIL) | {"webhook": policy}))
+
+        assert kind_problems() == []
+
+    @pytest.mark.parametrize("fax", ["tests.nowhere.FaxChannel", None])
+    def test_a_channel_that_cant_be_loaded_is_left_to_the_settings_check(self, declaring, settings, monkeypatch, fax):
+        # One that can't be imported, or that nothing registered: CHANNELS' own check names it.
+        if fax is None:
+            monkeypatch.delitem(registered, "push")
+        else:
+            monkeypatch.setitem(registered, "push", fax)
+        isik_areas(settings).NOTIFICATIONS = {"CHANNELS": (Channel.INBOX, Channel.PUSH)}
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.PUSH, every=(Channel.INBOX, Channel.PUSH))))
+
+        assert kind_problems() == []
 
     def test_a_push_carrying_what_the_snapshot_doesnt(self, declaring):
         reason = kinds.PushDataField(reason="the status opens the right tab in the app, and says nothing private")
@@ -228,12 +332,12 @@ class TestTheKinds:
         assert kind_problems() == []
 
     def test_a_channel_the_settings_dont_turn_on(self, declaring, settings):
-        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "CHANNELS": ("inbox",)}
-        declaring(shipped(channels=("inbox", "email", "webhook")))
+        isik_areas(settings).NOTIFICATIONS = {"PROJECT_NAME": "Testapp", "CHANNELS": (Channel.INBOX,)}
+        # Never sent there, too: what it names is what the settings turn on, and nothing more.
+        declaring(shipped(channels=sent_on(Channel.INBOX, Channel.EMAIL)))
 
         assert kind_problems() == [
-            "parcel_shipped is sent on email, webhook, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn "
-            "on."
+            "parcel_shipped names email, webhook, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn on."
         ]
 
     def test_a_kind_on_a_ledger_or_event_model(self, declaring):
@@ -278,7 +382,7 @@ class TestTheKinds:
         assert kind_problems() == ["unregistered has no trigger registered."]
 
     def test_an_application_kind_isnt_read_for_a_model(self, declaring):
-        declaring(Kind(name="app", audience=Field("x"), policy=Policy.MANDATORY, source=Source.APPLICATION))
+        declaring(Kind(name="app", audience=Field("x"), channels=sent_on(Channel.INBOX), source=Source.APPLICATION))
 
         assert kind_problems() == []
 
@@ -331,9 +435,7 @@ class TestUnmirroredKinds:
 class TestRetiredKinds:
     def test_a_declared_kind_the_database_retired(self):
         NoticeKindPolicy.objects.filter(name__in=["parcel_shipped", "parcel_flagged"]).update(status="retired")
-        NoticeKindPolicy.objects.create(
-            name="undeclared", policy="mandatory", scope="single_partition", source="trigger"
-        )
+        NoticeKindPolicy.objects.create(name="undeclared", channels={}, scope="single_partition", source="trigger")
         NoticeKindPolicy.objects.filter(name="undeclared").update(status="retired")
 
         assert retired_problems(["default"]) == [
@@ -403,7 +505,7 @@ class TestTheReviewsChecks:
         ]
 
     def test_a_kind_not_sent_by_email_needs_none(self, declaring):
-        declaring(dataclasses.replace(shipped(), name="no_templates", channels=("inbox",)))
+        declaring(dataclasses.replace(shipped(), name="no_templates", channels=sent_on(Channel.INBOX)))
 
         assert checks._template_problems() == []
 
@@ -459,7 +561,7 @@ class TestSecretLookingSnapshots:
         assert checks.sensitive_snapshot_warnings() == []
 
     def test_an_application_kind_carries_what_its_raiser_gives_it(self, declaring):
-        declaring(Kind(name="app", audience=Subscribers(), policy=Policy.MANDATORY, source=Source.APPLICATION))
+        declaring(Kind(name="app", audience=Subscribers(), channels=sent_on(Channel.INBOX), source=Source.APPLICATION))
 
         assert checks.sensitive_snapshot_warnings() == []
 
@@ -477,7 +579,7 @@ class TestSecretLookingSnapshots:
             notifies(
                 "k",
                 audience=Subscribers(),
-                policy=Policy.MANDATORY,
+                channels=sent_on(Channel.INBOX),
                 on=pgtrigger.Update,
                 sensitive={"secret": "it's fine"},
             )
@@ -633,7 +735,10 @@ class TestSharedEndpoints:
 
 def test_a_channel_that_cant_be_loaded_is_found_at_startup(settings, monkeypatch):
     monkeypatch.setitem(registered, "fax", "tests.nowhere.FaxChannel")
-    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
+        "CHANNELS": (Channel.INBOX, ChannelName("fax")),
+    }
 
     assert checks.setting_problems() == [
         "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on fax, which can't be loaded: No module named "
@@ -645,6 +750,9 @@ def test_a_channel_registered_by_class_is_loaded_too(settings, monkeypatch):
     from isik.django.apps.notifications.channels.inbox import InboxChannel
 
     monkeypatch.setitem(registered, "fax", InboxChannel)
-    isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("inbox", "fax")}
+    isik_areas(settings).NOTIFICATIONS = {
+        **isik_areas(settings).NOTIFICATIONS,
+        "CHANNELS": (Channel.INBOX, ChannelName("fax")),
+    }
 
     assert checks.setting_problems() == []

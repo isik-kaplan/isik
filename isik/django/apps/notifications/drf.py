@@ -55,7 +55,8 @@ from isik.django.apps.notifications.audience.swapping import (
     get_inbox_item_model,
     get_subscription_model,
 )
-from isik.django.apps.notifications.choices import KindStatus, Policy
+from isik.django.apps.notifications.channels import Channel
+from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy
 from isik.django.apps.notifications.kinds import kinds, rendered, text_of
 from isik.django.apps.notifications.pipeline import RetryRefused, gets, is_forced, retry_delivery
 from isik.django.apps.notifications.swapping import (
@@ -162,7 +163,7 @@ def subscription_serializer(model):
         forced_reason = serializers.SerializerMethodField()
 
         class Meta:
-            fields = ["id", "kind", "variant", "enabled", "forced", "forced_enabled", "forced_reason"]
+            fields = ["id", "kind", "variant", "channel", "enabled", "forced", "forced_enabled", "forced_reason"]
 
         def get_forced(self, subscription) -> bool:
             """Whether staff forced it, so it can't be changed - always False on a model that can't be forced."""
@@ -177,7 +178,8 @@ def subscription_serializer(model):
             return shown_reason(subscription) if self.get_forced(subscription) else None
 
         def validate(self, data):
-            # A mandatory kind is subscribe()'s to refuse, with its code - a 409 the client tells apart.
+            # A channel, or a kind, leaving no choice is subscribe()'s to refuse, with its code - a 409 the client
+            # tells apart.
             policy, variant = data["kind"], data.get("variant")
             if variant is not None and variant not in policy.variants:
                 raise ValidationError(
@@ -198,6 +200,8 @@ class EndpointKindSerializer(serializers.Serializer):
 
     def validate(self, data):
         policy, variant = data["kind"], data.get("variant")
+        if policy.channels.get(Channel.WEBHOOK, Policy.NEVER) == Policy.NEVER:
+            raise ValidationError({"kind": _("%(kind)s isn't sent to webhooks.") % {"kind": policy.name}})
         if variant is not None and variant not in policy.variants:
             raise ValidationError(
                 {"variant": _("%(kind)s declares no variant %(variant)r.") % {"kind": policy.name, "variant": variant}}
@@ -381,7 +385,11 @@ class SubscriptionViewSet(
         data = serializer.validated_data
         try:
             serializer.instance = subscribe(
-                self.request.user, data["kind"], data.get("variant"), enabled=data.get("enabled", True)
+                self.request.user,
+                data["kind"],
+                data.get("variant"),
+                channel=data.get("channel"),
+                enabled=data.get("enabled", True),
             )
         except SubscriptionRefused as refused:
             raise refusal(str(refused), code=refused.code) from refused
@@ -404,62 +412,96 @@ def shown_reason(forced):
 
 def kind_states(user, names):
     """
-    {kind: {"may_change", "enabled", "enabled_variants", "forced", "forced_enabled", "forced_variants",
-    "forced_reason"}} for `user` - one answer for every view saying what a person gets of a kind, whether they may
-    change it and whether it's forced for them, so two lists can't disagree, nor either with the fan-out.
+    {kind: {channel: {"policy", "may_change", "enabled", "enabled_variants", "forced", "forced_enabled",
+    "forced_variants", "forced_reason"}}} for `user` - each channel the kind is declared on, `Policy.NEVER` ones
+    too. One answer for every view saying what a person gets of a kind on each channel, whether they may change it
+    and whether it's forced for them, so two lists can't disagree, nor either with the fan-out.
     """
     policies = {
-        name: (kind_id, policy, variants)
-        for kind_id, name, policy, variants in get_kind_policy_model()
+        name: (kind_id, channels, variants)
+        for kind_id, name, channels, variants in get_kind_policy_model()
         ._default_manager.filter(name__in=names)
-        .values_list("pk", "name", "policy", "variants")
+        .values_list("pk", "name", "channels", "variants")
     }
     rows = list(get_subscription_model()._default_manager.filter(user=user))
+    # In CHANNELS' order - the database keeps a mapping in an order of its own.
+    order = {channel: at for at, channel in enumerate(conf.setting("CHANNELS"))}
     states = {}
     for name in names:
-        kind_id, policy, variants = policies[name]
-        mine = {row.variant: row for row in rows if row.kind_id == kind_id}
-        whole = mine.get(None)
-        forced = whole if is_forced(whole) else None
+        kind_id, channels, variants = policies[name]
+        mine = {(row.variant, row.channel): row for row in rows if row.kind_id == kind_id}
         states[name] = {
-            "may_change": policy != Policy.MANDATORY and forced is None,
-            "enabled": gets(whole, policy),
-            "enabled_variants": {variant: gets(mine.get(variant, whole), policy) for variant in variants},
-            "forced": forced is not None,
-            "forced_enabled": forced.forced_enabled if forced is not None else None,
-            "forced_variants": sorted(
-                variant for variant, row in mine.items() if variant is not None and is_forced(row)
-            ),
-            "forced_reason": shown_reason(forced) if forced is not None else None,
+            channel: _channel_state(mine, channel, channels[channel], variants)
+            for channel in sorted(channels, key=lambda channel: (order.get(channel, len(order)), channel))
         }
     return states
 
 
+def _row(mine, variant, channel):
+    """The person's row covering (`variant`, `channel`) - one at most, `VariantGuard` holds them to - or None."""
+    keys = ((variant, channel), (variant, None), (None, channel), (None, None))
+    return next((mine[key] for key in keys if key in mine), None)
+
+
+def _channel_state(mine, channel, policy, variants):
+    """What a person with the rows `mine` gets of a kind on `channel`, under `policy` there."""
+    whole = _row(mine, None, channel)
+    forced = whole if is_forced(whole) else None
+    # Each variant's row - the whole kind's, where none names the variant.
+    each = {variant: _row(mine, variant, channel) for variant in variants}
+    return {
+        "policy": policy,
+        "may_change": policy in CHOSEN and forced is None,
+        "enabled": _getting(whole, policy),
+        "enabled_variants": {variant: _getting(row, policy) for variant, row in each.items()},
+        "forced": forced is not None,
+        "forced_enabled": forced.forced_enabled if forced is not None else None,
+        "forced_variants": sorted(variant for variant, row in each.items() if row is not whole and is_forced(row)),
+        "forced_reason": shown_reason(forced) if forced is not None else None,
+    }
+
+
+def _getting(row, policy):
+    """Whether a person whose row is `row` gets a kind on a channel it's sent on under `policy` - never, on NEVER."""
+    return policy != Policy.NEVER and gets(row, policy)
+
+
+class ChannelStateSerializer(serializers.Serializer):
+    """What a person gets of a kind on one channel, and what they may do about it."""
+
+    policy = serializers.ChoiceField(
+        choices=Policy.choices,
+        help_text=gettext_lazy("Who gets it here by default - never: it isn't available on this channel."),
+    )
+    may_change = serializers.BooleanField(help_text=gettext_lazy("Whether you may turn it on or off here."))
+    enabled = serializers.BooleanField(
+        help_text=gettext_lazy("Whether you get it here now, every variant - forced, your own choice, or its policy.")
+    )
+    enabled_variants = serializers.DictField(
+        child=serializers.BooleanField(), help_text=gettext_lazy("Whether you get each variant of it here now.")
+    )
+    forced = serializers.BooleanField(help_text=gettext_lazy("Whether staff forced it for you here, every variant."))
+    forced_enabled = serializers.BooleanField(
+        allow_null=True, help_text=gettext_lazy("What staff forced it to for you here, every variant - else none.")
+    )
+    forced_variants = serializers.ListField(
+        child=serializers.CharField(), help_text=gettext_lazy("The variants staff forced for you here, one by one.")
+    )
+    forced_reason = serializers.CharField(
+        allow_null=True, help_text=gettext_lazy("Why it was forced here, if you may read it.")
+    )
+
+
 class NoticeKindSerializer(serializers.Serializer):
-    """A kind of notification as a person sees it: what it is, what it's sent on, and what they may do about it."""
+    """A kind of notification as a person sees it: what it is, and on each channel what they get and may do."""
 
     kind = serializers.CharField(help_text=gettext_lazy("The kind's name - the key everything else names it by."))
     label = serializers.CharField(allow_null=True, help_text=gettext_lazy("Its name, as a person reads it."))
     description = serializers.CharField(allow_null=True, help_text=gettext_lazy("What it's about."))
-    policy = serializers.ChoiceField(choices=Policy.choices, help_text=gettext_lazy("What a person gets by default."))
     variants = serializers.ListField(child=serializers.CharField(), help_text=gettext_lazy("Its variants, if any."))
-    channels = serializers.ListField(child=serializers.CharField(), help_text=gettext_lazy("What it's sent on."))
-    may_change = serializers.BooleanField(help_text=gettext_lazy("Whether you may turn it on or off."))
-    enabled = serializers.BooleanField(
-        help_text=gettext_lazy("Whether you get it now, every variant - forced, your own choice, or its policy.")
-    )
-    enabled_variants = serializers.DictField(
-        child=serializers.BooleanField(), help_text=gettext_lazy("Whether you get each variant of it now.")
-    )
-    forced = serializers.BooleanField(help_text=gettext_lazy("Whether staff forced it for you, every variant."))
-    forced_enabled = serializers.BooleanField(
-        allow_null=True, help_text=gettext_lazy("What staff forced it to for you, every variant - else none.")
-    )
-    forced_variants = serializers.ListField(
-        child=serializers.CharField(), help_text=gettext_lazy("The variants staff forced for you, one by one.")
-    )
-    forced_reason = serializers.CharField(
-        allow_null=True, help_text=gettext_lazy("Why it was forced, if you may read it.")
+    channels = serializers.DictField(
+        child=ChannelStateSerializer(),
+        help_text=gettext_lazy("Each channel, and what you get of it there - those it never goes out on too."),
     )
 
     def get_fields(self):
@@ -488,23 +530,20 @@ class NoticeKindViewSet(BaseViewSet):
         return get_kind_policy_model()._default_manager.filter(status=KindStatus.ACTIVE, name__in=list(kinds()))
 
     def visible(self):
-        declared = kinds()
-        active = self.get_queryset().order_by("name").values_list("name", "policy", "variants")
+        active = self.get_queryset().order_by("name").values_list("name", "variants")
         hook = conf.setting("KINDS_VISIBLE")
         shown = None if hook is None else set(hook(self.request))
         rows = [row for row in active if shown is None or row[0] in shown]
-        states = kind_states(self.request.user, [name for name, _policy, _variants in rows])
+        states = kind_states(self.request.user, [name for name, _variants in rows])
         return {
             name: {
                 "kind": name,
                 "label": _text(text_of(name).label),
                 "description": _text(text_of(name).description),
-                "policy": policy,
                 "variants": variants,
-                "channels": list(declared[name].enabled_channels),
-                **states[name],
+                "channels": states[name],
             }
-            for name, policy, variants in rows
+            for name, variants in rows
         }
 
     @extend_schema(responses=NoticeKindSerializer(many=True))

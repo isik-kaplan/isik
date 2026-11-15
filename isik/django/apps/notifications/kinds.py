@@ -1,13 +1,18 @@
 """
 Declaring kinds, in two steps: the vocabulary - `declare_kind()`, every kind a project has, in one module
 someone reviews - and each one's behavior: `notifies()` on the model a trigger-sourced kind watches, or the
-audience and policy given to `declare_kind()` for one the application raises with `raise_notice()`. The
+audience and channels given to `declare_kind()` for one the application raises with `raise_notice()`. The
 registry they're collected in is what the `NoticeKindPolicy` mirror, the checks, fan-out and
 `manage.py notices` read:
 
     # notices.py - the vocabulary
     INVOICE_VOIDED = declare_kind("invoice_voided")
-    REMINDER = declare_kind("reminder", variants=("daily", "weekly"), audience=Subscribers, policy=Policy.DEFAULT_OFF)
+    REMINDER = declare_kind(
+        "reminder",
+        variants=("daily", "weekly"),
+        audience=Subscribers,
+        channels={Channel.INBOX: Policy.DEFAULT_OFF, Channel.EMAIL: Policy.DEFAULT_OFF, Channel.WEBHOOK: Policy.NEVER},
+    )
 
     # models.py
     @notifies(
@@ -16,9 +21,13 @@ registry they're collected in is what the `NoticeKindPolicy` mirror, the checks,
         condition=pgtrigger.Q(old__voided_at__isnull=True, new__voided_at__isnull=False),
         snapshot=["number", "customer"],
         audience=Field("customer"),
-        policy=Policy.MANDATORY,
+        channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.MANDATORY) | {Channel.WEBHOOK: Policy.NEVER},
     )
     class Invoice(BaseModel): ...
+
+A kind's `channels` names every channel `CHANNELS` turns on, each with its `Policy` - `Policy.NEVER` where the
+kind never goes out on it - so what a kind does on each channel, a webhook's among them, is written where it's
+declared, and a channel added to `CHANNELS` later is decided for every kind.
 
 Each name is a `KindName` - a string, so anything storing it stores the name - and a check holds the two
 steps to each other: a declared kind nothing writes, or `notifies()` writing variants its declaration
@@ -31,6 +40,7 @@ unless a declaration names it - and one that looks secret is named only with a r
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
 
@@ -44,8 +54,9 @@ from django.db.models.expressions import RawSQL
 from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext as _
 from isik.common.utils.exemptions import Exemption
-from isik.django.apps.notifications import conf, swapping
-from isik.django.apps.notifications.choices import KindStatus, Policy, Scope, Source
+from isik.django.apps.notifications import swapping
+from isik.django.apps.notifications.channels import Channel
+from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy, Scope, Source
 
 
 class SensitiveSnapshotField(
@@ -157,12 +168,12 @@ class Kind:
 
     name: str
     audience: object
-    policy: str
+    # {channel: the Policy it's sent there under} - every channel CHANNELS turns on, a check holds it to that.
+    channels: dict
     scope: str = Scope.SINGLE_PARTITION
     source: str = Source.TRIGGER
     # {variant: the condition it's written on, or None for always} - a tuple for an application kind.
     variants: object = ()
-    channels: tuple = None
     model: type = None
     on: object = None
     condition: object = None
@@ -180,9 +191,23 @@ class Kind:
         return f"notify_{self.name}"
 
     @property
+    def policies(self):
+        """{channel: Policy} - its channels, or none while they're something else, which a check names."""
+        return self.channels if isinstance(self.channels, Mapping) else {}
+
+    def policy_on(self, channel):
+        """The `Policy` it's sent on `channel` under - `Policy.NEVER` for a channel it doesn't name."""
+        return self.policies.get(channel, Policy.NEVER)
+
+    @property
     def enabled_channels(self):
-        """The channels it's sent on: its own, else every configured one."""
-        return tuple(self.channels) if self.channels is not None else tuple(conf.setting("CHANNELS"))
+        """The channels it's sent on - each it names with a policy other than `Policy.NEVER`, in its order."""
+        return tuple(channel for channel, policy in self.policies.items() if policy != Policy.NEVER)
+
+    @property
+    def chosen_channels(self):
+        """The channels a person chooses whether they get it on - `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF`."""
+        return tuple(channel for channel, policy in self.policies.items() if policy in CHOSEN)
 
 
 # Every declaration, in the order made - a name declared twice is in here twice, for the check to report.
@@ -213,6 +238,11 @@ def _declare(kind):
     return kind
 
 
+def _channels(channels):
+    # A mapping kept as a dict of its own, in its order; anything else as given, for the check to name.
+    return dict(channels) if isinstance(channels, Mapping) else channels
+
+
 def _audience(audience):
     # An audience taking no arguments may be given as its class: audience=Owners.
     return audience() if isinstance(audience, type) else audience
@@ -222,14 +252,13 @@ def notifies(
     name,
     *,
     audience,
-    policy,
+    channels,
     on,
     condition=None,
     variants=None,
     snapshot=(),
     previous=False,
     scope=Scope.SINGLE_PARTITION,
-    channels=None,
     partition=None,
     sensitive=None,
     label=None,
@@ -249,9 +278,10 @@ def notifies(
     - `name`: the kind's `KindName`, from `declare_kind()` - or a bare name, declaring it here.
     - `audience`: who it's for - anything with `recipients(notice)` (see `audiences.py`), or a class of
       one taking no arguments.
-    - `policy`: a `Policy` - whether a subscription can turn it off, or has to turn it on.
+    - `channels`: `{channel: Policy}`, every channel `CHANNELS` turns on - whether a subscription can turn it
+      off there, has to turn it on, or neither can (`Policy.MANDATORY`), or it never goes out there
+      (`Policy.NEVER`).
     - `scope`: `Scope.CROSS_PARTITION` when its audience spans partitions.
-    - `channels`: the channel names it's sent on, else every one `CHANNELS` turns on.
     - `partition`: where the row's partition is read from - a resolver from `partitions.py`, else
       `DEFAULT_PARTITION`. A project with no partitions leaves it out.
     - `sensitive`: `{field: SensitiveSnapshotField(reason=...)}`, for each snapshot field that looks secret.
@@ -267,10 +297,9 @@ def notifies(
         kind = Kind(
             name=str(name),
             audience=_audience(audience),
-            policy=policy,
+            channels=_channels(channels),
             scope=scope,
             variants=dict(variants or {}),
-            channels=tuple(channels) if channels is not None else None,
             model=model,
             on=on,
             condition=condition,
@@ -295,9 +324,8 @@ def declare_kind(
     *,
     variants=(),
     audience=None,
-    policy=None,
-    scope=Scope.SINGLE_PARTITION,
     channels=None,
+    scope=Scope.SINGLE_PARTITION,
     source=Source.APPLICATION,
     label=None,
     description=None,
@@ -308,8 +336,8 @@ def declare_kind(
     """
     Declares the kind `name`, and the `variants` it may have - its place in the vocabulary - and returns its
     `KindName`. A kind written by a trigger takes its behavior from `notifies()`, given this name. One the
-    application raises with `raise_notice()` takes it here: its `audience` and `policy`, with `scope` and
-    `channels` as `notifies()` takes them.
+    application raises with `raise_notice()` takes it here: its `audience` and `channels`, with `scope`, as
+    `notifies()` takes them.
 
     `source=Source.RECORDED` declares a kind of email its caller sends itself and `record_email()` records -
     mandatory, on email alone, with no audience: it takes none of those.
@@ -321,7 +349,7 @@ def declare_kind(
     declared_name = KindName(name, variants, text)
     # Built before anything is registered, so a declaration that fails leaves the registry as it was.
     if source == Source.RECORDED:
-        if audience is not None or policy is not None or channels is not None or push is not None:
+        if audience is not None or channels is not None or push is not None:
             raise ImproperlyConfigured(
                 _("%(kind)s is recorded - mandatory, on email alone, and for whoever its caller sent it to.")
                 % {"kind": name}
@@ -329,20 +357,18 @@ def declare_kind(
         behavior = Kind(
             name=name,
             audience=None,
-            policy=Policy.MANDATORY,
+            channels={Channel.EMAIL: Policy.MANDATORY},
             source=Source.RECORDED,
             variants=tuple(variants),
-            channels=("email",),
         )
-    elif audience is not None or policy is not None:
+    elif audience is not None or channels is not None:
         behavior = Kind(
             name=name,
             audience=_audience(audience),
-            policy=policy,
+            channels=_channels(channels),
             scope=scope,
             source=Source.APPLICATION,
             variants=tuple(variants),
-            channels=tuple(channels) if channels is not None else None,
             push=_push(name, push),
         )
     elif push is not None:

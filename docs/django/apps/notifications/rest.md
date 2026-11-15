@@ -18,16 +18,21 @@ Every kind a person may get - the mandatory ones too - so a client renders the p
 
 | route | |
 |---|---|
-| `GET /` | the kinds: `{kind, label, description, policy, variants, channels, may_change, enabled, enabled_variants, forced, forced_enabled, forced_variants, forced_reason}` |
+| `GET /` | the kinds: `{kind, label, description, variants, channels}` |
 | `GET /{kind}/` | one |
 
-`label` and `description` are in the request's language. `enabled` is what the caller gets of the kind now,
-every variant - a force, else their own choice, else the policy, the very answer the fan-out gives - and
-`enabled_variants` the same per variant; `forced_enabled` what staff forced it to, or null. A client draws
-the preferences from these alone, with no policy logic of its own. `may_change` is false for a mandatory kind and
-for one staff forced for the caller (every variant); `forced_variants` names the variants forced one by
-one, and `forced_reason` is there when the force's source shows it. One function answers these for every
-view, so the kinds and the subscriptions can't disagree.
+`channels` is `{channel: {policy, may_change, enabled, enabled_variants, forced, forced_enabled,
+forced_variants, forced_reason}}` - every channel the kind is declared on, in `CHANNELS`' order, a `never`
+one too, so a client shows it as not available for the kind. `label` and `description` are in the
+request's language. On each channel, `enabled` is what the caller gets of the kind there now, every variant -
+a force, else their own choice, else the policy, the very answer the fan-out gives - and `enabled_variants`
+the same per variant; `forced_enabled` what staff forced it to, or null. `may_change` is true where the
+policy is `default_on` or `default_off` and staff haven't forced it for the caller (every variant);
+`forced_variants` names the variants forced one by one, and `forced_reason` is there when the force's
+source shows it. A client draws the preferences from these alone, with no policy logic of its own - one
+switch per kind, say, on where every changeable channel is on, off where none is and mixed between, setting
+every channel at once with a subscription naming none. One function answers these for every view, so the
+kinds and the subscriptions can't disagree.
 
 Which kinds a caller sees is `KINDS_VISIBLE(request)` - every active kind by default - and which fields
 are published is `NOTICE_KIND_FIELDS`, every one by default (name the rest to leave out `channels`, say).
@@ -51,11 +56,12 @@ The caller's own subscriptions.
 | route | |
 |---|---|
 | `GET /` | them - a forced one with `forced: true`, `forced_enabled` what it's forced to (`enabled` stays the caller's own choice), and its `forced_reason` where the source shows it |
-| `POST /` | `{kind, variant, enabled}` - sets one, with `subscribe()`, made or replacing the one before: `201` either way; no key needed |
+| `POST /` | `{kind, variant, channel, enabled}` - sets one, with `subscribe()`, made or replacing the ones it covers: `201` either way; no key needed. No `channel` is every channel the kind leaves to the caller |
 | `DELETE /{id}/` | forgets one, so the policy decides again |
 
-A mandatory kind, or a forced subscription, is refused with `409` and its code - `kind_mandatory`,
-`subscription_forced` - in the `{detail, code}` body, so a client tells them apart.
+A channel the kind leaves no choice on, a kind leaving none on any, or a forced subscription, is refused
+with `409` and its code - `channel_not_chosen`, `kind_mandatory`, `subscription_forced` - in the
+`{detail, code}` body, so a client tells them apart.
 
 Each view and action's docstring is what drf-spectacular shows your API's callers, so isik's are written for
 them; each documents what it takes and answers exactly - `?unread=` on the inbox, no body on the `POST`
@@ -111,8 +117,8 @@ so isik's checks (`isik.E002`) and drf-spectacular find it, and the schema types
 
 An endpoint's version is its `updated_at`, which its kinds move too - so each write to one names it with
 `If-Match`. Its secret is in the response that creates it, and `rotate-secret`'s - never anywhere else,
-and neither is replayed. `kinds` naming a kind twice, a variant it doesn't declare, or one kind both for
-every variant and for some, is refused with a message saying so.
+and neither is replayed. `kinds` naming a kind twice, a variant it doesn't declare, one kind both for
+every variant and for some, or a kind whose webhook policy is `never`, is refused with a message saying so.
 
 ## `DeliveryViewSet`
 

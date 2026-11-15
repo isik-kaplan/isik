@@ -47,6 +47,7 @@ from isik.django.apps.feedback.notes import UserNoteMixin, notes
 from isik.django.apps.feedback.votes import UserVoteMixin, votes
 from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audiences import Field, Subscribers
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy, Source
 from isik.django.apps.notifications.partitions import Follow
@@ -715,7 +716,7 @@ PARCEL_REMINDER = declare_kind(
     "parcel_reminder",
     variants=("daily", "weekly"),
     audience=Subscribers,
-    policy=Policy.DEFAULT_OFF,
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_OFF) | {Channel.WEBHOOK: Policy.NEVER},
     label="Parcel reminders",
     # One sentence per variant: a callable message is given the variant beside the data.
     message=lambda data, variant: f"Your {variant} reminder: {data.get('name', 'your parcel')}.",
@@ -730,8 +731,7 @@ AUTOMATED = declare_force_source("automated", label="Automated", reason_floor=5,
 SUBSCRIPTION_FORCED = declare_kind(
     "subscription_forced",
     audience=Field("user"),
-    policy=Policy.MANDATORY,
-    channels=("inbox",),
+    channels={Channel.INBOX: Policy.MANDATORY} | dict.fromkeys((Channel.EMAIL, Channel.WEBHOOK), Policy.NEVER),
     label="Notification settings changed",
     message="Staff changed your notification settings.",
 )
@@ -746,7 +746,7 @@ PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Sou
     snapshot=["status", "recipient", "sender"],
     previous=True,
     audience=Field("recipient"),
-    policy=Policy.DEFAULT_ON,
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_ON) | {Channel.WEBHOOK: Policy.MANDATORY},
 )
 @notifies(
     "parcel_routed",
@@ -756,8 +756,7 @@ PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Sou
     condition=pgtrigger.Q(new__status="routed"),
     snapshot=["sender"],
     audience=Field("sender"),
-    policy=Policy.MANDATORY,
-    channels=("inbox",),
+    channels={Channel.INBOX: Policy.MANDATORY} | dict.fromkeys((Channel.EMAIL, Channel.WEBHOOK), Policy.NEVER),
     # Its partition read through the sender - here, their username.
     partition=Follow("sender", "username"),
 )
@@ -767,8 +766,7 @@ PARCEL_RECEIPT = declare_kind("parcel_receipt", variants=("signed",), source=Sou
     variants={"lost": pgtrigger.Q(new__status="lost"), "damaged": pgtrigger.Q(new__status="damaged")},
     snapshot=["status", "sender"],
     audience=Field("sender"),
-    policy=Policy.DEFAULT_OFF,
-    channels=("inbox", "email", "webhook"),
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_OFF) | {Channel.WEBHOOK: Policy.MANDATORY},
 )
 class Parcel(BaseModel):
     """A row notices are written about: two trigger-sourced kinds, one with variants, and a column none carries."""

@@ -40,8 +40,11 @@ class TestTheNoticesCommand:
         assert (
             "parcel_flagged\n  source: trigger\n  model: testapp.Parcel\n  trigger: notify_parcel_flagged\n" in listed
         )
-        assert "  variants: lost, damaged\n  audience: Field('sender')\n  policy: default_off\n" in listed
-        assert "  channels: inbox, email, webhook\n  snapshot: status, sender\n" in listed
+        assert "  variants: lost, damaged\n  audience: Field('sender')\n  scope: single_partition\n" in listed
+        assert (
+            "  channels: inbox=default_off, email=default_off, webhook=mandatory\n  snapshot: status, sender\n"
+            in listed
+        )
         assert "parcel_reminder\n  source: application\n  variants: daily, weekly\n  audience: Subscribers\n" in listed
 
     def test_it_lists_them_as_json(self):
@@ -55,7 +58,7 @@ class TestTheNoticesCommand:
     def test_it_shows_where_the_mirror_differs(self):
         with pgtrigger.ignore("isik_notifications.NoticeKindPolicy:protect_policy_delete"):
             NoticeKindPolicy.objects.filter(name="parcel_reminder").delete()
-        NoticeKindPolicy.objects.create(name="gone", policy="mandatory", scope="single_partition", source="trigger")
+        NoticeKindPolicy.objects.create(name="gone", scope="single_partition", source="trigger")
         NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
 
         listed = notices()
@@ -87,13 +90,13 @@ class TestTheNoticesCommand:
 
         with transaction.atomic(), pytest.raises(ProgrammingError, match="Cannot insert"):
             NoticeKindPolicy.objects.create(
-                name="born_retired", policy="mandatory", scope="single_partition", source="trigger", status="retired"
+                name="born_retired", scope="single_partition", source="trigger", status="retired"
             )
 
     def test_a_retired_kinds_other_columns_still_change(self):
         NoticeKindPolicy.objects.filter(name="parcel_shipped").update(status="retired")
 
-        assert NoticeKindPolicy.objects.filter(name="parcel_shipped").update(policy="mandatory") == 1
+        assert NoticeKindPolicy.objects.filter(name="parcel_shipped").update(channels={"inbox": "mandatory"}) == 1
 
 
 @pytest.mark.django_db

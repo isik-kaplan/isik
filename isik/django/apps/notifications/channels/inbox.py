@@ -10,7 +10,7 @@ class InboxChannel(Channel):
     the inbox and the ledger sharing a database, landing is all there is to sending.
     """
 
-    name = "inbox"
+    name = Channel.INBOX
 
     def targets(self, notice, kind, users):
         return [Target(f"user:{user.pk}", get_inbox_delivery_model(), {"user_id": str(user.pk)}) for user in users]

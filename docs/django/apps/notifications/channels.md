@@ -128,7 +128,7 @@ encrypted field of your own.
 
 ## push
 
-`pip install isik[push]`, then add `"push"` to `CHANNELS`. Each active device of each user a notice
+`pip install isik[push]`, then add `Channel.PUSH` to `CHANNELS`. Each active device of each user a notice
 reaches gets a delivery of its own, sent straight to its platform's service over HTTP/2 - APNs for an iOS
 token, FCM for a Firebase one. No middleman, no SDK: the extra is `httpx[http2]` and `pyjwt[crypto]`.
 
@@ -136,7 +136,7 @@ token, FCM for a Firebase one. No middleman, no SDK: the extra is `httpx[http2]`
 ISIK = {
     "DJANGO": {
         "NOTIFICATIONS": {
-            "CHANNELS": ("inbox", "email", "push"),
+            "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.PUSH),
             "PUSH": {
                 "APNS": {"TEAM_ID": "...", "KEY_ID": "...", "KEY": os.environ["APNS_KEY"], "TOPIC": "com.acme.app"},
                 "FCM": {"CREDENTIALS": json.loads(os.environ["FCM_SERVICE_ACCOUNT"])},
@@ -192,10 +192,14 @@ class SmsChannel(Channel):
         ...
         return Outcome(succeeded=True)   # or Outcome(succeeded=False, permanent=True, error="...")
 
-register_channel("sms", SmsChannel)   # or its dotted path
+SMS = register_channel("sms", SmsChannel)   # or its dotted path - SMS is its ChannelName
 ```
 
-Add it to `CHANNELS`. `targets()` runs inside the partition; each `Target` names its key (unique per
+Add `SMS` to `CHANNELS`, and to each kind's `channels` with its policy there - the `ChannelName`
+`register_channel()` returned, as isik's own are `Channel.EMAIL` and the rest. `chosen_by_people` says whether
+a person chooses whether they get a kind on it - True by default; False for one like a webhook, which takes
+`Policy.MANDATORY` or `Policy.NEVER` alone. `targets()` is given the users the kind's policy on the channel
+chose, and runs inside the partition; each `Target` names its key (unique per
 notice) and its child row. Raising from `send()` counts as a failure to try again. `attempted(delivery,
 outcome)` runs after each attempt, and `unretriable(delivery)` says why a delivery can't be retried by
 hand, or None.

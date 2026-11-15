@@ -14,6 +14,7 @@ from isik.django.apps.features.audiences import HolderPeople
 from isik.django.apps.notifications import bases
 from isik.django.apps.notifications.audience import bases as audience
 from isik.django.apps.notifications.audiences import Field
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy
 
@@ -113,7 +114,7 @@ PACKAGE_LOST = declare_kind(
     variants={"stolen": pgtrigger.Q(new__state="stolen"), "misplaced": pgtrigger.Q(new__state="misplaced")},
     snapshot=["label", "owner"],
     audience=Field("owner"),
-    policy=Policy.DEFAULT_ON,
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_ON) | {Channel.WEBHOOK: Policy.MANDATORY},
 )
 class Package(UUIDPrimaryKeyModel):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
@@ -167,6 +168,5 @@ notifies(
     on=pgtrigger.Insert,
     snapshot=["holder", "feature"],
     audience=HolderPeople(),
-    policy=Policy.MANDATORY,
-    channels=("inbox",),
+    channels={Channel.INBOX: Policy.MANDATORY} | dict.fromkeys((Channel.EMAIL, Channel.WEBHOOK), Policy.NEVER),
 )(FeatureGrant)

@@ -1,11 +1,13 @@
 """
 Channels - how a delivery goes out. Each one says who a notice reaches on it (`targets()`, called inside
-the partition being delivered to) and sends one delivery (`send()`). Four ship - `inbox`, `email`,
-`webhook` and `push` (its extra, `isik[push]`, installed) - and a project registers its own:
+the partition being delivered to) and sends one delivery (`send()`). Four ship - `Channel.INBOX`,
+`Channel.EMAIL`, `Channel.WEBHOOK` and `Channel.PUSH` (its extra, `isik[push]`, installed) - and a project
+registers its own, keeping the name it's given:
 
-    register_channel("sms", "acme.notifications.SmsChannel")
+    SMS = register_channel("sms", "acme.notifications.SmsChannel")
 
-`CHANNELS` decides which a kind may name.
+Each is named by its `ChannelName` - in `CHANNELS`, which decides which a kind may name, and as the keys of
+a kind's `channels`.
 """
 
 from dataclasses import dataclass, field
@@ -39,10 +41,25 @@ class Outcome:
     error: str = ""
 
 
+class ChannelName(str):
+    """
+    A channel's name - `Channel.EMAIL`, or what `register_channel()` returned - a string, so anything storing it
+    stores the name.
+    """
+
+
 class Channel:
-    """The base of a channel."""
+    """The base of a channel - and, on it, the names of the channels isik ships."""
+
+    INBOX = ChannelName("inbox")
+    EMAIL = ChannelName("email")
+    WEBHOOK = ChannelName("webhook")
+    PUSH = ChannelName("push")
 
     name = None
+    # Whether a person chooses whether they get a kind on it - a kind's policy there then DEFAULT_ON or DEFAULT_OFF
+    # as well as MANDATORY or NEVER. False for a channel no person's subscription reaches, a webhook's.
+    chosen_by_people = True
 
     def targets(self, notice, kind, users):
         """The `Target`s `notice` reaches on this channel - given the `users` its audience and policy chose."""
@@ -66,17 +83,23 @@ class Channel:
             return str(gone)
 
 
+# Each by its dotted path, imported when it's first sent on - push's extra only where push is.
 registered = {
-    "inbox": "isik.django.apps.notifications.channels.inbox.InboxChannel",
-    "email": "isik.django.apps.notifications.channels.email.EmailChannel",
-    "webhook": "isik.django.apps.notifications.channels.webhook.WebhookChannel",
-    "push": "isik.django.apps.notifications.channels.push.PushChannel",
+    Channel.INBOX: "isik.django.apps.notifications.channels.inbox.InboxChannel",
+    Channel.EMAIL: "isik.django.apps.notifications.channels.email.EmailChannel",
+    Channel.WEBHOOK: "isik.django.apps.notifications.channels.webhook.WebhookChannel",
+    Channel.PUSH: "isik.django.apps.notifications.channels.push.PushChannel",
 }
 
 
 def register_channel(name, channel):
-    """Registers `channel` - a `Channel` subclass or its dotted path - as `name`."""
-    registered[name] = channel
+    """
+    Registers `channel` - a `Channel` subclass or its dotted path - as `name`, and returns its `ChannelName`: what
+    `CHANNELS` and a kind's `channels` name it by.
+    """
+    channel_name = ChannelName(name)
+    registered[channel_name] = channel
+    return channel_name
 
 
 def get_channel(name):

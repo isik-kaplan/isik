@@ -136,7 +136,14 @@ class TestThePartitionItStores:
     def kind(self, partition):
         from isik.django.apps.notifications.kinds import Kind
 
-        return Kind(name="k", audience=None, policy="mandatory", model=Parcel, on=pgtrigger.Update, partition=partition)
+        return Kind(
+            name="k",
+            audience=None,
+            channels={"inbox": "mandatory"},
+            model=Parcel,
+            on=pgtrigger.Update,
+            partition=partition,
+        )
 
     def test_none_without_a_resolver(self):
         assert NoticeTrigger(kind=self.kind(None))._partition(Parcel) == "NULL"
@@ -230,8 +237,10 @@ class TestAttemptsAreAppendOnly:
 
 
 class TestTheVariantGuard:
-    def subscribe(self, user, variant, kind="parcel_flagged"):
-        return get_subscription_model().objects.create(user=user, kind=kind_named(kind), variant=variant)
+    def subscribe(self, user, variant, kind="parcel_flagged", channel=None):
+        return get_subscription_model().objects.create(
+            user=user, kind=kind_named(kind), variant=variant, channel=channel
+        )
 
     def test_a_declared_variant_or_none_is_taken(self, alice, bob):
         self.subscribe(alice, "lost")
@@ -261,7 +270,7 @@ class TestTheVariantGuard:
     def test_some_variant_beside_none_is_refused(self, alice):
         self.subscribe(alice, None)
 
-        with pytest.raises(IntegrityError, match="cannot sit beside one naming a variant for the same user"):
+        with pytest.raises(IntegrityError, match="cannot sit beside another it covers for the same user and kind"):
             self.subscribe(alice, "lost")
 
     def test_an_update_into_it_is_refused(self, alice):
@@ -288,6 +297,60 @@ class TestTheVariantGuard:
         with pytest.raises(IntegrityError, match="subscription_once"):
             self.subscribe(alice, None)
 
+    @pytest.mark.parametrize("channel", ["inbox", "email"])
+    def test_a_channel_the_kind_leaves_to_people_is_taken(self, alice, channel):
+        assert self.subscribe(alice, None, channel=channel).channel == channel
+
+    @pytest.mark.parametrize(
+        ("kind", "channel"),
+        [
+            ("parcel_flagged", "webhook"),
+            ("parcel_routed", "inbox"),
+            ("parcel_routed", "email"),
+            ("parcel_flagged", "fax"),
+        ],
+    )
+    def test_a_channel_it_leaves_no_choice_on_is_refused(self, alice, kind, channel):
+        # Mandatory there, never sent there, or not one of its channels at all.
+        with pytest.raises(IntegrityError, match="the kind leaves no choice on that channel"):
+            self.subscribe(alice, None, kind=kind, channel=channel)
+
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            ((None, None), ("lost", "inbox")),
+            ((None, "inbox"), ("lost", "inbox")),
+            (("lost", None), ("lost", "inbox")),
+            (("lost", None), (None, "inbox")),
+            (("lost", "inbox"), (None, None)),
+        ],
+    )
+    def test_a_row_covering_another_or_part_of_it_is_refused(self, alice, first, second):
+        self.subscribe(alice, first[0], channel=first[1])
+
+        with pytest.raises(IntegrityError, match="cannot sit beside another it covers"):
+            self.subscribe(alice, second[0], channel=second[1])
+
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            (("lost", "inbox"), ("lost", "email")),
+            (("lost", "inbox"), ("damaged", "inbox")),
+            (("lost", None), ("damaged", "email")),
+            ((None, "inbox"), ("lost", "email")),
+        ],
+    )
+    def test_rows_covering_nothing_of_each_other_are_taken(self, alice, first, second):
+        self.subscribe(alice, first[0], channel=first[1])
+
+        self.subscribe(alice, second[0], channel=second[1])
+
+    def test_the_same_channel_twice_is_refused_by_the_constraint(self, alice):
+        self.subscribe(alice, "lost", channel="inbox")
+
+        with pytest.raises(IntegrityError, match="subscription_once"):
+            self.subscribe(alice, "lost", channel="inbox")
+
     def test_endpoint_kinds_are_guarded_by_their_endpoint(self):
         from isik.django.apps.notifications.audience.swapping import get_endpoint_model
 
@@ -307,6 +370,12 @@ class TestTheVariantGuard:
         items.create(user=alice, kind=kind_named("parcel_flagged"), delivery_id=uuid.uuid4())
         with pytest.raises(IntegrityError, match="declares no such variant"):
             items.create(user=alice, kind=kind_named("parcel_flagged"), variant="stolen", delivery_id=uuid.uuid4())
+
+    def test_only_a_guard_naming_channels_reads_them(self):
+        refusal = "the kind leaves no choice on that channel"
+
+        assert refusal not in VariantGuard(name="g", owner="user").get_func(get_subscription_model())
+        assert refusal in VariantGuard(name="g", owner="user", channel=True).get_func(get_subscription_model())
 
     def test_only_an_owned_guard_locks(self):
         assert "pg_advisory_xact_lock" not in VariantGuard(name="g").get_func(get_subscription_model())
@@ -393,7 +462,12 @@ class TestTheCompiledSql:
         from isik.django.apps.notifications.kinds import Kind
 
         kind = Kind(
-            name="k", audience=None, policy="mandatory", model=Parcel, on=pgtrigger.Update, variants={"v": None}
+            name="k",
+            audience=None,
+            channels={"inbox": "mandatory"},
+            model=Parcel,
+            on=pgtrigger.Update,
+            variants={"v": None},
         )
 
         assert NoticeTrigger(kind=kind).get_func(Parcel).startswith(f"{GUARD}IF TRUE THEN INSERT INTO ")

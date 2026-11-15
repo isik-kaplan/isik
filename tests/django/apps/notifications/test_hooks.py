@@ -12,6 +12,7 @@ from django.test import RequestFactory
 
 from isik.django.apps.notifications import checks, exemptions, hooks, pipeline, schedule
 from isik.django.apps.notifications.audiences import Subscribers
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.hooks import FanOutAfterWritesMiddleware, fan_out_if_waiting
 from isik.django.apps.notifications.kinds import Kind
 from isik.django.apps.notifications.management.commands.notices import Command as NoticesCommand
@@ -222,9 +223,8 @@ class TestSendingInline:
             Kind(
                 name="app",
                 audience=Subscribers(),
-                policy=Policy.MANDATORY,
                 source=Source.APPLICATION,
-                channels=("inbox",),
+                channels={Channel.INBOX: Policy.MANDATORY, Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: Policy.NEVER},
             )
         )
 

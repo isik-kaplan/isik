@@ -185,9 +185,10 @@ class TestWhoIsChosen:
         isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("recording",)}
         ship(parcel)
 
-        fan_out(django_capture_on_commit_callbacks)
+        with redeclared(monkeypatch, "parcel_shipped", channels={"recording": Policy.MANDATORY}):
+            fan_out(django_capture_on_commit_callbacks)
 
-        assert given == [kinds.get_kind("parcel_shipped")]
+            assert given == [kinds.get_kind("parcel_shipped")]
 
     def test_the_audience_is_asked_about_the_notice(
         self, monkeypatch, settings, parcel, bob, dispatched, django_capture_on_commit_callbacks
@@ -233,7 +234,9 @@ class TestWritingDeliveries:
                 return ["a", "b", "a"]
 
         with pytest.raises(ValueError) as raised:
-            pipeline._single_partition(notice, kinds.Kind(name="k", audience=Two(), policy=Policy.MANDATORY))
+            pipeline._single_partition(
+                notice, kinds.Kind(name="k", audience=Two(), channels={Channel.INBOX: Policy.MANDATORY})
+            )
 
         assert (
             str(raised.value) == f"k is single-partition, and its audience named 2 partitions for notice {notice.pk}."
@@ -601,9 +604,8 @@ class TestTheCommandExactly:
             "condition": "(NEW.\"status\" = 'shipped' AND NOT (OLD.\"status\" = 'shipped'))",
             "variants": [],
             "audience": "Field('recipient')",
-            "policy": "default_on",
             "scope": "single_partition",
-            "channels": ["inbox", "email", "webhook"],
+            "channels": {"inbox": "default_on", "email": "default_on", "webhook": "mandatory"},
             "snapshot": ["status", "recipient", "sender"],
         }
 

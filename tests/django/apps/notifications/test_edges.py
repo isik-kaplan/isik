@@ -17,7 +17,7 @@ from django.utils import timezone
 from isik.django.apps.notifications import checks, kinds, pipeline
 from isik.django.apps.notifications.audience.swapping import get_endpoint_model
 from isik.django.apps.notifications.audiences import Subscribers
-from isik.django.apps.notifications.channels import guard
+from isik.django.apps.notifications.channels import Channel, guard
 from isik.django.apps.notifications.channels import webhook as webhook_module
 from isik.django.apps.notifications.kinds import KindName, declare_kind, notifies
 from isik.django.apps.notifications.models import (
@@ -92,7 +92,13 @@ class TestDeclaringDetails:
             ImproperlyConfigured,
             match=r"^k\.sensitive takes a SensitiveSnapshotField\(reason=\.\.\.\) for secret, not a bare string\.$",
         ):
-            notifies("k", audience=Subscribers, policy=Policy.MANDATORY, on=pgtrigger.Update, sensitive={"secret": "x"})
+            notifies(
+                "k",
+                audience=Subscribers,
+                channels={Channel.INBOX: Policy.MANDATORY},
+                on=pgtrigger.Update,
+                sensitive={"secret": "x"},
+            )
 
     def test_an_audience_alone_declares_behavior(self, monkeypatch):
         monkeypatch.setattr(kinds, "declared", [])
@@ -101,7 +107,7 @@ class TestDeclaringDetails:
         declare_kind("half", audience=Subscribers)
 
         [kind] = kinds.declared
-        assert (kind.name, kind.policy) == ("half", None)
+        assert (kind.name, kind.channels) == ("half", None)
 
     def test_raising_by_a_kind_name(self, db):
         from tests.testapp.models import PARCEL_REMINDER

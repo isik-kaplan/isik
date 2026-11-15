@@ -9,7 +9,7 @@ from django.apps import apps
 from django.db import connection
 
 from isik.django.apps.notifications import conf, swapping
-from isik.django.apps.notifications.choices import KindStatus
+from isik.django.apps.notifications.choices import CHOSEN, KindStatus
 
 
 def literal(value):
@@ -142,13 +142,18 @@ class VariantGuard(pgtrigger.Trigger):
     refuses a row naming no variant beside one naming some, for the same owner and kind, and the reverse:
     no variant already means every one. It takes an advisory lock on the (owner, kind) pair first, so two
     writers can't both pass.
+
+    With `channel` - a subscription's - a row names a channel too, or none for every one: one naming a channel
+    its kind leaves no choice on is refused, and so is one covering any (variant, channel) another row of the
+    owner's for the kind covers - so a person has one row at most for each.
     """
 
     when = pgtrigger.Before
     operation = pgtrigger.Insert | pgtrigger.Update
 
-    def __init__(self, *, name, owner=None):
+    def __init__(self, *, name, owner=None, channel=False):
         self.owner = owner
+        self.channel = channel
         super().__init__(name=name)
 
     def _refuse(self, message):
@@ -167,11 +172,20 @@ class VariantGuard(pgtrigger.Trigger):
         # reaching across schemas - would otherwise take a kind that doesn't exist.
         policy = _quote(NoticeKindPolicy._meta.db_table)
         lookup = f"SELECT 1 FROM {policy} WHERE {_column(NoticeKindPolicy, 'id')} = NEW.{kind}"
-        return (
+        declared = (
             f"IF NOT EXISTS ({lookup}) THEN {self._refuse(f'{model._meta.label}: no kind is called that.')} END IF; "
             f"IF NEW.{variant} IS NOT NULL AND NOT EXISTS ({lookup} AND "
             f"{_column(NoticeKindPolicy, 'variants')} @> jsonb_build_array(NEW.{variant})) THEN "
             f"{self._refuse(f'{model._meta.label}: the kind declares no such variant.')} END IF;"
+        )
+        if not self.channel:
+            return declared
+        channel = _column(model, "channel")
+        chosen = ", ".join(literal(policy) for policy in CHOSEN)
+        return (
+            f"{declared} IF NEW.{channel} IS NOT NULL AND NOT EXISTS ({lookup} AND "
+            f"{_column(NoticeKindPolicy, 'channels')} ->> NEW.{channel} IN ({chosen})) THEN "
+            f"{self._refuse(f'{model._meta.label}: the kind leaves no choice on that channel.')} END IF;"
         )
 
     def _exclusive(self, model):
@@ -182,11 +196,24 @@ class VariantGuard(pgtrigger.Trigger):
             f"{model._meta.label}: a row naming no variant, which covers every one, "
             f"cannot sit beside one naming a variant for the same {self.owner} and kind."
         )
+        overlapping = f"({variant} IS NULL) <> (NEW.{variant} IS NULL)"
+        if self.channel:
+            channel = _column(model, "channel")
+            refusal = self._refuse(
+                f"{model._meta.label}: a row naming no variant or no channel, which covers every one, "
+                f"cannot sit beside another it covers for the same {self.owner} and kind."
+            )
+            overlapping = (
+                f"({variant} IS NULL OR NEW.{variant} IS NULL OR {variant} = NEW.{variant}) "
+                f"AND ({channel} IS NULL OR NEW.{channel} IS NULL OR {channel} = NEW.{channel}) "
+                f"AND NOT ({variant} IS NOT DISTINCT FROM NEW.{variant} "
+                f"AND {channel} IS NOT DISTINCT FROM NEW.{channel})"
+            )
         return (
             f"PERFORM pg_advisory_xact_lock(hashtext({literal(model._meta.db_table)}), "
             f"hashtext(NEW.{owner}::text || ':' || NEW.{kind}::text)); "
             f"IF EXISTS (SELECT 1 FROM {table} WHERE {owner} = NEW.{owner} AND {kind} = NEW.{kind} "
-            f"AND {pk} IS DISTINCT FROM NEW.{pk} AND ({variant} IS NULL) <> (NEW.{variant} IS NULL)) THEN "
+            f"AND {pk} IS DISTINCT FROM NEW.{pk} AND {overlapping}) THEN "
             f"{refusal} END IF;"
         )
 

@@ -102,7 +102,7 @@ def send_from_mjml_templates(delivery, notice, address):
 class EmailChannel(Channel):
     """Email, sent by `EMAIL_SENDER` inside the delivery's partition."""
 
-    name = "email"
+    name = Channel.EMAIL
 
     def targets(self, notice, kind, users):
         targets = []

@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from isik.django.apps.notifications import checks, kinds, pipeline
 from isik.django.apps.notifications.audiences import Subscribers
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, raise_notice
 from isik.django.apps.notifications.management.commands.notices import describe
 from isik.django.apps.notifications.models import (
@@ -223,16 +224,15 @@ class TestARecordedKind:
     def test_its_declared_mandatory_on_email_alone(self):
         kind = kinds.get_kind("parcel_receipt")
 
-        assert (kind.source, kind.policy, kind.channels, kind.audience, kind.variants) == (
+        assert (kind.source, kind.channels, kind.audience, kind.variants) == (
             Source.RECORDED,
-            Policy.MANDATORY,
-            ("email",),
+            {Channel.EMAIL: Policy.MANDATORY},
             None,
             ("signed",),
         )
         assert NoticeKindPolicy.objects.get(name="parcel_receipt").source == Source.RECORDED
 
-    @pytest.mark.parametrize("given", [{"audience": "x"}, {"policy": Policy.DEFAULT_ON}, {"channels": ("email",)}])
+    @pytest.mark.parametrize("given", [{"audience": "x"}, {"channels": {Channel.EMAIL: Policy.MANDATORY}}])
     def test_it_takes_nothing_isik_would_send_it_by(self, given):
         with pytest.raises(ImproperlyConfigured, match="^receipt is recorded - mandatory, on email alone"):
             declare_kind("receipt", source=Source.RECORDED, **given)
@@ -247,20 +247,25 @@ class TestARecordedKind:
             kinds.Kind(
                 name="receipt",
                 audience=None,
-                policy=Policy.MANDATORY,
+                channels={Channel.EMAIL: Policy.MANDATORY},
                 source=Source.RECORDED,
                 variants=("signed",),
-                channels=("email",),
             )
         ]
 
     def test_its_checks_pass_over_it_to_the_next(self, declaring):
         declaring(
             kinds.get_kind("parcel_receipt"),
-            kinds.Kind(name="odd", audience=Subscribers(), policy="sometimes", source=Source.APPLICATION),
+            kinds.Kind(
+                name="odd",
+                audience=Subscribers(),
+                channels={Channel.INBOX: "sometimes", Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: Policy.NEVER},
+                source=Source.APPLICATION,
+            ),
         )
 
-        assert checks.kind_problems() == ["odd's policy is a Policy, not 'sometimes'."]
+        # The recorded kind names email alone, CHANNELS turning on more - and isn't held to them.
+        assert checks.kind_problems() == ["odd gives inbox something other than a Policy."]
 
     def test_its_listed_with_no_audience(self):
         assert describe(kinds.get_kind("parcel_receipt"))["audience"] is None

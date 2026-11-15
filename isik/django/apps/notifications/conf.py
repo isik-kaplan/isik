@@ -17,6 +17,7 @@ from datetime import timedelta
 
 from django.utils.module_loading import import_string
 
+from isik.django.apps.notifications.channels import Channel
 from isik.django.conf import django_area
 
 
@@ -39,7 +40,7 @@ DEFAULTS = {
     # The HTTP statuses a webhook failure is tried again for. Any other one is permanent.
     "RETRYABLE_STATUSES": (408, 425, 429, *range(500, 600)),
     # The channels a kind may name, each a registered channel's name.
-    "CHANNELS": ("inbox", "email", "webhook"),
+    "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK),
     # {"header": the webhook signature header's name, over X-<PROJECT_NAME>-Signature}.
     "SIGNATURE": {},
     # Seconds a webhook POST may take in all, and the consecutive failures that park its endpoint.

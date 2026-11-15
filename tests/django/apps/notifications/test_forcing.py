@@ -10,6 +10,7 @@ from isik.django.apps.common.forcing import ForceRefused, checked_force, checked
 from isik.django.apps.notifications import checks, kinds, pipeline
 from isik.django.apps.notifications.audience.bases import _force_constraints
 from isik.django.apps.notifications.audience.helpers import (
+    ChannelNotChosen,
     KindIsMandatory,
     SubscriptionForced,
     SubscriptionRefused,
@@ -71,7 +72,13 @@ class TestForceSources:
 
 class TestTheDefaultModel:
     def test_a_mandatory_kind_is_no_ones_to_choose(self, alice):
-        with pytest.raises(KindIsMandatory, match="^subscription_forced is mandatory - it reaches everyone it's for.$"):
+        with pytest.raises(
+            KindIsMandatory,
+            match=(
+                "^subscription_forced leaves no choice on any channel - it reaches everyone it's for, wherever it's "
+                "sent.$"
+            ),
+        ):
             subscribe(alice, "subscription_forced")
         assert KindIsMandatory.code == "kind_mandatory"
 
@@ -185,9 +192,25 @@ class TestForcing:
 
         with pytest.raises(
             SubscriptionRefused,
-            match=f"^{alice} has a choice about every variant of parcel_flagged - force the kind, not one variant.$",
+            match=f"^{alice} has a choice about parcel_flagged covering this one - force that one.$",
         ):
             force_subscription(alice, "parcel_flagged", "lost", enabled=True, source="staff", reason=REASON)
+
+    def test_a_channel_the_kind_leaves_no_choice_on_isnt_forced(self, forceable, alice):
+        with pytest.raises(ChannelNotChosen):
+            force_subscription(alice, "parcel_flagged", channel="webhook", enabled=False, source="staff", reason=REASON)
+
+    def test_releasing_one_channel_leaves_the_others_forced(self, forceable, alice):
+        force_subscription(
+            alice, "parcel_flagged", "lost", channel="inbox", enabled=True, source="staff", reason=REASON
+        )
+        force_subscription(
+            alice, "parcel_flagged", "lost", channel="email", enabled=True, source="staff", reason=REASON
+        )
+
+        assert release_subscription(alice, "parcel_flagged", "lost", channel="email") is True
+
+        assert list(forceable.values_list("channel", flat=True)) == ["inbox"]
 
     def test_a_mandatory_kind_isnt_forced(self, forceable, alice):
         with pytest.raises(KindIsMandatory):
@@ -243,14 +266,30 @@ class TestTellingThePerson:
             "SUBSCRIPTION_FORCED_KIND": "subscription_forced",
         }
 
-        force_subscription(alice, "parcel_flagged", "lost", enabled=False, source="staff", reason=REASON)
-        release_subscription(alice, "parcel_flagged", "lost")
+        force_subscription(
+            alice, "parcel_flagged", "lost", channel="email", enabled=False, source="staff", reason=REASON
+        )
+        release_subscription(alice, "parcel_flagged", "lost", channel="email")
 
         assert [
             notice.snapshot for notice in Notice.objects.filter(kind__name="subscription_forced").order_by("pk")
         ] == [
-            {"user": str(alice.pk), "kind": "parcel_flagged", "variant": "lost", "forced": True, "enabled": False},
-            {"user": str(alice.pk), "kind": "parcel_flagged", "variant": "lost", "forced": False, "enabled": None},
+            {
+                "user": str(alice.pk),
+                "kind": "parcel_flagged",
+                "variant": "lost",
+                "channel": "email",
+                "forced": True,
+                "enabled": False,
+            },
+            {
+                "user": str(alice.pk),
+                "kind": "parcel_flagged",
+                "variant": "lost",
+                "channel": "email",
+                "forced": False,
+                "enabled": None,
+            },
         ]
 
     def test_not_unless_a_kind_is_named(self, forceable, alice):
@@ -260,11 +299,23 @@ class TestTellingThePerson:
 
 
 class TestWhoGetsIt:
-    def users(self, notice_kind, *users):
+    def users(self, notice_kind, *users, channel="inbox"):
         kind = kinds.get_kind(notice_kind)
         notice = Notice(kind=kind_named(notice_kind), variant="lost", snapshot={})
         audience = type("Them", (), {"recipients": lambda self, notice: list(users)})()
-        return pipeline.chosen_users(notice, kinds.Kind(name=kind.name, audience=audience, policy=kind.policy))
+        chosen = pipeline.chosen_users(notice, kinds.Kind(name=kind.name, audience=audience, channels=kind.channels))
+        return chosen[channel]
+
+    def test_a_force_on_one_channel_beats_their_choice_there_alone(self, forceable, alice):
+        subscribe(alice, "parcel_flagged", channel="inbox", enabled=False)
+        force_subscription(alice, "parcel_flagged", channel="email", enabled=True, source="staff", reason=REASON)
+
+        assert (self.users("parcel_flagged", alice), self.users("parcel_flagged", alice, channel="email")) == (
+            [],
+            [alice],
+        )
+        assert release_subscription(alice, "parcel_flagged", channel="email") is True
+        assert self.users("parcel_flagged", alice, channel="email") == []
 
     def test_a_force_beats_the_default_and_their_own_choice(self, forceable, alice, bob):
         subscribe(bob, "parcel_flagged")
@@ -304,11 +355,12 @@ class TestTheChecks:
         from isik.django.apps.notifications.audiences import Subscribers
 
         declaring(
+            kinds.Kind(name="bare", audience=Subscribers(), source="application", channels={"inbox": "mandatory"}),
             kinds.Kind(
-                name="bare", audience=Subscribers(), policy="mandatory", source="application", channels=("inbox",)
-            ),
-            kinds.Kind(
-                name="mailed", audience=Subscribers(), policy="mandatory", source="application", channels=("email",)
+                name="mailed",
+                audience=Subscribers(),
+                source="application",
+                channels={"email": "mandatory", "inbox": "never"},
             ),
         )
 
@@ -345,10 +397,12 @@ class TestTheChecks:
         assert checks._untracked_force_problems() == []
 
     def test_a_policy_row_is_read_for_mandatory(self, alice):
-        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(channels={"inbox": "mandatory", "email": "never"})
 
         with pytest.raises(KindIsMandatory):
             subscribe(alice, "parcel_flagged")
+        with pytest.raises(ChannelNotChosen):
+            subscribe(alice, "parcel_flagged", channel="email")
 
 
 def test_a_forceable_subscription_is_held_to_its_forcing_by_two_constraints():

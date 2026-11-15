@@ -3,6 +3,7 @@
 import getpass
 import os
 
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.exemptions import ScheduledElsewhere
 
 
@@ -37,7 +38,7 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 ISIK = {
     "DJANGO": {
         "NOTIFICATIONS": {
-            "CHANNELS": ("inbox", "email", "webhook"),
+            "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK),
             "PROJECT_NAME": "Owned",
             # Each endpoint is a user's, and hears only what that user would.
             "ENDPOINT_OWNER_FIELD": "owner",

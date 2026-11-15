@@ -13,6 +13,7 @@ import httpx
 import pytest
 from django.core import mail
 from django.db import connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from isik.django.apps.notifications import kinds as kinds_module
@@ -24,7 +25,7 @@ from isik.django.apps.notifications.audience.swapping import (
     get_inbox_item_model,
 )
 from isik.django.apps.notifications.audiences import Audience
-from isik.django.apps.notifications.channels import Outcome, register_channel, registered
+from isik.django.apps.notifications.channels import Channel, ChannelName, Outcome, register_channel, registered
 from isik.django.apps.notifications.channels.webhook import WebhookChannel
 from isik.django.apps.notifications.models import (
     Delivery,
@@ -170,10 +171,57 @@ class TestFanningOut:
         subscribe(bob, "parcel_shipped", enabled=False)
         notice = ship(parcel)
 
-        with redeclared(monkeypatch, "parcel_shipped", policy=Policy.MANDATORY):
+        with redeclared(
+            monkeypatch, "parcel_shipped", channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.MANDATORY)
+        ):
             fan_out(django_capture_on_commit_callbacks)
 
         assert len(deliveries(notice)) == 2
+
+    def test_each_channel_under_its_own_policy(
+        self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        subscribe(bob, "parcel_shipped", enabled=False)
+        notice = ship(parcel)
+        channels = {Channel.INBOX: Policy.DEFAULT_ON, Channel.EMAIL: Policy.MANDATORY, Channel.WEBHOOK: Policy.NEVER}
+
+        with redeclared(monkeypatch, "parcel_shipped", channels=channels):
+            fan_out(django_capture_on_commit_callbacks)
+
+        assert deliveries(notice) == [("email", "email:bob@example.com")]
+
+    def test_a_choice_on_one_channel_moves_that_channel_alone(
+        self, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        subscribe(bob, "parcel_shipped", channel="email", enabled=False)
+        notice = ship(parcel)
+
+        fan_out(django_capture_on_commit_callbacks)
+
+        assert deliveries(notice) == [("inbox", f"user:{bob.pk}")]
+
+    def test_a_choice_on_one_channel_beside_one_for_every_other(
+        self, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        subscribe(bob, "parcel_flagged", "lost", channel="email")
+        subscribe(bob, "parcel_flagged", channel="inbox")
+        notice = flag(bob)
+
+        fan_out(django_capture_on_commit_callbacks)
+
+        assert deliveries(notice) == [("email", "email:bob@example.com"), ("inbox", f"user:{bob.pk}")]
+
+    def test_a_kind_no_person_chooses_on_reads_no_subscription(
+        self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        notice = ship(parcel)
+        channels = {Channel.INBOX: Policy.MANDATORY, Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: Policy.NEVER}
+
+        with redeclared(monkeypatch, "parcel_shipped", channels=channels), CaptureQueriesContext(connection) as queries:
+            fan_out(django_capture_on_commit_callbacks)
+
+        assert deliveries(notice) == [("inbox", f"user:{bob.pk}")]
+        assert not [query for query in queries if '"isik_subscription"' in query["sql"]]
 
     def test_an_empty_audience_reaches_nobody(self, alice, dispatched, django_capture_on_commit_callbacks):
         parcel = Parcel.objects.create(sender=alice)
@@ -186,7 +234,8 @@ class TestFanningOut:
     def test_a_kinds_own_channels(self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks):
         notice = ship(parcel)
 
-        with redeclared(monkeypatch, "parcel_shipped", channels=("inbox",)):
+        channels = {Channel.INBOX: Policy.DEFAULT_ON, Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: Policy.NEVER}
+        with redeclared(monkeypatch, "parcel_shipped", channels=channels):
             fan_out(django_capture_on_commit_callbacks)
 
         assert deliveries(notice) == [("inbox", f"user:{bob.pk}")]
@@ -923,11 +972,14 @@ class TestRegisteringAChannel:
                 return Outcome(succeeded=True)
 
         monkeypatch.setitem(registered, "pager", None)
-        register_channel("pager", Pager)
+        pager = register_channel("pager", Pager)
+
+        assert (type(pager), pager) == (ChannelName, "pager")
         isik_areas(settings).NOTIFICATIONS = {**isik_areas(settings).NOTIFICATIONS, "CHANNELS": ("pager",)}
         notice = ship(parcel)
 
-        fan_out(django_capture_on_commit_callbacks)
+        with redeclared(monkeypatch, "parcel_shipped", channels={"pager": Policy.DEFAULT_ON}):
+            fan_out(django_capture_on_commit_callbacks)
 
         assert deliveries(notice) == [("pager", f"pager:{bob.pk}")]
         assert isinstance(get_channel("pager"), Pager)

@@ -52,43 +52,52 @@ kind's snapshot to it.
 
 ## Policies
 
-Each kind has one `Policy`:
+Each kind has a `Policy` on each channel, in its `channels` (see
+[kinds.md](kinds.md#the-policy-on-each-channel)):
 
-| policy | who gets it |
+| policy | who gets it on that channel |
 |---|---|
 | `MANDATORY` | everyone the audience names - subscriptions are ignored |
 | `DEFAULT_ON` | everyone the audience names, but those who turned it off |
 | `DEFAULT_OFF` | only those the audience names who turned it on |
+| `NEVER` | no one - the kind never goes out on it |
 
-Webhook endpoints are separate: an endpoint gets every notice of a kind (and variant) its
-`EndpointKind` rows ask for, whoever the audience is.
+The audience and the subscriptions are read once per notice, and each channel takes its own policy over
+them. Webhook endpoints are separate: on a kind whose webhook policy is `MANDATORY`, an endpoint gets every
+notice of it (and its variant) its `EndpointKind` rows ask for, whoever the audience is.
 
 ## Subscriptions
 
 A subscription is a deviation from the policy - so a newly declared kind reaches everyone it should
-with nothing to backfill. One row per user, kind and variant: no variant covers every one.
+with nothing to backfill. One row per user, kind, variant and channel: no variant covers every one, and no
+channel every channel the kind leaves to the person.
 
 ```python
 from isik.django.apps.notifications.audience.helpers import subscribe, unsubscribe
 
-subscribe(user, "parcel_flagged", "lost")             # on, for one variant
-subscribe(user, "parcel_flagged", enabled=False)      # off, for every variant - replacing the named ones
-unsubscribe(user, "parcel_flagged")                   # back to the policy
+subscribe(user, "parcel_flagged", "lost")                       # on, for one variant, on every channel
+subscribe(user, "parcel_flagged", enabled=False)                # off, everywhere - replacing the named ones
+subscribe(user, "parcel_flagged", channel=Channel.EMAIL, enabled=False)  # off by email alone
+unsubscribe(user, "parcel_flagged")                             # back to the policy
+unsubscribe(user, "parcel_flagged", channel=Channel.EMAIL)      # back to it by email
 ```
 
-A row naming no variant can't sit beside one naming a variant for the same user and kind - the first
-already covers the second. The database refuses it (`VariantGuard`, under an advisory lock so two
+One row a person's (variant, channel) at most: a row covering another - naming no variant, or no channel,
+where the other names one - can't sit beside it for the same user and kind, nor two rows covering part of
+each other (`("lost", every channel)` and `(every variant, "email")`). The database refuses it (`VariantGuard`, under an advisory lock so two
 writers can't both pass), and refuses a kind that doesn't exist and a variant the kind doesn't declare -
 so a `kind` key without a database constraint, one reaching across schemas, is still checked.
 The guard is the trigger `guard_variant` on each kind-holder, and `protect_policy_delete` on
 `NoticeKindPolicy` keeps a kind from ever being deleted - so a `kind` key with no constraint of its own
 can't dangle. Both names are stable: a project may name them as what guards its keys.
-`subscribe()` with no variant removes the named rows first, in one transaction; naming one beside a row
-covering every variant is refused - `unsubscribe()` the kind first. Endpoint kinds and inbox items are held to declared variants
-the same way.
+`subscribe()` removes the rows it covers first, in one transaction; naming one beside a row covering it, or
+part of it, is refused - `unsubscribe()` that one first. The guard refuses a row naming a channel the kind
+leaves no choice on, too. Endpoint kinds and inbox items are held to declared variants the same way.
 
-A `MANDATORY` kind has no choice to record: `subscribe()` refuses it (`KindIsMandatory`, code
-`kind_mandatory`), so no row says a person turned off what they can't. A kind with no policy row is
+A channel whose policy is `MANDATORY` or `NEVER` has no choice to record: `subscribe()` naming it is refused
+(`ChannelNotChosen`, code `channel_not_chosen`), and so is one naming no channel for a kind leaving no
+choice on any (`KindIsMandatory`, code `kind_mandatory`) - so no row says a person turned off what they
+can't. A kind with no policy row is
 refused too, with a `ValueError`. Given a policy row rather than a name, `subscribe()` uses it without
 reading it again. Each refusal is a
 `SubscriptionRefused` carrying its `code`.
@@ -123,10 +132,11 @@ release_subscription(user, "security_alert")
 
 The sources are the [force sources](../features/README.md#force-sources) the features app's settings
 take - each saying how long a reason must be, whether staff may lift it, and whether the person may read
-it. Who gets a notice is then, per person: **a forced variant > a forced kind > their own variant > their
+it. Who gets a notice is then, per person and channel: **a forced variant > a forced kind > their own variant > their
 own kind > the kind's policy**. With the plain base it's exactly the policy and their own rows, as before.
 
-- A `MANDATORY` kind can't be forced: off would silence what must reach them, on means nothing.
+- A channel whose policy is `MANDATORY` or `NEVER` can't be forced: off would silence what must reach them,
+  on means nothing. `force_subscription()` and `release_subscription()` take `channel=` as `subscribe()` does.
 - `subscribe()` and `unsubscribe()` refuse a forced row (`SubscriptionForced`, code
   `subscription_forced`), and so do the REST create and delete, with that code in a `409`.
 - `ISIK["DJANGO"]["NOTIFICATIONS"]["SUBSCRIPTION_FORCED_KIND"]` names a `MANDATORY` application kind of yours,

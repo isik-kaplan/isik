@@ -8,7 +8,7 @@ nothing can forget to notify. A Celery task then fans each notice out into deliv
 inbox, email, webhook and push channels, and each delivery is tried until it's sent.
 
 - [kinds.md](kinds.md) - declaring a kind: `notifies()`, `declare_kind()`, `raise_notice()`, variants
-- [audiences.md](audiences.md) - who a kind reaches, its policy, and subscriptions
+- [audiences.md](audiences.md) - who a kind reaches, its policy on each channel, and subscriptions
 - [channels.md](channels.md) - inbox, email, webhooks (the wire format and signing), push to phones, your own channel
 - [partitions.md](partitions.md) - tenants, schemas, or any other split of your data
 - [operations.md](operations.md) - the tasks, the beat schedule, retries, pruning, health, `manage.py notices`, tests
@@ -40,6 +40,7 @@ isik's pytest plugin lets that flush through on its own (see [operations.md](ope
 
 ```python
 from isik.django.apps.notifications.audiences import Field
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import Policy, declare_kind, notifies  # Scope and Source too
 
 INVOICE_VOIDED = declare_kind("invoice_voided")  # in one module of every kind - see kinds.md
@@ -50,7 +51,8 @@ INVOICE_VOIDED = declare_kind("invoice_voided")  # in one module of every kind -
     condition=pgtrigger.Q(old__voided_at__isnull=True, new__voided_at__isnull=False),
     snapshot=["number", "customer"],
     audience=Field("customer"),
-    policy=Policy.MANDATORY,
+    # Every channel CHANNELS turns on, each with its policy - see kinds.md.
+    channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.MANDATORY) | {Channel.WEBHOOK: Policy.NEVER},
 )
 class Invoice(BaseModel):
     ...
@@ -171,7 +173,7 @@ superuser turning triggers off - it narrows accidents, not attackers.
 | `REQUIRE_DECLARED_KINDS` | False | refuse a bare name given to `notifies()` - every kind declared with `declare_kind()` |
 | `PROJECT_NAME` | None | names the webhook signature header, `X-<PROJECT_NAME>-Signature` - required once a kind is sent by webhook, unless `SIGNATURE["header"]` is set |
 | `SIGNATURE` | `{}` | `{"header": ...}` names the signature header outright |
-| `CHANNELS` | `("inbox", "email", "webhook")` | the channels a kind may be sent on - `"push"` too, with `isik[push]` |
+| `CHANNELS` | `(Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK)` | the channels a kind may be sent on, each a `ChannelName` - `Channel.PUSH` too, with `isik[push]` |
 | `PUSH` | `{}` | `{"APNS": {...}, "FCM": {...}}` - the push services' credentials ([push](channels.md#push)) |
 | `RECORD_ATTEMPTS` | `"failures"` | which attempts get a `DeliveryAttempt` row: `"all"`, `"failures"`, `"none"` |
 | `MAX_ATTEMPTS` | 5 | tries before a delivery (or shard) is abandoned - in each run, a manual retry starting one |

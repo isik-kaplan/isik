@@ -12,7 +12,7 @@ from isik.django.apps.notifications.swapping import get_kind_policy_model
 
 
 def mirror_kinds(using=DEFAULT_DB_ALIAS, **kwargs):
-    """Writes each declared kind's row - its policy, scope, source and variants as declared. Returns them."""
+    """Writes each declared kind's row - each channel's policy, scope, source and variants as declared. Returns them."""
     rows = []
     with transaction.atomic(using=using):
         for kind in kinds().values():
@@ -22,7 +22,7 @@ def mirror_kinds(using=DEFAULT_DB_ALIAS, **kwargs):
                 .update_or_create(
                     name=kind.name,
                     defaults={
-                        "policy": kind.policy,
+                        "channels": dict(kind.policies),
                         "scope": kind.scope,
                         "source": kind.source,
                         "variants": list(kind.variants),

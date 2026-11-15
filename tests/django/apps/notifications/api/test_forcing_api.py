@@ -12,6 +12,11 @@ from tests.django.apps.notifications.test_forcing import REASON, row
 pytestmark = pytest.mark.django_db
 
 
+def catalog(user, channel="inbox"):
+    """{kind: what `user` gets of it on `channel`} - the kinds catalog, one channel of it."""
+    return {kind["kind"]: kind["channels"].get(channel) for kind in client_for(user).get("/kinds/").json()}
+
+
 class TestTheApi:
     def test_a_forced_subscription_shows_why_where_its_source_lets_it(self, forceable, alice):
         force_subscription(alice, "parcel_flagged", "lost", enabled=True, source="staff", reason=REASON)
@@ -46,7 +51,7 @@ class TestTheApi:
         force_subscription(alice, "parcel_shipped", enabled=False, source="staff", reason=REASON)
         force_subscription(alice, "parcel_flagged", "lost", enabled=True, source="account_review", reason=REASON)
 
-        listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
+        listed = catalog(alice)
 
         shipped, flagged = listed["parcel_shipped"], listed["parcel_flagged"]
         assert (shipped["may_change"], shipped["forced"], shipped["forced_reason"]) == (False, True, REASON)
@@ -59,7 +64,7 @@ class TestTheApi:
         force_subscription(alice, "parcel_flagged", "lost", enabled=True, source="staff", reason=REASON)
         subscribe(alice, "parcel_flagged", "damaged", enabled=True)
 
-        listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
+        listed = catalog(alice)
         mine = {row["kind"]: row for row in client_for(alice).get("/subscriptions/").json() if row["variant"] is None}
 
         shipped, flagged = listed["parcel_shipped"], listed["parcel_flagged"]
@@ -77,7 +82,7 @@ class TestTheApi:
         subscribe(bob, "parcel_flagged", enabled=True)
         subscribe(alice, "parcel_flagged", "damaged", enabled=False)
 
-        listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
+        listed = catalog(alice)
 
         assert (listed["parcel_shipped"]["may_change"], listed["parcel_shipped"]["forced"]) == (True, False)
         assert listed["parcel_flagged"]["enabled_variants"] == {"lost": False, "damaged": False}
@@ -86,7 +91,7 @@ class TestTheApi:
     def test_a_choice_for_every_variant_answers_for_each(self, forceable, alice):
         subscribe(alice, "parcel_flagged", enabled=True)
 
-        flagged = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}["parcel_flagged"]
+        flagged = catalog(alice)["parcel_flagged"]
 
         assert (flagged["may_change"], flagged["enabled"], flagged["enabled_variants"]) == (
             True,
@@ -95,13 +100,51 @@ class TestTheApi:
         )
 
     def test_a_variant_a_kind_gives_by_default(self, alice):
-        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(policy="default_on")
-        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(policy="mandatory")
+        NoticeKindPolicy.objects.filter(name="parcel_flagged").update(channels={"inbox": "default_on"})
+        NoticeKindPolicy.objects.filter(name="parcel_reminder").update(channels={"inbox": "mandatory"})
 
-        listed = {kind["kind"]: kind for kind in client_for(alice).get("/kinds/").json()}
+        listed = catalog(alice)
 
         assert listed["parcel_flagged"]["enabled_variants"] == {"lost": True, "damaged": True}
         assert listed["parcel_reminder"]["enabled_variants"] == {"daily": True, "weekly": True}
+
+    def test_a_force_on_one_channel_is_that_channels_alone(self, forceable, alice):
+        subscribe(alice, "parcel_flagged", channel="inbox", enabled=True)
+        force_subscription(
+            alice, "parcel_flagged", "lost", channel="email", enabled=True, source="staff", reason=REASON
+        )
+
+        inbox, email = catalog(alice)["parcel_flagged"], catalog(alice, "email")["parcel_flagged"]
+
+        assert (inbox["may_change"], inbox["enabled"], inbox["forced_variants"]) == (True, True, [])
+        assert (email["may_change"], email["enabled"], email["forced_variants"]) == (True, False, ["lost"])
+        assert email["enabled_variants"] == {"lost": True, "damaged": False}
+
+    def test_a_force_on_every_variant_names_none_one_by_one(self, forceable, alice):
+        force_subscription(alice, "parcel_flagged", enabled=True, source="staff", reason=REASON)
+
+        flagged = catalog(alice)["parcel_flagged"]
+
+        assert (flagged["forced"], flagged["forced_variants"], flagged["may_change"]) == (True, [], False)
+        assert flagged["enabled_variants"] == {"lost": True, "damaged": True}
+
+    def test_a_choice_for_every_channel_leaves_one_it_never_goes_out_on_off(self, alice):
+        subscribe(alice, "parcel_reminder")
+
+        inbox, webhook = catalog(alice)["parcel_reminder"], catalog(alice, "webhook")["parcel_reminder"]
+
+        assert (inbox["enabled"], inbox["enabled_variants"]) == (True, {"daily": True, "weekly": True})
+        assert (webhook["policy"], webhook["may_change"], webhook["enabled"]) == ("never", False, False)
+        assert webhook["enabled_variants"] == {"daily": False, "weekly": False}
+
+    def test_a_channel_the_settings_dont_name_comes_last(self, alice):
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(
+            channels={"pager": "mandatory", "fax": "never", "webhook": "mandatory", "inbox": "default_on"}
+        )
+
+        shipped = client_for(alice).get("/kinds/parcel_shipped/").json()
+
+        assert list(shipped["channels"]) == ["inbox", "webhook", "fax", "pager"]
 
     def test_the_catalog_publishes_the_fields_a_project_names(self, alice, settings):
         isik_areas(settings).NOTIFICATIONS = {

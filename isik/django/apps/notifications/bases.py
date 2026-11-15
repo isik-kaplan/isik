@@ -31,7 +31,8 @@ from isik.django.apps.common.db.conditions import AnyChange
 from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import DatabaseUUID7, UUIDPrimaryKeyModel, new_primary_key
 from isik.django.apps.common.db.triggers import ProtectTruncate
-from isik.django.apps.notifications.choices import DeliveryState, KindStatus, Policy, Scope, ShardState, Source
+from isik.django.apps.notifications.channels import Channel
+from isik.django.apps.notifications.choices import DeliveryState, KindStatus, Scope, ShardState, Source
 from isik.django.apps.notifications.swapping import (
     DELIVERY_MODEL,
     KIND_POLICY_MODEL,
@@ -54,14 +55,16 @@ class AbstractNoticeKindPolicy(UUIDPrimaryKeyModel):
         db_comment="The kind's name, as its declaration gives it. Never changes.",
         verbose_name=gettext_lazy("name"),
     )
-    policy = models.CharField(
-        max_length=16,
-        choices=Policy.choices,
+    channels = models.JSONField(
+        default=dict,
+        blank=True,
         help_text=gettext_lazy(
-            "Who gets the kind: everyone its audience names, opted-out aside, or only the opted-in."
+            "Each channel the kind is declared on, and who gets it there: everyone its audience names, opted-out "
+            "aside, only the opted-in, or no one."
         ),
-        db_comment="mandatory, default_on or default_off - mirrored from the declaration.",
-        verbose_name=gettext_lazy("policy"),
+        db_comment="{channel: mandatory, default_on, default_off or never} - mirrored from the declaration. A "
+        "subscription naming a channel the kind leaves no choice on is refused.",
+        verbose_name=gettext_lazy("channels"),
     )
     scope = models.CharField(
         max_length=16,
@@ -427,7 +430,7 @@ def _delivery_key(related_name):
 class AbstractWebhookDelivery(UUIDPrimaryKeyModel):
     """A delivery's endpoint - its key in the partition the delivery names."""
 
-    delivery = _delivery_key("webhook")
+    delivery = _delivery_key(Channel.WEBHOOK)
     endpoint_id = models.CharField(
         max_length=255,
         help_text=gettext_lazy("The endpoint's primary key."),
@@ -442,7 +445,7 @@ class AbstractWebhookDelivery(UUIDPrimaryKeyModel):
 class AbstractEmailDelivery(UUIDPrimaryKeyModel):
     """A delivery's address, and the user it belongs to when it's a user's."""
 
-    delivery = _delivery_key("email")
+    delivery = _delivery_key(Channel.EMAIL)
     address = models.CharField(
         max_length=254,
         help_text=gettext_lazy("The address it's sent to."),
@@ -474,7 +477,7 @@ class AbstractEmailDelivery(UUIDPrimaryKeyModel):
 class AbstractInboxDelivery(UUIDPrimaryKeyModel):
     """A delivery's user - whose inbox it lands in."""
 
-    delivery = _delivery_key("inbox")
+    delivery = _delivery_key(Channel.INBOX)
     user_id = models.CharField(
         max_length=255,
         help_text=gettext_lazy("The user whose inbox it lands in."),
@@ -489,7 +492,7 @@ class AbstractInboxDelivery(UUIDPrimaryKeyModel):
 class AbstractPushDelivery(UUIDPrimaryKeyModel):
     """A delivery's device - one of a user's phones - and the user it's theirs."""
 
-    delivery = _delivery_key("push")
+    delivery = _delivery_key(Channel.PUSH)
     device_id = models.CharField(
         max_length=255,
         help_text=gettext_lazy("The device's primary key."),

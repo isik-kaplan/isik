@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-11-15
+
+### Breaking
+
+- A notice kind's policy is per channel. `notifies()` and `declare_kind()` take no `policy=`; `channels` is
+  a required `{ChannelName: Policy}` naming every channel `ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS']` turns on,
+  `Policy.NEVER` where the kind never goes out. A tuple of channels, and leaving `channels` out, are refused
+  by `isik.E014`. To move a kind over: `policy=P` with no `channels` becomes
+  `channels=dict.fromkeys(CHANNELS, P)` (the webhook's as below); `policy=P, channels=("inbox",)` becomes
+  `channels={Channel.INBOX: P} | dict.fromkeys((Channel.EMAIL, Channel.WEBHOOK), Policy.NEVER)`.
+- A channel is named by its `ChannelName` - a `str`, so the database, the policy row and REST keep plain
+  names. isik's own are `Channel.INBOX`, `Channel.EMAIL`, `Channel.WEBHOOK` and `Channel.PUSH` (from
+  `isik.django.apps.notifications.channels`), and `register_channel()` returns a project's:
+  `SMS = register_channel("sms", "acme.notifications.SmsChannel")`. A kind's `channels` keys and every
+  `CHANNELS` entry are `ChannelName`s - `isik.E014` refuses one written as plain text - so
+  `channels={"email": Policy.MANDATORY}` becomes `channels={Channel.EMAIL: Policy.MANDATORY}`, and
+  `"CHANNELS": ("inbox", "email")` becomes `"CHANNELS": (Channel.INBOX, Channel.EMAIL)`.
+- A channel no person chooses on - the webhook, and a project's channel with `chosen_by_people = False` -
+  takes `Policy.MANDATORY` (every endpoint asking for the kind gets it, as before) or `Policy.NEVER`;
+  `DEFAULT_ON` and `DEFAULT_OFF` there are refused.
+- `Kind.policy` is gone: `Kind.channels` holds the mapping, `Kind.policy_on(channel)` reads one channel's
+  policy, `Kind.enabled_channels` the channels it's sent on and `Kind.chosen_channels` those a person
+  chooses on.
+- `NoticeKindPolicy.policy` is replaced by `channels`, a JSON `{channel: policy}` mirrored from the
+  declaration after every migrate (`isik_notifications` 0002). A project owning the kind policy model
+  (`AbstractNoticeKindPolicy`) runs `makemigrations` for the field.
+- `Subscription` gains a nullable `channel` - none for every channel the kind leaves to the person - its
+  unique constraint covers (user, kind, variant, channel), and `guard_variant` refuses a row covering another
+  of the same person's for the kind, or part of it, and a row naming a channel the kind leaves no choice on
+  (`isik_notifications_audience` 0003). A project owning the subscription model runs `makemigrations` for
+  the field, the constraint and the trigger.
+- `pipeline.chosen_users(notice, kind)` answers `{channel: users}`.
+- `KindIsMandatory` is raised for a kind leaving no choice on any channel; a channel leaving none raises the
+  new `ChannelNotChosen` (code `channel_not_chosen`). A subscription covering part of the one asked for is
+  refused, as one covering all of it was.
+- REST: a kind in `NoticeKindViewSet` is `{kind, label, description, variants, channels}`, `channels` being
+  `{channel: {policy, may_change, enabled, enabled_variants, forced, forced_enabled, forced_variants,
+  forced_reason}}` for every channel the kind is declared on, `never` ones too. A subscription carries
+  `channel`. `kind_states()` answers the same per channel.
+- `SUBSCRIPTION_FORCED_KIND`'s notice snapshot carries `channel`.
+
+### Added
+
+- `Policy.NEVER`, `ChannelName`, and `Channel.INBOX`, `Channel.EMAIL`, `Channel.WEBHOOK` and `Channel.PUSH`.
+- `subscribe()`, `unsubscribe()`, `force_subscription()` and `release_subscription()` take `channel=`, and
+  `SubscriptionViewSet` takes `channel`.
+- `Channel.chosen_by_people`, False on the webhook channel.
+- `EndpointViewSet` refuses a kind whose webhook policy is `Policy.NEVER`, naming it.
+- `isik.E014` refuses a channel named by plain text - a kind's `channels` key or a `CHANNELS` entry - a
+  configured channel a kind leaves unnamed, a channel it names that `CHANNELS` leaves off, `channels` that
+  aren't a mapping or name something other than a `Policy`, and a choice on a channel no person chooses on.
+
 ## [0.54.0] - 2026-11-14
 
 ### Added

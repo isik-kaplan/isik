@@ -308,7 +308,7 @@ SENDERS = {Platform.APNS: send_apns, Platform.FCM: send_fcm}
 class PushChannel(Channel):
     """A push to each active device of each user the notice reaches."""
 
-    name = "push"
+    name = Channel.PUSH
 
     def targets(self, notice, kind, users):
         devices = (

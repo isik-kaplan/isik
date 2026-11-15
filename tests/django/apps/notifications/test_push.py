@@ -8,6 +8,7 @@ import hashlib
 import json
 import uuid
 from contextlib import contextmanager, nullcontext
+from dataclasses import replace
 from datetime import timedelta
 from urllib.parse import parse_qs
 
@@ -18,11 +19,12 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.utils import timezone, translation
 
+from isik.django.apps.notifications import kinds as kinds_module
 from isik.django.apps.notifications import pipeline
 from isik.django.apps.notifications.audience.helpers import forget_devices, register_device, subscribe
 from isik.django.apps.notifications.audience.models import Device, InboxItem
-from isik.django.apps.notifications.channels import push
-from isik.django.apps.notifications.choices import Platform, PushEnvironment
+from isik.django.apps.notifications.channels import Channel, push
+from isik.django.apps.notifications.choices import Platform, PushEnvironment, Source
 from isik.django.apps.notifications.kinds import PushContent, PushDataField, raise_notice
 from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState, PushDelivery
 from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
@@ -86,10 +88,21 @@ def services(monkeypatch, settings):
     monkeypatch.setattr(push.time, "time", lambda: NOW)
     isik_areas(settings).NOTIFICATIONS = {
         **isik_areas(settings).NOTIFICATIONS,
-        "CHANNELS": ("inbox", "email", "webhook", "push"),
+        "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK, Channel.PUSH),
         "PUSH": {"APNS": APNS, "FCM": {"CREDENTIALS": ACCOUNT}},
         "RECORD_ATTEMPTS": "all",
     }
+    # Each kind sent by push as it's sent to the inbox - the channel they name it for, push being on now.
+    monkeypatch.setattr(
+        kinds_module,
+        "declared",
+        [
+            kind
+            if kind.source == Source.RECORDED
+            else replace(kind, channels={**kind.channels, Channel.PUSH: kind.channels["inbox"]})
+            for kind in kinds_module.declared
+        ],
+    )
     return faked
 
 
