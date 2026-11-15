@@ -32,7 +32,15 @@ KEYS = {"EXEMPTIONS": "rule levels", "DJANGO": "isik.django's areas"}
 # {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS and SMS check
 # their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
 AREA_KEYS = {
-    "HISTORY": ("CONTEXT_KEYS", "CONTEXT_VERSION", "CONTEXT_BUILD", "REQUEST_ID_HEADER", "TASK_DISPATCH_ON_COMMIT"),
+    "HISTORY": (
+        "CONTEXT_KEYS",
+        "CONTEXT_VERSION",
+        "CONTEXT_BUILD",
+        "REQUEST_ID_HEADER",
+        "REQUEST_ID_VALID",
+        "RETURN_REQUEST_ID",
+        "TASK_DISPATCH_ON_COMMIT",
+    ),
     "SESSIONS": ("HEADER_NAME", "DEAD_SESSION_HEADER"),
     "IDEMPOTENCY": ("CLAIM_MODEL", "BODY_CODEC", "LOCK_TIMEOUT", "NORMALIZE"),
     "DRF": ("PAGINATION_MAX_PAGE_SIZE",),

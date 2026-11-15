@@ -1,6 +1,7 @@
 from isik.django.apps.common.db import lookups  # noqa: F401
 from isik.django.apps.common.db.choices import ChoiceRules, EnumField, with_choice_rules
 from isik.django.apps.common.db.constraints import NoViolationMessage, fitted_name
+from isik.django.apps.common.db.context_columns import AddContextColumn, context_rows
 from isik.django.apps.common.db.fields import IfUnset, if_unset, redeclare
 from isik.django.apps.common.db.history import (
     APPEND_ONLY_TRIGGERS,
@@ -48,8 +49,10 @@ __all__ = [
     "NoViolationMessage",
     "ProtectTruncate",
     "allow_truncate",
+    "AddContextColumn",
     "ContextField",
     "context_fields_trigger",
+    "context_rows",
     "database_kept_fields",
     "DatabaseTimestampsModel",
     "DatabaseUUID7",
