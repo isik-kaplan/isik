@@ -52,7 +52,11 @@ ISIK = {
 
 ## A request's ids
 
-Every request the middleware serves carries two ids, whatever its method:
+Every request the middleware serves carries two ids, whatever its method, and answers with one of them. Django
+makes them; sending one in is optional and is for what sits in front of Django - an edge proxy, or a server
+calling Django, such as a Next.js render. An edge proxy setting the header (nginx's
+`proxy_set_header X-Request-ID $request_id`) replaces whatever a browser sent.
+
 
 - `request.request_id` - its own, a uuid7 made here. It's never read from the request, so each request's rows
   stay apart from every other's: a Next.js render calling Django four times leaves four request ids.
@@ -69,11 +73,23 @@ its request and its chain.
 
 `ISIK["DJANGO"]["HISTORY"]["REQUEST_ID_VALID"]` decides what a sent id may be - a callable taking the value
 (or a dotted path to one), `is_uuid` unless set: a UUID, hyphenated or as 32 hex digits, with nothing around
-it. nginx's `$request_id` is one. A sent id it doesn't take is replaced by the request's own, never kept or
-answered with - so no newline or oversized value reaches the history or a response. The refusal is logged at
-DEBUG on `isik.django.apps.common.middleware.history`, naming the header and the value as its `repr()` - where to
-look when a proxy's ids never match the correlation ids. A correlation id is the caller's to choose: it groups
-requests, and a request is authorized and deduplicated by something else - its credentials, and its [`Idempotency-Key`](../../idempotency/README.md).
+it. nginx's `$request_id` is one. A sent id it doesn't take is never kept or answered with - so no newline or
+oversized value reaches the history or a response - and goes to `ISIK["DJANGO"]["HISTORY"]["REQUEST_ID_REFUSED"]`,
+a callable `(request, header, value)` or a dotted path to one:
+
+- `log_refused_request_id`, unless set, logs the header and the value (as its `repr()`) at WARNING on
+  `isik.django.apps.common.middleware.history`, with the request on the record as Django's own request logging
+  puts it, and the request is served under its own id - the line to look for
+  when a proxy's ids never match the correlation ids.
+- `refuse_request_with_400` logs the same and answers 400 `{"detail": ..., "code": "request_id_refused"}`, without
+  serving the request or echoing the value - for a deployment where everything in front of Django sends an id,
+  so that a proxy or calling server set up wrong, a Next.js server forwarding a malformed id, say, fails where
+  it's seen. It's answered under the request's own id, like every response, so the WARNING line and the request
+  in the history are found from it.
+- A project's own answers a response to send instead of serving the request, or None to serve it.
+
+A correlation id is the proxy's or calling server's to choose: it groups requests, and a request is authorized and deduplicated by
+something else - its credentials, and its [`Idempotency-Key`](../../idempotency/README.md).
 
 `HistoryContextMiddleware.identify(request)` gives a request both ids unless it has them; `get_context()` calls
 it, so a subclass's `get_context()` answers for a request a test builds and hands it directly.

@@ -39,6 +39,7 @@ AREA_KEYS = {
         "CONTEXT_BUILD",
         "REQUEST_ID_HEADER",
         "REQUEST_ID_VALID",
+        "REQUEST_ID_REFUSED",
         "RETURN_REQUEST_ID",
         "TASK_DISPATCH_ON_COMMIT",
     ),

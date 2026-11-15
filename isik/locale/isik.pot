@@ -187,6 +187,11 @@ msgstr ""
 msgid "%(guard)s needs a viewset - %(view)s has no action."
 msgstr ""
 
+#: isik/django/apps/common/middleware/history.py:76
+#, python-format
+msgid "%(header)s isn't a request id this server takes."
+msgstr ""
+
 #: isik/common/config/environment.py:39
 #, python-format
 msgid "%(key)s and %(file_key)s are both set - set only one of them."
@@ -1691,7 +1696,7 @@ msgstr ""
 msgid "A trigger"
 msgstr ""
 
-#: isik/django/apps/sync/drf.py:217
+#: isik/django/apps/sync/drf.py:213
 msgid "A whole number of at least 1."
 msgstr ""
 
@@ -2119,12 +2124,12 @@ msgstr ""
 msgid "ISIK['DJANGO']['FEATURES']['SWEEP'] is next_boundary, which schedules each run with Celery - install it."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:84
+#: isik/django/apps/common/middleware/history.py:117
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(key)s, and ISIK['DJANGO']['HISTORY']['%(setting)s'] isn't set."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:78
+#: isik/django/apps/common/middleware/history.py:111
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(unknown)s - it takes %(known)s."
 msgstr ""

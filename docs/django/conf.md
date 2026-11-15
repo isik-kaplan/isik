@@ -32,7 +32,7 @@ ISIK = {
 | `DJANGO.NOTIFICATIONS` | the notifications apps | [notifications](apps/notifications/README.md) |
 | `DJANGO.SMS` | the SMS senders | [sms](sms.md) |
 | `DJANGO.SYNC` | the sync app | [sync](apps/sync/README.md) |
-| `DJANGO.HISTORY` | `CONTEXT_KEYS`, `CONTEXT_VERSION`, `CONTEXT_BUILD`, `REQUEST_ID_HEADER`, `REQUEST_ID_VALID`, `RETURN_REQUEST_ID`, `TASK_DISPATCH_ON_COMMIT` | [history middleware](apps/common/middleware/history.md), [celery](celery/README.md) |
+| `DJANGO.HISTORY` | `CONTEXT_KEYS`, `CONTEXT_VERSION`, `CONTEXT_BUILD`, `REQUEST_ID_HEADER`, `REQUEST_ID_VALID`, `REQUEST_ID_REFUSED`, `RETURN_REQUEST_ID`, `TASK_DISPATCH_ON_COMMIT` | [history middleware](apps/common/middleware/history.md), [celery](celery/README.md) |
 | `DJANGO.SESSIONS` | `HEADER_NAME`, `DEAD_SESSION_HEADER` | [session middleware](apps/common/middleware/session.md) |
 | `DJANGO.IDEMPOTENCY` | `CLAIM_MODEL`, `BODY_CODEC`, `LOCK_TIMEOUT`, `NORMALIZE`, `RETENTION` | [idempotency](apps/idempotency/README.md) |
 | `DJANGO.DRF` | `PAGINATION_MAX_PAGE_SIZE` | [pagination](drf/pagination.md) |
