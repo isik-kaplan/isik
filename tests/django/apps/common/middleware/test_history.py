@@ -224,6 +224,12 @@ class TestOptionalKeys:
         assert self.seen(rf, **{"sentry-trace": "nonsense"})["trace_id"] is None
         assert self.seen(rf)["trace_id"] is None
 
+    def test_no_sentry_trace_is_no_trace_whatever_an_id_may_be(self, rf, settings):
+        valid = {"CONTEXT_KEYS": ["trace_id"], "REQUEST_ID_VALID": lambda value: True}
+        settings.ISIK = isik_with(DJANGO={"HISTORY": valid})
+
+        assert self.seen(rf)["trace_id"] is None
+
     def test_ids_named_alone_are_the_only_ones_kept(self, rf, settings):
         settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["trace_id"]}})
 

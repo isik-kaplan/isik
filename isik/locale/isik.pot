@@ -720,6 +720,11 @@ msgstr ""
 msgid "%(model)s.%(field)s's verbose_name is Django's, %(value)r - declare it."
 msgstr ""
 
+#: isik/django/apps/common/db/context_columns.py:130
+#, python-format
+msgid "%(name)r isn't a column AddContextColumn adds."
+msgstr ""
+
 #: isik/django/drf/schema.py:50
 #, python-format
 msgid "%(name)r was already used to build a %(builder)s - pass reuse=True if this is intentional, or build it once and reuse the resulting class instead of calling this again under the same name."
@@ -763,6 +768,11 @@ msgstr ""
 #: isik/common/settings/messages.py:40
 #, python-format
 msgid "%(name)s is %(value)s, above the recommended safe limit of %(soft_max)s - this may take a long time"
+msgstr ""
+
+#: isik/django/apps/common/db/context_columns.py:72
+#, python-format
+msgid "%(name)s is a column of pghistory's context table already."
 msgstr ""
 
 #: isik/django/apps/features/operations.py:229
@@ -1469,6 +1479,16 @@ msgstr ""
 msgid "A comment can't be moved under another one."
 msgstr ""
 
+#: isik/django/apps/common/db/context_columns.py:75
+#, python-format
+msgid "A context column is %(types)s, not %(type)r."
+msgstr ""
+
+#: isik/django/apps/common/db/context_columns.py:68
+#, python-format
+msgid "A context column's name and key are lowercase identifiers - not %(name)r and %(key)r."
+msgstr ""
+
 #: isik/django/apps/features/declarations.py:51
 #, python-format
 msgid "A feature called %(name)s is declared already."
@@ -1970,12 +1990,12 @@ msgstr ""
 msgid "ISIK['DJANGO']['FEATURES']['SWEEP'] is next_boundary, which schedules each run with Celery - install it."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:52
+#: isik/django/apps/common/middleware/history.py:79
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(key)s, and ISIK['DJANGO']['HISTORY']['%(setting)s'] isn't set."
 msgstr ""
 
-#: isik/django/apps/common/middleware/history.py:46
+#: isik/django/apps/common/middleware/history.py:73
 #, python-format
 msgid "ISIK['DJANGO']['HISTORY']['CONTEXT_KEYS'] names %(unknown)s - it takes %(known)s."
 msgstr ""
@@ -3710,6 +3730,10 @@ msgstr ""
 #: isik/django/apps/notifications/audience/bases.py:153
 #: isik/django/apps/notifications/bases.py:195
 msgid "context"
+msgstr ""
+
+#: isik/django/apps/common/db/context_columns.py:127
+msgid "context_rows() takes one column and its value."
 msgstr ""
 
 #: isik/django/apps/common/_model_makers.py:28

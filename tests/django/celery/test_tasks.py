@@ -12,7 +12,7 @@ from django.test import RequestFactory
 from isik.django.apps.common.db.history import open_history_context
 from isik.django.apps.common.middleware import HistoryContextMiddleware
 from isik.django.celery import HistoryContextTask
-from isik.django.conf import isik_areas, isik_with
+from isik.django.conf import isik_areas, isik_with, override_isik
 from tests.testapp.models import EmailUser, Widget, WidgetEvent
 
 
@@ -91,7 +91,9 @@ def while_serving(dispatch, context=None):
         def get_context(self, request):
             return {**super().get_context(request), **(context or {})}
 
-    return Middleware(get_response=lambda request: dispatch())(RequestFactory().post("/widgets/"))
+    # The view returns what it dispatched, not a response - so nothing is answered with the request's id.
+    with override_isik(DJANGO={"HISTORY": {"RETURN_REQUEST_ID": False}}):
+        return Middleware(get_response=lambda request: dispatch())(RequestFactory().post("/widgets/"))
 
 
 def context_of(widget_pk):
