@@ -3,11 +3,11 @@
 import uuid
 
 import pytest
-from django.db import IntegrityError
-from django.db.models.query import QuerySet
+from django.db import IntegrityError, transaction
 
 from isik.django.apps.sync.drf import PrimaryKeyTaken
 from tests.django.apps.sync import support
+from tests.testapp.models import SyncTask
 from tests.testapp.sync_views import TaskSerializer
 
 
@@ -42,20 +42,13 @@ def test_an_id_taken_is_a_409():
     assert str(raised.value.detail) == "A row with this id exists already."
 
 
-def test_an_id_taken_while_the_create_ran_is_a_409(monkeypatch):
+def test_an_id_taken_fails_only_its_own_savepoint():
     made(id=TASK)
-    asked = []
-    exists = QuerySet.exists
 
-    def taken_after_asking(self):
-        asked.append(self)
-        return len(asked) > 1 and exists(self)
-
-    monkeypatch.setattr(QuerySet, "exists", taken_after_asking)
-
-    with pytest.raises(PrimaryKeyTaken):
-        made(id=TASK)
-    assert len(asked) == 2
+    with transaction.atomic():
+        with pytest.raises(PrimaryKeyTaken):
+            made(id=TASK)
+        assert SyncTask.objects.count() == 1
 
 
 def _taken(self, validated_data):

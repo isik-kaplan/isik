@@ -96,10 +96,8 @@ class ParentLogTrigger(_LogTrigger):
 
     def _entry(self, row):
         owner = self.synced.model
-        # The column the key references - its pk unless it names a to_field - read off the owner, as a through
-        # model's key may not have resolved its target yet.
-        (to_field,) = self.owner_key.to_fields
-        target = owner._meta.get_field(to_field) if to_field else owner._meta.pk
+        # The column the key references - resolved: the trigger is made once every model is loaded.
+        target = self.owner_key.target_field
         log = swapping.get_sync_log_model()
         columns = ", ".join(_column(log, name) for name in ("xid", "op", "model", "object_id", "scope"))
         pk, scope = _column(owner, owner._meta.pk.name), _column(owner, self.synced.scope)

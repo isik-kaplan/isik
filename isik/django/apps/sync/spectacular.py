@@ -15,10 +15,12 @@ import hashlib
 import json
 
 from isik.django.apps.sync.declarations import synced_models
-from isik.django.apps.sync.reading import view_for, viewset_of
+from isik.django.apps.sync.push import JSON, route
+from isik.django.apps.sync.reading import viewset_of
 
 
 PROTOCOL = 1
+COMPONENT = "#/components/schemas/"
 # {(OpenAPI type, format): the column type the protocol names}, a format of None for any other.
 COLUMN_TYPES = {
     ("string", "uuid"): "uuid",
@@ -33,7 +35,7 @@ COLUMN_TYPES = {
 
 def _resolved(schema, components):
     while "$ref" in schema:
-        schema = components[schema["$ref"].rsplit("/", 1)[-1]]
+        schema = components[schema["$ref"].removeprefix(COMPONENT)]
     return schema
 
 
@@ -75,39 +77,31 @@ def x_sync(synced, path, columns):
         "columns": columns,
         "indexed": indexed_of(synced, columns),
     }
-    text = json.dumps(described, sort_keys=True, separators=(",", ":"))
-    return {**described, "hash": hashlib.sha256(text.encode()).hexdigest()}
+    return {**described, "hash": hashlib.sha256(json.dumps(described).encode()).hexdigest()}
 
 
-def _collection(viewset, endpoints):
-    for path, _, method, callback in endpoints:
-        if getattr(callback, "cls", None) is viewset and callback.actions.get(method.lower()) in ("list", "create"):
-            return path
+def _retrieved_at(generator, viewset):
+    # The path of the viewset's retrieve, as the document names it - its lookup named as drf-spectacular does.
+    for path, _, method, callback in generator.endpoints:
+        if callback.cls is viewset and callback.actions.get(method.lower()) == "retrieve":
+            return generator.coerce_path(path, method, generator.create_view(callback, method))
     return None
 
 
-def _component(serializer_class, registry):
-    # The response's component: of those drf-spectacular made from the serializer, the shortest name - a request
-    # component's adds to it.
-    names = [
-        component.name
-        for component in registry._components.values()
-        if component.type == "schemas"
-        and (component.object is serializer_class or type(component.object) is serializer_class)
-    ]
-    return min(names, key=len) if names else None
-
-
 def add_sync_extensions(result, generator, request, public):
-    """A drf-spectacular postprocessing hook adding `x-sync` to each routed synced model's component schema."""
-    schemas = result.get("components", {}).get("schemas", {})
+    """
+    A drf-spectacular postprocessing hook adding `x-sync` to each routed synced model's component schema - the one
+    its `retrieve` answers with.
+    """
+    routes = [(path, callback) for path, _, _, callback in generator.endpoints]
     for synced in synced_models().values():
         viewset = viewset_of(synced)
-        path = _collection(viewset, generator.endpoints)
-        name = _component(view_for(viewset, None, "retrieve").get_serializer_class(), generator.registry)
-        if path is None or name not in schemas:
+        collection, detail = route(viewset, routes, "create"), _retrieved_at(generator, viewset)
+        if collection is None or detail is None:
             continue
-        properties = schemas[name].get("properties", {})
-        columns = {column: column_type(schema, schemas) for column, schema in properties.items()}
-        schemas[name]["x-sync"] = x_sync(synced, path, columns)
+        schemas = result["components"]["schemas"]
+        answer = result["paths"][detail]["get"]["responses"]["200"]["content"][JSON]["schema"]
+        component = _resolved(answer, schemas)
+        columns = {column: column_type(schema, schemas) for column, schema in component["properties"].items()}
+        component["x-sync"] = x_sync(synced, collection, columns)
     return result

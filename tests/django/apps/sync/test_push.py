@@ -22,8 +22,8 @@ from isik.django.apps.sync.push import (
     ViewPushBackend,
     entry_context,
     entry_key,
-    paths,
     result,
+    route,
     sub_request,
 )
 from isik.django.conf import override_isik
@@ -126,18 +126,19 @@ class TestAResult:
         }
 
 
-class TestPaths:
-    def test_a_viewset_routed_nowhere_names_the_model_s_own(self):
-        synced = SyncTask.synced
-
-        assert paths(TaskViewSet, [], synced, "pk") == ("/tasks/", "/tasks/{pk}/")
-
-    def test_a_viewset_routed_is_at_its_routes(self):
+class TestARoute:
+    def routes(self, urlconf="tests.testapp.sync_urls"):
         from rest_framework.schemas.generators import EndpointEnumerator
 
-        endpoints = EndpointEnumerator(urlconf="tests.testapp.sync_urls").get_api_endpoints()
+        return [(path, callback) for path, _, callback in EndpointEnumerator(urlconf=urlconf).get_api_endpoints()]
 
-        assert paths(TaskViewSet, endpoints, SyncTask.synced, "pk") == ("/api/tasks/", "/api/tasks/{pk}/")
+    def test_is_where_the_viewset_serves_the_action(self):
+        assert route(TaskViewSet, self.routes(), "create") == "/api/tasks/"
+        assert route(TaskViewSet, self.routes(), "partial_update") == "/api/tasks/{pk}/"
+        assert route(TaskViewSet, self.routes(), "destroy") == "/api/tasks/{pk}/"
+
+    def test_none_for_a_viewset_routed_nowhere(self):
+        assert route(TaskViewSet, self.routes("tests.testapp.sync_urls_without_tasks"), "create") is None
 
 
 @pytest.mark.django_db

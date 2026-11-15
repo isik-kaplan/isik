@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from isik.django.apps.sync.drf import ClientPrimaryKeyMixin
 from isik.django.drf.viewsets import BaseModelViewSet
+from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
 from tests.testapp.models import SyncBoard, SyncNote, SyncProject, SyncTask
 
 
@@ -39,6 +40,11 @@ class TaskViewSet(BaseModelViewSet):
     endpoint = "tasks"
     serializer_class = TaskSerializer
 
+    @none_during_schema_generation
+    def get_queryset(self):
+        # A person's own tasks - what the feed reads them through, too.
+        return super().get_queryset().filter(owner=self.request.user)
+
 
 class NoteViewSet(BaseModelViewSet):
     idempotency_claim_model = CLAIMS
@@ -50,7 +56,7 @@ class NoteViewSet(BaseModelViewSet):
 class BoardSerializer(ClientPrimaryKeyMixin, serializers.ModelSerializer):
     class Meta:
         model = SyncBoard
-        fields = ["id", "owner", "teams"]
+        fields = ["id", "owner", "teams", "color"]
 
 
 class BoardViewSet(BaseModelViewSet):

@@ -123,7 +123,8 @@ class AbstractSyncLogEntry(models.Model):
         abstract = True
 
     def __str__(self):
-        return f"{self.op} {self.model or self.scope} {self.object_id or self.member or ''}".rstrip()
+        parts = (self.op, self.model or self.scope, self.object_id or self.member)
+        return " ".join(str(part) for part in parts if part)
 
 
 def _hold_to_the_rules(sender, **kwargs):

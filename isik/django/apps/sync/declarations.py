@@ -172,7 +172,7 @@ def _watch_memberships(synced):
         pgtrigger.register(MembershipTrigger(kind=synced.kind, memberships=synced.memberships))(membership_model)
 
     waits = [make_model_tuple(synced.memberships.label)]
-    remote = None if synced.kind_given is not None else _remote_model(synced)
+    remote = _remote_model(synced)
     if remote is not None:
         waits.append(make_model_tuple(resolve_relation(synced.model, remote)))
     synced.model._meta.apps.lazy_model_operation(register, *waits)
@@ -211,11 +211,15 @@ def log_relation_parents():
                 continue
             table, owner_key = _relation_table(relation)
             trigger = ParentLogTrigger(synced=synced, relation=name, owner_key=owner_key)
-            meta = type("Meta", (), {"proxy": True, "app_label": synced.model._meta.app_label})
+
+            class Meta:
+                proxy = True
+                app_label = synced.model._meta.app_label
+
             proxy_name = f"{synced.model.__name__}{snake_to_pascal(name)}SyncLog"
-            attributes = {"__module__": synced.model.__module__, "Meta": meta}
+            proxy = type(proxy_name, (table,), {"__module__": synced.model.__module__, "Meta": Meta})
             # Registered here, not left to pgtrigger's reading of each model's Meta, which may have run already.
-            pgtrigger.register(trigger)(mark_generated(type(proxy_name, (table,), attributes), "lock"))
+            pgtrigger.register(trigger)(mark_generated(proxy, "lock"))
             PARENT_LOGS.append((synced.name, name))
 
 

@@ -1014,3 +1014,10 @@ class SyncBoard(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         db_comment="Whose board it is.",
     )
     teams = models.ManyToManyField(SyncTeam, blank=True, related_name="sync_boards", help_text="Its teams.")
+    color = models.CharField(
+        max_length=10,
+        choices=[("red", "Red"), ("blue", "Blue")],
+        default="red",
+        help_text="Its color.",
+        db_comment="Its color.",
+    )

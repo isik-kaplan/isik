@@ -15,7 +15,7 @@ from django.db.models import Q
 
 from isik.django.apps.sync.choices import ROW_OPERATIONS, SCOPE_OPERATIONS, Operation
 from isik.django.apps.sync.declarations import scopes_of, synced_models
-from isik.django.apps.sync.log import Position, horizon, last_position, warn_of_lag, watermark
+from isik.django.apps.sync.log import IN_ORDER, Position, horizon, last_position, warn_of_lag, watermark
 from isik.django.apps.sync.reading import Reader
 from isik.django.apps.sync.swapping import get_sync_log_model
 
@@ -29,7 +29,7 @@ class CursorExpired(Exception):
 
 def encode_cursor(state):
     """A cursor holding `state`, signed."""
-    return signing.dumps(state, salt=CURSOR_SALT, compress=True)
+    return signing.dumps(state, salt=CURSOR_SALT)
 
 
 def decode_cursor(cursor):
@@ -78,7 +78,8 @@ class Feed:
         self.below = watermark()
         warn_of_lag()
         if self.cursor is None:
-            state = {"p": [self.below, 0], "open": _snapshot(), "queue": []}
+            start = Position.before(self.below)
+            state = {"p": [start.xid, start.seq], "open": _snapshot(), "queue": []}
             self.changes.append(framing("snapshot_begin", state["open"]))
         else:
             state = decode_cursor(self.cursor)
@@ -121,19 +122,16 @@ class Feed:
             # Revoked while it was served: closed with no end - the scope_revoked the log holds ends it.
             self.state["open"] = None
             return False
-        kind, _, scope_id = (scope or "").partition(":")
-        names = [
-            name
-            for name, synced in self.synced.items()
-            if (snapshot["model"] is None or name == snapshot["model"]) and (scope is None or synced.kind == kind)
-        ]
         after_name, after_id = snapshot["after"] or (None, None)
-        for name in names:
+        for name, synced in self.synced.items():
+            prefix = f"{synced.kind}:"
+            if snapshot["model"] not in (None, name) or (scope is not None and not scope.startswith(prefix)):
+                continue
             if after_name is not None and name < after_name:
                 continue
-            found, more = self.reader(name).page(
-                after_id if name == after_name else None, self.budget, None if scope is None else [scope_id]
-            )
+            reader = self.reader(name)
+            scope_ids = reader.scope_ids if scope is None else [scope.removeprefix(prefix)]
+            found, more = reader.page(after_id if name == after_name else None, self.budget, scope_ids)
             self.changes.extend(found)
             self._spend(len(found))
             if found:
@@ -146,43 +144,39 @@ class Feed:
 
     def _visible(self):
         rows = Q(op__in=ROW_OPERATIONS) & (Q(scope__in=self.scopes) | Q(old_scope__in=self.scopes))
-        return rows | Q(op__in=SCOPE_OPERATIONS, member=str(self.user.pk))
+        # Only a scope's entries name a member.
+        return rows | Q(member=str(self.user.pk))
 
     def _scan(self):
         """
         Serves the log after the cursor, below the watermark, as far as the page goes: True when it stopped with
         more to serve, the scope a grant it reached opens a snapshot of, or None at the end.
         """
-        entries = get_sync_log_model()._default_manager.filter(self._visible(), xid__lt=self.below)
         position = Position(*self.state["p"])
+        entries = get_sync_log_model()._default_manager.filter(self._visible(), position.after(), xid__lt=self.below)
         # {("row", model, id): None} and {("scope", seq): change}, in the order they're served - a row at its
         # last change.
         served = OrderedDict()
         rows = 0
         stopped = None
-        while stopped is None:
-            unread = entries.filter(position.after()).order_by("xid", "seq")
-            read = list(unread if self.budget is None else unread[: self.budget + 1])
-            for entry in read:
-                if entry.op in SCOPE_OPERATIONS:
-                    served[("scope", entry.seq)] = {"op": entry.op, "scope": entry.scope}
-                    position = Position.of(entry)
-                    if entry.op == Operation.SCOPE_GRANTED:
-                        stopped = entry.scope
-                        break
-                    continue
-                key = ("row", entry.model, entry.object_id)
-                if key in served:
-                    served.move_to_end(key)
-                elif entry.model in self.synced:
-                    if rows == self.budget:
-                        stopped = True
-                        break
-                    served[key] = None
-                    rows += 1
+        for entry in entries.order_by(*IN_ORDER).iterator():
+            if entry.op in SCOPE_OPERATIONS:
+                served[("scope", entry.seq)] = {"op": entry.op, "scope": entry.scope}
                 position = Position.of(entry)
-            if stopped is None and (self.budget is None or len(read) <= self.budget):
-                break
+                if entry.op == Operation.SCOPE_GRANTED:
+                    stopped = entry.scope
+                    break
+                continue
+            key = ("row", entry.model, entry.object_id)
+            if key in served:
+                served.move_to_end(key)
+            elif entry.model in self.synced:
+                if rows == self.budget:
+                    stopped = True
+                    break
+                served[key] = None
+                rows += 1
+            position = Position.of(entry)
         if stopped is None:
             # The end: on to the last entry below the watermark, those of scopes the person isn't in too.
             position = max(position, last_position(self.below) or position)

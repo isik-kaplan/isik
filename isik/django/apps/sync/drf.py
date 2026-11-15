@@ -8,28 +8,28 @@ push runs for every entry.
 """
 
 import hashlib
-import json
 
 from django.db import IntegrityError, transaction
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
-from rest_framework.utils.encoders import JSONEncoder
-from rest_framework.validators import UniqueValidator
 
 from isik._internal.translation import gettext as _
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.atomic import not_atomic
 from isik.django.apps.sync import conf
 from isik.django.apps.sync.feed import CursorExpired, Feed
+from isik.django.apps.sync.push import ETAG
 from isik.django.drf.viewsets.base import BaseViewSet
 from isik.django.drf.viewsets.preconditions import matches
 
 
 PROTOCOL_HEADER = "Isik-Sync-Protocol"
+IF_NONE_MATCH = "If-None-Match"
 # The protocol versions this server speaks.
 PROTOCOLS = (1,)
 
@@ -54,6 +54,10 @@ class ClientPrimaryKeyMixin:
     is read-only, as before.
     """
 
+    # What the id's field keeps of the model field's own - and nothing that makes it read-only, nor the unique
+    # validator: an id taken is a 409 the create answers, not a 400.
+    client_primary_key_kwargs = ("label", "help_text")
+
     def get_fields(self):
         fields = super().get_fields()
         pk = self.Meta.model._meta.pk
@@ -64,18 +68,14 @@ class ClientPrimaryKeyMixin:
     def build_client_primary_key(self, pk):
         """The field taking the id on a create - the model field's own, writable and optional."""
         field_class, kwargs = self.build_standard_field(pk.name, pk)
-        # An id taken is a 409 the create answers, not a 400 a validator would.
-        validators = [each for each in kwargs.get("validators", ()) if not isinstance(each, UniqueValidator)]
-        kwargs.update(read_only=False, required=False, validators=validators)
-        return field_class(**kwargs)
+        kept = {name: value for name, value in kwargs.items() if name in self.client_primary_key_kwargs}
+        return field_class(required=False, **kept)
 
     def create(self, validated_data):
         model = self.Meta.model
         pk = validated_data.get(model._meta.pk.name)
-        if pk is not None and model._default_manager.filter(pk=pk).exists():
-            raise PrimaryKeyTaken()
         try:
-            # A savepoint of its own: a concurrent create taking the id first fails the insert, not the request.
+            # A savepoint of its own: an id taken fails the insert, not the request.
             with transaction.atomic():
                 return super().create(validated_data)
         except IntegrityError:
@@ -102,11 +102,8 @@ class SyncPushThrottle(SimpleRateThrottle):
         self.scope = scope
         super().__init__()
 
-    def get_cache_key(self, request, view):
-        return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
-
     def allow_request(self, request, view):
-        self.key = self.get_cache_key(request, view)
+        self.key = self.cache_format % {"scope": self.scope, "ident": request.user.pk}
         self.history = self.cache.get(self.key, [])
         self.now = self.timer()
         while self.history and self.history[-1] <= self.now - self.duration:
@@ -114,8 +111,8 @@ class SyncPushThrottle(SimpleRateThrottle):
         count = view.entry_count(request)
         if len(self.history) + count > self.num_requests:
             return self.throttle_failure()
-        self.history[:0] = [self.now] * count
-        self.cache.set(self.key, self.history, self.duration)
+        for _entry in range(count):
+            self.throttle_success()
         return True
 
 
@@ -134,8 +131,7 @@ class PushSerializer(serializers.Serializer):
 
 def page_etag(body):
     """The ETag of a page of the feed: its body's digest - a page served again the same is the same."""
-    text = json.dumps(body, cls=JSONEncoder, sort_keys=True, separators=(",", ":"))
-    return f'"{hashlib.sha256(text.encode()).hexdigest()[:32]}"'
+    return f'"{hashlib.sha256(JSONRenderer().render(body)).hexdigest()}"'
 
 
 @not_atomic(
@@ -162,13 +158,14 @@ class SyncViewSet(BaseViewSet):
         # 401, never 403, for a person not authenticated: the protocol pauses a client on a 401.
         return super().get_authenticate_header(request) or 'Session realm="api"'
 
-    def initial(self, request, *args, **kwargs):
+    def check_permissions(self, request):
+        # After authentication and before throttling, which reads a push's body.
+        super().check_permissions(request)
+        if request.headers.get(PROTOCOL_HEADER) not in [str(protocol) for protocol in PROTOCOLS]:
+            raise ProtocolUnsupported()
         if self.action == "push":
             # Read before anything parses it: its size is held to MAX_BYTES.
             self.pushed_bytes = len(request._request.body)
-        super().initial(request, *args, **kwargs)
-        if request.headers.get(PROTOCOL_HEADER) not in [str(protocol) for protocol in PROTOCOLS]:
-            raise ProtocolUnsupported()
 
     def handle_exception(self, exc):
         if isinstance(exc, ProtocolUnsupported):
@@ -179,10 +176,9 @@ class SyncViewSet(BaseViewSet):
             return Response({"code": "sync_cursor_expired"}, status=status.HTTP_410_GONE)
         return super().handle_exception(exc)
 
-    def finalize_response(self, request, response, *args, **kwargs):
-        response = super().finalize_response(request, response, *args, **kwargs)
-        response[PROTOCOL_HEADER] = str(PROTOCOLS[-1])
-        return response
+    @property
+    def default_response_headers(self):
+        return {**super().default_response_headers, PROTOCOL_HEADER: str(PROTOCOLS[-1])}
 
     def get_throttles(self):
         if self.action != "push":
@@ -222,10 +218,10 @@ class SyncViewSet(BaseViewSet):
         cursor = request.query_params.get("cursor")
         body = Feed(request, cursor, limit, request.query_params.getlist("snapshot")).page()
         etag = page_etag(body)
-        header = request.headers.get("If-None-Match")
+        header = request.headers.get(IF_NONE_MATCH)
         if header is not None and matches(header, etag):
-            return Response(status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
-        return Response(body, headers={"ETag": etag})
+            return Response(status=status.HTTP_304_NOT_MODIFIED, headers={ETAG: etag})
+        return Response(body, headers={ETAG: etag})
 
     @action(detail=False, methods=["post"])
     def push(self, request):

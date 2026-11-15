@@ -52,7 +52,7 @@ class TestTheSettings:
             f"{AREA}['PUSH']['BACKEND'] can't be loaded: No module named 'isik.nothing'"
         ]
 
-    @pytest.mark.parametrize("backend", [object, "isik.django.apps.sync.push.paths"])
+    @pytest.mark.parametrize("backend", [object, "isik.django.apps.sync.push.route"])
     def test_a_backend_is_a_push_backend(self, backend):
         assert problems(PUSH={"BACKEND": backend}) == [
             f"{AREA}['PUSH']['BACKEND'] is a PushBackend subclass, or its dotted path."

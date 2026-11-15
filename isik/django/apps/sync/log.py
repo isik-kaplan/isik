@@ -43,12 +43,21 @@ SELECT LEAST(
 ) FROM pg_current_snapshot() AS snapshot
 """
 
+# Read stats are cleared first: a transaction keeps the first it read.
+CLEAR_STATS = "SELECT pg_stat_clear_snapshot()"
+
 # The oldest transaction of this database holding an id, other than the one asking: what holds the watermark.
 OLDEST_OPEN = """
 SELECT pid, xact_start FROM pg_stat_activity
 WHERE datname = current_database() AND backend_xid IS NOT NULL AND pid <> pg_backend_pid()
 ORDER BY xact_start LIMIT 1
 """
+
+
+# Log positions in order - and reversed, with .reverse().
+IN_ORDER = ("xid", "seq")
+# The sequence number before every entry's.
+BEFORE_EVERY_ENTRY = 0
 
 
 @dataclass(frozen=True, order=True)
@@ -67,28 +76,33 @@ class Position:
         """An entry's position."""
         return cls(entry.xid, entry.seq)
 
+    @classmethod
+    def before(cls, xid):
+        """The position before every entry of transaction `xid`."""
+        return cls(xid, BEFORE_EVERY_ENTRY)
+
 
 def watermark():
     """
     The transaction id below which every entry is final - a statement of its own, before any read of the log, so
-    a transaction that ended before it is visible to the reads after it. Read stats are cleared first, as a
-    transaction keeps the first it read.
+    a transaction that ended before it is visible to the reads after it.
     """
     with connection.cursor() as cursor:
-        cursor.execute("SELECT pg_stat_clear_snapshot()")
+        cursor.execute(CLEAR_STATS)
         cursor.execute(WATERMARK)
         return cursor.fetchone()[0]
 
 
 def horizon():
     """The position pruning last cut the log at - None while nothing is pruned."""
-    mark = get_sync_log_model()._default_manager.filter(op=Operation.PRUNED).order_by("-xid", "-seq").first()
+    # One at most: pruning replaces the last.
+    mark = get_sync_log_model()._default_manager.filter(op=Operation.PRUNED).first()
     return None if mark is None else Position.of(mark)
 
 
 def last_position(below):
     """The position of the last entry of a transaction below `below` - None for an empty log."""
-    last = get_sync_log_model()._default_manager.filter(xid__lt=below).order_by("-xid", "-seq").first()
+    last = get_sync_log_model()._default_manager.filter(xid__lt=below).order_by(*IN_ORDER).last()
     return None if last is None else Position.of(last)
 
 
@@ -110,10 +124,8 @@ def prune_sync_log(batch=None):
     below = watermark()
     with transaction.atomic():
         old = entries.filter(xid__lt=below, created_at__lt=timezone.now() - retention).exclude(op=Operation.PRUNED)
-        if batch is None:
-            last = old.order_by("-xid", "-seq").values_list("xid", "seq").first()
-        else:
-            last = ([None] + list(old.order_by("xid", "seq").values_list("xid", "seq")[:batch]))[-1]
+        cut = old.order_by(*IN_ORDER).values_list(*IN_ORDER)
+        last = cut.last() if batch is None else [None, *cut[:batch]][-1]
         if last is None:
             return 0
         mark = Position(*last)
@@ -141,7 +153,7 @@ def sync_feed_lag():
     there is none. For a health check: an idle-in-transaction connection stalls every person's feed.
     """
     with connection.cursor() as cursor:
-        cursor.execute("SELECT pg_stat_clear_snapshot()")
+        cursor.execute(CLEAR_STATS)
         cursor.execute(OLDEST_OPEN)
         row = cursor.fetchone()
     if row is None:

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from drf_spectacular.generators import SchemaGenerator
 
-from isik.django.apps.sync import declarations, spectacular
+from isik.django.apps.sync import declarations
 from isik.django.apps.sync.spectacular import add_sync_extensions, column_type, indexed_of, x_sync
 from tests.testapp.models import SyncBoard, SyncTask
 
@@ -40,7 +40,7 @@ def test_the_hash_moves_with_what_it_covers():
 def test_a_relation_s_column_is_json():
     board = next(schema for schema in generated().values() if schema.get("x-sync", {}).get("model") == "boards")
 
-    assert board["x-sync"]["columns"] == {"id": "uuid", "owner": "uuid", "teams": "json"}
+    assert board["x-sync"]["columns"] == {"id": "uuid", "owner": "uuid", "teams": "json", "color": "string"}
     assert SyncBoard.synced.name == "boards"
 
 
@@ -50,15 +50,14 @@ def test_a_model_routed_nowhere_gets_none():
     assert [schema["x-sync"]["model"] for schema in schemas.values() if "x-sync" in schema] == ["projects"]
 
 
-def test_a_model_whose_component_isn_t_there_gets_none(monkeypatch):
-    monkeypatch.setattr(spectacular, "_component", lambda serializer, registry: None)
+def test_a_model_routed_with_no_retrieve_gets_none():
+    schemas = generated("tests.testapp.sync_urls_creating_only")
 
-    assert [schema for schema in generated().values() if "x-sync" in schema] == []
+    assert [schema for schema in schemas.values() if "x-sync" in schema] == []
 
 
-def test_the_schema_s_own_extensions_are_kept_for_a_document_with_no_components():
-    registry = type("Registry", (), {"_components": {}})()
-    generator = type("Generator", (), {"endpoints": [], "registry": registry})()
+def test_a_document_with_no_synced_model_routed_is_left_as_it_is():
+    generator = type("Generator", (), {"endpoints": []})()
 
     assert add_sync_extensions({"paths": {}}, generator, None, True) == {"paths": {}}
 

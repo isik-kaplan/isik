@@ -18,11 +18,9 @@ def viewset_of(synced):
     return import_string(synced.viewset) if isinstance(synced.viewset, str) else synced.viewset
 
 
-def view_for(viewset, request, action, **kwargs):
+def view_for(viewset, request, action):
     """An instance of `viewset` serving `request`'s `action`, as `as_view()` would set it up."""
-    view = viewset(request=request, args=(), kwargs=kwargs, format_kwarg=None, action=action)
-    view.headers = {}
-    return view
+    return viewset(request=request, format_kwarg=None, action=action)
 
 
 def upsert(synced, view, instance):
@@ -61,37 +59,31 @@ class Reader:
             return False
         return True
 
-    def queryset(self, scope_ids=None):
-        """The rows the person may see - of `scope_ids` only, when given."""
+    def queryset(self, scope_ids):
+        """The rows of `scope_ids` the person may see, each with its ETag."""
         attname = self.synced.scope_field.attname
-        ids = self.scope_ids if scope_ids is None else scope_ids
-        return with_concurrency_etags(self.view.get_queryset().filter(**{f"{attname}__in": ids}))
+        return with_concurrency_etags(self.view.get_queryset().filter(**{f"{attname}__in": scope_ids}))
 
     def changes(self, ids):
         """{id: upsert} for each of `ids` the person may see now."""
         if not self._allowed():
             return {}
-        rows = self.queryset().filter(pk__in=ids)
+        rows = self.queryset(self.scope_ids).filter(pk__in=ids)
         return {str(row.pk): upsert(self.synced, self.view, row) for row in rows if self._shown(row)}
 
-    def page(self, after, count, scope_ids=None):
+    def page(self, after, count, scope_ids):
         """
-        The upserts of up to `count` rows the person may see - every one when it's None - by primary key, after
-        the key `after` (None: from the first), and whether another follows them.
+        The upserts of up to `count` rows of `scope_ids` the person may see - every one when it's None - by primary
+        key, after the key `after` (None: from the first), and whether another follows them.
         """
         if not self._allowed():
             return [], False
         rows = self.queryset(scope_ids).order_by("pk")
         found = []
-        while True:
-            unread = rows if after is None else rows.filter(pk__gt=after)
-            read = list(unread if count is None else unread[: count + 1])
-            for row in read:
-                after = row.pk
-                if not self._shown(row):
-                    continue
-                if len(found) == count:
-                    return found, True
-                found.append(upsert(self.synced, self.view, row))
-            if count is None or len(read) <= count:
-                return found, False
+        for row in (rows if after is None else rows.filter(pk__gt=after)).iterator():
+            if not self._shown(row):
+                continue
+            if len(found) == count:
+                return found, True
+            found.append(upsert(self.synced, self.view, row))
+        return found, False

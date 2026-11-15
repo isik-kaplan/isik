@@ -37,6 +37,8 @@ ACTIONS = {
 # An entry's key that isn't a UUID is made one in this namespace - the same key, the same UUID - since an
 # Idempotency-Key is a UUID to REST.
 KEY_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "isik.django.apps.sync.push")
+ETAG = "ETag"
+JSON = "application/json"
 # What a request carries that an entry's request takes from the entry instead.
 _ENTRY_HEADERS = ("CONTENT_TYPE", "CONTENT_LENGTH", "HTTP_IDEMPOTENCY_KEY", "HTTP_IF_MATCH", "HTTP_IF_NONE_MATCH")
 # A request's own parts, which an entry's request has its own of - every other attribute it carries,
@@ -142,16 +144,18 @@ class ViewPushBackend(PushBackend):
     """
 
     def run(self, request, entries):
+        # The urlconf the push was routed by - a host's own, under django-hosts - which routes its entries too.
         endpoints = EndpointEnumerator(urlconf=getattr(request._request, "urlconf", None)).get_api_endpoints()
-        return [self.run_entry(request, index, entry, endpoints) for index, entry in enumerate(entries)]
+        routes = [(path, callback) for path, _, callback in endpoints]
+        return [self.run_entry(request, index, entry, routes) for index, entry in enumerate(entries)]
 
-    def run_entry(self, request, index, entry, endpoints):
+    def run_entry(self, request, index, entry, routes):
         synced = synced_models().get(entry["model"])
         if synced is None:
             return {"key": entry["key"], "status": status.HTTP_404_NOT_FOUND, "errors": {"code": "sync_model_unknown"}}
         try:
             with transaction.atomic(), entry_context(index):
-                response = self.dispatch(request, synced, entry, endpoints)
+                response = self.dispatch(request, synced, entry, routes)
                 if not status.is_success(response.status_code):
                     transaction.set_rollback(True)
         except Exception:
@@ -159,51 +163,45 @@ class ViewPushBackend(PushBackend):
             return {"key": entry["key"], "status": status.HTTP_500_INTERNAL_SERVER_ERROR, "errors": {"code": "error"}}
         return result(entry, response)
 
-    def dispatch(self, request, synced, entry, endpoints):
+    def dispatch(self, request, synced, entry, routes):
         from isik.django.apps.sync.drf import PerEntryThrottle
 
         viewset = viewset_of(synced)
         handler, action = ACTIONS[entry["method"]]
         throttles = [each for each in viewset.throttle_classes if issubclass(each, PerEntryThrottle)]
         view = viewset.as_view({handler: action}, throttle_classes=throttles)
-        lookup = viewset.lookup_url_kwarg or viewset.lookup_field
-        collection, detail = paths(viewset, endpoints, synced, lookup)
-        if entry["method"] == "POST":
+        if action == "create":
             body = {synced.model._meta.pk.name: entry["id"], **entry.get("body", {})}
-            return view(sub_request(request, entry, collection, body))
-        path = detail.replace("{" + lookup + "}", entry["id"])
+            path = route(viewset, routes, action) or f"/{synced.name}/"
+            return view(sub_request(request, entry, path, body))
+        lookup = viewset.lookup_url_kwarg or viewset.lookup_field
+        path = (route(viewset, routes, action) or f"/{synced.name}/{{{lookup}}}/").replace(f"{{{lookup}}}", entry["id"])
         return view(sub_request(request, entry, path, entry.get("body")), **{lookup: entry["id"]})
 
 
-def paths(viewset, endpoints, synced, lookup):
-    """The REST paths `viewset` is routed at: its collection's, and its rows' with `{lookup}` in it."""
-    collection = detail = None
-    for path, _, callback in endpoints:
-        if getattr(callback, "cls", None) is not viewset:
-            continue
-        actions = set(getattr(callback, "actions", {}).values())
-        if "create" in actions:
-            collection = path
-        if actions & {"update", "partial_update", "destroy"}:
-            detail = path
-    # A viewset routed nowhere is still the one serving the model: its entries' requests name a path of the
-    # model's own, which only an idempotency key's fingerprint reads.
-    collection = collection or f"/{synced.name}/"
-    return collection, detail or f"{collection}{{{lookup}}}/"
+def route(viewset, routes, action):
+    """
+    The path `viewset` serves `action` at, of `routes` - (path, callback) pairs, a URI template naming its lookup as
+    `{pk}` - or None. A viewset routed nowhere is still the one serving its model: an entry's request then names a
+    path of the model's own, which only an idempotency key's fingerprint reads.
+    """
+    return next(
+        (path for path, callback in routes if callback.cls is viewset and action in callback.actions.values()), None
+    )
 
 
 def sub_request(request, entry, path, body):
     """The request an entry stands for - see `ViewPushBackend`."""
     outer = request._request
-    content = b"" if body is None else JSONRenderer().render(body)
+    content = JSONRenderer().render(body)
     environ = {key: value for key, value in outer.META.items() if key not in _ENTRY_HEADERS}
+    # The push's own SCRIPT_NAME kept, so the entry's path is the one its REST request would have.
     environ.update(
         {
             "REQUEST_METHOD": entry["method"],
             "PATH_INFO": path,
-            "SCRIPT_NAME": "",
             "QUERY_STRING": "",
-            "CONTENT_TYPE": "application/json",
+            "CONTENT_TYPE": JSON,
             "CONTENT_LENGTH": str(len(content)),
             "wsgi.input": io.BytesIO(content),
             "HTTP_IDEMPOTENCY_KEY": entry_key(entry["key"]),
@@ -224,14 +222,14 @@ def result(entry, response):
     answered = {"key": entry["key"], "status": response.status_code}
     data = response.data
     if status.is_success(response.status_code):
-        etag = response.get("ETag") or _etag_of(data)
+        etag = response.get(ETAG) or _etag_of(data)
         if etag is not None:
             answered["etag"] = etag
         if data is not None:
             answered["data"] = data
     elif response.status_code == status.HTTP_412_PRECONDITION_FAILED:
-        if response.get("ETag"):
-            answered["etag"] = response["ETag"]
+        if response.get(ETAG):
+            answered["etag"] = response[ETAG]
         if data.get("current") is not None:
             answered["current"] = data["current"]
     else:
@@ -248,4 +246,4 @@ def _etag_of(data):
     return current_concurrency_etag(type(instance), instance.pk)
 
 
-__all__ = ["PushBackend", "ViewPushBackend", "entry_context", "entry_key"]
+__all__ = ["PushBackend", "ViewPushBackend", "entry_context", "entry_key", "route"]

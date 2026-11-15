@@ -83,6 +83,7 @@ class TestSyncs:
         assert (declared.kind_given, declared.memberships) == (None, None)
         assert (declared.viewset, declared.indexed) == ("a.ViewSet", (("owner",),))
         assert [type(trigger) for trigger in model._meta.triggers] == [SyncLogTrigger]
+        assert model._meta.triggers[0].synced is declared
 
     @isolate_apps("tests.testapp")
     def test_indexed_unset_is_none(self, own_registry):
@@ -115,6 +116,29 @@ class TestSyncs:
             teams,
             f"sync_{group._meta.model_name}_membership",
         )
+
+    @isolate_apps("tests.testapp")
+    def test_memberships_of_two_kinds_get_a_trigger_each(self, own_registry):
+        member = throwaway(user=models.UUIDField(), group=models.UUIDField())
+        teams = Memberships(member, user="user", scope="group")
+        for kind in ("crew", "band"):
+            syncs(scope="group", kind=kind, memberships=teams)(throwaway(group=models.UUIDField()))
+
+        assert sorted(each.kind for each in member._meta.triggers) == ["band", "crew"]
+
+    @isolate_apps("tests.testapp")
+    def test_memberships_wait_for_a_scope_key_s_model_named_by_its_name_alone(self, own_registry):
+        member = throwaway(user=models.UUIDField(), group=models.UUIDField())
+        target = f"Group{uuid.uuid4().hex[:8]}"
+        model = syncs(scope="group", memberships=Memberships(member, user="user", scope="group"))(
+            throwaway(group=models.ForeignKey(target, on_delete=models.CASCADE, related_name="+"))
+        )
+        assert getattr(member._meta, "triggers", []) == []
+
+        type(target, (models.Model,), {"__module__": __name__, "Meta": type("Meta", (), {"app_label": "testapp"})})
+
+        assert [each.kind for each in member._meta.triggers] == [target.lower()]
+        assert model.synced.kind == target.lower()
 
     @isolate_apps("tests.testapp")
     def test_memberships_of_a_kind_given_wait_for_their_model_alone(self, own_registry):
@@ -163,6 +187,35 @@ class TestScopes:
 
 
 class TestRelationParents:
+    @isolate_apps("tests.testapp")
+    def test_a_covered_relation_gets_a_proxy_logging_its_synced_row(self, own_registry, monkeypatch):
+        from isik.django.apps.common.generated import generated_models
+        from isik.django.apps.sync.triggers import ParentLogTrigger
+
+        monkeypatch.setattr(declarations, "PARENT_LOGS", [])
+        label = throwaway()
+        model = syncs("covering", scope="owner")(
+            throwaway(
+                owner=models.UUIDField(),
+                labels=models.ManyToManyField(label, related_name="+"),
+                concurrency_relations=("labels",),
+            )
+        )
+        monkeypatch.setattr(declarations, "SYNCED", {"covering": model.synced})
+
+        log_relation_parents()
+
+        proxy = next(each for each in generated_models("lock") if each.__name__ == f"{model.__name__}LabelsSyncLog")
+        through = model._meta.get_field("labels").remote_field.through
+        [trigger] = proxy._meta.triggers
+        assert (proxy._meta.proxy, proxy._meta.app_label, proxy.__module__) == (True, "testapp", __name__)
+        assert proxy._meta.concrete_model is through
+        assert isinstance(trigger, ParentLogTrigger)
+        assert (trigger.synced, trigger.name) == (model.synced, "sync_labels_parent")
+        assert trigger.owner_key is through._meta.get_field(model._meta.model_name)
+        assert proxy.isik_generated == "lock"
+        assert declarations.PARENT_LOGS == [("covering", "labels")]
+
     def test_each_covered_relation_logs_its_synced_row_once(self):
         log_relation_parents()
 
@@ -215,3 +268,17 @@ def test_memberships_with_no_condition_take_every_row():
 
     assert '"active"' not in func
     assert 'NEW."active"' in conditioned
+
+
+def test_the_log_model_comes_from_isik_s_setting_else_isik_s_own(settings):
+    from isik.django.apps.sync.swapping import set_defaults
+
+    del settings.ISIK_SYNC_LOG_MODEL
+    settings.ISIK = {"DJANGO": {"SYNC": {"LOG_MODEL": "owned.Log"}}}
+    set_defaults()
+    assert settings.ISIK_SYNC_LOG_MODEL == "owned.Log"
+
+    del settings.ISIK_SYNC_LOG_MODEL
+    settings.ISIK = {}
+    set_defaults()
+    assert settings.ISIK_SYNC_LOG_MODEL == "isik_sync.SyncLogEntry"

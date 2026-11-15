@@ -249,10 +249,10 @@ def prune_claims(model=None, batch=None):
     if retention is None:
         return 0
     claims = get_claim_model(model)._default_manager
-    old = claims.filter(claimed_at__lt=timezone.now() - retention).order_by("claimed_at").values_list("pk", flat=True)
+    old = claims.filter(claimed_at__lt=timezone.now() - retention).order_by("claimed_at").values("pk")
     if batch is not None:
         old = old[:batch]
-    deleted, _ = claims.filter(pk__in=list(old)).delete()
+    deleted, _ = claims.filter(pk__in=old).delete()
     return deleted
 
 
