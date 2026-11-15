@@ -88,6 +88,7 @@ class HistoryContextMiddleware(HistoryMiddleware):
         for key, setting in FROM_SETTINGS.items():
             if key in self.context_keys:
                 context[key] = django_setting("HISTORY", setting)
+        self.identify(request)
         ids = {
             "request_id": request.request_id,
             "correlation_id": request.correlation_id,
@@ -96,13 +97,22 @@ class HistoryContextMiddleware(HistoryMiddleware):
         context.update({key: value for key, value in ids.items() if key in self.context_keys})
         return context
 
+    @staticmethod
+    def identify(request):
+        """
+        Gives `request` its `request_id` and `correlation_id`, unless it has them - so `get_context()` answers for a
+        request that hasn't been through `__call__`, such as one a test builds.
+        """
+        if not hasattr(request, "request_id"):
+            header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
+            request.request_id = str(uuid7())
+            request.correlation_id = well_formed(request.headers.get(header)) or request.request_id
+
     def __call__(self, request):
-        header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
-        request.request_id = str(uuid7())
-        request.correlation_id = well_formed(request.headers.get(header)) or request.request_id
+        self.identify(request)
         response = self._served(request)
         if django_setting("HISTORY", "RETURN_REQUEST_ID", True):
-            response[header] = request.correlation_id
+            response[django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)] = request.correlation_id
         return response
 
     def _served(self, request):

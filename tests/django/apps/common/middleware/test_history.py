@@ -265,6 +265,26 @@ def starts_req(value):
 
 
 class TestEveryRequestsIds:
+    def test_a_context_built_outside_the_request_cycle_has_them_too(self, rf, settings):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"CONTEXT_KEYS": ["request_id", "correlation_id"]}})
+        sent = str(uuid.uuid4())
+        request = rf.post("/", headers={"X-Request-ID": sent})
+        request.user = AnonymousUser()
+
+        context = HistoryContextMiddleware(get_response=None).get_context(request)
+
+        assert context["correlation_id"] == sent
+        assert context["request_id"] == request.request_id
+        assert uuid.UUID(request.request_id).version == 7
+
+    def test_ids_a_request_has_are_kept(self, rf):
+        request = rf.post("/")
+        request.request_id, request.correlation_id = "mine", "theirs"
+
+        HistoryContextMiddleware.identify(request)
+
+        assert (request.request_id, request.correlation_id) == ("mine", "theirs")
+
     def test_every_request_carries_them_whatever_its_method(self, rf, settings):
         settings.PGHISTORY_MIDDLEWARE_METHODS = ("POST",)
         sent = str(uuid.uuid4())

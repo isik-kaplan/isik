@@ -74,6 +74,9 @@ answered with - so no newline or oversized value reaches a log or the history. A
 caller's to choose: it groups requests, and a request is authorized and deduplicated by something else - its
 credentials, and its [`Idempotency-Key`](../../idempotency/README.md).
 
+`HistoryContextMiddleware.identify(request)` gives a request both ids unless it has them; `get_context()` calls
+it, so a subclass's `get_context()` answers for a request a test builds and hands it directly.
+
 ### Answering with the id
 
 The response carries the correlation id under `REQUEST_ID_HEADER`, so a browser can log the same id the
