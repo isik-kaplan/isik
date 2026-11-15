@@ -13,6 +13,7 @@ the column lists to index it by, and a hash over all of it that changes when any
 
 import hashlib
 import json
+import re
 
 from isik.django.apps.sync.declarations import synced_models
 from isik.django.apps.sync.push import JSON, route
@@ -80,11 +81,15 @@ def x_sync(synced, path, columns):
     return {**described, "hash": hashlib.sha256(json.dumps(described).encode()).hexdigest()}
 
 
-def _retrieved_at(generator, viewset):
-    # The path of the viewset's retrieve, as the document names it - its lookup named as drf-spectacular does.
+def _parameterless(path):
+    return re.sub(r"\{[^}]*\}", "{}", path)
+
+
+def _retrieved_at(generator, viewset, paths):
+    # The document's path of the viewset's retrieve - its lookup named as drf-spectacular names it.
     for path, _, method, callback in generator.endpoints:
         if callback.cls is viewset and callback.actions.get(method.lower()) == "retrieve":
-            return generator.coerce_path(path, method, generator.create_view(callback, method))
+            return next(each for each in paths if _parameterless(each) == _parameterless(path))
     return None
 
 
@@ -96,7 +101,7 @@ def add_sync_extensions(result, generator, request, public):
     routes = [(path, callback) for path, _, _, callback in generator.endpoints]
     for synced in synced_models().values():
         viewset = viewset_of(synced)
-        collection, detail = route(viewset, routes, "create"), _retrieved_at(generator, viewset)
+        collection, detail = route(viewset, routes, "create"), _retrieved_at(generator, viewset, result["paths"])
         if collection is None or detail is None:
             continue
         schemas = result["components"]["schemas"]

@@ -64,6 +64,10 @@ class Reader:
         attname = self.synced.scope_field.attname
         return with_concurrency_etags(self.view.get_queryset().filter(**{f"{attname}__in": scope_ids}))
 
+    def count(self, scope_ids):
+        """How many rows of `scope_ids` the person's view holds - none when it refuses them."""
+        return self.queryset(scope_ids).count() if self._allowed() else 0
+
     def changes(self, ids):
         """{id: upsert} for each of `ids` the person may see now."""
         if not self._allowed():

@@ -371,3 +371,80 @@ class TestAPage:
         support.create("tasks", task(1, owner=BOB))
 
         assert ops(pulled(client)) == [("snapshot_begin", None, None), ("snapshot_end", None, None)]
+
+
+class TestProgress:
+    def test_remaining_is_never_below_what_comes_and_none_at_the_end(self, client):
+        for number in range(1, 4):
+            support.create("tasks", task(number))
+        cursor = caught_up(client)
+        for title in "abc":
+            support.update("tasks", task(1)["id"], {"title": title})
+            support.update("tasks", task(2)["id"], {"title": title})
+        support.create("tasks", task(4, owner=BOB))
+
+        page = {"cursor": cursor, "has_more": True}
+        pages = []
+        while page["has_more"]:
+            page = pulled(client, limit=1, cursor=page["cursor"])
+            pages.append((len(page["changes"]), page["remaining"]))
+
+        # Three entries for each of two rows, interleaved, and one of a scope the person isn't in - fewer row
+        # changes come after each page than it counts, since a page collapses a row's entries.
+        assert pages[0] == (1, 5)
+        for at, (_, remaining) in enumerate(pages):
+            assert remaining >= sum(count for count, _ in pages[at + 1 :])
+        assert pages[-1][1] == 0
+
+    def test_remaining_counts_each_entry_a_page_collapses(self, client):
+        support.create("tasks", task(1))
+        support.create("tasks", task(2))
+        cursor = caught_up(client)
+        support.update("tasks", task(1)["id"], {"title": "a"})
+        for title in "abc":
+            support.update("tasks", task(2)["id"], {"title": title})
+
+        first = pulled(client, cursor=cursor, limit=1)
+        last = pulled(client, cursor=first["cursor"], limit=1)
+
+        assert (len(first["changes"]), first["remaining"]) == (1, 3)
+        assert (len(last["changes"]), last["remaining"], last["has_more"]) == (1, 0, False)
+
+    def test_remaining_counts_what_an_open_snapshot_holds_back(self, client):
+        for number in range(1, 3):
+            support.create("tasks", task(number))
+        first = pulled(client, limit=1)
+        support.update("tasks", task(1)["id"], {"done": True})
+        second = pulled(client, cursor=first["cursor"], limit=1)
+        third = pulled(client, cursor=second["cursor"])
+
+        assert (first["has_more"], first["remaining"]) == (True, 0)
+        assert (second["has_more"], second["remaining"]) == (True, 1)
+        assert (third["has_more"], third["remaining"]) == (False, 0)
+
+    def test_a_snapshot_says_how_many_rows_it_serves_once(self, client):
+        for number in range(1, 4):
+            support.create("tasks", task(number))
+        support.create("projects", {"id": "0190a000-0000-7000-8000-200000000001", "owner": ALICE, "name": "p"})
+
+        first = pulled(client, limit=1)
+        support.create("tasks", task(5))
+        rest = pulled(client, cursor=first["cursor"])
+
+        assert first["changes"][0] == {"op": "snapshot_begin", "scope": None, "model": None, "total": 4}
+        assert all(change["op"] != "snapshot_begin" for change in rest["changes"])
+
+    def test_a_snapshot_s_total_leaves_out_what_the_view_refuses(self, client, monkeypatch):
+        monkeypatch.setattr(TaskViewSet, "permission_classes", [NoOne])
+        support.create("tasks", task(1))
+
+        assert pulled(client)["changes"][0]["total"] == 0
+
+    def test_a_snapshot_across_models_goes_on_from_each_model_s_first_row(self, client):
+        support.create("projects", {"id": "0190a000-0000-7000-8000-900000000001", "owner": ALICE, "name": "p"})
+        support.create("tasks", task(1))
+
+        first = pulled(client, limit=1)
+        second = pulled(client, cursor=first["cursor"], limit=1)
+
+        assert ops(second) == [("upsert", "tasks", task(1)["id"]), ("snapshot_end", None, None)]

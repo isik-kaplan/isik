@@ -124,8 +124,8 @@ def prune_sync_log(batch=None):
     below = watermark()
     with transaction.atomic():
         old = entries.filter(xid__lt=below, created_at__lt=timezone.now() - retention).exclude(op=Operation.PRUNED)
-        cut = old.order_by(*IN_ORDER).values_list(*IN_ORDER)
-        last = cut.last() if batch is None else [None, *cut[:batch]][-1]
+        batched = old.filter(pk__in=old.order_by(*IN_ORDER).values("pk")[:batch])
+        last = batched.order_by(*IN_ORDER).values_list(*IN_ORDER).last()
         if last is None:
             return 0
         mark = Position(*last)

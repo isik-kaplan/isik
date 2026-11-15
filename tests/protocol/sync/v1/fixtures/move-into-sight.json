@@ -38,7 +38,8 @@
             {
               "op": "snapshot_begin",
               "scope": null,
-              "model": null
+              "model": null,
+              "total": 0
             },
             {
               "op": "snapshot_end",
@@ -47,7 +48,8 @@
             }
           ],
           "cursor": "$cursor:1",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     },
@@ -94,7 +96,8 @@
             }
           ],
           "cursor": "$cursor:2",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     }

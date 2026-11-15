@@ -59,7 +59,8 @@
             {
               "op": "snapshot_begin",
               "scope": null,
-              "model": null
+              "model": null,
+              "total": 3
             },
             {
               "op": "upsert",
@@ -89,7 +90,8 @@
             }
           ],
           "cursor": "$cursor:1",
-          "has_more": true
+          "has_more": true,
+          "remaining": "$any"
         }
       }
     },
@@ -132,7 +134,8 @@
             }
           ],
           "cursor": "$cursor:2",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     },
@@ -157,7 +160,8 @@
         "body": {
           "changes": [],
           "cursor": "$cursor:3",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     },
@@ -182,7 +186,8 @@
         "body": {
           "changes": [],
           "cursor": "$cursor:3",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     },

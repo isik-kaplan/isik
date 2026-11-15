@@ -65,7 +65,18 @@
           "required": ["op", "scope", "model"],
           "additionalProperties": false,
           "properties": {
-            "op": { "enum": ["snapshot_begin", "snapshot_end"] },
+            "op": { "const": "snapshot_begin" },
+            "scope": { "oneOf": [{ "$ref": "#/$defs/Scope" }, { "type": "null" }] },
+            "model": { "type": ["string", "null"] },
+            "total": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "scope", "model"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "snapshot_end" },
             "scope": { "oneOf": [{ "$ref": "#/$defs/Scope" }, { "type": "null" }] },
             "model": { "type": ["string", "null"] }
           }
@@ -79,7 +90,8 @@
       "properties": {
         "changes": { "type": "array", "items": { "$ref": "#/$defs/Change" } },
         "cursor": { "type": "string", "minLength": 1 },
-        "has_more": { "type": "boolean" }
+        "has_more": { "type": "boolean" },
+        "remaining": { "type": "integer", "minimum": 0 }
       }
     },
     "Capabilities": {

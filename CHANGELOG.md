@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     synced row whenever one of its rows changes.
   - `SyncViewSet`, which a project routes: `GET capabilities`; `GET changes`, a page of a person's changes with
     full, scope and model snapshots, collapsing, a signed cursor, 304 on `If-None-Match` and 410 past retention,
-    each row read through its model's own viewset; and `POST push`, a batch of queued writes run by a
+    each row read through its model's own viewset, with `remaining` on every page - at most how many row
+    changes are still to come, `0` at the end - and `total` on every `snapshot_begin`, the rows it serves; and
+    `POST push`, a batch of queued writes run by a
     `PushBackend` - isik's `ViewPushBackend` running each entry through its model's REST view, in a transaction
     of its own, with its own history context (`sync_entry`) - 413 over `MAX_ENTRIES` or `MAX_BYTES`, and
     `THROTTLE_SCOPE` counting entries.

@@ -4,7 +4,10 @@ The wire contract between a server that serves offline sync (isik) and a client 
 copy (`@isikk/core/sync`). Each side pins a copy of this directory. Neither side's tests run the
 other: both run the fixtures in `fixtures/`, and every message validates against `schema.json`.
 
-A change to anything here is a new protocol version, in a new directory.
+Within v1, fields are only ever added, and an added field is optional: a client ignores a field it
+doesn't know, and treats a missing added field as unknown. Any other change - a field removed,
+renamed, retyped or made required, or a meaning changed - is a new protocol version, in a new
+directory.
 
 ## Versioning
 
@@ -55,18 +58,19 @@ schema:
 Query: `cursor` (opaque, absent on first sync), `limit` (a request; the server may serve fewer),
 `snapshot` (a model name, repeatable - see "Snapshots").
 
-`200 { "changes": [Change], "cursor": string, "has_more": boolean }`, with an `ETag`.
+`200 { "changes": [Change], "cursor": string, "has_more": boolean, "remaining": integer }`, with an
+`ETag`.
 
 A `Change` is one of:
 
-| `op`             | fields                                     | meaning                                 |
-| ---------------- | ------------------------------------------ | --------------------------------------- |
-| `upsert`         | `model`, `id`, `etag`, `data`              | the row as REST `retrieve` shows it     |
-| `delete`         | `model`, `id`                              | gone, or no longer visible to this user |
-| `scope_granted`  | `scope`                                    | informational; a snapshot of it follows |
-| `scope_revoked`  | `scope`                                    | drop every local row of that scope      |
-| `snapshot_begin` | `scope`, `model` (each a string or `null`) | rows that follow are a snapshot         |
-| `snapshot_end`   | `scope`, `model`                           | that snapshot is complete               |
+| `op`             | fields                                              | meaning                                 |
+| ---------------- | --------------------------------------------------- | --------------------------------------- |
+| `upsert`         | `model`, `id`, `etag`, `data`                       | the row as REST `retrieve` shows it     |
+| `delete`         | `model`, `id`                                       | gone, or no longer visible to this user |
+| `scope_granted`  | `scope`                                             | informational; a snapshot of it follows |
+| `scope_revoked`  | `scope`                                             | drop every local row of that scope      |
+| `snapshot_begin` | `scope`, `model` (each a string or `null`), `total` | rows that follow are a snapshot         |
+| `snapshot_end`   | `scope`, `model`                                    | that snapshot is complete               |
 
 - `etag` is exactly the `ETag` header REST sends for the row, quotes included, and `data` and `etag`
   come from one read at serve time.
@@ -78,6 +82,12 @@ A `Change` is one of:
 - `limit` counts `upsert` and `delete` only. Scope and snapshot events ride along uncounted, though a
   server may bound them per page by its own configuration; a client accepts a page whatever its event
   count.
+- `remaining` estimates the `upsert` and `delete` changes still to come after this page, outside any
+  snapshot: the log entries past `cursor` in the user's scopes, with any an open snapshot holds back.
+  It is never below the real count, since collapsing and visibility only shrink it, and it is `0`
+  when `has_more` is false. It is for a progress bar, so a client never relies on it being exact and
+  keeps its own count within it. Added within v1: a server sends it, and a client treats it as
+  optional.
 - A cursor older than the server's tombstone retention gets
   `410 { "code": "sync_cursor_expired" }`. The client drops its cursor and pulls without one.
 - Re-requesting the same cursor with `If-None-Match` set to that response's `ETag` gets `304` when
@@ -101,6 +111,9 @@ snapshot is never a replay of the log.
   and swaps them in at `snapshot_end`: a covered local row absent from the snapshot is gone.
 - A snapshot may span pages; the cursor resumes inside it. `snapshot_end` comes in the page that
   holds the snapshot's last row, or with `snapshot_begin` when the snapshot is empty.
+- `total` on `snapshot_begin` is the number of rows the snapshot will serve, counted once when it
+  opens and never revised. For a scope or a full snapshot it spans every model the snapshot covers. A
+  snapshot ended early by `scope_revoked` serves fewer. Added within v1, like `remaining`.
 - A full snapshot is never open beside another. Scope and model snapshots may be open together.
 - `scope_revoked S` while a snapshot of S is open ends it without a `snapshot_end`; the client
   discards its staging.
@@ -186,7 +199,8 @@ in one request, and a client may replay its outbox through them instead.
   - Every header the fixture names must be present with that value; other headers are free.
   - A string `"$<kind>:<name>"` is a placeholder: the first occurrence binds it, and every later one
     must equal it. Two different names of kind `etag` must bind different values; `cursor` names may
-    bind equal values. `"$any"` matches anything. A placeholder in a request is replaced by its bound
+    bind equal values. `"$any"` matches anything; `remaining` is `"$any"` wherever it is an estimate,
+    and `0` where `has_more` is false. A placeholder in a request is replaced by its bound
     value.
   - Objects match key for key: a key the fixture lacks must be absent. Arrays match in order.
   - `given.push` sets the server's push limits for the fixture (`max_entries`, `max_bytes`, each

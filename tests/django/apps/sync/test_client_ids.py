@@ -71,3 +71,10 @@ def test_after_the_create_the_id_is_read_only():
 
     assert str(serializer.save().pk) == TASK
     assert serializer.fields["id"].read_only
+
+
+def test_the_id_s_field_keeps_the_model_field_s_label_and_help():
+    field = TaskSerializer().fields["id"]
+
+    assert (field.label, field.help_text) == ("ID", "The row's identifier, assigned when it's created.")
+    assert not field.read_only and not field.required

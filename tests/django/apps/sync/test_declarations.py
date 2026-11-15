@@ -203,7 +203,7 @@ class TestRelationParents:
             throwaway(
                 owner=models.UUIDField(),
                 labels=models.ManyToManyField(label, related_name="+"),
-                concurrency_relations=("labels",),
+                concurrency_relations=("missing", "labels"),
             )
         )
         monkeypatch.setattr(declarations, "SYNCED", {"covering": model.synced})

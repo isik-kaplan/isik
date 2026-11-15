@@ -79,8 +79,9 @@ class Feed:
         warn_of_lag()
         if self.cursor is None:
             start = Position.before(self.below)
-            state = {"p": [start.xid, start.seq], "open": _snapshot(), "queue": []}
-            self.changes.append(framing("snapshot_begin", state["open"]))
+            state = {"p": [start.xid, start.seq], "open": None, "queue": []}
+            self.state = state
+            self._open(_snapshot())
         else:
             state = decode_cursor(self.cursor)
             cut = horizon()
@@ -92,7 +93,38 @@ class Feed:
             if name in self.synced and name not in pending:
                 state["queue"].append(name)
         has_more = self._serve()
-        return {"changes": self.changes, "cursor": encode_cursor(state), "has_more": has_more}
+        return {
+            "changes": self.changes,
+            "cursor": encode_cursor(state),
+            "has_more": has_more,
+            "remaining": self._remaining(),
+        }
+
+    def _remaining(self):
+        """
+        At most how many row changes are still to come after this page, outside any snapshot: the log's entries of
+        the person's scopes past the cursor, below the watermark - one count over the log, which collapsing and
+        rows the person can't see only make more than are served. None past the end of the feed.
+        """
+        rows = Q(op__in=ROW_OPERATIONS) & (Q(scope__in=self.scopes) | Q(old_scope__in=self.scopes))
+        past = Position(*self.state["p"]).after()
+        return get_sync_log_model()._default_manager.filter(rows, past, xid__lt=self.below).count()
+
+    def _open(self, snapshot):
+        """Opens `snapshot`, its `snapshot_begin` saying how many rows it serves - counted now, never again."""
+        self.state["open"] = snapshot
+        total = sum(reader.count(scope_ids) for _, reader, scope_ids in self._covered(snapshot))
+        self.changes.append({**framing("snapshot_begin", snapshot), "total": total})
+
+    def _covered(self, snapshot):
+        """(model name, its reader, the scope ids it's read in) for each model `snapshot` covers, in name order."""
+        scope = snapshot["scope"]
+        for name, synced in self.synced.items():
+            prefix = f"{synced.kind}:"
+            if snapshot["model"] not in (None, name) or (scope is not None and not scope.startswith(prefix)):
+                continue
+            reader = self.reader(name)
+            yield name, reader, reader.scope_ids if scope is None else [scope.removeprefix(prefix)]
 
     def _serve(self):
         state = self.state
@@ -102,15 +134,13 @@ class Feed:
                     return True
                 continue
             if state["queue"]:
-                state["open"] = _snapshot(model=state["queue"].pop(0))
-                self.changes.append(framing("snapshot_begin", state["open"]))
+                self._open(_snapshot(model=state["queue"].pop(0)))
                 continue
             stopped = self._scan()
             if stopped is None:
                 return False
             if stopped is not True:
-                state["open"] = _snapshot(scope=stopped)
-                self.changes.append(framing("snapshot_begin", state["open"]))
+                self._open(_snapshot(scope=stopped))
                 continue
             return True
 
@@ -123,14 +153,9 @@ class Feed:
             self.state["open"] = None
             return False
         after_name, after_id = snapshot["after"] or (None, None)
-        for name, synced in self.synced.items():
-            prefix = f"{synced.kind}:"
-            if snapshot["model"] not in (None, name) or (scope is not None and not scope.startswith(prefix)):
-                continue
+        for name, reader, scope_ids in self._covered(snapshot):
             if after_name is not None and name < after_name:
                 continue
-            reader = self.reader(name)
-            scope_ids = reader.scope_ids if scope is None else [scope.removeprefix(prefix)]
             found, more = reader.page(after_id if name == after_name else None, self.budget, scope_ids)
             self.changes.extend(found)
             self._spend(len(found))
@@ -154,8 +179,8 @@ class Feed:
         """
         position = Position(*self.state["p"])
         entries = get_sync_log_model()._default_manager.filter(self._visible(), position.after(), xid__lt=self.below)
-        # {("row", model, id): None} and {("scope", seq): change}, in the order they're served - a row at its
-        # last change.
+        # {("row", model, id): (model, id)} and {("scope", seq): change}, in the order they're served - a row at
+        # its last change.
         served = OrderedDict()
         rows = 0
         stopped = None
@@ -174,7 +199,7 @@ class Feed:
                 if rows == self.budget:
                     stopped = True
                     break
-                served[key] = None
+                served[key] = (entry.model, entry.object_id)
                 rows += 1
             position = Position.of(entry)
         if stopped is None:
@@ -187,13 +212,13 @@ class Feed:
 
     def _emit(self, served):
         ids = {}
-        for key in served:
+        for key, served_as in served.items():
             if key[0] == "row":
-                ids.setdefault(key[1], []).append(key[2])
+                ids.setdefault(served_as[0], []).append(served_as[1])
         current = {name: self.reader(name).changes(each) for name, each in ids.items()}
-        for key, change in served.items():
+        for key, served_as in served.items():
             if key[0] == "scope":
-                self.changes.append(change)
+                self.changes.append(served_as)
                 continue
-            _, name, object_id = key
+            name, object_id = served_as
             self.changes.append(current[name].get(object_id) or {"op": "delete", "model": name, "id": object_id})

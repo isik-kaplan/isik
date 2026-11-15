@@ -52,7 +52,8 @@
             {
               "op": "snapshot_begin",
               "scope": null,
-              "model": null
+              "model": null,
+              "total": 3
             },
             {
               "op": "upsert",
@@ -98,7 +99,8 @@
             }
           ],
           "cursor": "$cursor:1",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     },
@@ -125,7 +127,8 @@
             {
               "op": "snapshot_begin",
               "scope": null,
-              "model": "tasks"
+              "model": "tasks",
+              "total": 2
             },
             {
               "op": "upsert",
@@ -160,7 +163,8 @@
             }
           ],
           "cursor": "$cursor:2",
-          "has_more": false
+          "has_more": false,
+          "remaining": 0
         }
       }
     }

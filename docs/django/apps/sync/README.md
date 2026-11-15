@@ -126,8 +126,8 @@ back.
 
 ## The feed
 
-`GET /sync/changes?cursor=&limit=&snapshot=` answers `{changes, cursor, has_more}` with an `ETag`; asked again
-with `If-None-Match` naming it, a page that hasn't changed is a 304.
+`GET /sync/changes?cursor=&limit=&snapshot=` answers `{changes, cursor, has_more, remaining}` with an `ETag`;
+asked again with `If-None-Match` naming it, a page that hasn't changed is a 304.
 
 - A missing cursor starts a **full snapshot** of every row the person sees, read at the watermark, framed by
   `snapshot_begin` and `snapshot_end` - the feed goes on from there. A scope granted starts a snapshot of the
@@ -138,6 +138,13 @@ with `If-None-Match` naming it, a page that hasn't changed is a 304.
   viewset - its `get_queryset()`, its permissions, its `retrieve` serializer - so the feed and the API agree:
   a row the person can't see now goes out as a `delete`.
 - `limit` counts row changes; scope and snapshot events ride along. `PAGE_LIMIT` caps what a client asks.
+- For a progress bar: `remaining` is at most how many row changes are still to come after the page, outside any
+  snapshot - the log's entries of the person's scopes past the cursor, below the watermark, those an open
+  snapshot holds back among them. It's one count over the log, so it's never below what comes: a page collapses
+  a row's entries, and a row the person can't see is served as one `delete` or none. It's `0` when `has_more` is
+  false. Each `snapshot_begin` carries `total`, the rows the snapshot serves across every model it covers -
+  counted once, when it opens, through each model's `get_queryset()`; a scope revoked while it's served ends it
+  with fewer.
 - The cursor is signed, and opaque to the client. One before what pruning removed - or not signed here - is a
   410, `sync_cursor_expired`, and the client pulls a snapshot again. A model `snapshot=` names that isn't synced
   is passed over.
