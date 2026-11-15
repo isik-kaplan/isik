@@ -1,3 +1,4 @@
+import json
 import uuid
 
 import pghistory
@@ -9,7 +10,7 @@ from django.test import RequestFactory
 
 from isik.django.apps.common.db.history import open_history_context
 from isik.django.apps.common.middleware import HistoryContextMiddleware
-from isik.django.apps.common.middleware.history import is_uuid
+from isik.django.apps.common.middleware.history import is_uuid, refuse_request_with_400
 from isik.django.conf import isik_with
 from tests.testapp.models import EmailUser, Widget, WidgetEvent
 
@@ -277,22 +278,60 @@ class TestEveryRequestsIds:
         assert context["request_id"] == request.request_id
         assert uuid.UUID(request.request_id).version == 7
 
-    def test_a_refused_sent_id_is_logged(self, rf, caplog):
+    def test_a_refused_sent_id_is_logged_and_the_request_served_by_default(self, rf, caplog):
         caplog.set_level("DEBUG", logger="isik.django.apps.common.middleware.history")
 
-        HistoryContextMiddleware.identify(rf.post("/", headers={"X-Request-ID": "from-the-edge"}))
+        seen = serve(rf.post("/", headers={"X-Request-ID": "from-the-edge"}), lambda request: request)
 
+        assert seen.correlation_id == seen.request_id
+        assert [record.request for record in caplog.records] == [seen]
+        assert [(record.levelname, record.getMessage()) for record in caplog.records] == [
+            (
+                "WARNING",
+                "X-Request-ID 'from-the-edge' isn't an id REQUEST_ID_VALID takes; the request's own id is used.",
+            )
+        ]
+
+    @pytest.mark.parametrize("headers", [{}, {"X-Request-ID": str(uuid.uuid4())}])
+    def test_a_taken_or_absent_id_is_no_refusal(self, rf, caplog, settings, headers):
+        caplog.set_level("DEBUG", logger="isik.django.apps.common.middleware.history")
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"REQUEST_ID_REFUSED": refuse_request_with_400}})
+
+        assert HistoryContextMiddleware.identify(rf.post("/", headers=headers)) is None
+        assert caplog.messages == []
+
+    @pytest.mark.parametrize(
+        "refused", [refuse_request_with_400, "isik.django.apps.common.middleware.history.refuse_request_with_400"]
+    )
+    def test_a_refused_sent_id_answered_with_400(self, rf, caplog, settings, refused):
+        settings.ISIK = isik_with(DJANGO={"HISTORY": {"REQUEST_ID_REFUSED": refused, "RETURN_REQUEST_ID": True}})
+        served = []
+
+        request = rf.post("/", headers={"X-Request-ID": "from-the-edge"})
+
+        response = serve(request, served.append)
+
+        assert served == []
+        assert response.status_code == 400
+        assert json.loads(response.content) == {
+            "detail": "X-Request-ID isn't a request id this server takes.",
+            "code": "request_id_refused",
+        }
+        assert uuid.UUID(response["X-Request-ID"]).version == 7
+        assert [record.request for record in caplog.records] == [request]
         assert caplog.messages == [
             "X-Request-ID 'from-the-edge' isn't an id REQUEST_ID_VALID takes; the request's own id is used."
         ]
 
-    @pytest.mark.parametrize("headers", [{}, {"X-Request-ID": str(uuid.uuid4())}])
-    def test_a_taken_or_absent_id_logs_nothing(self, rf, caplog, headers):
-        caplog.set_level("DEBUG", logger="isik.django.apps.common.middleware.history")
+    def test_what_a_refusal_does_is_a_setting(self, rf, settings):
+        heard = []
+        settings.ISIK = isik_with(
+            DJANGO={"HISTORY": {"REQUEST_ID_HEADER": "X-Trace", "REQUEST_ID_REFUSED": lambda *seen: heard.append(seen)}}
+        )
+        request = rf.post("/", headers={"X-Trace": "bad"})
 
-        HistoryContextMiddleware.identify(rf.post("/", headers=headers))
-
-        assert caplog.messages == []
+        assert HistoryContextMiddleware.identify(request) is None
+        assert heard == [(request, "X-Trace", "bad")]
 
     def test_ids_a_request_has_are_kept(self, rf):
         request = rf.post("/")

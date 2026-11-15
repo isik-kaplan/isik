@@ -2,6 +2,7 @@ import logging
 
 import pghistory
 from django.core.exceptions import ImproperlyConfigured
+from django.http import JsonResponse
 from django.utils.module_loading import import_string
 from pghistory import config
 from pghistory.middleware import HistoryMiddleware
@@ -35,13 +36,45 @@ def is_uuid(value):
     return UUID_PATTERN.fullmatch(value) is not None
 
 
+def _configured(key, default):
+    """The callable ISIK['DJANGO']['HISTORY'][key] names - itself, or a dotted path to it - or `default`."""
+    chosen = django_setting("HISTORY", key) or default
+    return import_string(chosen) if isinstance(chosen, str) else chosen
+
+
 def well_formed(value):
-    """`value` - an id a client or proxy sent - when ISIK['DJANGO']['HISTORY']['REQUEST_ID_VALID'] takes it, or None."""
+    """
+    `value` - an id an edge proxy or calling server sent - when ISIK['DJANGO']['HISTORY']['REQUEST_ID_VALID'] takes
+    it, or None.
+    """
     if not value:
         return None
-    valid = django_setting("HISTORY", "REQUEST_ID_VALID") or is_uuid
-    valid = import_string(valid) if isinstance(valid, str) else valid
-    return value if valid(value) else None
+    return value if _configured("REQUEST_ID_VALID", is_uuid)(value) else None
+
+
+def log_refused_request_id(request, header, value):
+    """
+    The default `REQUEST_ID_REFUSED`: logs the refused id at WARNING, naming the header and the value as its
+    `repr()` and the request on the record as `request`, as Django's own request logging does, and lets the request
+    go on under its own id.
+    """
+    logger.warning(
+        "%s %r isn't an id REQUEST_ID_VALID takes; the request's own id is used.",
+        header,
+        value,
+        extra={"request": request},
+    )
+
+
+def refuse_request_with_400(request, header, value):
+    """
+    A `REQUEST_ID_REFUSED` answering the request with 400 `{detail, code: "request_id_refused"}` - for a
+    deployment where everything in front of Django sends an id, so a refused one is a proxy or calling server set
+    up wrong. The value isn't echoed back.
+    """
+    log_refused_request_id(request, header, value)
+    detail = _("%(header)s isn't a request id this server takes.") % {"header": header}
+    return JsonResponse({"detail": detail, "code": "request_id_refused"}, status=400)
 
 
 class HistoryContextMiddleware(HistoryMiddleware):
@@ -106,19 +139,23 @@ class HistoryContextMiddleware(HistoryMiddleware):
     def identify(request):
         """
         Gives `request` its `request_id` and `correlation_id`, unless it has them - so `get_context()` answers for a
-        request that hasn't been through `__call__`, such as one a test builds.
+        request that hasn't been through `__call__`, such as one a test builds. A sent id `REQUEST_ID_VALID`
+        refuses goes to `REQUEST_ID_REFUSED`; what that answers is returned - a response the request is answered
+        with instead of being served, or None.
         """
-        if not hasattr(request, "request_id"):
-            header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
-            request.request_id = str(uuid7())
-            sent = request.headers.get(header)
-            request.correlation_id = well_formed(sent) or request.request_id
-            if sent and request.correlation_id != sent:
-                logger.debug("%s %r isn't an id REQUEST_ID_VALID takes; the request's own id is used.", header, sent)
+        if hasattr(request, "request_id"):
+            return None
+        header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
+        request.request_id = str(uuid7())
+        sent = request.headers.get(header)
+        request.correlation_id = well_formed(sent) or request.request_id
+        if sent and request.correlation_id != sent:
+            return _configured("REQUEST_ID_REFUSED", log_refused_request_id)(request, header, sent)
+        return None
 
     def __call__(self, request):
-        self.identify(request)
-        response = self._served(request)
+        refused = self.identify(request)
+        response = self._served(request) if refused is None else refused
         if django_setting("HISTORY", "RETURN_REQUEST_ID", True):
             response[django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)] = request.correlation_id
         return response
