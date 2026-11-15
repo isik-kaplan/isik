@@ -277,6 +277,23 @@ class TestEveryRequestsIds:
         assert context["request_id"] == request.request_id
         assert uuid.UUID(request.request_id).version == 7
 
+    def test_a_refused_sent_id_is_logged(self, rf, caplog):
+        caplog.set_level("DEBUG", logger="isik.django.apps.common.middleware.history")
+
+        HistoryContextMiddleware.identify(rf.post("/", headers={"X-Request-ID": "from-the-edge"}))
+
+        assert caplog.messages == [
+            "X-Request-ID 'from-the-edge' isn't an id REQUEST_ID_VALID takes; the request's own id is used."
+        ]
+
+    @pytest.mark.parametrize("headers", [{}, {"X-Request-ID": str(uuid.uuid4())}])
+    def test_a_taken_or_absent_id_logs_nothing(self, rf, caplog, headers):
+        caplog.set_level("DEBUG", logger="isik.django.apps.common.middleware.history")
+
+        HistoryContextMiddleware.identify(rf.post("/", headers=headers))
+
+        assert caplog.messages == []
+
     def test_ids_a_request_has_are_kept(self, rf):
         request = rf.post("/")
         request.request_id, request.correlation_id = "mine", "theirs"
