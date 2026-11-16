@@ -126,7 +126,9 @@ of your own. A success clears the count.
 **A kind that stops going to webhooks.** An endpoint subscribes only to a kind sent on webhook: a subscription
 (`EndpointKind`) to a kind whose webhook policy is `Policy.NEVER` - or names none - is refused when it's written,
 by the database (`check_violation`, `<model>: the kind is not sent on webhook.`) and by `EndpointViewSet`, which
-says `<kind> isn't sent to webhooks.`
+says `<kind> isn't sent to webhooks.` The database's guard fails closed on purpose: a policy row whose `channels`
+has no `webhook` key counts as not sent on webhook. A declaration names every channel, so a mirrored row always
+has it - but should one ever lack it, an endpoint is refused rather than quietly taken.
 
 A kind can still move to `Policy.NEVER` on webhook after endpoints subscribed - its declaration changes, and the
 mirror writes it after the next `migrate`. Their subscriptions are kept, inert: fan-out sends nothing on them, and

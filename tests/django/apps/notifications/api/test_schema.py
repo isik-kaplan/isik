@@ -162,3 +162,19 @@ def test_every_write_is_drfs_own_or_declared():
 
     assert body == {"$ref": "#/components/schemas/Subscription"}
     assert operation["description"].startswith("Sets your preference for a kind of notification")
+
+
+def test_an_endpoint_s_inert_kinds_are_described():
+    schema = SchemaGenerator(urlconf=urls).get_schema(request=None, public=True)
+    components = schema["components"]["schemas"]
+    inert = next(
+        component["properties"]["inert_kinds"]
+        for component in components.values()
+        if "inert_kinds" in component.get("properties", {})
+    )
+
+    assert inert["type"] == "array"
+    assert inert["readOnly"] is True
+    assert inert["description"].startswith("The endpoint's subscriptions its kind isn't sent on webhook now")
+    item = components[inert["items"]["$ref"].rsplit("/", 1)[-1]]
+    assert set(item["properties"]) == {"kind", "label", "variant"}

@@ -30,18 +30,21 @@ def sent_on_webhook(channels):
     return channels.get(Channel.WEBHOOK, Policy.NEVER) != Policy.NEVER
 
 
-def subscribed_endpoints(policy, using=DEFAULT_DB_ALIAS):
-    """The ids of the endpoints subscribed to the kind `policy` is the row of, as text, in order."""
+def subscribed_endpoints(policy):
+    """
+    The ids of the endpoints subscribed to the kind `policy` is the row of, as text, in order - read from the
+    database the row was.
+    """
     if not apps.is_installed(AUDIENCE_APP):
         return []
     from isik.django.apps.notifications.audience.swapping import get_endpoint_kind_model
 
-    rows = get_endpoint_kind_model()._default_manager.using(using).filter(kind=policy)
+    rows = get_endpoint_kind_model()._default_manager.using(policy._state.db).filter(kind=policy)
     return sorted({str(endpoint) for endpoint in rows.values_list("endpoint_id", flat=True)})
 
 
 def _announce(policy, was_sent, using):
-    endpoint_ids = subscribed_endpoints(policy, using)
+    endpoint_ids = subscribed_endpoints(policy)
     if not endpoint_ids:
         return
     signal = endpoint_kinds_withdrawn if was_sent else endpoint_kinds_restored

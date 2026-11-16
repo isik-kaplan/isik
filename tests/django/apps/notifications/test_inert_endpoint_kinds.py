@@ -82,6 +82,19 @@ class TestWritingASubscription:
         with pytest.raises(IntegrityError, match="the kind is not sent on webhook"):
             get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=policy)
 
+    def test_to_a_kind_whose_row_lost_its_webhook_key_in_sql_is_refused(self, endpoint):
+        # Exhaustive channels make it unreachable from a declaration; the guard fails closed should a row lack it.
+        policy = kind_named("parcel_flagged")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"UPDATE {type(policy)._meta.db_table} SET channels = channels - 'webhook' WHERE id = %s", [policy.pk]
+            )
+        policy.refresh_from_db()
+        assert "webhook" not in policy.channels
+
+        with pytest.raises(IntegrityError, match="the kind is not sent on webhook"):
+            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=policy)
+
     def test_to_a_kind_sent_on_webhook_goes_through(self, endpoint):
         get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
 
@@ -155,6 +168,32 @@ def kind_channels():
     return dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.DEFAULT_OFF) | {Channel.WEBHOOK: Policy.MANDATORY}
 
 
+class TestTheDatabaseItsMirrorWrites:
+    def test_endpoints_are_read_and_told_of_in_it(self, monkeypatch, endpoint, django_capture_on_commit_callbacks):
+        from isik.django.apps.notifications import sync
+
+        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
+        read, committing = [], []
+        manager = type(get_endpoint_kind_model()._default_manager)
+        using = manager.using
+        monkeypatch.setattr(manager, "using", lambda self, alias: read.append(alias) or using(self, alias))
+        monkeypatch.setattr(sync.transaction, "on_commit", lambda send, using: committing.append(using))
+
+        with redeclared(monkeypatch, "parcel_flagged", channels=NEVER_ON_WEBHOOK):
+            mirror_kinds(using="default")
+
+        assert (set(read), committing) == ({"default"}, ["default"])
+
+
+def test_a_guard_made_now_compiles_to_what_s_installed():
+    from isik.django.apps.notifications.triggers import VariantGuard
+
+    guard = VariantGuard(name="guard_variant", owner="endpoint", sent_on=Channel.WEBHOOK)
+
+    assert guard.sent_on == Channel.WEBHOOK
+    assert guard.get_installation_status(get_endpoint_kind_model()) == ("INSTALLED", True)
+
+
 class TestSeeingThem:
     def inert(self, endpoint):
         with pgtrigger.ignore(GUARD):
@@ -163,17 +202,19 @@ class TestSeeingThem:
             )
 
     def test_the_notices_command_lists_each_kind_s(self, endpoint):
+        other = get_endpoint_model().objects.create(url="https://hooks.example/b", secret="s")
         self.inert(endpoint)
+        self.inert(other)
+        ids = sorted([str(endpoint.pk), str(other.pk)])
         out = StringIO()
         call_command("notices", stdout=out)
         listed = StringIO()
         call_command("notices", "--format", "json", stdout=listed)
 
-        assert (
-            f"parcel_reminder isn't sent on webhook - 1 endpoints' subscriptions to it are inert: {endpoint.pk}"
-            in out.getvalue()
+        assert out.getvalue().splitlines()[-1] == (
+            f"parcel_reminder isn't sent on webhook - 2 endpoints' subscriptions to it are inert: {', '.join(ids)}"
         )
-        assert json.loads(listed.getvalue())["inert"] == {"parcel_reminder": [str(endpoint.pk)]}
+        assert json.loads(listed.getvalue())["inert"] == {"parcel_reminder": ids}
 
     def test_a_kind_sent_on_webhook_or_with_no_subscriptions_isn_t_listed(self, endpoint):
         get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))

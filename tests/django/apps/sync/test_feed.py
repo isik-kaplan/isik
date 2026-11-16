@@ -457,3 +457,19 @@ def test_a_cursor_made_a_second_later_is_the_same(monkeypatch):
 
     assert encode_cursor(state) == first
     assert decode_cursor(first) == state
+
+
+@pytest.mark.usefixtures("routed")
+def test_a_page_full_after_a_revoked_scope_goes_on_past_it(client):
+    support.grant(ALICE, f"team:{TEAM}")
+    support.create("tasks", task(1))
+    cursor = caught_up(client)
+    support.update("tasks", task(1)["id"], {"done": True})
+    support.revoke(ALICE, f"team:{TEAM}")
+    support.create("tasks", task(2))
+
+    first = pulled(client, cursor=cursor, limit=1)
+    second = pulled(client, cursor=first["cursor"], limit=1)
+
+    assert ops(first) == [("upsert", "tasks", task(1)["id"]), ("scope_revoked", None, f"team:{TEAM}")]
+    assert ops(second) == [("upsert", "tasks", task(2)["id"])]

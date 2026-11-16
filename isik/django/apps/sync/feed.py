@@ -130,22 +130,20 @@ class Feed:
             yield name, reader, reader.scope_ids if scope is None else [scope.removeprefix(prefix)]
 
     def _serve(self):
+        """
+        Serves the page - the open snapshot, each snapshot asked for, then the log - as far as it goes: True when
+        it stopped with more to serve. Each step is taken once: none goes round again.
+        """
         state = self.state
-        while True:
-            if state["open"] is not None:
-                if self._serve_snapshot():
-                    return True
-                continue
-            if state["queue"]:
-                self._open(_snapshot(model=state["queue"].pop(0)))
-                continue
-            stopped = self._scan()
-            if stopped is None:
-                return False
-            if stopped is not True:
-                self._open(_snapshot(scope=stopped))
-                continue
+        if state["open"] is not None and self._serve_snapshot():
             return True
+        queued = state["queue"]
+        for at, name in enumerate(queued):
+            state["queue"] = queued[at + 1 :]
+            self._open(_snapshot(model=name))
+            if self._serve_snapshot():
+                return True
+        return self._scan()
 
     def _serve_snapshot(self):
         """Serves the open snapshot as far as the page goes - True when rows of it are left for the next."""
@@ -177,41 +175,51 @@ class Feed:
 
     def _scan(self):
         """
-        Serves the log after the cursor, below the watermark, as far as the page goes: True when it stopped with
-        more to serve, the scope a grant it reached opens a snapshot of, or None at the end.
+        Serves the log after the cursor, below the watermark, as far as the page goes - each scope granted followed
+        by its snapshot - in one pass: True when it stopped with more to serve.
         """
         position = Position(*self.state["p"])
         entries = get_sync_log_model()._default_manager.filter(self._visible(), position.after(), xid__lt=self.below)
-        # {("row", model, id): (model, id)} and {("scope", seq): change}, in the order they're served - a row at
-        # its last change.
+        # {("row", model, id): (model, id)} and {("scope", seq): [change, ...]}, in the order they're served - a
+        # row at its last change, a scope with the snapshot a grant opens.
         served = OrderedDict()
-        rows = 0
-        stopped = None
         for entry in entries.order_by(*IN_ORDER).iterator():
+            position = Position.of(entry)
             if entry.op in SCOPE_OPERATIONS:
-                served[("scope", entry.seq)] = {"op": entry.op, "scope": entry.scope}
-                position = Position.of(entry)
-                if entry.op == Operation.SCOPE_GRANTED:
-                    stopped = entry.scope
-                    break
+                self.state["p"] = [position.xid, position.seq]
+                events = served[("scope", entry.seq)] = [{"op": entry.op, "scope": entry.scope}]
+                if entry.op == Operation.SCOPE_GRANTED and self._snapshot_into(events, entry.scope, position):
+                    self._emit(served)
+                    return True
                 continue
             key = ("row", entry.model, entry.object_id)
             if key in served:
                 served.move_to_end(key)
             elif entry.model in self.synced:
-                if rows == self.budget:
-                    stopped = True
-                    break
+                if self.budget == 0:
+                    self._emit(served)
+                    return True
                 served[key] = (entry.model, entry.object_id)
-                rows += 1
-            position = Position.of(entry)
-        if stopped is None:
-            # The end: on to the last entry below the watermark, those of scopes the person isn't in too.
-            position = max(position, last_position(self.below) or position)
+                self._spend(1)
+            self.state["p"] = [position.xid, position.seq]
+        # The end: on to the last entry below the watermark, those of scopes the person isn't in too.
+        position = max(position, last_position(self.below) or position)
         self.state["p"] = [position.xid, position.seq]
         self._emit(served)
-        self._spend(rows)
-        return stopped
+        return False
+
+    def _snapshot_into(self, changes, scope, granted):
+        """
+        Opens the snapshot of the scope just granted at `granted`, its changes into `changes` - True when rows of it
+        are left for the next page, which goes on from the grant.
+        """
+        self.state["p"] = [granted.xid, granted.seq]
+        kept, self.changes = self.changes, changes
+        try:
+            self._open(_snapshot(scope=scope))
+            return self._serve_snapshot()
+        finally:
+            self.changes = kept
 
     def _emit(self, served):
         ids = {}
@@ -221,7 +229,7 @@ class Feed:
         current = {name: self.reader(name).changes(each) for name, each in ids.items()}
         for key, served_as in served.items():
             if key[0] == "scope":
-                self.changes.append(served_as)
+                self.changes.extend(served_as)
                 continue
             name, object_id = served_as
             self.changes.append(current[name].get(object_id) or {"op": "delete", "model": name, "id": object_id})
