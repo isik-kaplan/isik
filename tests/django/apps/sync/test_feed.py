@@ -385,9 +385,13 @@ class TestProgress:
 
         page = {"cursor": cursor, "has_more": True}
         pages = []
-        while page["has_more"]:
+        # Six entries can't take more than six pages - a feed that stops moving on fails here rather than hangs.
+        for _ in range(6):
             page = pulled(client, limit=1, cursor=page["cursor"])
             pages.append((len(page["changes"]), page["remaining"]))
+            if not page["has_more"]:
+                break
+        assert not page["has_more"]
 
         # Three entries for each of two rows, interleaved, and one of a scope the person isn't in - fewer row
         # changes come after each page than it counts, since a page collapses a row's entries.
