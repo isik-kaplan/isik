@@ -267,6 +267,24 @@ class TestFanningOutEveryNotice:
 
         assert order == [earlier.pk, later.pk, tied_low.pk, tied_high.pk]
 
+    def test_ties_come_out_by_number_however_the_rows_lie(self, alice, dispatched, django_capture_on_commit_callbacks):
+        # Twenty tied notices written highest first: the table holds them in no order of their numbers, so
+        # only the order by key brings them out lowest first - a layout left by earlier tests can't line
+        # twenty up by chance.
+        now = timezone.now()
+        policy = NoticeKindPolicy.objects.get(name="parcel_reminder")
+        tied = list(range(979, 959, -1))
+        for tied_id in tied:
+            Notice.objects.create(id=tied_id, kind=policy, occurred_at=now)
+
+        order = []
+        for _ in tied:
+            with django_capture_on_commit_callbacks(execute=True):
+                pipeline.fan_out(batch_size=1)
+            order.append(Notice.objects.filter(fanned_out_at__isnull=False).exclude(pk__in=order).get().pk)
+
+        assert order == [Notice.objects.get(id=tied_id).pk for tied_id in sorted(tied)]
+
     def test_every_notices_deliveries_and_shards_are_asked_for(
         self, monkeypatch, settings, alice, bob, dispatched, django_capture_on_commit_callbacks
     ):
