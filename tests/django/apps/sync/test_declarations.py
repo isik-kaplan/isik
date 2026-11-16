@@ -24,6 +24,7 @@ from tests.testapp.models import SyncNote, SyncProject, SyncTask, SyncTeam, Sync
 
 ALICE = "0190a000-0000-7000-8000-a00000000001"
 TEAM, OTHER_TEAM = "0190a000-0000-7000-8000-b00000000007", "0190a000-0000-7000-8000-b00000000008"
+THIRD_TEAM = "0190a000-0000-7000-8000-b00000000009"
 TEAMS = Memberships("testapp.SyncTeamMembership", user="user", scope="team", condition=models.Q(active=True))
 
 
@@ -177,6 +178,7 @@ class TestScopes:
         alice = support.user(ALICE)
         support.grant(ALICE, f"team:{TEAM}")
         SyncTeamMembership.objects.create(user=alice, team=support.team(OTHER_TEAM), active=False)
+        support.grant("0190a000-0000-7000-8000-a00000000002", f"team:{THIRD_TEAM}")
 
         assert scopes_of(alice) == [f"user:{ALICE}", f"team:{TEAM}"]
 

@@ -21,6 +21,7 @@ from django.db.models.signals import class_prepared
 from isik._internal.translation import gettext_lazy
 from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.models import DatabaseTimestampsModel, UUIDPrimaryKeyModel
+from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.choices import Platform, PushEnvironment
 from isik.django.apps.notifications.triggers import VariantGuard
 
@@ -317,12 +318,13 @@ class AbstractDevice(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
         return f"{self.platform}:{self.token[:12]}"
 
 
-# {base: (the field owning a row, beside "kind" and "variant", or None; whether a row names a channel)} - the
-# owner makes a row covering others exclusive with the rest of its owner's rows for a kind.
+# {base: (the field owning a row, beside "kind" and "variant", or None; whether a row names a channel; the channel
+# its kind must be sent on, or None)} - the owner makes a row covering others exclusive with the rest of its
+# owner's rows for a kind.
 GUARDED = {
-    AbstractSubscription: ("user", True),
-    AbstractEndpointKind: ("endpoint", False),
-    AbstractInboxItem: (None, False),
+    AbstractSubscription: ("user", True, None),
+    AbstractEndpointKind: ("endpoint", False, Channel.WEBHOOK),
+    AbstractInboxItem: (None, False, None),
 }
 
 
@@ -336,10 +338,10 @@ def _guard(sender, **kwargs):
         # name reaches nothing but an error, and a schema copied whole renames a unique over two columns anyway.
         sender._meta.unique_together = (*sender._meta.unique_together, ("platform", "token"))
         sender._meta.original_attrs["unique_together"] = sender._meta.unique_together
-    for base, (owner, channel) in GUARDED.items():
+    for base, (owner, channel, sent_on) in GUARDED.items():
         if not issubclass(sender, base):
             continue
-        pgtrigger.register(VariantGuard(name="guard_variant", owner=owner, channel=channel))(sender)
+        pgtrigger.register(VariantGuard(name="guard_variant", owner=owner, channel=channel, sent_on=sent_on))(sender)
         if owner:
             # A new list: one inherited from a parent Meta is that Meta's own.
             sender._meta.constraints = [

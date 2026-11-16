@@ -28,14 +28,17 @@ class CursorExpired(Exception):
 
 
 def encode_cursor(state):
-    """A cursor holding `state`, signed."""
-    return signing.dumps(state, salt=CURSOR_SALT)
+    """
+    A cursor holding `state`, signed - with no timestamp, unlike `signing.dumps()`'s: the same state is the same
+    cursor whenever it's made, so a page served again the same is the same page.
+    """
+    return signing.Signer(salt=CURSOR_SALT).sign_object(state)
 
 
 def decode_cursor(cursor):
     """The state a cursor holds - `CursorExpired` for one not signed here."""
     try:
-        return signing.loads(cursor, salt=CURSOR_SALT)
+        return signing.Signer(salt=CURSOR_SALT).unsign_object(cursor)
     except signing.BadSignature:
         raise CursorExpired() from None
 
@@ -79,7 +82,7 @@ class Feed:
         warn_of_lag()
         if self.cursor is None:
             start = Position.before(self.below)
-            state = {"p": [start.xid, start.seq], "open": None, "queue": []}
+            state = {"p": [start.xid, start.seq], "queue": []}
             self.state = state
             self._open(_snapshot())
         else:

@@ -98,6 +98,9 @@ class TestTheMirrorsDatabase:
             yield
 
         class Rows:
+            def values_list(self, *fields):
+                return []
+
             def update_or_create(self, **kwargs):
                 return NoticeKindPolicy(name=kwargs["name"]), True
 

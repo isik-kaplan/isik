@@ -82,7 +82,8 @@ def x_sync(synced, path, columns):
 
 
 def _parameterless(path):
-    return re.sub(r"\{[^}]*\}", "{}", path)
+    # The path's fixed parts - a parameter named either way between them.
+    return re.split(r"\{[^}]*\}", path)
 
 
 def _retrieved_at(generator, viewset, paths):

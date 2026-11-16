@@ -2,6 +2,7 @@
 
 import uuid
 
+import pgtrigger
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
@@ -361,6 +362,33 @@ class TestEndpoints:
         }
         assert not get_endpoint_model().objects.filter(url="https://hooks.example/new").exists()
 
+    def test_an_inert_subscription_written_again_is_told_it_s_inert(self, alice):
+        from isik.django.apps.notifications import drf
+
+        endpoint = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="s")
+        with pgtrigger.ignore("isik_notifications_audience.EndpointKind:guard_variant"):
+            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_reminder"))
+        client = client_for(alice)
+        inert = (
+            "parcel_reminder isn't sent on webhook any more; this endpoint's subscription to it is kept but inert - "
+            "delete it, or wait for the kind to be sent again."
+        )
+
+        answered = client.patch(
+            f"/endpoints/{endpoint.pk}/",
+            {"kinds": [{"kind": "parcel_reminder"}, {"kind": "parcel_routed"}]},
+            format="json",
+            **keyed(HTTP_IF_MATCH=version_of(client, endpoint)),
+        )
+        serializer = drf.endpoint_serializer(get_endpoint_model())(
+            endpoint, data={"kinds": [{"kind": "parcel_reminder"}]}, partial=True
+        )
+        serializer.is_valid()
+
+        assert answered.json() == {"kinds": [{"kind": [inert]}, {"kind": ["parcel_routed isn't sent to webhooks."]}]}
+        assert serializer.errors["kinds"][0]["kind"][0].code == "kind_inert_on_webhook"
+        assert get_endpoint_kind_model().objects.filter(endpoint=endpoint).count() == 1
+
     def test_a_kind_named_twice_is_refused(self, alice):
         twice = [{"kind": "parcel_flagged", "variant": "lost"}, {"kind": "parcel_flagged", "variant": "lost"}]
 
@@ -529,6 +557,7 @@ class TestTheDetails:
             "url",
             "is_active",
             "kinds",
+            "inert_kinds",
             "consecutive_failures",
             "parked_at",
             "secret",
@@ -540,15 +569,18 @@ class TestTheDetails:
     def test_an_endpoints_kinds_are_listed_by_kind_then_variant(self, alice):
         endpoint = get_endpoint_model().objects.create(url="https://hooks.example/in", secret="s")
         for kind, variant in [("parcel_reminder", "daily"), ("parcel_flagged", "lost"), ("parcel_flagged", "damaged")]:
-            get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named(kind), variant=variant)
+            # The reminder's row from before its kind stopped being sent on webhook - inert since.
+            with pgtrigger.ignore("isik_notifications_audience.EndpointKind:guard_variant"):
+                get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named(kind), variant=variant)
 
-        listed = client_for(alice).get(f"/endpoints/{endpoint.pk}/").json()["kinds"]
+        shown = client_for(alice).get(f"/endpoints/{endpoint.pk}/").json()
 
-        assert listed == [
+        assert shown["kinds"] == [
             {"kind": "parcel_flagged", "variant": "damaged"},
             {"kind": "parcel_flagged", "variant": "lost"},
             {"kind": "parcel_reminder", "variant": "daily"},
         ]
+        assert shown["inert_kinds"] == [{"kind": "parcel_reminder", "label": "Parcel reminders", "variant": "daily"}]
 
     def test_an_endpoints_counters_cant_be_written(self, alice, endpoint):
         client = client_for(alice)

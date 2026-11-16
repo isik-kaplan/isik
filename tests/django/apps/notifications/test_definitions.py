@@ -301,6 +301,7 @@ class TestTheSerializers:
 
         assert {name for name, field in fields.items() if field.read_only} == {
             "id",
+            "inert_kinds",
             "consecutive_failures",
             "parked_at",
             "secret",

@@ -55,7 +55,6 @@ from isik.django.apps.notifications.audience.swapping import (
     get_inbox_item_model,
     get_subscription_model,
 )
-from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy
 from isik.django.apps.notifications.kinds import kinds, rendered, text_of
 from isik.django.apps.notifications.pipeline import RetryRefused, gets, is_forced, retry_delivery
@@ -64,6 +63,7 @@ from isik.django.apps.notifications.swapping import (
     get_delivery_model,
     get_kind_policy_model,
 )
+from isik.django.apps.notifications.sync import sent_on_webhook
 from isik.django.drf.error_handling import refusal
 from isik.django.drf.viewsets.base import BaseViewSet
 from isik.django.drf.viewsets.preconditions import NoPrecondition, PreconditionMixin
@@ -200,13 +200,38 @@ class EndpointKindSerializer(serializers.Serializer):
 
     def validate(self, data):
         policy, variant = data["kind"], data.get("variant")
-        if policy.channels.get(Channel.WEBHOOK, Policy.NEVER) == Policy.NEVER:
-            raise ValidationError({"kind": _("%(kind)s isn't sent to webhooks.") % {"kind": policy.name}})
+        if not sent_on_webhook(policy.channels):
+            raise self._unsent(policy)
         if variant is not None and variant not in policy.variants:
             raise ValidationError(
                 {"variant": _("%(kind)s declares no variant %(variant)r.") % {"kind": policy.name, "variant": variant}}
             )
         return data
+
+    def _unsent(self, policy):
+        # An endpoint already subscribed to the kind keeps its row, inert - and is told so, apart from a new one.
+        endpoint = self.parent.parent.instance
+        held = get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint, kind=policy).exists()
+        if endpoint is None or not held:
+            return ValidationError({"kind": _("%(kind)s isn't sent to webhooks.") % {"kind": policy.name}})
+        return ValidationError(
+            {
+                "kind": _(
+                    "%(kind)s isn't sent on webhook any more; this endpoint's subscription to it is kept but inert - "
+                    "delete it, or wait for the kind to be sent again."
+                )
+                % {"kind": policy.name}
+            },
+            code="kind_inert_on_webhook",
+        )
+
+
+class InertKindSerializer(serializers.Serializer):
+    """One of an endpoint's subscriptions its kind's policy leaves inert: the kind isn't sent on webhook now."""
+
+    kind = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True, allow_null=True)
+    variant = serializers.CharField(read_only=True, allow_null=True)
 
 
 def kinds_problem(wanted):
@@ -225,16 +250,32 @@ def kinds_problem(wanted):
     return None
 
 
+INERT_KINDS_HELP = gettext_lazy(
+    "The endpoint's subscriptions its kind isn't sent on webhook now: kept, inert, and sent again when it is."
+)
+
+
 @cache
 def endpoint_serializer(model):
     """The serializer of an endpoint of `model` - its secret shown only when it's new."""
 
     class EndpointSerializer(serializers.ModelSerializer):
         kinds = EndpointKindSerializer(many=True, required=False)
+        inert_kinds = InertKindSerializer(many=True, read_only=True, help_text=INERT_KINDS_HELP)
         secret = serializers.SerializerMethodField()
 
         class Meta:
-            fields = ["id", "url", "is_active", "kinds", "consecutive_failures", "parked_at", "secret", "updated_at"]
+            fields = [
+                "id",
+                "url",
+                "is_active",
+                "kinds",
+                "inert_kinds",
+                "consecutive_failures",
+                "parked_at",
+                "secret",
+                "updated_at",
+            ]
             # id and updated_at aren't editable, so they're read-only already.
             read_only_fields = ["consecutive_failures", "parked_at"]
 
@@ -244,8 +285,12 @@ def endpoint_serializer(model):
         def to_representation(self, endpoint):
             data = super().to_representation(endpoint)
             wanted = get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint).order_by(*BY_KIND)
-            data["kinds"] = [
-                {"kind": kind, "variant": variant} for kind, variant in wanted.values_list("kind__name", "variant")
+            rows = list(wanted.values_list("kind__name", "variant", "kind__channels"))
+            data["kinds"] = [{"kind": kind, "variant": variant} for kind, variant, _channels in rows]
+            data["inert_kinds"] = [
+                {"kind": kind, "label": _text(text_of(kind).label), "variant": variant}
+                for kind, variant, channels in rows
+                if not sent_on_webhook(channels)
             ]
             return data
 

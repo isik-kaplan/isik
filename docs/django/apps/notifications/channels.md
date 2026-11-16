@@ -123,6 +123,37 @@ delivery is abandoned. An endpoint that's gone, inactive or parked abandons its 
 (`isik.django.apps.notifications.signals`), once, with `endpoint`, so you can tell its owners with a kind
 of your own. A success clears the count.
 
+**A kind that stops going to webhooks.** An endpoint subscribes only to a kind sent on webhook: a subscription
+(`EndpointKind`) to a kind whose webhook policy is `Policy.NEVER` - or names none - is refused when it's written,
+by the database (`check_violation`, `<model>: the kind is not sent on webhook.`) and by `EndpointViewSet`, which
+says `<kind> isn't sent to webhooks.`
+
+A kind can still move to `Policy.NEVER` on webhook after endpoints subscribed - its declaration changes, and the
+mirror writes it after the next `migrate`. Their subscriptions are kept, inert: fan-out sends nothing on them, and
+when the kind moves back off `never` they send again, as they were. Nothing deletes them - that's the operator's
+choice, or the endpoint's owner's. They show:
+
+- in `manage.py notices`, which lists each kind whose policy leaves subscriptions inert, with the endpoints';
+- in each endpoint `EndpointViewSet` shows, as `inert_kinds` - `[{"kind", "label", "variant"}]`, one per inert
+  subscription - so a page can say "<label>: no longer sent" without asking again;
+- to an endpoint writing its kinds again with an inert one among them, refused with
+  `kind_inert_on_webhook`: `<kind> isn't sent on webhook any more; this endpoint's subscription to it is kept but
+  inert - delete it, or wait for the kind to be sent again.`
+
+When the mirror's transaction commits a kind moving to `never` on webhook, `endpoint_kinds_withdrawn` is sent -
+`sender` the kind policy model, `kind` its name, `endpoint_ids` the ids of the endpoints subscribed to it, as
+text - and `endpoint_kinds_restored`, the same, when it moves back. Each is sent once a move, and never for a
+kind no endpoint subscribes to. As with `endpoint_parked`, isik doesn't know who owns an endpoint: tell the
+owners from the signal, with a kind of your own - the endpoint's owner should hear of it, and the operators may
+mute theirs:
+
+```python
+@receiver(endpoint_kinds_withdrawn)
+def tell_owners(sender, kind, endpoint_ids, **kwargs):
+    for endpoint in Endpoint.objects.filter(pk__in=endpoint_ids):
+        raise_notice(WEBHOOK_KIND_WITHDRAWN, subject=endpoint, snapshot={"kind": kind})
+```
+
 **Secrets.** `Endpoint.secret` is a plain field on the base; override it (and `secret_previous`) with an
 encrypted field of your own.
 

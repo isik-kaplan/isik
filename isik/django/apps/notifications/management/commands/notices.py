@@ -7,6 +7,7 @@ from isik.django.apps.notifications import pipeline
 from isik.django.apps.notifications.choices import KindStatus
 from isik.django.apps.notifications.kinds import kinds
 from isik.django.apps.notifications.swapping import get_kind_policy_model
+from isik.django.apps.notifications.sync import sent_on_webhook, subscribed_endpoints
 
 
 def describe(kind):
@@ -24,6 +25,16 @@ def describe(kind):
         "scope": str(kind.scope),
         "channels": {channel: str(policy) for channel, policy in kind.policies.items()},
         "snapshot": list(kind.snapshot),
+    }
+
+
+def inert_endpoints():
+    """{kind: [endpoint id, ...]} - each kind whose policy now leaves endpoints' subscriptions to it inert."""
+    policies = get_kind_policy_model().objects.order_by("name")
+    return {
+        policy.name: endpoints
+        for policy in policies
+        if not sent_on_webhook(policy.channels) and (endpoints := subscribed_endpoints(policy))
     }
 
 
@@ -58,7 +69,8 @@ def _until_done(step):
 class Command(BaseCommand):
     help = (
         "Lists every declared notice kind - what writes it, what it watches, who gets it and on which channels - "
-        "and where the declarations and the mirrored policy rows differ. --retire retires a kind."
+        "where the declarations and the mirrored policy rows differ, and the endpoints whose subscriptions a kind's "
+        "policy leaves inert. --retire retires a kind."
     )
 
     def add_arguments(self, parser):
@@ -92,12 +104,13 @@ class Command(BaseCommand):
         if work:
             self._work()
             return
-        described, differing = (
+        described, differing, inert = (
             [describe(kind) for kind in sorted(kinds().values(), key=lambda kind: kind.name)],
             drift(),
+            inert_endpoints(),
         )
         if format == "json":
-            self.stdout.write(json.dumps({"kinds": described, "drift": differing}, indent=2))
+            self.stdout.write(json.dumps({"kinds": described, "drift": differing, "inert": inert}, indent=2))
             return
         for kind in described:
             self.stdout.write(kind["kind"])
@@ -112,6 +125,11 @@ class Command(BaseCommand):
         for key, names in differing.items():
             if names:
                 self.stdout.write(f"{labels[key]}: {', '.join(names)}")
+        for kind, endpoints in inert.items():
+            self.stdout.write(
+                _("%(kind)s isn't sent on webhook - %(count)s endpoints' subscriptions to it are inert: %(ids)s")
+                % {"kind": kind, "count": len(endpoints), "ids": ", ".join(endpoints)}
+            )
 
     def _fan_out(self):
         self.stdout.write(_("Fanned out %(count)s notices.") % {"count": _until_done(pipeline.fan_out)})

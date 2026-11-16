@@ -256,7 +256,7 @@ class TestAgainstConcurrentTransactions:
         support.create("tasks", task(2))
 
         held = pulled(client, cursor=cursor)
-        assert ops(held) == []
+        assert (ops(held), held["has_more"], held["remaining"]) == ([], False, 0)
         other.commit()
         assert ops(pulled(client, cursor=held["cursor"])) == [
             ("upsert", "tasks", task(1)["id"]),
@@ -448,3 +448,12 @@ class TestProgress:
         second = pulled(client, cursor=first["cursor"], limit=1)
 
         assert ops(second) == [("upsert", "tasks", task(1)["id"]), ("snapshot_end", None, None)]
+
+
+def test_a_cursor_made_a_second_later_is_the_same(monkeypatch):
+    state = {"p": [1, 2], "queue": []}
+    first = encode_cursor(state)
+    monkeypatch.setattr("time.time", lambda: 10**10)
+
+    assert encode_cursor(state) == first
+    assert decode_cursor(first) == state

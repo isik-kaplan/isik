@@ -267,3 +267,10 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
     assert isinstance(device, owned.Device)
     assert pipeline.send(delivery.pk).state == DeliveryState.SENT
     assert json.loads(sent[0].content)["aps"]["alert"] == {"title": "Package lost", "body": "Bob's & <box> is lost."}
+
+
+def test_the_project_s_endpoint_kind_refuses_a_kind_never_sent_on_webhook():
+    endpoint = owned.Endpoint.objects.create(url="https://hooks.example/in", secret=uuid.uuid4().hex)
+
+    with pytest.raises(IntegrityError, match="owned.EndpointKind: the kind is not sent on webhook"):
+        owned.EndpointKind.objects.create(endpoint=endpoint, kind=kind_named("feature_granted"))

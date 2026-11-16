@@ -90,6 +90,7 @@ def test_the_fixture_holds(path):
     if member is not None:
         client.force_authenticate(member)
     names = {}
+    seen = []
     with override_isik(
         DJANGO={
             "SYNC": {
@@ -107,7 +108,10 @@ def test_the_fixture_holds(path):
             response = answered(client, step["request"], names)
             expected = step["response"]
             where = f"step {number}"
-            assert response.status_code == expected["status"], f"{where}: {response.status_code} {response.content!r}"
+            assert response.status_code == expected["status"], (
+                f"{where}: {response.status_code} {response.content!r} after {[r.content for r in seen]!r}"
+            )
+            seen.append(response)
             for header, value in expected.get("headers", {}).items():
                 matched(value, response.headers.get(header), names, f"{where} {header}")
             if "body" in expected:

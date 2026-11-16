@@ -9,7 +9,10 @@ from django.apps import apps
 from django.db import connection
 
 from isik.django.apps.notifications import conf, swapping
-from isik.django.apps.notifications.choices import CHOSEN, KindStatus
+from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy
+
+
+NEVER = Policy.NEVER.value
 
 
 def literal(value):
@@ -146,14 +149,19 @@ class VariantGuard(pgtrigger.Trigger):
     With `channel` - a subscription's - a row names a channel too, or none for every one: one naming a channel
     its kind leaves no choice on is refused, and so is one covering any (variant, channel) another row of the
     owner's for the kind covers - so a person has one row at most for each.
+
+    With `sent_on` - a channel, the webhook for an endpoint kind - a row written for a kind its policy doesn't send
+    on that channel (`never`, or not declared on it) is refused. A row already there when its kind stops being sent
+    stays, inert, and comes back to life when the kind is sent again - only a write is refused.
     """
 
     when = pgtrigger.Before
     operation = pgtrigger.Insert | pgtrigger.Update
 
-    def __init__(self, *, name, owner=None, channel=False):
+    def __init__(self, *, name, owner=None, channel=False, sent_on=None):
         self.owner = owner
         self.channel = channel
+        self.sent_on = sent_on
         super().__init__(name=name)
 
     def _refuse(self, message):
@@ -178,6 +186,12 @@ class VariantGuard(pgtrigger.Trigger):
             f"{_column(NoticeKindPolicy, 'variants')} @> jsonb_build_array(NEW.{variant})) THEN "
             f"{self._refuse(f'{model._meta.label}: the kind declares no such variant.')} END IF;"
         )
+        if self.sent_on is not None:
+            sent = f"COALESCE({_column(NoticeKindPolicy, 'channels')} ->> {literal(self.sent_on)}, {literal(NEVER)})"
+            declared = (
+                f"{declared} IF NOT EXISTS ({lookup} AND {sent} <> {literal(NEVER)}) THEN "
+                f"{self._refuse(f'{model._meta.label}: the kind is not sent on {self.sent_on}.')} END IF;"
+            )
         if not self.channel:
             return declared
         channel = _column(model, "channel")

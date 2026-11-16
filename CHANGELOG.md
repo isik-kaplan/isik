@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `isik.E027` (`Check.SYNC`), refusing a sync setting or declaration that can't work.
 - `ISIK['DJANGO']['IDEMPOTENCY']['RETENTION']` and `prune_claims(model=None, batch=None)`, deleting the claims
   spent longer ago.
+- An endpoint's subscription to a kind not sent on webhook - `Policy.NEVER` there, or no webhook policy at all -
+  is refused by the database too: the endpoint kind's `guard_variant` trigger refuses writing one, with
+  `check_violation`. `EndpointViewSet`'s refusal stays as it was.
+- A kind whose webhook policy moves to `never` keeps every endpoint's subscription to it, inert - sending nothing
+  until the kind is sent again - and shows them: `manage.py notices` lists them by kind, `EndpointViewSet` gives
+  each endpoint's as `inert_kinds` (`[{kind, label, variant}]`), and writing one again is refused with its own
+  code, `kind_inert_on_webhook`.
+- `endpoint_kinds_withdrawn` and `endpoint_kinds_restored` (`isik.django.apps.notifications.signals`), sent once
+  the post-migrate mirror commits a kind's webhook policy moving to `never` or back - `sender` the kind policy
+  model, `kind` its name, `endpoint_ids` the endpoints subscribed to it - once a move, never with none.
 
 ## [0.55.0] - 2026-11-15
 
