@@ -188,7 +188,7 @@ class Feed:
             if entry.op in SCOPE_OPERATIONS:
                 self.state["p"] = [position.xid, position.seq]
                 events = served[("scope", entry.seq)] = [{"op": entry.op, "scope": entry.scope}]
-                if entry.op == Operation.SCOPE_GRANTED and self._snapshot_into(events, entry.scope, position):
+                if entry.op == Operation.SCOPE_GRANTED and self._snapshot_into(events, entry.scope):
                     self._emit(served)
                     return True
                 continue
@@ -208,12 +208,11 @@ class Feed:
         self._emit(served)
         return False
 
-    def _snapshot_into(self, changes, scope, granted):
+    def _snapshot_into(self, changes, scope):
         """
-        Opens the snapshot of the scope just granted at `granted`, its changes into `changes` - True when rows of it
-        are left for the next page, which goes on from the grant.
+        Opens the snapshot of the scope just granted, its changes into `changes` - True when rows of it are left for
+        the next page, which goes on from the grant.
         """
-        self.state["p"] = [granted.xid, granted.seq]
         kept, self.changes = self.changes, changes
         try:
             self._open(_snapshot(scope=scope))

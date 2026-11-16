@@ -473,3 +473,42 @@ def test_a_page_full_after_a_revoked_scope_goes_on_past_it(client):
 
     assert ops(first) == [("upsert", "tasks", task(1)["id"]), ("scope_revoked", None, f"team:{TEAM}")]
     assert ops(second) == [("upsert", "tasks", task(2)["id"])]
+
+
+@pytest.mark.usefixtures("routed")
+class TestTheCursor:
+    def test_two_snapshots_asked_for_the_first_spanning_pages_keeps_the_second(self, client):
+        for number in range(1, 3):
+            support.create("tasks", task(number))
+        support.create("projects", {"id": "0190a000-0000-7000-8000-200000000001", "owner": ALICE, "name": "p"})
+        cursor = caught_up(client)
+
+        first = pulled(client, cursor=cursor, snapshot=["tasks", "projects"], limit=1)
+        rest = pulled(client, cursor=first["cursor"])
+
+        assert decode_cursor(first["cursor"])["queue"] == ["projects"]
+        assert [(op, model) for op, model, _ in ops(rest)] == [
+            ("upsert", "tasks"),
+            ("snapshot_end", "tasks"),
+            ("snapshot_begin", "projects"),
+            ("upsert", "projects"),
+            ("snapshot_end", "projects"),
+        ]
+
+    def test_a_snapshot_revoked_while_served_is_closed_in_it(self, client):
+        support.create("notes", {"id": "0190a000-0000-7000-8000-300000000001", "team": TEAM, "body": "x"})
+        support.create("notes", {"id": "0190a000-0000-7000-8000-300000000002", "team": TEAM, "body": "y"})
+        cursor = caught_up(client)
+        support.grant(ALICE, f"team:{TEAM}")
+        first = pulled(client, cursor=cursor, limit=1)
+        support.revoke(ALICE, f"team:{TEAM}")
+
+        assert decode_cursor(pulled(client, cursor=first["cursor"])["cursor"])["open"] is None
+
+    def test_at_the_end_it_moves_past_the_changes_of_scopes_the_person_isn_t_in(self, client):
+        cursor = caught_up(client)
+        support.create("tasks", task(1, owner=BOB))
+
+        moved = pulled(client, cursor=cursor)
+        assert ops(moved) == []
+        assert decode_cursor(moved["cursor"])["p"] > decode_cursor(cursor)["p"]
