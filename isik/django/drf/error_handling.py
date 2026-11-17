@@ -3,7 +3,6 @@ from rest_framework import status
 from rest_framework.exceptions import APIException, ErrorDetail
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
-from isik._internal.translation import gettext_lazy
 from isik.common.utils.error_handling import TransformExceptions
 
 
@@ -36,6 +35,23 @@ def django_to_drf_validation_error(e):
     return drf_validation_error(e)
 
 
+def coded(detail):
+    """
+    `detail`, a DRF ValidationError's, with each message `{"message", "code"}` - in a list always, a message
+    DRF holds alone (`ValidationError({"city": "Unknown."})`) too, so every message reads the same.
+    """
+    if isinstance(detail, dict):
+        return {key: coded(value) for key, value in detail.items()}
+    if isinstance(detail, list):
+        return [_coded_entry(each) for each in detail]
+    return [_coded_entry(detail)]
+
+
+def _coded_entry(entry):
+    # A list's entry: a message, or - many=True's, a nested list's - errors of their own.
+    return coded(entry) if isinstance(entry, (dict, list)) else {"message": str(entry), "code": entry.code}
+
+
 def exception_handler(exc, context):
     """
     DRF's exception handler, with each single-message error's code beside its message - `{"detail",
@@ -47,9 +63,15 @@ def exception_handler(exc, context):
         403  {"detail": "You do not have permission to perform this action.", "code": "permission_denied"}
         404  {"detail": "No Widget matches the given query.", "code": "not_found"}
 
-    A validation error - its fields' messages - keeps DRF's shape; so does whatever a view rendered itself.
+    A validation error raised as one message - `ValidationError({"detail": "..."}, code=...)` - is answered
+    so too. Any other carries each message's code: every message in it is `{"message", "code"}`, in the place
+    DRF puts the message - a field's list, `non_field_errors`, a nested or many=True serializer's:
+
+        400  {"detail": "Disable it first.", "code": "disable_first"}
+        400  {"email": [{"message": "Enter a valid email address.", "code": "invalid"}]}
+
     Django's own ValidationError - a model's `full_clean()` refusing a row, a constraint's message - is a
-    400 in that shape too (`drf_validation_error()`), not a 500.
+    400 in that shape too (`drf_validation_error()`), not a 500. Whatever a view rendered itself is its own.
     """
     # Imported here: `rest_framework.views` imports the project's DEFAULT_PERMISSION_CLASSES while it loads,
     # and an isik permission among them loads this module - before that module has its handler to give.
@@ -58,21 +80,40 @@ def exception_handler(exc, context):
     if isinstance(exc, ValidationError):
         exc = drf_validation_error(exc)
     response = drf_exception_handler(exc, context)
-    if response is not None and isinstance(response.data, dict) and set(response.data) == {"detail"}:
-        detail = response.data["detail"]
-        if isinstance(detail, ErrorDetail):
-            response.data["code"] = detail.code
+    if response is None:
+        return None
+    one = isinstance(response.data, dict) and set(response.data) == {"detail"}
+    if one and isinstance(response.data["detail"], ErrorDetail):
+        response.data["code"] = response.data["detail"].code
+    elif isinstance(exc, DRFValidationError):
+        response.data = coded(exc.detail)
     return response
 
 
 class Refused(APIException):
-    """A change refused for what the row is, not what was sent - a forced subscription, say."""
+    """
+    A request refused, its body as given - `{"detail", "code"}` and any data beside them, each value as it
+    is, never made a message. 409 unless it says otherwise.
+    """
 
     status_code = status.HTTP_409_CONFLICT
-    default_detail = gettext_lazy("This can't be changed.")
-    default_code = "refused"
+
+    def __init__(self, body, *, status_code=None):
+        super().__init__()
+        self.detail = body
+        if status_code is not None:
+            self.status_code = status_code
 
 
-def refusal(message, *, code):
-    """`Refused`, its body `{"detail", "code"}` whatever exception handler a project sets - a client reads the code."""
-    return Refused({"detail": message, "code": code})
+def refusal(message, *, code, status=None, **data):
+    """
+    `Refused`, its body `{"detail", "code"}` and `data` beside them, whatever exception handler a project
+    sets - a client reads the code, and the data as it was given:
+
+        raise refusal(_("Some organizations refused you."), code="join_refused", status=400,
+                      refused=[{"organization": str(pk), "reason": "schema_is_gone"}])
+
+        400  {"refused": [{"organization": "01a1...", "reason": "schema_is_gone"}],
+              "detail": "Some organizations refused you.", "code": "join_refused"}
+    """
+    return Refused({**data, "detail": message, "code": code}, status_code=status)

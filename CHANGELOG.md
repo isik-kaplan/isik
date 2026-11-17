@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-11-17
+
+### Added
+
+- `refusal(message, *, code, status=None, **data)` takes a status - 409 unless given - and data, carried
+  beside `detail` and `code` as given: a refusal saying which rows it refused and why, raised, its values
+  never made messages. `Refused(body, *, status_code=None)` keeps its body as given.
+
+### Changed
+
+- **Breaking:** isik's `exception_handler` answers a validation error with each message's code beside it:
+  every message is `{"message", "code"}`, wherever DRF puts one - a field's list, `non_field_errors`, a
+  nested or `many=True` serializer's, a bare list - the shape of DRF's `get_full_details()`. A message DRF
+  held alone is in a list now too: `ValidationError({"city": "Unknown."})` read `{"city": "Unknown."}` and
+  now reads `{"city": [{"message": "Unknown.", "code": "invalid"}]}`. A field error read
+  `{"email": ["Enter a valid email address."]}` and now reads
+  `{"email": [{"message": "Enter a valid email address.", "code": "invalid"}]}`. `{"detail", "code"}` is as it
+  was, a validation error raised as one message - `ValidationError({"detail": "..."}, code=...)` - among them. Every
+  value in a validation error is a message, data carried in one included: carry data with `refusal()`. A client reading 400 bodies needs a reader for the new shape - `@isikk/core`'s reads both.
+- `EndpointViewSet` refuses a new subscription to a kind not sent on webhook with the code
+  `kind_not_sent_on_webhook`, told apart from `kind_inert_on_webhook`, a subscription held already and left
+  inert.
+
 ## [0.56.0] - 2026-11-15
 
 ### Added

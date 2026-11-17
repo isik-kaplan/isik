@@ -34,15 +34,57 @@ REST_FRAMEWORK = {"EXCEPTION_HANDLER": "isik.django.drf.error_handling.exception
 # 404  {"detail": "No Widget matches the given query.", "code": "not_found"}
 ```
 
-A validation error keeps DRF's shape, its fields' messages; anything that isn't an API error is left to
-DRF as before. What headers a refusal carries is the project's to add.
+A validation error carries each message's code the same way: every message in it is `{"message", "code"}`,
+where DRF puts the message - a field's list, `non_field_errors`, a nested or `many=True` serializer's, a bare
+list - as DRF's `get_full_details()` has it, and always in a list, a message DRF holds alone
+(`ValidationError({"city": "Unknown."})`) too:
+
+```python
+# 400  {"email": [{"message": "Enter a valid email address.", "code": "invalid"}]}
+# 400  {"items": [{}, {"qty": [{"message": "Ensure this value is less than or equal to 5.", "code": "max_value"}]}]}
+# 400  {"non_field_errors": [{"message": "Pick one.", "code": "one"}]}
+```
+
+A validation error raised as one message - `ValidationError({"detail": "Disable it first."},
+code="disable_first")`, a refusal that names no field - is answered as one, the shape above:
+`{"detail": "Disable it first.", "code": "disable_first"}`.
+
+Every value in a validation error is a message: data carried in one - an id, a reason - comes out as
+`{"message": "<the id>", "code": "invalid"}`. A refusal carrying data is `refusal()`'s, below.
+
+A code is a stable identifier, part of the API: a client branches on it, and the message, translated and
+reworded freely, is what a person reads. isik's own codes change only with a breaking release, named in the
+changelog. Anything that isn't an API error is left to DRF as before. What headers a refusal carries is the
+project's to add.
 
 Django's own `ValidationError` is a 400 in that shape too, not a 500. DRF never calls `full_clean()`, so a
 row a `CheckConstraint` refuses is refused by `FullCleanOnSaveModel.save()` after the serializer passed - and
 without this, that refusal escapes the view. A `UniqueConstraint` never got that far: DRF builds a validator
-from one itself. With it, the constraint's `violation_error_message` is what the client reads:
+from one itself. With it, the constraint's `violation_error_message` is what the client reads, and its
+`violation_error_code` the code - `invalid` when it sets none:
 
 ```python
-# 400  {"non_field_errors": ["A site has one primary domain."]}
+# 400  {"non_field_errors": [{"message": "A site has one primary domain.", "code": "one_primary_domain"}]}
 ```
 
+## `refusal`
+
+`refusal(message, *, code, status=None, **data)` is a request refused - raised, so the transaction it's in
+rolls back - its body `{"detail", "code"}` and `data` beside them, each value as it was given, whatever
+exception handler a project sets. 409 unless `status` says otherwise:
+
+```python
+from isik.django.drf.error_handling import refusal
+
+raise refusal(_("This subscription is forced by staff, so it can't be changed."), code="subscription_forced")
+# 409  {"detail": "This subscription is forced by staff, so it can't be changed.", "code": "subscription_forced"}
+
+raise refusal(
+    _("Some organizations refused you."), code="join_refused", status=400,
+    refused=[{"organization": str(pk), "reason": "schema_is_gone"}],
+)
+# 400  {"refused": [{"organization": "01a1...", "reason": "schema_is_gone"}],
+#       "detail": "Some organizations refused you.", "code": "join_refused"}
+```
+
+`detail` and `code` are always the message and code given; data under either name is dropped.

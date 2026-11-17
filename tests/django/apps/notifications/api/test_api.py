@@ -381,12 +381,13 @@ class TestEndpoints:
             **keyed(HTTP_IF_MATCH=version_of(client, endpoint)),
         )
         serializer = drf.endpoint_serializer(get_endpoint_model())(
-            endpoint, data={"kinds": [{"kind": "parcel_reminder"}]}, partial=True
+            endpoint, data={"kinds": [{"kind": "parcel_reminder"}, {"kind": "parcel_routed"}]}, partial=True
         )
         serializer.is_valid()
 
         assert answered.json() == {"kinds": [{"kind": [inert]}, {"kind": ["parcel_routed isn't sent to webhooks."]}]}
         assert serializer.errors["kinds"][0]["kind"][0].code == "kind_inert_on_webhook"
+        assert serializer.errors["kinds"][1]["kind"][0].code == "kind_not_sent_on_webhook"
         assert get_endpoint_kind_model().objects.filter(endpoint=endpoint).count() == 1
 
         another = get_endpoint_model().objects.create(url="https://hooks.example/other", secret="s")

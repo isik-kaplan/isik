@@ -126,7 +126,7 @@ of your own. A success clears the count.
 **A kind that stops going to webhooks.** An endpoint subscribes only to a kind sent on webhook: a subscription
 (`EndpointKind`) to a kind whose webhook policy is `Policy.NEVER` - or names none - is refused when it's written,
 by the database (`check_violation`, `<model>: the kind is not sent on webhook.`) and by `EndpointViewSet`, which
-says `<kind> isn't sent to webhooks.` The database's guard fails closed on purpose: a policy row whose `channels`
+refuses it with `kind_not_sent_on_webhook`: `<kind> isn't sent to webhooks.` The database's guard fails closed on purpose: a policy row whose `channels`
 has no `webhook` key counts as not sent on webhook. A declaration names every channel, so a mirrored row always
 has it - but should one ever lack it, an endpoint is refused rather than quietly taken.
 
@@ -140,7 +140,10 @@ choice, or the endpoint's owner's. They show:
   subscription - so a page can say "<label>: no longer sent" without asking again;
 - to an endpoint writing its kinds again with an inert one among them, refused with
   `kind_inert_on_webhook`: `<kind> isn't sent on webhook any more; this endpoint's subscription to it is kept but
-  inert - delete it, or wait for the kind to be sent again.`
+  inert - delete it, or wait for the kind to be sent again.` A kind the endpoint doesn't hold yet is
+  refused with `kind_not_sent_on_webhook`, as any new one - each code in the endpoint's 400 beside its
+  `kind`, with isik's `exception_handler`. A project's own permissions on the endpoint answer first: a 403
+  there comes before either.
 
 When the mirror's transaction commits a kind moving to `never` on webhook, `endpoint_kinds_withdrawn` is sent -
 `sender` the kind policy model, `kind` its name, `endpoint_ids` the ids of the endpoints subscribed to it, as

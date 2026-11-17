@@ -4,10 +4,10 @@ import sys
 import pytest
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.http import Http404
-from rest_framework.exceptions import NotAuthenticated, PermissionDenied
+from rest_framework.exceptions import ErrorDetail, NotAuthenticated, PermissionDenied
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
-from isik.django.drf.error_handling import django_to_drf_validation_error, exception_handler
+from isik.django.drf.error_handling import django_to_drf_validation_error, exception_handler, refusal
 
 
 class TestDjangoToDrfValidationError:
@@ -101,10 +101,59 @@ class TestTheExceptionHandler:
         assert set(response.data) == {"detail", "code"}
         assert response.data["code"] == code
 
-    def test_a_validation_error_keeps_its_fields(self):
-        response = exception_handler(DRFValidationError({"name": ["This field is required."]}), {})
+    def test_a_validation_errors_messages_carry_their_codes(self):
+        raised = DRFValidationError({"name": [ErrorDetail("This field is required.", code="required")]})
 
-        assert response.data == {"name": ["This field is required."]}
+        response = exception_handler(raised, {})
+
+        assert response.status_code == 400
+        assert response.data == {"name": [{"message": "This field is required.", "code": "required"}]}
+
+    def test_every_message_is_coded_however_deep(self):
+        raised = DRFValidationError(
+            {
+                "non_field_errors": [ErrorDetail("Pick one.", code="one")],
+                "address": {"city": [ErrorDetail("Unknown.", code="unknown")]},
+                "items": [{}, {"qty": [ErrorDetail("Too many.", code="max_value")]}],
+            }
+        )
+
+        assert exception_handler(raised, {}).data == {
+            "non_field_errors": [{"message": "Pick one.", "code": "one"}],
+            "address": {"city": [{"message": "Unknown.", "code": "unknown"}]},
+            "items": [{}, {"qty": [{"message": "Too many.", "code": "max_value"}]}],
+        }
+
+    def test_a_validation_error_raised_as_one_message_is_answered_as_one(self):
+        raised = DRFValidationError({"detail": "Disable it first."}, code="disable_first")
+
+        response = exception_handler(raised, {})
+
+        assert response.status_code == 400
+        assert response.data == {"detail": "Disable it first.", "code": "disable_first"}
+
+    def test_a_field_called_detail_is_a_field(self):
+        raised = DRFValidationError({"detail": [ErrorDetail("Too long.", code="max_length")]})
+
+        assert exception_handler(raised, {}).data == {"detail": [{"message": "Too long.", "code": "max_length"}]}
+
+    def test_a_message_held_alone_is_listed_however_deep(self):
+        raised = DRFValidationError({"city": "Unknown.", "address": {"street": ErrorDetail("Long.", code="long")}})
+
+        assert exception_handler(raised, {}).data == {
+            "city": [{"message": "Unknown.", "code": "invalid"}],
+            "address": {"street": [{"message": "Long.", "code": "long"}]},
+        }
+
+    def test_a_list_of_lists_is_coded_in_each(self):
+        raised = DRFValidationError({"grid": [[ErrorDetail("Bad.", code="bad")]]})
+
+        assert exception_handler(raised, {}).data == {"grid": [[{"message": "Bad.", "code": "bad"}]]}
+
+    def test_a_validation_error_raised_bare_is_a_coded_list(self):
+        assert exception_handler(DRFValidationError("Nope.", code="nope"), {}).data == [
+            {"message": "Nope.", "code": "nope"}
+        ]
 
     def test_a_django_validation_error_is_a_400_in_drfs_shape_with_its_codes(self):
         raised = ValidationError({"name": [ValidationError("Taken.", code="taken")]})
@@ -112,8 +161,7 @@ class TestTheExceptionHandler:
         response = exception_handler(raised, {})
 
         assert response.status_code == 400
-        assert response.data == {"name": ["Taken."]}
-        assert response.data["name"][0].code == "taken"
+        assert response.data == {"name": [{"message": "Taken.", "code": "taken"}]}
 
     def test_a_models_own_error_is_under_drfs_non_field_key(self):
         raised = ValidationError({NON_FIELD_ERRORS: [ValidationError("A site has one primary domain.", code="one")]})
@@ -121,18 +169,21 @@ class TestTheExceptionHandler:
         response = exception_handler(raised, {})
 
         assert response.status_code == 400
-        assert response.data == {"non_field_errors": ["A site has one primary domain."]}
-        assert response.data["non_field_errors"][0].code == "one"
+        assert response.data == {"non_field_errors": [{"message": "A site has one primary domain.", "code": "one"}]}
 
     def test_a_models_own_errors_join_any_already_under_the_key(self):
         raised = ValidationError({"non_field_errors": ["first"], NON_FIELD_ERRORS: ["second"]})
 
-        assert exception_handler(raised, {}).data == {"non_field_errors": ["first", "second"]}
+        assert exception_handler(raised, {}).data == {
+            "non_field_errors": [{"message": "first", "code": "invalid"}, {"message": "second", "code": "invalid"}]
+        }
 
     def test_the_key_is_the_one_the_project_set(self, settings):
         settings.REST_FRAMEWORK = {**getattr(settings, "REST_FRAMEWORK", {}), "NON_FIELD_ERRORS_KEY": "errors"}
 
-        assert exception_handler(ValidationError("Nope."), {}).data == {"errors": ["Nope."]}
+        assert exception_handler(ValidationError("Nope."), {}).data == {
+            "errors": [{"message": "Nope.", "code": "invalid"}]
+        }
 
     @pytest.mark.django_db
     def test_a_refused_constraint_reaches_the_client_as_its_message(self):
@@ -143,8 +194,9 @@ class TestTheExceptionHandler:
         response = exception_handler(refused.value, {})
 
         assert response.status_code == 400
-        assert response.data == {"non_field_errors": ["kind must be one of: bolt, nut."]}
-        assert response.data["non_field_errors"][0].code == "invalid_choice"
+        assert response.data == {
+            "non_field_errors": [{"message": "kind must be one of: bolt, nut.", "code": "invalid_choice"}]
+        }
 
     def test_what_isnt_an_api_error_is_left_alone(self):
         assert exception_handler(ValueError("boom"), {}) is None
@@ -183,3 +235,31 @@ def test_drfs_views_load_with_an_isik_permission_by_default():
     )
 
     assert run.returncode == 0, run.stderr
+
+
+class TestARefusal:
+    def test_is_a_409_with_its_message_and_code(self):
+        response = exception_handler(refusal("Forced by staff.", code="subscription_forced"), {})
+
+        assert response.status_code == 409
+        assert response.data == {"detail": "Forced by staff.", "code": "subscription_forced"}
+
+    def test_carries_its_data_as_given(self):
+        refused = [{"organization": "01a1e7c6-12ff-7025-ada2-0e594bc98577", "reason": "schema_is_gone", "tries": 3}]
+
+        response = exception_handler(
+            refusal("Some organizations refused you.", code="join_refused", status=400, refused=refused), {}
+        )
+
+        assert response.status_code == 400
+        assert response.data == {
+            "refused": refused,
+            "detail": "Some organizations refused you.",
+            "code": "join_refused",
+        }
+        assert type(response.data["refused"][0]["organization"]) is str
+
+    def test_its_message_and_code_are_its_own_whatever_the_data_says(self):
+        response = exception_handler(refusal("Mine.", code="mine", detail="theirs"), {})
+
+        assert response.data == {"detail": "Mine.", "code": "mine"}

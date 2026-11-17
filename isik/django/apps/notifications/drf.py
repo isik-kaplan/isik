@@ -213,7 +213,9 @@ class EndpointKindSerializer(serializers.Serializer):
         endpoint = self.parent.parent.instance
         held = get_endpoint_kind_model()._default_manager.filter(endpoint=endpoint, kind=policy).exists()
         if endpoint is None or not held:
-            return ValidationError({"kind": _("%(kind)s isn't sent to webhooks.") % {"kind": policy.name}})
+            return ValidationError(
+                {"kind": _("%(kind)s isn't sent to webhooks.") % {"kind": policy.name}}, code="kind_not_sent_on_webhook"
+            )
         return ValidationError(
             {
                 "kind": _(

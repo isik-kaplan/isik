@@ -279,7 +279,7 @@ msgstr ""
 msgid "%(kind)s is declared, and the database has no policy row for it - nothing writes its notices until migrate writes one, as the migrate this is shown by will."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:243
+#: isik/django/apps/notifications/drf.py:245
 #, python-format
 msgid "%(kind)s is named twice."
 msgstr ""
@@ -319,7 +319,7 @@ msgstr ""
 msgid "%(kind)s is single-partition, and its audience named %(count)s partitions for notice %(notice)s."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:247
+#: isik/django/apps/notifications/drf.py:249
 #, python-format
 msgid "%(kind)s is wanted for every variant and for some - name it once, with no variant, for all."
 msgstr ""
@@ -329,12 +329,12 @@ msgstr ""
 msgid "%(kind)s isn't sent on webhook - %(count)s endpoints' subscriptions to it are inert: %(ids)s"
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:219
+#: isik/django/apps/notifications/drf.py:221
 #, python-format
 msgid "%(kind)s isn't sent on webhook any more; this endpoint's subscription to it is kept but inert - delete it, or wait for the kind to be sent again."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:216
+#: isik/django/apps/notifications/drf.py:217
 #, python-format
 msgid "%(kind)s isn't sent to webhooks."
 msgstr ""
@@ -1350,7 +1350,7 @@ msgstr ""
 msgid "%(view)s declares %(guard)s but doesn't run field guards - add GuardedFieldsMixin (part of BaseModelViewSet)."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:677
+#: isik/django/apps/notifications/drf.py:679
 #, python-format
 msgid "%(view)s doesn't know whose endpoints a caller sees - set its owner_field, or override get_queryset()."
 msgstr ""
@@ -1935,7 +1935,7 @@ msgstr ""
 msgid "Each channel the kind is declared on, and who gets it there: everyone its audience names, opted-out aside, only the opted-in, or no one."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:549
+#: isik/django/apps/notifications/drf.py:551
 msgid "Each channel, and what you get of it there - those it never goes out on too."
 msgstr ""
 
@@ -2267,7 +2267,7 @@ msgstr ""
 
 #: isik/django/apps/features/drf.py:108
 #: isik/django/apps/features/drf.py:188
-#: isik/django/apps/notifications/drf.py:544
+#: isik/django/apps/notifications/drf.py:546
 msgid "Its name, as a person reads it."
 msgstr ""
 
@@ -2275,7 +2275,7 @@ msgstr ""
 msgid "Its target, as one key - what keeps a notice from reaching one target twice."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:546
+#: isik/django/apps/notifications/drf.py:548
 msgid "Its variants, if any."
 msgstr ""
 
@@ -2939,7 +2939,7 @@ msgstr ""
 msgid "The endpoint's primary key."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:253
+#: isik/django/apps/notifications/drf.py:255
 msgid "The endpoint's subscriptions its kind isn't sent on webhook now: kept, inert, and sent again when it is."
 msgstr ""
 
@@ -3004,7 +3004,7 @@ msgstr ""
 msgid "The kind it's for."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:543
+#: isik/django/apps/notifications/drf.py:545
 msgid "The kind's name - the key everything else names it by."
 msgstr ""
 
@@ -3240,7 +3240,7 @@ msgstr ""
 msgid "The user whose inbox it lands in."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:533
+#: isik/django/apps/notifications/drf.py:535
 msgid "The variants staff forced for you here, one by one."
 msgstr ""
 
@@ -3266,10 +3266,6 @@ msgstr ""
 
 #: isik/common/settings/messages.py:44
 msgid "These may take a long time:"
-msgstr ""
-
-#: isik/django/drf/error_handling.py:72
-msgid "This can't be changed."
 msgstr ""
 
 #: isik/django/drf/viewsets/preconditions.py:69
@@ -3322,7 +3318,7 @@ msgid "This request must say which version it was made against, in an If-Match h
 msgstr ""
 
 #: isik/django/apps/notifications/audience/helpers.py:83
-#: isik/django/apps/notifications/drf.py:447
+#: isik/django/apps/notifications/drf.py:449
 msgid "This subscription is forced by staff, so it can't be changed."
 msgstr ""
 
@@ -3448,7 +3444,7 @@ msgstr ""
 msgid "What it may be."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:545
+#: isik/django/apps/notifications/drf.py:547
 msgid "What it's about."
 msgstr ""
 
@@ -3476,7 +3472,7 @@ msgstr ""
 msgid "What refused it, for a client to tell refusals apart."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:530
+#: isik/django/apps/notifications/drf.py:532
 msgid "What staff forced it to for you here, every variant - else none."
 msgstr ""
 
@@ -3656,7 +3652,7 @@ msgstr ""
 msgid "Whether pushes are sent to it."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:528
+#: isik/django/apps/notifications/drf.py:530
 msgid "Whether staff forced it for you here, every variant."
 msgstr ""
 
@@ -3684,11 +3680,11 @@ msgstr ""
 msgid "Whether the user gets the kind."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:526
+#: isik/django/apps/notifications/drf.py:528
 msgid "Whether you get each variant of it here now."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:523
+#: isik/django/apps/notifications/drf.py:525
 msgid "Whether you get it here now, every variant - forced, your own choice, or its policy."
 msgstr ""
 
@@ -3696,7 +3692,7 @@ msgstr ""
 msgid "Whether you may change it."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:521
+#: isik/django/apps/notifications/drf.py:523
 msgid "Whether you may turn it on or off here."
 msgstr ""
 
@@ -3728,7 +3724,7 @@ msgstr ""
 msgid "Who cast this vote."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:519
+#: isik/django/apps/notifications/drf.py:521
 msgid "Who gets it here by default - never: it isn't available on this channel."
 msgstr ""
 
@@ -3761,7 +3757,7 @@ msgstr ""
 msgid "Why it failed, or nothing."
 msgstr ""
 
-#: isik/django/apps/notifications/drf.py:536
+#: isik/django/apps/notifications/drf.py:538
 msgid "Why it was forced here, if you may read it."
 msgstr ""
 
