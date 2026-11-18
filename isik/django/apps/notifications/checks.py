@@ -35,6 +35,7 @@ from isik.django.apps.notifications.audience.swapping import (
     get_endpoint_model,
     get_subscription_model,
 )
+from isik.django.apps.notifications.audiences import annotations_of
 from isik.django.apps.notifications.channels import Channel, ChannelName, get_channel, registered
 from isik.django.apps.notifications.channels.email import send_from_mjml_templates, send_from_templates
 from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy, Scope, Source
@@ -469,7 +470,21 @@ def kind_problems():
                     _("%(kind)s's push carries %(fields)s, which its snapshot doesn't.")
                     % {"kind": kind.name, "fields": ", ".join(unsnapshotted)}
                 )
-    return problems
+    return problems + _annotation_problems()
+
+
+def _annotation_problems():
+    """Two audiences annotating the user row under one name - the row holds one of them, and both read it."""
+    givers = {}
+    for kind in declarations.kinds().values():
+        for name in annotations_of(kind.audience):
+            givers.setdefault(name, {})[(type(kind.audience), str(kind.audience))] = kind.audience
+    return [
+        _("The audiences %(audiences)s each annotate the user row as %(name)s.")
+        % {"audiences": ", ".join(sorted(str(audience) for audience in audiences.values())), "name": name}
+        for name, audiences in sorted(givers.items())
+        if len(audiences) > 1
+    ]
 
 
 def _mirrored(databases):

@@ -6,6 +6,7 @@ import pgtrigger
 import pytest
 from django.apps import apps
 from django.db import DatabaseError
+from django.db.models import Value
 
 from isik.django.apps.common.checks import Check, CheckOption
 from isik.django.apps.notifications import checks, conf, kinds
@@ -198,7 +199,50 @@ class Spanning(Audience):
     spans_partitions = True
 
 
+class Annotating(Audience):
+    def __init__(self, *names):
+        self.names = names
+
+    def annotations(self):
+        return {name: Value(True) for name in self.names}
+
+    def __str__(self):
+        return f"Annotating({', '.join(self.names)})"
+
+
+class Owners(Annotating):
+    def __init__(self):
+        super().__init__("is_owner")
+
+
 class TestTheKinds:
+    def test_audiences_annotating_the_user_row_under_one_name(self, declaring):
+        declaring(
+            shipped(audience=Annotating("is_owner", "is_staff")),
+            shipped(name="parcel_routed", audience=Annotating("is_owner")),
+            shipped(name="parcel_flagged", audience=Annotating("is_staff", "holds")),
+            kinds.get_kind("parcel_receipt"),
+        )
+
+        assert kind_problems() == [
+            "The audiences Annotating(is_owner), Annotating(is_owner, is_staff) each annotate the user row as "
+            "is_owner.",
+            "The audiences Annotating(is_owner, is_staff), Annotating(is_staff, holds) each annotate the user row as "
+            "is_staff.",
+        ]
+
+    def test_one_audience_on_many_kinds_annotating_alike(self, declaring):
+        declaring(shipped(audience=Owners()), shipped(name="parcel_routed", audience=Owners()))
+
+        assert kind_problems() == []
+
+    def test_two_audience_classes_named_alike_annotating_alike(self, declaring):
+        declaring(shipped(audience=Owners()), shipped(name="parcel_routed", audience=Annotating("is_owner")))
+
+        assert kind_problems() == [
+            "The audiences Annotating(is_owner), Annotating(is_owner) each annotate the user row as is_owner."
+        ]
+
     def test_one_declared_twice(self, declaring):
         reminder = kinds.get_kind("parcel_reminder")
         declaring(reminder, reminder, shipped(), shipped())

@@ -50,6 +50,80 @@ safe at the top; your own models aren't.
 Return `snapshot_fields()` from your own audience if it reads the snapshot, so the check holds the
 kind's snapshot to it.
 
+### Who could ever get a kind: `could_include()`
+
+`recipients()` answers for one notice. `could_include(user)` answers before there is one: could this
+person ever be among the recipients? `True`, `False`, or `None` - "can't tell". It's what the preferences
+show (`in_audience` on each kind) and what a subscription is refused by: setting one for a kind whose
+audience answers `False` is refused, since the fan-out would never read it. `Subscribers` answers `True` -
+subscribing is how a person joins it - and `Field` and an audience saying nothing answer `None`, which
+refuses nothing.
+
+It's asked for every kind a person sees at once, so it answers from the user row alone, never with a query
+of its own. A role on the row is read off it:
+
+```python
+class Operators(Audience):
+    def recipients(self, notice):
+        return get_user_model().objects.filter(is_staff=True)
+
+    def could_include(self, user):
+        return user.is_staff
+```
+
+What the row doesn't hold, `annotations()` puts on it - `{name: expression}`, as `QuerySet.annotate()`
+takes them. isik loads the person once with every visible kind's audiences' annotations together, then asks
+each audience, so the preferences ask one query for this however many kinds and audiences there are, and
+none when no audience annotates:
+
+```python
+from django.db.models import Exists, OuterRef
+
+
+class Owners(Audience):
+    def recipients(self, notice):
+        return get_user_model().objects.filter(memberships__role="owner")
+
+    def annotations(self):
+        from apps.organizations.models import Membership
+
+        return {"owns_something": Exists(Membership.objects.filter(user=OuterRef("pk"), role="owner"))}
+
+    def could_include(self, user):
+        return user.owns_something
+
+
+class InstallationHolders(Audience):
+    # Who holds an installation changes with what's installed now - None, and it refuses nothing.
+    def could_include(self, user):
+        return None
+```
+
+A name means one thing on the row: give it from one audience. An audience on many kinds is the same
+audience on each - the same class, its `str()` the same - and gives its annotations once; two different
+ones giving one name are refused at startup (`isik.E014`). Name a configurable audience's annotations by
+what configures it, as `__str__` does.
+
+A subscription written before its audience said `False` - by a person it never included - stays: the
+fan-out asks the audience first, so it's never read and changes nothing they get, and deleting it still
+works. Only writing one again is refused.
+
+The answer is the kind's, every variant at once: an audience is asked who a kind could reach, not a variant.
+
+`could_reach(user, names)` (`isik.django.apps.notifications.audiences`) is the same answer for your own
+views - `{name: True, False or None}`, `None` for a recorded kind - in that one query. A `KINDS_VISIBLE`
+hiding the kinds a person could never get is:
+
+```python
+from isik.django.apps.notifications.audiences import could_reach
+from isik.django.apps.notifications.kinds import kinds
+
+
+def kinds_visible(request):
+    names = list(kinds())
+    return [name for name, reach in could_reach(request.user, names).items() if reach is not False]
+```
+
 ## Policies
 
 Each kind has a `Policy` on each channel, in its `channels` (see

@@ -55,6 +55,7 @@ from isik.django.apps.notifications.audience.swapping import (
     get_inbox_item_model,
     get_subscription_model,
 )
+from isik.django.apps.notifications.audiences import could_reach
 from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy
 from isik.django.apps.notifications.kinds import kinds, rendered, text_of
 from isik.django.apps.notifications.pipeline import RetryRefused, gets, is_forced, retry_delivery
@@ -430,6 +431,13 @@ class SubscriptionViewSet(
     # The row is written by subscribe(), which sets one or replaces the one before.
     def perform_create(self, serializer):
         data = serializer.validated_data
+        name = data["kind"].name
+        if could_reach(self.request.user, [name])[name] is False:
+            raise refusal(
+                _("%(kind)s is sent to people you aren't among, so you can't choose whether you get it.")
+                % {"kind": name},
+                code="not_in_audience",
+            )
         try:
             serializer.instance = subscribe(
                 self.request.user,
@@ -546,6 +554,12 @@ class NoticeKindSerializer(serializers.Serializer):
     label = serializers.CharField(allow_null=True, help_text=gettext_lazy("Its name, as a person reads it."))
     description = serializers.CharField(allow_null=True, help_text=gettext_lazy("What it's about."))
     variants = serializers.ListField(child=serializers.CharField(), help_text=gettext_lazy("Its variants, if any."))
+    in_audience = serializers.BooleanField(
+        allow_null=True,
+        help_text=gettext_lazy(
+            "Whether you could ever get it - false: it's sent to people you aren't among; null: that can't be told."
+        ),
+    )
     channels = serializers.DictField(
         child=ChannelStateSerializer(),
         help_text=gettext_lazy("Each channel, and what you get of it there - those it never goes out on too."),
@@ -581,13 +595,15 @@ class NoticeKindViewSet(BaseViewSet):
         hook = conf.setting("KINDS_VISIBLE")
         shown = None if hook is None else set(hook(self.request))
         rows = [row for row in active if shown is None or row[0] in shown]
-        states = kind_states(self.request.user, [name for name, _variants in rows])
+        names = [name for name, _variants in rows]
+        states, reach = kind_states(self.request.user, names), could_reach(self.request.user, names)
         return {
             name: {
                 "kind": name,
                 "label": _text(text_of(name).label),
                 "description": _text(text_of(name).description),
                 "variants": variants,
+                "in_audience": reach[name],
                 "channels": states[name],
             }
             for name, variants in rows

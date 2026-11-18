@@ -18,7 +18,7 @@ Every kind a person may get - the mandatory ones too - so a client renders the p
 
 | route | |
 |---|---|
-| `GET /` | the kinds: `{kind, label, description, variants, channels}` |
+| `GET /` | the kinds: `{kind, label, description, variants, in_audience, channels}` |
 | `GET /{kind}/` | one |
 
 `channels` is `{channel: {policy, may_change, enabled, enabled_variants, forced, forced_enabled,
@@ -33,6 +33,10 @@ source shows it. A client draws the preferences from these alone, with no policy
 switch per kind, say, on where every changeable channel is on, off where none is and mixed between, setting
 every channel at once with a subscription naming none. One function answers these for every view, so the
 kinds and the subscriptions can't disagree.
+
+`in_audience` is whether the caller could ever get the kind - its audience's
+[`could_include()`](audiences.md#who-could-ever-get-a-kind-could_include): `false` where it's sent to people
+they aren't among, so a client hides the row or says why it's locked; `null` where that can't be told.
 
 Which kinds a caller sees is `KINDS_VISIBLE(request)` - every active kind by default - and which fields
 are published is `NOTICE_KIND_FIELDS`, every one by default (name the rest to leave out `channels`, say).
@@ -58,6 +62,9 @@ The caller's own subscriptions.
 | `GET /` | them - a forced one with `forced: true`, `forced_enabled` what it's forced to (`enabled` stays the caller's own choice), and its `forced_reason` where the source shows it |
 | `POST /` | `{kind, variant, channel, enabled}` - sets one, with `subscribe()`, made or replacing the ones it covers: `201` either way; no key needed. No `channel` is every channel the kind leaves to the caller |
 | `DELETE /{id}/` | forgets one, so the policy decides again |
+
+A subscription to a kind whose audience can't include the caller (`in_audience` false) is refused, a `409`
+with code `not_in_audience`; one already held can still be deleted.
 
 A channel the kind leaves no choice on, a kind leaving none on any, or a forced subscription, is refused
 with `409` and its code - `channel_not_chosen`, `kind_mandatory`, `subscription_forced` - in the

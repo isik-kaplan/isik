@@ -268,6 +268,8 @@ PUSH = {Channel.PUSH: Policy.DEFAULT_ON} if Channel.PUSH in conf.setting("CHANNE
   `CHANNELS` leaves off
 - `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF` on a channel no person chooses on - a webhook's
 - a single-partition kind whose audience spans partitions; a cross-partition one with no partitions
+- two different audiences annotating the user row under one name (see
+  [`could_include()`](audiences.md#who-could-ever-get-a-kind-could_include))
 - a channel `CHANNELS` turns on that can't be loaded - a broken `notifications` extra, say - found at
   startup rather than by the first fan-out, which would set every notice aside
 - a kind declared on a ledger model or a pghistory event model - a loop, or a copy of what pghistory wrote

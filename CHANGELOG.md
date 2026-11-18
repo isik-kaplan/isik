@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-11-18
+
+### Added
+
+- `Audience.could_include(user)` - whether a person could ever be among an audience's recipients: True,
+  False, or None where it can't be told, the default. `Subscribers` answers True. It answers from the user row
+  alone; `Audience.annotations()` - `{name: expression}` - puts on the row what it doesn't hold, and the
+  person is loaded once with every audience's annotations, so a list of kinds asks one query for it however
+  many there are, and none when no audience annotates. `isik.E014` refuses two different audiences annotating
+  one name.
+- `could_reach(user, names)` - `{name: True, False or None}` for the kinds named, in that one query.
+- `NoticeKindViewSet` publishes `in_audience` on each kind, and `SubscriptionViewSet` refuses a subscription
+  to a kind whose audience answers False, a 409 with code `not_in_audience`. One written before stays, never
+  read by the fan-out, and may be deleted.
+
 ## [0.57.0] - 2026-11-17
 
 ### Added

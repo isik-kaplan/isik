@@ -254,6 +254,7 @@ class TestSubscriptions:
             "label": "Parcel flagged",
             "description": None,
             "variants": ["lost", "damaged"],
+            "in_audience": None,
             "channels": {
                 channel: {
                     "policy": policy,
