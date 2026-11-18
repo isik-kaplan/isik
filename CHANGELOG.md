@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to a kind whose audience answers False, a 409 with code `not_in_audience`. One written before stays, never
   read by the fan-out, and may be deleted.
 
+### Changed
+
+- Once an audience answers `could_include`, a subscription its kind's audience answers False for, which was
+  a 201 writing a row the fan-out never read, is a 409 `not_in_audience`. A project's own tests that subscribe
+  someone outside a kind's audience fail on it; each one was a preference that never did anything.
+
 ## [0.57.0] - 2026-11-17
 
 ### Added
