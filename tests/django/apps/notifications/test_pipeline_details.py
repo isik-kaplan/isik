@@ -267,13 +267,23 @@ class TestFanningOutEveryNotice:
 
         assert order == [earlier.pk, later.pk, tied_low.pk, tied_high.pk]
 
-    def test_ties_come_out_by_number_however_the_rows_lie(self, alice, dispatched, django_capture_on_commit_callbacks):
-        # Twenty tied notices written highest first: the table holds them in no order of their numbers, so
-        # only the order by key brings them out lowest first - a layout left by earlier tests can't line
-        # twenty up by chance.
+    @pytest.mark.parametrize(
+        "tied",
+        [
+            list(range(979, 959, -1)),
+            [967, 961, 974, 960, 978, 965, 970, 963, 976, 962, 969, 975, 964, 979, 966, 972, 968, 977, 971, 973],
+        ],
+        ids=["highest_first", "shuffled"],
+    )
+    def test_ties_come_out_by_number_however_the_rows_lie(
+        self, tied, alice, dispatched, django_capture_on_commit_callbacks
+    ):
+        # Twenty tied notices written in no order of their numbers - highest first, and shuffled. Without the
+        # order by key, ties come out as the table and the database's sort hand them over, first or last
+        # written first depending on the Postgres version; the shuffle comes out in no order of numbers
+        # either way, so only the order by key brings them out lowest first.
         now = timezone.now()
         policy = NoticeKindPolicy.objects.get(name="parcel_reminder")
-        tied = list(range(979, 959, -1))
         for tied_id in tied:
             Notice.objects.create(id=tied_id, kind=policy, occurred_at=now)
 
