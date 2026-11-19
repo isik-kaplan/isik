@@ -249,6 +249,10 @@ def test_a_push_goes_to_the_projects_device_through_its_own_tables(alice, settin
             for kind in kinds.declared
         ],
     )
+    # And mirrored so, as a migrate would leave it - the fan-out sends on the project's policy row's channels.
+    policy = swapping.get_kind_policy_model().objects.get(name="package_lost")
+    policy.channels = {**policy.channels, Channel.PUSH: Policy.DEFAULT_ON}
+    policy.save(update_fields=["channels"])
     sent = []
     monkeypatch.setattr(
         push,

@@ -26,7 +26,13 @@ from isik.django.apps.notifications.audience.models import Device, InboxItem
 from isik.django.apps.notifications.channels import Channel, push
 from isik.django.apps.notifications.choices import Platform, PushEnvironment, Source
 from isik.django.apps.notifications.kinds import PushContent, PushDataField, raise_notice
-from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState, PushDelivery
+from isik.django.apps.notifications.models import (
+    Delivery,
+    DeliveryAttempt,
+    DeliveryState,
+    NoticeKindPolicy,
+    PushDelivery,
+)
 from isik.django.apps.notifications.pipeline import RetryRefused, retry_delivery
 from isik.django.conf import isik_areas
 from tests.django.apps.notifications import kind_named
@@ -103,6 +109,10 @@ def services(monkeypatch, settings):
             for kind in kinds_module.declared
         ],
     )
+    # And mirrored so, as a migrate would leave it - the fan-out sends on the mirrored row's channels.
+    for policy in NoticeKindPolicy.objects.exclude(source=Source.RECORDED):
+        policy.channels = {**policy.channels, Channel.PUSH: policy.channels["inbox"]}
+        policy.save(update_fields=["channels"])
     return faked
 
 

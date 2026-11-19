@@ -5,6 +5,12 @@ and the declaration is the source of truth - after every `migrate`, each declare
 `NoticeKindPolicy` row is written or brought up to date (a `post_migrate` handler, never a data
 migration, so your migrations stay what `makemigrations` writes).
 
+A kind's channels and their policies are read off that row everywhere - by the fan-out deciding what to send,
+the preferences and subscription endpoints, and the database's own guards - so a change to them takes effect at
+the `migrate` that mirrors it, together, not when new code starts. A worker that runs new code before `migrate`
+does keeps sending as the row says until then. A new kind arrives at `migrate` the same way: a notice of it can't
+be written before its row exists.
+
 ## The vocabulary: `declare_kind()`
 
 Every kind a project has is declared in one place - a module someone reviews - and its name is then handed

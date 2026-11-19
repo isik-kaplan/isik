@@ -26,7 +26,7 @@ from isik.django.apps.notifications import conf
 from isik.django.apps.notifications.audience.bases import AbstractForceableSubscription
 from isik.django.apps.notifications.audience.swapping import get_subscription_model
 from isik.django.apps.notifications.channels import Channel, Outcome, get_channel
-from isik.django.apps.notifications.choices import DeliveryState, Policy, Scope, ShardState, Source
+from isik.django.apps.notifications.choices import CHOSEN, DeliveryState, Policy, Scope, ShardState, Source
 from isik.django.apps.notifications.kinds import _retired, checked_kind, get_kind, matching_variant, write_notice
 from isik.django.apps.notifications.partitions import PartitionGone, in_partition
 from isik.django.apps.notifications.swapping import (
@@ -56,19 +56,26 @@ def backoff(attempts):
 def chosen_users(notice, kind):
     """
     {channel: the users `notice` is for on it} - each channel its kind is sent on, with its audience's users less
-    those its policy there and their subscriptions leave out, each as `gets()` decides. The audience and the
+    those its policy there and their subscriptions leave out, each as `gets()` decides. The channels and their
+    policies are the kind's mirrored row's, which the preferences, the subscription endpoints and the database read
+    too, so what's sent changes when they do - at migrate - not when new code starts. The audience and the
     subscriptions are read once, for every channel. A person has one row matching a variant and a channel at most,
     which `VariantGuard` holds them to.
     """
+    policies = notice.kind.channels
     users = list(kind.audience.recipients(notice))
     # None read where no person chooses: every channel it's sent on is mandatory.
     subscriptions = (
         matching_variant(get_subscription_model()._default_manager.filter(kind_id=notice.kind_id), notice.variant)
-        if kind.chosen_channels
+        if any(policy in CHOSEN for policy in policies.values())
         else ()
     )
     rows = {(row.user_id, row.channel): row for row in subscriptions}
-    return {channel: _chosen_on(users, rows, channel, kind.policy_on(channel)) for channel in kind.enabled_channels}
+    return {
+        channel: _chosen_on(users, rows, channel, policies[channel])
+        for channel in conf.in_channel_order(policies)
+        if policies[channel] != Policy.NEVER
+    }
 
 
 def _chosen_on(users, rows, channel, policy):

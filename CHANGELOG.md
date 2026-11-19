@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The fan-out sends on the channels, under the policies, of a kind's mirrored `NoticeKindPolicy` row - as the
+  preferences, the subscription endpoints and the database's guards already read them - rather than its
+  declaration in code. A worker running new code before `migrate` sent by the new declaration while everything
+  else answered by the old row: a kind moved to `never` on webhook stopped sending while endpoints could still
+  subscribe to it, and the preferences list disagreed with what was sent. Now a change to a kind's channels takes
+  effect at the `migrate` that mirrors it, everywhere at once.
+
 ## [0.58.0] - 2026-11-18
 
 ### Added

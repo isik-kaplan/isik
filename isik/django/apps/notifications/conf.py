@@ -135,6 +135,13 @@ def setting(name):
     return value
 
 
+def in_channel_order(channels):
+    """`channels`' names in `CHANNELS`' order, any it doesn't list after them by name - a database keeps a mapping
+    in an order of its own."""
+    order = {channel: at for at, channel in enumerate(setting("CHANNELS"))}
+    return sorted(channels, key=lambda channel: (order.get(channel, len(order)), channel))
+
+
 def partitioned():
     """Whether the project declares partitions - `PARTITIONS` and `IN_PARTITION` both set."""
     return setting("PARTITIONS") is not None and setting("IN_PARTITION") is not None

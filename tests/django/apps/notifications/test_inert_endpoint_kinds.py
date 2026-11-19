@@ -51,7 +51,10 @@ def heard():
 
 def flipped(monkeypatch, django_capture_on_commit_callbacks, channels):
     """The mirror run with parcel_flagged declared on `channels`, its commit's callbacks run."""
-    with redeclared(monkeypatch, "parcel_flagged", channels=channels), django_capture_on_commit_callbacks(execute=True):
+    with (
+        redeclared(monkeypatch, "parcel_flagged", mirrored=False, channels=channels),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
         mirror_kinds()
 
 
@@ -108,7 +111,7 @@ class TestAFlip:
         get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_flagged"))
 
         flipped(monkeypatch, django_capture_on_commit_callbacks, NEVER_ON_WEBHOOK)
-        with redeclared(monkeypatch, "parcel_flagged", channels=NEVER_ON_WEBHOOK):
+        with redeclared(monkeypatch, "parcel_flagged", mirrored=False, channels=NEVER_ON_WEBHOOK):
             withdrawn = flag(alice)
             fan_out(django_capture_on_commit_callbacks)
         assert get_endpoint_kind_model().objects.filter(endpoint=endpoint).count() == 1
@@ -131,7 +134,7 @@ class TestAFlip:
         ids = sorted([str(endpoint.pk), str(other.pk)])
         Policies = type(kind_named("parcel_flagged"))
 
-        with redeclared(monkeypatch, "parcel_flagged", channels=NEVER_ON_WEBHOOK):
+        with redeclared(monkeypatch, "parcel_flagged", mirrored=False, channels=NEVER_ON_WEBHOOK):
             with django_capture_on_commit_callbacks() as callbacks:
                 mirror_kinds()
             assert heard == []
@@ -179,7 +182,7 @@ class TestTheDatabaseItsMirrorWrites:
         monkeypatch.setattr(manager, "using", lambda self, alias: read.append(alias) or using(self, alias))
         monkeypatch.setattr(sync.transaction, "on_commit", lambda send, using: committing.append(using))
 
-        with redeclared(monkeypatch, "parcel_flagged", channels=NEVER_ON_WEBHOOK):
+        with redeclared(monkeypatch, "parcel_flagged", mirrored=False, channels=NEVER_ON_WEBHOOK):
             mirror_kinds(using="default")
 
         assert (set(read), committing) == ({"default"}, ["default"])

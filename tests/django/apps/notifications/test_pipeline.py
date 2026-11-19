@@ -33,6 +33,7 @@ from isik.django.apps.notifications.models import (
     DeliveryState,
     FanOutShard,
     Notice,
+    NoticeKindPolicy,
     Policy,
     Scope,
     ShardState,
@@ -72,11 +73,23 @@ def deliveries(notice):
 
 
 @contextmanager
-def redeclared(monkeypatch, name, **changes):
-    """The kind `name` declared with `changes` for the duration."""
+def redeclared(monkeypatch, name, *, mirrored=True, **changes):
+    """
+    The kind `name` declared with `changes` for the duration - its mirrored row's channels too, as a migrate would
+    leave them, since those are what the fan-out sends on; not while `mirrored` is False, for a test of the mirror.
+    """
     replaced = [dataclasses.replace(kind, **changes) if kind.name == name else kind for kind in kinds_module.declared]
     monkeypatch.setattr(kinds_module, "declared", replaced)
-    yield
+    if not mirrored or "channels" not in changes:
+        yield
+        return
+    rows = NoticeKindPolicy.objects.filter(name=name)
+    was = rows.get().channels
+    rows.update(channels={str(channel): str(policy) for channel, policy in changes["channels"].items()})
+    try:
+        yield
+    finally:
+        rows.update(channels=was)
 
 
 class TwoPartitions(Audience):
@@ -177,6 +190,30 @@ class TestFanningOut:
             fan_out(django_capture_on_commit_callbacks)
 
         assert len(deliveries(notice)) == 2
+
+    def test_on_the_channels_its_mirrored_row_names_until_a_migrate_moves_it(
+        self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        # New code declaring the kind on email alone, its row not yet mirrored: what's sent is still the row's,
+        # as the preferences and the subscription endpoints read it.
+        notice = ship(parcel)
+
+        with redeclared(monkeypatch, "parcel_shipped", mirrored=False, channels={Channel.EMAIL: Policy.MANDATORY}):
+            fan_out(django_capture_on_commit_callbacks)
+
+        assert [channel for channel, _key in deliveries(notice)] == ["email", "inbox"]
+
+    def test_never_on_a_channel_its_mirrored_row_says_never(
+        self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks
+    ):
+        notice = ship(parcel)
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(
+            channels={"inbox": "never", "email": "default_on", "webhook": "mandatory"}
+        )
+
+        fan_out(django_capture_on_commit_callbacks)
+
+        assert [channel for channel, _key in deliveries(notice)] == ["email"]
 
     def test_each_channel_under_its_own_policy(
         self, monkeypatch, parcel, bob, dispatched, django_capture_on_commit_callbacks

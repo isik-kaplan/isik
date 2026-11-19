@@ -479,15 +479,13 @@ def kind_states(user, names):
         .values_list("pk", "name", "channels", "variants")
     }
     rows = list(get_subscription_model()._default_manager.filter(user=user))
-    # In CHANNELS' order - the database keeps a mapping in an order of its own.
-    order = {channel: at for at, channel in enumerate(conf.setting("CHANNELS"))}
     states = {}
     for name in names:
         kind_id, channels, variants = policies[name]
         mine = {(row.variant, row.channel): row for row in rows if row.kind_id == kind_id}
         states[name] = {
             channel: _channel_state(mine, channel, channels[channel], variants)
-            for channel in sorted(channels, key=lambda channel: (order.get(channel, len(order)), channel))
+            for channel in conf.in_channel_order(channels)
         }
     return states
 
