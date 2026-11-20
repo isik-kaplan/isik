@@ -36,6 +36,10 @@ def ERASE(collector, field, sub_objs, using):
     """
 
 
+# It removes the holder's rows itself, so deleting an account leaves none of them behind - see isik.E029.
+ERASE.settles_deletion = True
+
+
 class AbstractFeature(UUIDPrimaryKeyModel):
     """A declared feature, kept as a row: what a grant names, outliving its declaration."""
 

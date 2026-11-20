@@ -42,6 +42,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   threads and viewset actions
 - [django/apps/tags/](django/apps/tags/README.md) - `tags()`: a per-host tag pool + M2M
   through-table, deduped by name
+- [django/apps/accounts/](django/apps/accounts/README.md) - a person deleting their own account: locked at
+  once, deleted after a grace period unless they sign back in, then erased or anonymized - history included
 - [django/apps/features/](django/apps/features/README.md) - features granted to a holder (a user,
   or an organization) from a ledger, and settings the holder chooses within them that staff can force
 - [django/apps/idempotency/](django/apps/idempotency/README.md) - `IdempotencyMixin`: a retry

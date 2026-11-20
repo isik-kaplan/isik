@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "isik.django.apps.features",
     "isik.django.apps.sync",
     "isik.django.apps.inbound",
+    "isik.django.apps.accounts",
     "tests.testapp",
 ]
 
@@ -115,6 +116,7 @@ ISIK = {
                 reason="each test runs the fan-out it needs itself, with no beat or worker"
             ),
         },
+        "ACCOUNTS": {"DELETION_AFTER": timedelta(days=14), "ERASURES": "tests.testapp.erasures"},
         "INBOUND": {
             "SOURCES": "tests.testapp.inbound_sources",
             "BACKOFF": (60, 300),

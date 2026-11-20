@@ -23,6 +23,7 @@ from django_lifecycle import (
     hook,
 )
 
+from isik.django.apps.accounts.bases import DeletableAccount
 from isik.django.apps.common.db import (
     BaseModel,
     ContextField,
@@ -71,7 +72,15 @@ def not_in_the_future(value):
         raise ValidationError("Must not be in the future.")
 
 
-class EmailUser(UserVoteMixin, UserBookmarkMixin, UserNoteMixin, UserCommentMixin, UUIDPrimaryKeyModel, AbstractUser):
+class EmailUser(
+    DeletableAccount,
+    UserVoteMixin,
+    UserBookmarkMixin,
+    UserNoteMixin,
+    UserCommentMixin,
+    UUIDPrimaryKeyModel,
+    AbstractUser,
+):
     """A real AUTH_USER_MODEL with USERNAME_FIELD != "username"."""
 
     USERNAME_FIELD = "email"

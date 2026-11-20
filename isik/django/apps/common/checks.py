@@ -49,6 +49,7 @@ to - every one by default. Anything else in
 | Check.CHOICE_RULES         | isik.E026              | choice rules on a model that can't hold them                 |
 | Check.SYNC                 | isik.E027              | a sync setting or syncs() declaration that can't work        |
 | Check.INBOUND              | isik.E028              | an inbound setting or source declaration that can't work     |
+| Check.ACCOUNTS             | isik.E029              | account deletion that can't work or leaves a person's rows   |
 
 These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
 swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
@@ -100,6 +101,7 @@ class Check(Enum):
     CHOICE_RULES = "choice_rules"
     SYNC = "sync"
     INBOUND = "inbound"
+    ACCOUNTS = "accounts"
 
 
 class CheckOption(Enum):
@@ -161,6 +163,7 @@ CHECKS = {
     Check.CHOICE_RULES: (CheckOption.APPS,),
     Check.SYNC: (),
     Check.INBOUND: (),
+    Check.ACCOUNTS: (),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.

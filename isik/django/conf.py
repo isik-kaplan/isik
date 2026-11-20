@@ -30,8 +30,8 @@ SETTING = "ISIK"
 
 # {key: what it holds} - ISIK's own keys, and those of ISIK['DJANGO'].
 KEYS = {"EXEMPTIONS": "rule levels", "DJANGO": "isik.django's areas"}
-# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS, SMS, SYNC and
-# INBOUND check their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
+# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS, SMS, SYNC,
+# INBOUND and ACCOUNTS check their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
 AREA_KEYS = {
     "HISTORY": (
         "CONTEXT_KEYS",
@@ -58,6 +58,7 @@ DJANGO_AREAS = (
     "SMS",
     "SYNC",
     "INBOUND",
+    "ACCOUNTS",
     *AREA_KEYS,
 )
 
