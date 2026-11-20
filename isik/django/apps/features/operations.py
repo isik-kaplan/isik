@@ -69,6 +69,9 @@ def _setting(name):
 
 
 def _checked_value(setting, value):
+    # None is a value only of a setting whose null_label says what it is - its field's own blank rule aside.
+    if value is None and setting.null_label is not None:
+        return None
     try:
         return setting.field.clean(value, None)
     except ValidationError as invalid:

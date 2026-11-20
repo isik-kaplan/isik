@@ -154,19 +154,50 @@ def _records_status(trigger):
     )
 
 
+def _null_problems(setting):
+    """What's wrong with whether `setting` may be None: only one with a null_label is, and that one's default is."""
+    if setting.null_label is None:
+        if setting.field.null or setting.default is None:
+            return [
+                _(
+                    "%(setting)s could be null - a setting has a value unless a null_label says what None is, so its "
+                    "field takes no null=True and its default isn't None. Give it a null_label for a None that "
+                    "means something."
+                )
+                % {"setting": setting.name}
+            ]
+        return []
+    problems = []
+    if not setting.field.null:
+        problems.append(
+            _("%(setting)s has a null_label, and its field takes no null=True - give it null=True, or drop the label.")
+            % {"setting": setting.name}
+        )
+    if setting.default is not None:
+        problems.append(
+            _(
+                "%(setting)s has a null_label, so its default is None - a holder's own None and no choice at all "
+                "would read alike otherwise."
+            )
+            % {"setting": setting.name}
+        )
+    if any(value is None for value, _label in setting.field.flatchoices):
+        problems.append(
+            _(
+                "%(setting)s's field lists None among its choices, and it has a null_label - say what None is in "
+                "one of them."
+            )
+            % {"setting": setting.name}
+        )
+    return problems
+
+
 def declaration_problems():
     """The problems with the declared features and settings."""
     problems = []
     holder_fields = {field.name for field in get_holder_model()._meta.get_fields()}
     for setting in declarations.settings.values():
-        if setting.field.null or setting.default is None:
-            problems.append(
-                _(
-                    "%(setting)s could be null - a setting always has a value, so its field takes no null=True and "
-                    "its default isn't None."
-                )
-                % {"setting": setting.name}
-            )
+        problems += _null_problems(setting)
         if isinstance(setting.own, declarations.OnHolder) and setting.own.field not in holder_fields:
             problems.append(
                 _("%(setting)s's own value is the holder's %(field)s, which %(model)s has no field called.")

@@ -189,8 +189,35 @@ class TestTheDeclarationsCheck:
         monkeypatch.setitem(declarations.settings, "maybe", a_setting("maybe", **declared))
 
         assert checks.declaration_problems() == [
-            "maybe could be null - a setting always has a value, so its field takes no null=True and its default "
-            "isn't None."
+            "maybe could be null - a setting has a value unless a null_label says what None is, so its field takes "
+            "no null=True and its default isn't None. Give it a null_label for a None that means something."
+        ]
+
+    def test_a_setting_with_a_null_label_may_be_null(self, monkeypatch):
+        field = models.IntegerField(null=True)
+        monkeypatch.setitem(
+            declarations.settings, "cap", a_setting("cap", field=field, default=None, null_label="No limit")
+        )
+
+        assert checks.declaration_problems() == []
+
+    def test_a_null_label_on_a_field_that_cant_be_null_with_a_default(self, monkeypatch):
+        monkeypatch.setitem(declarations.settings, "cap", a_setting("cap", default=3, null_label="No limit"))
+
+        assert checks.declaration_problems() == [
+            "cap has a null_label, and its field takes no null=True - give it null=True, or drop the label.",
+            "cap has a null_label, so its default is None - a holder's own None and no choice at all would read "
+            "alike otherwise.",
+        ]
+
+    def test_a_null_label_beside_a_choice_of_none(self, monkeypatch):
+        field = models.CharField(null=True, choices=[("a", "A"), (None, "Neither")])
+        monkeypatch.setitem(
+            declarations.settings, "pick", a_setting("pick", field=field, default=None, null_label="None")
+        )
+
+        assert checks.declaration_problems() == [
+            "pick's field lists None among its choices, and it has a null_label - say what None is in one of them."
         ]
 
     def test_a_feature_nothing_reads(self, monkeypatch):

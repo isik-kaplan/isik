@@ -59,5 +59,6 @@ One version covers all of a holder's settings - their overrides row's - so the l
 
 The PATCH needs no `Idempotency-Key`: setting a value twice is setting it once. The schema says all of this -
 `If-Match` required, the `ETag` header on the list and the PATCH, and each refusal's body - so a generated
-client sends the version it read without being told. `value` and `default` are never null: `isik.E017`
-refuses a setting whose field takes null or whose default is `None`.
+client sends the version it read without being told. `value` and `default` are never null, but in a
+setting listed as `<type>_or_null` - one with a `null_label`, which it lists beside the value (or, for a choice,
+among `choices` as `{"value": null, "label"}`); a PATCH sets None there with `"value": null`.

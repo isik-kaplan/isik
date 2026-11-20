@@ -16,6 +16,7 @@ BETA = declare_feature("beta", label="Beta", description="Try what's coming.")
 # What a service checks beta with - so beta, unlocking no setting, is still read.
 needs_beta = requires_feature(BETA)
 INTERNAL = declare_feature("internal_flag", label="Internal", visible_to_holder=False)
+SEATS = declare_feature("seats", label="Seats")
 
 declare_setting(
     "max_endpoints",
@@ -60,4 +61,21 @@ declare_setting(
 )
 declare_setting(
     "staff_note", models.TextField(), default="", label="Staff note", visible_to_holder=False, feature=INTERNAL
+)
+# None is a value of these - "No limit", the site's own colours - so each says what a person reads for it.
+declare_setting(
+    "max_seats",
+    models.PositiveIntegerField(null=True),
+    default=None,
+    feature=SEATS,
+    without_feature=AtMost(10),
+    label="Seats",
+    null_label="No limit",
+)
+declare_setting(
+    "accent",
+    models.CharField(max_length=10, null=True, choices=[("red", "Red"), ("blue", "Blue")]),
+    default=None,
+    label="Accent",
+    null_label="The site's own",
 )

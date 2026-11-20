@@ -200,25 +200,36 @@ class SettingFields(serializers.Serializer):
     )
 
 
-def _setting_serializer(kind):
-    """The serializer of a setting of the type `kind` - its `value` and `default` typed."""
+def _setting_serializer(kind, nullable=False):
+    """
+    The serializer of a setting of the type `kind` - its `value` and `default` typed, and None among them for a
+    `nullable` one: a setting with a `null_label`, listed as `<kind>_or_null`.
+    """
     fields = {
-        "value": VALUE_FIELDS[kind](),
-        "default": VALUE_FIELDS[kind](),
+        "value": VALUE_FIELDS[kind](allow_null=nullable),
+        "default": VALUE_FIELDS[kind](allow_null=nullable),
         # What a release or the feature brings back - beside what's in force.
         "chosen": VALUE_FIELDS[kind](allow_null=True, help_text=gettext_lazy("Your own choice, or none yet.")),
     }
     if kind == "choice":
-        fields["choices"] = ChoiceSerializer(many=True, help_text=gettext_lazy("What it may be."))
+        fields["choices"] = ChoiceSerializer(
+            many=True, help_text=gettext_lazy("What it may be - None among them, with its label, where it may be None.")
+        )
+    elif nullable:
+        fields["null_label"] = serializers.CharField(help_text=gettext_lazy("What None is, as a person reads it."))
     if kind in NUMBERS:
         # None where the field has no such validator.
         fields["minimum"] = VALUE_FIELDS[kind](allow_null=True)
         fields["maximum"] = VALUE_FIELDS[kind](allow_null=True)
-    name = f"{kind.capitalize()}Setting"
-    return type(name, (SettingFields,), {**fields, "__doc__": f"A setting holding a {kind} value."})
+    name = f"{kind.capitalize()}{'OrNull' if nullable else ''}Setting"
+    held = f"a {kind} value, or None" if nullable else f"a {kind} value"
+    return type(name, (SettingFields,), {**fields, "__doc__": f"A setting holding {held}."})
 
 
-SETTING_SERIALIZERS = {kind: _setting_serializer(kind) for kind in VALUE_FIELDS}
+SETTING_SERIALIZERS = {
+    **{kind: _setting_serializer(kind) for kind in VALUE_FIELDS},
+    **{f"{kind}_or_null": _setting_serializer(kind, nullable=True) for kind in VALUE_FIELDS},
+}
 SETTING_SCHEMA = PolymorphicProxySerializer(
     component_name="Setting", serializers=SETTING_SERIALIZERS, resource_type_field_name="type", many=False
 )
@@ -230,11 +241,15 @@ class ValueFields(serializers.Serializer):
     type = serializers.CharField(help_text=gettext_lazy("The setting's type, as listed."))
 
 
-def _value_serializer(kind):
-    return type(f"{kind.capitalize()}SettingValue", (ValueFields,), {"value": VALUE_FIELDS[kind]()})
+def _value_serializer(kind, nullable=False):
+    name = f"{kind.capitalize()}{'OrNull' if nullable else ''}SettingValue"
+    return type(name, (ValueFields,), {"value": VALUE_FIELDS[kind](allow_null=nullable)})
 
 
-VALUE_SERIALIZERS = {kind: _value_serializer(kind) for kind in VALUE_FIELDS}
+VALUE_SERIALIZERS = {
+    **{kind: _value_serializer(kind) for kind in VALUE_FIELDS},
+    **{f"{kind}_or_null": _value_serializer(kind, nullable=True) for kind in VALUE_FIELDS},
+}
 VALUE_SCHEMA = PolymorphicProxySerializer(
     component_name="SettingValue", serializers=VALUE_SERIALIZERS, resource_type_field_name="type", many=False
 )
@@ -331,9 +346,13 @@ class SettingViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet):
             "chosen": own_value(holder, setting, overrides_of(holder)),
             "requires_feature": setting.feature if setting.feature in self.visible_features(holder) else None,
         }
-        if setting.type == "choice":
+        if setting.kind == "choice":
             shown["choices"] = [{"value": value, "label": str(label)} for value, label in setting.field.choices]
-        if setting.type in NUMBERS:
+            if setting.null_label is not None:
+                shown["choices"].append({"value": None, "label": str(setting.null_label)})
+        elif setting.null_label is not None:
+            shown["null_label"] = str(setting.null_label)
+        if setting.kind in NUMBERS:
             shown["minimum"], shown["maximum"] = _limits(setting.field)
         return SETTING_SERIALIZERS[setting.type](shown).data
 

@@ -213,12 +213,34 @@ declare_setting("display_name", models.CharField(max_length=100), "", own=OnHold
   back - a form, a serializer - writes what was in force as the holder's own: write a setting through its
   own field, or `set_setting()`.
 - **`visible_to_holder=False`** - kept out of the holder's listing; staff's alone.
+- **`null_label`** - what a person reads for None, for a setting where None means something: a cap with no
+  limit, a colour that's the site's own. Giving it is what lets the setting be None - every other setting always
+  has a value, and `isik.E017` refuses a field with `null=True` or a default of None without it. **A setting
+  with a `null_label` has None as its default** (`isik.E017` refuses another): a holder's own value of None and
+  no choice at all are the same column, so None has to be what no choice means.
+
+  ```python
+  declare_setting(
+      "max_webhook_endpoints", models.PositiveIntegerField(null=True), None,
+      own=OnOverrides(), holder_may_change=False,
+      label=_("Webhook endpoints"), null_label=_("No limit"),
+  )
+  force_setting(org, "max_webhook_endpoints", 3, source="staff", reason=...)     # capped at 3
+  force_setting(org, "max_webhook_endpoints", None, source="staff", reason=...)  # forced to no limit
+  ```
+
+  It's listed as `<kind>_or_null` - `int_or_null` here - so a generated client types None into these settings
+  alone: `null_label` beside the value, or, for a choice, None among `choices` with the label. A field
+  already listing `(None, ...)` in its choices is refused beside a `null_label`, so the label has one source.
+  Under `AtMost(n)` or `AtLeast(n)`, a holder without the feature whose value is None gets `n` - no limit,
+  clamped to a limit. That's what Postgres' `LEAST` and `GREATEST` answer for a NULL, so `effective()` answers
+  it too: the Python and the SQL (`effective_expression()`) must never differ.
 
 Labels and descriptions are lazy-translated text shown to holders - after declaring them, run
 `makemessages` and clear the fuzzy guesses it writes (see [kinds](../notifications/kinds.md#what-a-person-reads-labels-and-messages)).
 
 The types the API knows are bool, int, decimal, float, duration, text, and choice - any field with
-`choices`.
+`choices` - each also as `<type>_or_null` for a setting with a `null_label`.
 
 ### The overrides model is the project's
 
@@ -234,11 +256,26 @@ class OrganizationOverrides(AbstractOverrides):
     """An organization's settings."""
 ```
 
+`OnOverrides()` is the default: a setting declared without `own=` keeps the holder's own value on this row,
+not on the holder - the holder model has no field for it. Read it with `effective()` or
+`effective_expression()`, write it with `set_setting()`:
+
+```python
+declare_setting("max_members", models.PositiveIntegerField(), 10, label=_("Members"))   # OnOverrides()
+
+effective(org, "max_members").value                                      # what's in force
+Organization.objects.filter(pk=org.pk).annotate(cap=effective_expression("max_members"))
+set_setting(org, "max_members", 25)                                        # the row's max_members column
+OrganizationOverrides.objects.get(holder=org).max_members                  # its own choice, None until made
+```
+
 `ISIK["DJANGO"]["FEATURES"]["SETTINGS"]` is imported before the class is built, and each declared setting adds its
 columns: `<name>` (where it's `OnOverrides`), and `<name>_forced`, `<name>_forced_value`,
 `<name>_forced_source` and `<name>_forced_reason`, with a constraint that they're all set or none are.
 Adding a setting is a `makemigrations` in your app. A row is made on the holder's first write; until then
-every setting is its default.
+every setting is its default. A constraint or index of your own over these columns names itself within
+Postgres' 63 characters - `fitted_name(table, suffix)` (`isik.django.apps.common.db.constraints`), as isik's
+own do, since a long setting name makes a long column name.
 
 `isik.E017` refuses an overrides model that isn't tracked - who forced a setting, when and why is its
 history - a grant model whose history can't say when each grant was revoked, and a holder key that cascades.

@@ -72,6 +72,8 @@ class TestDeclaring:
             "session_length": "duration",
             "display_name": "text",
             "staff_note": "text",
+            "max_seats": "int_or_null",
+            "accent": "choice_or_null",
         }
         assert Setting("x", models.FloatField(), 0).type == "float"
         assert Setting("x", models.DecimalField(), 0).type == "decimal"
@@ -80,6 +82,7 @@ class TestDeclaring:
     def test_what_a_feature_unlocks(self):
         assert declarations.settings_unlocked_by("long_lived_tokens") == ["token_lifetime_days"]
         assert declarations.settings_unlocked_by("beta") == []
+        assert declarations.settings_unlocked_by("seats") == ["max_seats"]
 
     def test_a_feature_name_carries_its_text(self):
         assert (declarations.features["webhooks"].label, declarations.features["internal_flag"].visible_to_holder) == (
@@ -302,7 +305,7 @@ class TestResolving:
 class TestHoldingEveryFeature:
     """`HOLDS_EVERY_FEATURE` - holders holding every declared feature with no grant, in Python and SQL alike."""
 
-    EVERY = {"webhooks", "long_lived_tokens", "beta", "internal_flag"}
+    EVERY = {"webhooks", "long_lived_tokens", "beta", "internal_flag", "seats"}
 
     @pytest.fixture(params=["field", "q", "q_asked"])
     def declared(self, request, settings):

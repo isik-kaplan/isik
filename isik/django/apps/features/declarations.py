@@ -83,7 +83,8 @@ class AtMost:
     bound: object
 
     def apply(self, value):
-        return min(value, self.bound)
+        # None isn't within any bound, so it's held to the bound - as Postgres' LEAST answers in SQL.
+        return self.bound if value is None else min(value, self.bound)
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,8 @@ class AtLeast:
     bound: object
 
     def apply(self, value):
-        return max(value, self.bound)
+        # None isn't within any bound, so it's held to the bound - as Postgres' GREATEST answers in SQL.
+        return self.bound if value is None else max(value, self.bound)
 
 
 @dataclass(frozen=True)
@@ -144,13 +146,19 @@ class Setting:
     visible_to_holder: bool = True
     holder_may_change: bool = True
     request_policies: tuple = ()
+    null_label: object = None
 
     @property
-    def type(self):
+    def kind(self):
         """`choice` for a field with choices, else what its class is - `int`, `bool`, `duration`, ..."""
         if self.field.choices:
             return "choice"
         return next((name for kind, name in TYPES if isinstance(self.field, kind)), "text")
+
+    @property
+    def type(self):
+        """What it's listed as: its `kind`, or `<kind>_or_null` for one with a `null_label`, which may be None."""
+        return self.kind if self.null_label is None else f"{self.kind}_or_null"
 
 
 # Every declared setting, by name, in the order declared.
@@ -170,13 +178,15 @@ def declare_setting(
     visible_to_holder=True,
     holder_may_change=True,
     request_policies=(),
+    null_label=None,
 ):
     """
     Declares the setting `name`: a value of `field`'s type, `default` until the holder chooses. With `feature`,
     `without_feature` says what it is while the holder lacks it (`Default()`, `Fixed(value)`, or
     `AtMost(n)`/`AtLeast(n)`); `own` where the holder's own value lives (`OnOverrides()`, or `OnHolder("field")`);
     `holder_may_change=False` for one the holder reads and only staff set; `request_policies` the project's request
-    policies its change has to pass (a fresh re-authentication, say). Returns the `Setting`.
+    policies its change has to pass (a fresh re-authentication, say); `null_label` what a person reads for None - giving
+    it is what lets the setting be None, its default then being None. Returns the `Setting`.
     """
     if name in settings:
         raise ImproperlyConfigured(_("A setting called %(name)s is declared already.") % {"name": name})
@@ -205,6 +215,7 @@ def declare_setting(
         visible_to_holder=visible_to_holder,
         holder_may_change=holder_may_change,
         request_policies=tuple(request_policies),
+        null_label=null_label,
     )
     settings[name] = declared
     return declared

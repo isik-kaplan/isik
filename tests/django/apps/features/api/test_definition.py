@@ -64,7 +64,11 @@ class TestTheSettingSerializers:
             "value": ("JSONField", False, None),
             "default": ("JSONField", False, None),
             "chosen": ("JSONField", True, "Your own choice, or none yet."),
-            "choices": ("ListSerializer", False, "What it may be."),
+            "choices": (
+                "ListSerializer",
+                False,
+                "What it may be - None among them, with its label, where it may be None.",
+            ),
         }
         assert made().fields["choices"].many is True
         assert list(made().fields["origin"].choices) == ["forced", "feature_missing", "limited", "own", "default"]

@@ -58,7 +58,7 @@ class TestFeatures:
 
         listed = {each["name"]: each for each in client_for(alice).get("/features/").json()}
 
-        assert sorted(listed) == ["beta", "long_lived_tokens", "webhooks"]
+        assert sorted(listed) == ["beta", "long_lived_tokens", "seats", "webhooks"]
         assert listed["webhooks"]["held"] is True
         assert listed["webhooks"]["grants"][0]["source"] is None
         assert (listed["beta"]["held"], len(listed["beta"]["grants"])) == (False, 1)
@@ -101,8 +101,10 @@ class TestListingSettings:
 
         assert etag == defaults_etag()
         assert sorted(listed) == [
+            "accent",
             "display_name",
             "max_endpoints",
+            "max_seats",
             "session_length",
             "theme",
             "token_lifetime_days",
@@ -279,15 +281,12 @@ class TestTheSchema:
         setting = generated["components"]["schemas"]["Setting"]
 
         assert setting["discriminator"]["propertyName"] == "type"
-        assert set(setting["discriminator"]["mapping"]) == {
-            "bool",
-            "int",
-            "decimal",
-            "float",
-            "duration",
-            "text",
-            "choice",
-        }
+        kinds = {"bool", "int", "decimal", "float", "duration", "text", "choice"}
+        assert set(setting["discriminator"]["mapping"]) == kinds | {f"{kind}_or_null" for kind in kinds}
+        nullable = generated["components"]["schemas"]["IntOrNullSetting"]["properties"]
+        assert nullable["value"].get("nullable") is True
+        assert "null_label" in generated["components"]["schemas"]["IntOrNullSetting"]["required"]
+        assert "nullable" not in generated["components"]["schemas"]["IntSetting"]["properties"]["value"]
         body = generated["paths"]["/settings/{name}/"]["patch"]["requestBody"]["content"]["application/json"]["schema"]
         assert body == {"$ref": "#/components/schemas/PatchedSettingValue"}
 
