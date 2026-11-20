@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: isik/django/apps/notifications/management/commands/notices.py:169
+#: isik/django/apps/notifications/management/commands/notices.py:168
 #, python-format
 msgid " - %(withdrawn)s endpoints' subscriptions to it go inert"
 msgstr ""
@@ -339,7 +339,7 @@ msgstr ""
 msgid "%(kind)s is wanted for every variant and for some - name it once, with no variant, for all."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:173
+#: isik/django/apps/notifications/management/commands/notices.py:172
 #, python-format
 msgid "%(kind)s isn't sent on webhook - %(count)s endpoints' subscriptions to it are inert: %(ids)s"
 msgstr ""
@@ -374,7 +374,7 @@ msgstr ""
 msgid "%(kind)s names %(channels)s, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn on."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:167
+#: isik/django/apps/notifications/management/commands/notices.py:166
 #, python-format
 msgid "%(kind)s on %(channel)s: %(now)s now, %(after)s after the next migrate"
 msgstr ""
@@ -1706,7 +1706,7 @@ msgstr ""
 msgid "A kind is sent on push, and ISIK['DJANGO']['NOTIFICATIONS']['PUSH'] holds no APNS or FCM credentials."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:160
+#: isik/django/apps/notifications/management/commands/notices.py:159
 msgid "A policy row no declaration makes - retire it"
 msgstr ""
 
@@ -1832,7 +1832,7 @@ msgstr ""
 msgid "Asked %(key)s, which the test gave no answer for."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:183
+#: isik/django/apps/notifications/management/commands/notices.py:182
 #, python-format
 msgid "Asked again for %(deliveries)s deliveries and %(shards)s shards."
 msgstr ""
@@ -1944,11 +1944,11 @@ msgstr ""
 msgid "Declare each name - CheckOption.NAMES says which are held. See isik.django.apps.common.db.names."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:161
+#: isik/django/apps/notifications/management/commands/notices.py:160
 msgid "Declared, and retired"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:159
+#: isik/django/apps/notifications/management/commands/notices.py:158
 msgid "Declared, with no policy row - run migrate"
 msgstr ""
 
@@ -2043,7 +2043,7 @@ msgstr ""
 msgid "False opts out of %(rule)s without a reason, which needs Requirement.OPTIONAL for it - or write %(type)s(reason=...)."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:178
+#: isik/django/apps/notifications/management/commands/notices.py:177
 #, python-format
 msgid "Fanned out %(count)s notices."
 msgstr ""
@@ -2432,7 +2432,7 @@ msgstr ""
 msgid "No setting called %(name)s is declared."
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:191
+#: isik/django/apps/notifications/management/commands/notices.py:190
 #, python-format
 msgid "No unretired kind is called %(kind)s."
 msgstr ""
@@ -2551,7 +2551,7 @@ msgstr ""
 msgid "Production"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:185
+#: isik/django/apps/notifications/management/commands/notices.py:184
 #, python-format
 msgid "Pruned %(attempts)s attempts and %(notices)s notices."
 msgstr ""
@@ -2627,7 +2627,7 @@ msgstr ""
 msgid "Retired"
 msgstr ""
 
-#: isik/django/apps/notifications/management/commands/notices.py:192
+#: isik/django/apps/notifications/management/commands/notices.py:191
 #, python-format
 msgid "Retired %(kind)s."
 msgstr ""

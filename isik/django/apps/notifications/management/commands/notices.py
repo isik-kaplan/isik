@@ -55,19 +55,18 @@ def pending():
     changes = []
     for policy in get_kind_policy_model().objects.filter(name__in=list(kinds())).order_by("name"):
         after = {channel: str(each) for channel, each in kinds()[policy.name].policies.items()}
-        withdrawn = (
-            len(subscribed_endpoints(policy)) if sent_on_webhook(policy.channels) and not sent_on_webhook(after) else 0
-        )
         for channel in in_channel_order({**policy.channels, **after}):
             now, then = policy.channels.get(channel, Policy.NEVER), after.get(channel, Policy.NEVER)
             if now != then:
+                # A move to never on webhook - from a policy it's sent under - leaves its subscriptions inert.
+                leaves = channel == Channel.WEBHOOK and then == Policy.NEVER
                 changes.append(
                     {
                         "kind": policy.name,
                         "channel": channel,
                         "now": now,
                         "after": then,
-                        "withdrawn": withdrawn if channel == Channel.WEBHOOK else 0,
+                        "withdrawn": len(subscribed_endpoints(policy)) if leaves else 0,
                     }
                 )
     return changes

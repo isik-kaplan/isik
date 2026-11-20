@@ -13,7 +13,8 @@ from django.core.management import call_command
 
 from isik.django.apps.notifications import conf, kinds
 from isik.django.apps.notifications.audience.swapping import get_endpoint_kind_model, get_endpoint_model
-from isik.django.apps.notifications.channels import Channel, ChannelName
+from isik.django.apps.notifications.channels import Channel, ChannelName, registered
+from isik.django.apps.notifications.channels.webhook import WebhookChannel
 from isik.django.apps.notifications.checks import kind_problems, setting_problems
 from isik.django.apps.notifications.models import NoticeKindPolicy, Policy
 from isik.django.apps.notifications.signals import endpoint_kinds_withdrawn
@@ -74,12 +75,21 @@ class TestTheSettings:
         assert setting_problems() == [f"{setting} is {{channel: Policy}}, not ['webhook']."]
         assert conf.deployment_policies() == {}
 
-    @pytest.mark.parametrize("key, setting", [("defaults", DEFAULTS), ("forced", FORCED)])
-    def test_a_channel_by_plain_text(self, deployment, key, setting):
-        deployment(**{key: {"webhook": Policy.NEVER, Channel.EMAIL: Policy.NEVER}})
+    def test_both_are_checked_when_the_first_isnt_a_mapping(self, deployment):
+        deployment(defaults=[Channel.WEBHOOK], forced={"webhook": Policy.NEVER})
 
         assert setting_problems() == [
-            f"{setting} names webhook by plain text - name each as Channel.EMAIL does, or by the ChannelName "
+            f"{DEFAULTS} is {{channel: Policy}}, not ['webhook'].",
+            f"{FORCED} names webhook by plain text - name each as Channel.EMAIL does, or by the ChannelName "
+            "register_channel() returned.",
+        ]
+
+    @pytest.mark.parametrize("key, setting", [("defaults", DEFAULTS), ("forced", FORCED)])
+    def test_a_channel_by_plain_text(self, deployment, key, setting):
+        deployment(**{key: {"webhook": Policy.NEVER, Channel.EMAIL: Policy.NEVER, "inbox": Policy.NEVER}})
+
+        assert setting_problems() == [
+            f"{setting} names webhook, inbox by plain text - name each as Channel.EMAIL does, or by the ChannelName "
             "register_channel() returned."
         ]
 
@@ -94,17 +104,22 @@ class TestTheSettings:
 
     @pytest.mark.parametrize("key, setting", [("defaults", DEFAULTS), ("forced", FORCED)])
     def test_something_other_than_a_policy(self, deployment, key, setting):
-        deployment(**{key: {Channel.INBOX: "sometimes", Channel.EMAIL: Policy.NEVER}})
+        deployment(**{key: {Channel.INBOX: "sometimes", Channel.EMAIL: Policy.NEVER, Channel.WEBHOOK: None}})
 
-        assert setting_problems() == [f"{setting} gives inbox something other than a Policy."]
+        assert setting_problems() == [f"{setting} gives inbox, webhook something other than a Policy."]
 
     @pytest.mark.parametrize("key, setting", [("defaults", DEFAULTS), ("forced", FORCED)])
     @pytest.mark.parametrize("policy", [Policy.DEFAULT_ON, Policy.DEFAULT_OFF])
-    def test_a_choice_where_no_person_chooses(self, deployment, key, setting, policy):
-        deployment(**{key: {Channel.WEBHOOK: policy, Channel.INBOX: Policy.DEFAULT_OFF}})
+    def test_a_choice_where_no_person_chooses(self, deployment, monkeypatch, key, setting, policy):
+        pager = ChannelName("pager")
+        monkeypatch.setitem(registered, pager, WebhookChannel)
+        deployment(
+            **{key: {Channel.WEBHOOK: policy, Channel.INBOX: Policy.DEFAULT_OFF, pager: policy}},
+            CHANNELS=(Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK, pager),
+        )
 
         assert setting_problems() == [
-            f"{setting} leaves webhook to each person's choice, and no person chooses there - "
+            f"{setting} leaves webhook, pager to each person's choice, and no person chooses there - "
             "Policy.MANDATORY or Policy.NEVER."
         ]
 
@@ -295,6 +310,27 @@ class TestNotices:
     def test_a_channel_the_row_lacks_reads_as_never(self, declaring):
         NoticeKindPolicy.objects.filter(name="parcel_shipped").update(
             channels={"inbox": "default_on", "email": "default_on"}
+        )
+
+        assert json.loads(self.listing("--format", "json"))["pending"] == [
+            {"kind": "parcel_shipped", "channel": "webhook", "now": "never", "after": "mandatory", "withdrawn": 0}
+        ]
+
+    def test_a_channel_the_declaration_lacks_reads_as_never(self):
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(
+            channels={"inbox": "default_on", "email": "default_on", "webhook": "mandatory", "fax": "mandatory"}
+        )
+
+        assert json.loads(self.listing("--format", "json"))["pending"] == [
+            {"kind": "parcel_shipped", "channel": "fax", "now": "mandatory", "after": "never", "withdrawn": 0}
+        ]
+
+    def test_a_kind_coming_back_to_webhook_withdraws_nothing(self):
+        endpoint = get_endpoint_model().objects.create(url="https://hooks.example/a", secret="s")
+        get_endpoint_kind_model().objects.create(endpoint=endpoint, kind=kind_named("parcel_shipped"))
+        # Its subscription inert while the row says never, as a mirror moving it off webhook leaves it.
+        NoticeKindPolicy.objects.filter(name="parcel_shipped").update(
+            channels={"inbox": "default_on", "email": "default_on", "webhook": "never"}
         )
 
         assert json.loads(self.listing("--format", "json"))["pending"] == [
