@@ -43,7 +43,7 @@ def setting_problems():
         ]
     if not callable(getattr(backend, "delete", None)):
         problems.append(_("%(area)s['DELETION_BACKEND'] has no delete(user).") % {"area": AREA})
-    if isinstance(backend, Anonymize) and not erasures.get(get_user_model()._meta.label, None):
+    if isinstance(backend, Anonymize) and get_user_model()._meta.label not in erasures:
         problems.append(
             _(
                 "%(area)s anonymizes an account, and nothing says what of %(model)s's to set - register it with "

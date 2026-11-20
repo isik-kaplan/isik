@@ -267,6 +267,25 @@ class TestAProjectsOwnEventModel:
         assert OwnEvent._meta.original_attrs["indexes"] is OwnEvent._meta.indexes
 
     @isolate_apps("tests.testapp")
+    def test_its_indexes_named_within_what_an_index_takes(self):
+        from django.db import models
+
+        from isik.django.apps.common.db.constraints import fitted_name
+        from isik.django.apps.inbound.bases import AbstractInboundEvent
+
+        table = "a_project_whose_inbound_events_table_has_a_long_name"
+
+        class LongNamed(AbstractInboundEvent):
+            class Meta:
+                app_label = "testapp"
+                db_table = table
+
+        assert [index.name for index in LongNamed._meta.indexes] == [
+            fitted_name(table, rule, limit=models.Index.max_name_length) for rule in ("due", "claimed", "received")
+        ]
+        assert all(len(index.name) <= models.Index.max_name_length for index in LongNamed._meta.indexes)
+
+    @isolate_apps("tests.testapp")
     def test_a_proxy_and_a_model_of_another_kind_are_left_be(self):
         from django.db import models
 

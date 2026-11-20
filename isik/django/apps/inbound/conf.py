@@ -51,7 +51,8 @@ def configured():
 
 def setting(name):
     """`name`'s value: the project's, else its default. A hook given by its dotted path is imported."""
-    value = configured().get(name, DEFAULTS[name])
+    # Every default is None - DEFAULTS names the keys there are.
+    value = configured().get(name)
     if name in HOOKS and isinstance(value, str):
         return import_string(value)
     return value

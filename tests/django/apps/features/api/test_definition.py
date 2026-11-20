@@ -165,3 +165,28 @@ def test_a_setting_locked_for_want_of_its_feature_isnt_the_holders_to_change(ali
         False,
         True,
     )
+
+
+class TestTheNullableSerializers:
+    def test_a_number_carries_its_null_label(self):
+        from isik.django.apps.features.drf import _setting_serializer, _value_serializer
+
+        built, plain = _setting_serializer("int", nullable=True), _setting_serializer("int")
+        fields = built().fields
+
+        assert (built.__name__, built.__doc__) == ("IntOrNullSetting", "A setting holding a int value, or None.")
+        assert (plain.__name__, plain.__doc__) == ("IntSetting", "A setting holding a int value.")
+        assert (fields["value"].allow_null, fields["default"].allow_null) == (True, True)
+        assert (type(fields["null_label"]).__name__, str(fields["null_label"].help_text)) == (
+            "CharField",
+            "What None is, as a person reads it.",
+        )
+        assert "null_label" not in plain().fields
+        assert _value_serializer("int", nullable=True).__name__ == "IntOrNullSettingValue"
+        assert _value_serializer("int", nullable=True)().fields["value"].allow_null is True
+        assert _value_serializer("int").__name__ == "IntSettingValue"
+
+    def test_a_choice_carries_none_among_its_choices_instead(self):
+        from isik.django.apps.features.drf import _setting_serializer
+
+        assert "null_label" not in _setting_serializer("choice", nullable=True)().fields

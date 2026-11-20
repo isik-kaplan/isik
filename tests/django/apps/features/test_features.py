@@ -79,9 +79,18 @@ class TestDeclaring:
         assert Setting("x", models.DecimalField(), 0).type == "decimal"
         assert Setting("x", models.JSONField(), 0).type == "text"
 
-    def test_a_null_label_is_kept(self):
-        assert declarations.settings["max_seats"].null_label == "No limit"
-        assert declarations.settings["theme"].null_label is None
+    def test_a_null_label_is_kept(self, monkeypatch):
+        monkeypatch.setattr(declarations, "settings", {})
+
+        declared = declarations.declare_setting("cap", models.IntegerField(null=True), None, null_label="No limit")
+        plain = declarations.declare_setting("plain", models.IntegerField(), 0)
+
+        assert (declared.null_label, declared.type, plain.null_label, plain.type) == (
+            "No limit",
+            "int_or_null",
+            None,
+            "int",
+        )
 
     def test_what_a_feature_unlocks(self):
         assert declarations.settings_unlocked_by("long_lived_tokens") == ["token_lifetime_days"]
