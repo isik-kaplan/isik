@@ -94,6 +94,14 @@ class TestCancelled:
         assert alice.deletes_at is None
         assert heard == [(account_deletion_cancelled, EmailUser, {"user": alice})]
 
+    def test_only_the_pending_deletion_is_written(self, alice):
+        request_deletion(alice)
+        EmailUser.objects.filter(pk=alice.pk).update(first_name="Alice")
+
+        cancel_pending_deletion(alice)
+
+        assert EmailUser.objects.values_list("first_name", "deletes_at").get(pk=alice.pk) == ("Alice", None)
+
     def test_with_none_pending(self, alice, heard):
         assert cancel_pending_deletion(alice) is False
         assert heard == []

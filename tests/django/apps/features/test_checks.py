@@ -210,6 +210,14 @@ class TestTheDeclarationsCheck:
             "alike otherwise.",
         ]
 
+    def test_every_settings_problems_are_kept(self, monkeypatch):
+        monkeypatch.setitem(declarations.settings, "cap", a_setting("cap", default=3, null_label="No limit"))
+        monkeypatch.setitem(declarations.settings, "maybe", a_setting("maybe", default=None))
+
+        problems = checks.declaration_problems()
+
+        assert [problem.split(" ")[0] for problem in problems] == ["cap", "cap", "maybe"]
+
     def test_a_null_label_beside_a_choice_of_none(self, monkeypatch):
         field = models.CharField(null=True, choices=[("a", "A"), (None, "Neither")])
         monkeypatch.setitem(

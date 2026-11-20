@@ -165,7 +165,13 @@ class TestFailed:
 
 class TestRetriedByHand:
     def test_one_given_up_on_is_due_now_from_no_attempts(self, asked):
-        event = received(state=EventState.ABANDONED, attempt_count=5, processed_at=timezone.now())
+        other = received(event_id="evt_2", state=EventState.ABANDONED)
+        event = received(
+            state=EventState.ABANDONED,
+            attempt_count=5,
+            processed_at=timezone.now(),
+            next_attempt_at=timezone.now() + timedelta(hours=1),
+        )
 
         with TestCase.captureOnCommitCallbacks(execute=True):
             pipeline.retry_event(event)
@@ -174,12 +180,15 @@ class TestRetriedByHand:
         assert (event.state, event.attempt_count, event.processed_at) == (EventState.PENDING, 0, None)
         assert event.next_attempt_at <= timezone.now()
         assert asked == [(None, str(event.pk))]
+        assert fresh(other).state == EventState.ABANDONED
 
     def test_one_not_given_up_on_is_refused(self):
         event = received(state=EventState.PROCESSED)
 
-        with pytest.raises(pipeline.RetryRefused, match="Only an event given up on is retried by hand"):
+        with pytest.raises(pipeline.RetryRefused) as refused:
             pipeline.retry_event(event)
+
+        assert str(refused.value) == f"Only an event given up on is retried by hand, and {event} isn't."
 
 
 class TestWork:
@@ -253,6 +262,12 @@ class TestPartitions:
 
         inbound(settings, PARTITIONS=lambda: ["north", "south"], IN_PARTITION=in_partition)
         return entered
+
+    def test_the_task_handles_it_in_the_partition_it_names(self, partitioned, handled):
+        event = received(partition="south")
+
+        assert tasks.process("south", str(event.pk)) == EventState.PROCESSED
+        assert partitioned == ["south"]
 
     def test_an_event_is_handled_in_its_partition(self, partitioned, handled):
         event = received(partition="north")
