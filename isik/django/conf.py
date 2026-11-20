@@ -30,8 +30,8 @@ SETTING = "ISIK"
 
 # {key: what it holds} - ISIK's own keys, and those of ISIK['DJANGO'].
 KEYS = {"EXEMPTIONS": "rule levels", "DJANGO": "isik.django's areas"}
-# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS, SMS and SYNC
-# check their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
+# {area: its keys} - an area of ISIK['DJANGO'] whose keys are checked here; FEATURES, NOTIFICATIONS, SMS, SYNC and
+# INBOUND check their own, and CHECKS, PRIMARY_KEY and SCHEMA_LANGUAGE are what they hold.
 AREA_KEYS = {
     "HISTORY": (
         "CONTEXT_KEYS",
@@ -49,7 +49,17 @@ AREA_KEYS = {
     "FEEDBACK": ("COMMENTS_TIPTAP_SCHEMA_PATH",),
     "TEMPLATED_FIELDS": ("DELIMITERS", "UNDEFINED", "POLICY"),
 }
-DJANGO_AREAS = ("CHECKS", "PRIMARY_KEY", "SCHEMA_LANGUAGE", "FEATURES", "NOTIFICATIONS", "SMS", "SYNC", *AREA_KEYS)
+DJANGO_AREAS = (
+    "CHECKS",
+    "PRIMARY_KEY",
+    "SCHEMA_LANGUAGE",
+    "FEATURES",
+    "NOTIFICATIONS",
+    "SMS",
+    "SYNC",
+    "INBOUND",
+    *AREA_KEYS,
+)
 
 
 def configured():

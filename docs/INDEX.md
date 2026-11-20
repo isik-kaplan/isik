@@ -46,6 +46,8 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   or an organization) from a ledger, and settings the holder chooses within them that staff can force
 - [django/apps/idempotency/](django/apps/idempotency/README.md) - `IdempotencyMixin`: a retry
   with the same `Idempotency-Key` replays the first response, by reference or from a kept body
+- [django/apps/inbound/](django/apps/inbound/README.md) - webhooks a project receives: verified, written
+  down once per sender's event id, answered at once, and handed to a handler in a task (`inbound` extra)
 - [django/apps/notifications/](django/apps/notifications/README.md) - notices written by a trigger in
   the changing transaction, fanned out to the inbox, email, webhooks and phones (`notifications` extra;
   `push` for phones)

@@ -5,6 +5,7 @@ details come from the environment so the same settings work locally and in CI.
 
 import getpass
 import os
+from datetime import timedelta
 
 from isik.django.apps.notifications.exemptions import ScheduledElsewhere
 
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     "isik.django.apps.notifications.audience",
     "isik.django.apps.features",
     "isik.django.apps.sync",
+    "isik.django.apps.inbound",
     "tests.testapp",
 ]
 
@@ -112,6 +114,11 @@ ISIK = {
             "FAN_OUT_BY": ScheduledElsewhere(
                 reason="each test runs the fan-out it needs itself, with no beat or worker"
             ),
+        },
+        "INBOUND": {
+            "SOURCES": "tests.testapp.inbound_sources",
+            "BACKOFF": (60, 300),
+            "STRANDED_AFTER": timedelta(minutes=10),
         },
         "FEATURES": {
             "SETTINGS": "tests.testapp.feature_settings",

@@ -816,6 +816,17 @@ drf = [
     { name = "mjml-python" },
     { name = "whitenoise" },
 ]
+inbound = [
+    { name = "celery" },
+    { name = "dalf" },
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "django-lifecycle" },
+    { name = "django-object-actions" },
+    { name = "django-pghistory" },
+    { name = "mjml-python" },
+    { name = "whitenoise" },
+]
 notifications = [
     { name = "celery" },
     { name = "dalf" },
@@ -892,6 +903,7 @@ dev = [
 requires-dist = [
     { name = "celery", marker = "extra == 'all'" },
     { name = "celery", marker = "extra == 'celery'" },
+    { name = "celery", marker = "extra == 'inbound'" },
     { name = "celery", marker = "extra == 'notifications'" },
     { name = "celery", marker = "extra == 'push'" },
     { name = "click", marker = "extra == 'all'", specifier = ">=8.1" },
@@ -900,6 +912,7 @@ requires-dist = [
     { name = "dalf", marker = "extra == 'celery'" },
     { name = "dalf", marker = "extra == 'django'" },
     { name = "dalf", marker = "extra == 'drf'" },
+    { name = "dalf", marker = "extra == 'inbound'" },
     { name = "dalf", marker = "extra == 'notifications'" },
     { name = "dalf", marker = "extra == 'push'" },
     { name = "dalf", marker = "extra == 'sms'" },
@@ -908,6 +921,7 @@ requires-dist = [
     { name = "django", marker = "extra == 'celery'" },
     { name = "django", marker = "extra == 'django'" },
     { name = "django", marker = "extra == 'drf'" },
+    { name = "django", marker = "extra == 'inbound'" },
     { name = "django", marker = "extra == 'notifications'" },
     { name = "django", marker = "extra == 'push'" },
     { name = "django", marker = "extra == 'sms'" },
@@ -919,6 +933,7 @@ requires-dist = [
     { name = "django-lifecycle", marker = "extra == 'celery'" },
     { name = "django-lifecycle", marker = "extra == 'django'" },
     { name = "django-lifecycle", marker = "extra == 'drf'" },
+    { name = "django-lifecycle", marker = "extra == 'inbound'" },
     { name = "django-lifecycle", marker = "extra == 'notifications'" },
     { name = "django-lifecycle", marker = "extra == 'push'" },
     { name = "django-lifecycle", marker = "extra == 'sms'" },
@@ -927,6 +942,7 @@ requires-dist = [
     { name = "django-object-actions", marker = "extra == 'celery'" },
     { name = "django-object-actions", marker = "extra == 'django'" },
     { name = "django-object-actions", marker = "extra == 'drf'" },
+    { name = "django-object-actions", marker = "extra == 'inbound'" },
     { name = "django-object-actions", marker = "extra == 'notifications'" },
     { name = "django-object-actions", marker = "extra == 'push'" },
     { name = "django-object-actions", marker = "extra == 'sms'" },
@@ -935,6 +951,7 @@ requires-dist = [
     { name = "django-pghistory", marker = "extra == 'celery'" },
     { name = "django-pghistory", marker = "extra == 'django'" },
     { name = "django-pghistory", marker = "extra == 'drf'" },
+    { name = "django-pghistory", marker = "extra == 'inbound'" },
     { name = "django-pghistory", marker = "extra == 'notifications'" },
     { name = "django-pghistory", marker = "extra == 'push'" },
     { name = "django-pghistory", marker = "extra == 'sms'" },
@@ -957,6 +974,7 @@ requires-dist = [
     { name = "mjml-python", marker = "extra == 'celery'" },
     { name = "mjml-python", marker = "extra == 'django'" },
     { name = "mjml-python", marker = "extra == 'drf'" },
+    { name = "mjml-python", marker = "extra == 'inbound'" },
     { name = "mjml-python", marker = "extra == 'notifications'" },
     { name = "mjml-python", marker = "extra == 'push'" },
     { name = "mjml-python", marker = "extra == 'sms'" },
@@ -973,12 +991,13 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'celery'" },
     { name = "whitenoise", marker = "extra == 'django'" },
     { name = "whitenoise", marker = "extra == 'drf'" },
+    { name = "whitenoise", marker = "extra == 'inbound'" },
     { name = "whitenoise", marker = "extra == 'notifications'" },
     { name = "whitenoise", marker = "extra == 'push'" },
     { name = "whitenoise", marker = "extra == 'sms'" },
     { name = "whitenoise", marker = "extra == 'sync'" },
 ]
-provides-extras = ["all", "celery", "cli", "django", "drf", "notifications", "push", "sentry", "sms", "sync", "templated-fields", "tiptap"]
+provides-extras = ["all", "celery", "cli", "django", "drf", "inbound", "notifications", "push", "sentry", "sms", "sync", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [

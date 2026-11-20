@@ -48,6 +48,7 @@ to - every one by default. Anything else in
 | Check.SCOPED_KEYS          | isik.E025              | a plain key between two models in one scope                  |
 | Check.CHOICE_RULES         | isik.E026              | choice rules on a model that can't hold them                 |
 | Check.SYNC                 | isik.E027              | a sync setting or syncs() declaration that can't work        |
+| Check.INBOUND              | isik.E028              | an inbound setting or source declaration that can't work     |
 
 These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
 swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
@@ -98,6 +99,7 @@ class Check(Enum):
     SCOPED_KEYS = "scoped_keys"
     CHOICE_RULES = "choice_rules"
     SYNC = "sync"
+    INBOUND = "inbound"
 
 
 class CheckOption(Enum):
@@ -158,6 +160,7 @@ CHECKS = {
     Check.SCOPED_KEYS: (CheckOption.APPS,),
     Check.CHOICE_RULES: (CheckOption.APPS,),
     Check.SYNC: (),
+    Check.INBOUND: (),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
