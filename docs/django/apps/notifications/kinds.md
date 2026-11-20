@@ -7,7 +7,9 @@ migration, so your migrations stay what `makemigrations` writes).
 
 A kind's channels and their policies are read off that row everywhere - by the fan-out deciding what to send,
 the preferences and subscription endpoints, and the database's own guards - so a change to them takes effect at
-the `migrate` that mirrors it, together, not when new code starts. A worker that runs new code before `migrate`
+the `migrate` that mirrors it, together, not when new code starts. The row decides whether a notice goes out on
+each channel and under which policy; the declaration in code still decides who it's for and across which
+partitions - its audience and its scope, which no row can hold. A worker that runs new code before `migrate`
 does keeps sending as the row says until then. A new kind arrives at `migrate` the same way: a notice of it can't
 be written before its row exists.
 
