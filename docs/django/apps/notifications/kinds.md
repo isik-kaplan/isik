@@ -148,6 +148,44 @@ webhook, whose endpoints choose their kinds - takes `Policy.MANDATORY` or `Polic
 which it is with `chosen_by_people` (see [your own channel](channels.md#your-own)). An endpoint
 asking for a kind whose webhook policy is `Policy.NEVER` is refused.
 
+### The deployment's say: `CHANNEL_DEFAULTS` and `CHANNEL_FORCED`
+
+Two settings put a channel's policy in one place, for every kind, rather than in each:
+
+```python
+ISIK = {"DJANGO": {"NOTIFICATIONS": {
+    "CHANNEL_DEFAULTS": {Channel.PUSH: Policy.NEVER},     # a kind may leave push out, and isn't sent by push
+    "CHANNEL_FORCED": {Channel.WEBHOOK: Policy.NEVER},    # no kind is sent on webhook here
+}}}
+```
+
+- **A kind may leave out a channel either names**, and is sent there under the setting's policy.
+- **`CHANNEL_DEFAULTS` is a default**: a kind naming the channel is sent there under its own policy.
+- **`CHANNEL_FORCED` is the only policy there**: a kind naming the channel with another one is refused at
+  startup (`isik.E014`), naming the kind, the channel and both policies - change the kind, or leave the
+  channel out of it. Naming it with the forced policy is fine.
+- A channel in both is refused - its default would never be read. Each policy is held to what a kind's is:
+  `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF` on webhook is refused, and so is a channel `CHANNELS` doesn't
+  turn on.
+- A recorded kind is outside both: its email is the record of one its caller sent, not a send of isik's.
+
+The kind's policies - its own and the deployment's - are what its policy row mirrors, so they arrive at the
+next `migrate` like any change to a kind's channels, everywhere at once. `manage.py notices` shows, for each
+kind, which channels the settings set (`set_by`), and before that `migrate`, what it changes:
+
+```
+parcel_flagged on webhook: mandatory now, never after the next migrate - 3 endpoints' subscriptions to it go inert
+```
+
+Forcing a channel to `Policy.NEVER` in a running deployment withdraws it: endpoints' subscriptions to every kind
+it moves go inert, and `endpoint_kinds_withdrawn` is sent for each (see
+[a kind that stops going to webhooks](channels.md#webhook)). Run `notices` before migrating it in, and tell
+the endpoints' owners.
+
+These settings decide what's sent on a channel - not who receives it. A webhook goes to every endpoint
+subscribed to the kind (each owner's, with `ENDPOINT_OWNER_FIELD`), whatever the kind's audience; a policy
+can't say "only these recipients get webhooks".
+
 ## Application-sourced: `raise_notice()`
 
 For something no row change shows - a password reset, a reminder - declared with its audience and channels
@@ -247,8 +285,10 @@ from isik.django.apps.notifications.kinds import PushContent, PushDataField
 - `ttl` - how long the service keeps trying a phone that's off; None leaves it to the service.
 - `badge=True` - the app's badge, set to the user's unread inbox items.
 
-**Push turned on by deployment.** A kind's channels name exactly the channels `CHANNELS` turns on, so a
-kind sent by push where push is on names it with its policy there, and the rest of the time leaves it out:
+**Push turned on by deployment.** A kind's channels name only channels `CHANNELS` turns on, so a
+kind sent by push where push is on names it with its policy there, and the rest of the time leaves it out -
+and a kind never sent by push leaves it out always, with `CHANNEL_DEFAULTS = {Channel.PUSH: Policy.NEVER}` set
+where push is on:
 
 ```python
 from isik.django.apps.notifications import conf
@@ -270,8 +310,11 @@ PUSH = {Channel.PUSH: Policy.DEFAULT_ON} if Channel.PUSH in conf.setting("CHANNE
 - a kind declared twice
 - a kind's `channels` other than `{ChannelName: Policy}` - a key written as plain text, or a policy that
   isn't a `Policy`
-- a channel `CHANNELS` turns on that a kind's `channels` leaves unnamed, and a channel it names that
-  `CHANNELS` leaves off
+- a channel `CHANNELS` turns on that a kind's `channels` leaves unnamed and neither `CHANNEL_DEFAULTS` nor
+  `CHANNEL_FORCED` names, and a channel it names that `CHANNELS` leaves off
+- a kind naming a channel `CHANNEL_FORCED` names, with another policy
+- `CHANNEL_DEFAULTS` or `CHANNEL_FORCED` other than `{ChannelName: Policy}` over channels `CHANNELS` turns on,
+  a policy there a kind couldn't have, and a channel in both
 - `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF` on a channel no person chooses on - a webhook's
 - a single-partition kind whose audience spans partitions; a cross-partition one with no partitions
 - two different audiences annotating the user row under one name (see

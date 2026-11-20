@@ -637,6 +637,7 @@ class TestTheCommandExactly:
             "audience": "Field('recipient')",
             "scope": "single_partition",
             "channels": {"inbox": "default_on", "email": "default_on", "webhook": "mandatory"},
+            "set_by": {},
             "snapshot": ["status", "recipient", "sender"],
         }
 

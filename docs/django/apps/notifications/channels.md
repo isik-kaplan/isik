@@ -64,7 +64,9 @@ Every active, unparked endpoint whose `EndpointKind` rows cover the notice's kin
 **Owned endpoints.** When each endpoint is someone's - a user's, an organization's - set
 `ENDPOINT_OWNER_FIELD` to the endpoint's lookup naming its owner's users (`"owner"`,
 `"organization__members"`). An endpoint then gets only the notices whose audience holds its owner - before
-any subscription: its `EndpointKind` rows are its own choice. Leave it unset only when every endpoint is the
+any subscription: its `EndpointKind` rows are its own choice. An owner no audience holds - an application's
+account, where every audience is people - is sent nothing at all: such endpoints are the deployment's, said
+with `ENDPOINTS_SHARED`. Leave it unset only when every endpoint is the
 deployment's, or each owner's endpoint is sent every other owner's notices. A partition doesn't need it: an
 endpoint there hears only its partition's notices already. `isik.E014` refuses an `EndpointViewSet` or
 `DeliveryViewSet` scoped by an `owner_field` that isn't `ENDPOINT_OWNER_FIELD`, and `isik.W008` warns of an

@@ -174,6 +174,8 @@ superuser turning triggers off - it narrows accidents, not attackers.
 | `PROJECT_NAME` | None | names the webhook signature header, `X-<PROJECT_NAME>-Signature` - required once a kind is sent by webhook, unless `SIGNATURE["header"]` is set |
 | `SIGNATURE` | `{}` | `{"header": ...}` names the signature header outright |
 | `CHANNELS` | `(Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK)` | the channels a kind may be sent on, each a `ChannelName` - `Channel.PUSH` too, with `isik[push]` |
+| `CHANNEL_DEFAULTS` | `{}` | `{ChannelName: Policy}` - a kind may leave such a channel out, and is sent there under it; one naming it keeps its own ([kinds.md](kinds.md#the-deployments-say-channel_defaults-and-channel_forced)) |
+| `CHANNEL_FORCED` | `{}` | `{ChannelName: Policy}` - the only policy a kind may be sent there under; one naming another is refused at startup |
 | `PUSH` | `{}` | `{"APNS": {...}, "FCM": {...}}` - the push services' credentials ([push](channels.md#push)) |
 | `RECORD_ATTEMPTS` | `"failures"` | which attempts get a `DeliveryAttempt` row: `"all"`, `"failures"`, `"none"` |
 | `MAX_ATTEMPTS` | 5 | tries before a delivery (or shard) is abandoned - in each run, a manual retry starting one |

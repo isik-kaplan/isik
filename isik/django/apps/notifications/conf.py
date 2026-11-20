@@ -13,6 +13,7 @@ A hook - `REDACTOR`, `EMAIL_SENDER`, `EMAIL_ADDRESS`, `RECIPIENT_LANGUAGE`, `EMA
 keys this module doesn't know are refused by a system check.
 """
 
+from collections.abc import Mapping
 from datetime import timedelta
 
 from django.utils.module_loading import import_string
@@ -41,6 +42,12 @@ DEFAULTS = {
     "RETRYABLE_STATUSES": (408, 425, 429, *range(500, 600)),
     # The channels a kind may name, each a registered channel's name.
     "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK),
+    # {channel: Policy} - the deployment's say on a channel. A kind may leave out a channel either names, and is
+    # sent there under it. A default is only that: a kind naming the channel is sent under its own policy. A
+    # forced policy is the only one a kind may name there - one naming another is refused by a check. A kind
+    # isik's record_email() records is outside both.
+    "CHANNEL_DEFAULTS": {},
+    "CHANNEL_FORCED": {},
     # {"header": the webhook signature header's name, over X-<PROJECT_NAME>-Signature}.
     "SIGNATURE": {},
     # Seconds a webhook POST may take in all, and the consecutive failures that park its endpoint.
@@ -133,6 +140,21 @@ def setting(name):
     if name in HOOKS and isinstance(value, str):
         return import_string(value)
     return value
+
+
+def deployment_policies():
+    """
+    {channel: Policy} - what a kind leaving a channel out is sent there under: `CHANNEL_FORCED`'s, else
+    `CHANNEL_DEFAULTS`', for each channel `CHANNELS` turns on, in its order.
+    """
+    given = {**policies_in("CHANNEL_DEFAULTS"), **policies_in("CHANNEL_FORCED")}
+    return {channel: given[channel] for channel in setting("CHANNELS") if channel in given}
+
+
+def policies_in(name):
+    """`CHANNEL_DEFAULTS` or `CHANNEL_FORCED` - none while it isn't a mapping, which a check names."""
+    value = setting(name)
+    return value if isinstance(value, Mapping) else {}
 
 
 def in_channel_order(channels):

@@ -283,7 +283,8 @@ class TestTheKinds:
 
         assert kind_problems() == [
             "parcel_shipped says nothing of email, webhook - its channels name every channel "
-            "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on, Policy.NEVER where it never goes out."
+            "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on that CHANNEL_DEFAULTS and CHANNEL_FORCED don't, "
+            "Policy.NEVER where it never goes out."
         ]
 
     @pytest.mark.parametrize("policy", [Policy.DEFAULT_ON, Policy.DEFAULT_OFF])
@@ -725,8 +726,9 @@ class TestSharedEndpoints:
     WARNING = (
         "testapp.Parcel is keyed to the user model by sender, recipient, and "
         "ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] is unset - so every endpoint is sent every user's "
-        "notices of its kinds. Set it to "
-        "the owner's key, or say why they're the deployment's with ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
+        "notices of its kinds. Set it to the owner's key, and each endpoint is sent only the notices whose audience "
+        "holds its owner - one owned by an account no audience holds, an application's, is sent nothing. Or say why "
+        "they're the deployment's with ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
     )
 
     @pytest.fixture

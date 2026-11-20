@@ -4,7 +4,9 @@ from django.core.management.base import BaseCommand, CommandError
 
 from isik._internal.translation import gettext as _
 from isik.django.apps.notifications import pipeline
-from isik.django.apps.notifications.choices import KindStatus
+from isik.django.apps.notifications.channels import Channel
+from isik.django.apps.notifications.choices import KindStatus, Policy
+from isik.django.apps.notifications.conf import in_channel_order
 from isik.django.apps.notifications.kinds import kinds
 from isik.django.apps.notifications.swapping import get_kind_policy_model
 from isik.django.apps.notifications.sync import sent_on_webhook, subscribed_endpoints
@@ -24,6 +26,12 @@ def describe(kind):
         "audience": str(kind.audience) if kind.audience is not None else None,
         "scope": str(kind.scope),
         "channels": {channel: str(policy) for channel, policy in kind.policies.items()},
+        # Each channel the deployment's CHANNEL_DEFAULTS or CHANNEL_FORCED set, rather than the kind.
+        "set_by": {
+            channel: kind.policy_set_by(channel)
+            for channel in kind.policies
+            if kind.policy_set_by(channel) != "declared"
+        },
         "snapshot": list(kind.snapshot),
     }
 
@@ -36,6 +44,33 @@ def inert_endpoints():
         for policy in policies
         if not sent_on_webhook(policy.channels) and (endpoints := subscribed_endpoints(policy))
     }
+
+
+def pending():
+    """
+    [{"kind", "channel", "now", "after", "withdrawn"}] - each channel a declared kind's mirrored row is sent on under
+    another policy than its declaration and the deployment's say: what the next migrate changes, and how many
+    endpoints' subscriptions it leaves inert, a kind leaving webhook. What's sent changes then, not before.
+    """
+    changes = []
+    for policy in get_kind_policy_model().objects.filter(name__in=list(kinds())).order_by("name"):
+        after = {channel: str(each) for channel, each in kinds()[policy.name].policies.items()}
+        withdrawn = (
+            len(subscribed_endpoints(policy)) if sent_on_webhook(policy.channels) and not sent_on_webhook(after) else 0
+        )
+        for channel in in_channel_order({**policy.channels, **after}):
+            now, then = policy.channels.get(channel, Policy.NEVER), after.get(channel, Policy.NEVER)
+            if now != then:
+                changes.append(
+                    {
+                        "kind": policy.name,
+                        "channel": channel,
+                        "now": now,
+                        "after": then,
+                        "withdrawn": withdrawn if channel == Channel.WEBHOOK else 0,
+                    }
+                )
+    return changes
 
 
 def drift():
@@ -104,18 +139,21 @@ class Command(BaseCommand):
         if work:
             self._work()
             return
-        described, differing, inert = (
+        described, differing, inert, changing = (
             [describe(kind) for kind in sorted(kinds().values(), key=lambda kind: kind.name)],
             drift(),
             inert_endpoints(),
+            pending(),
         )
         if format == "json":
-            self.stdout.write(json.dumps({"kinds": described, "drift": differing, "inert": inert}, indent=2))
+            self.stdout.write(
+                json.dumps({"kinds": described, "drift": differing, "inert": inert, "pending": changing}, indent=2)
+            )
             return
         for kind in described:
             self.stdout.write(kind["kind"])
             for key, value in kind.items():
-                if key != "kind" and value not in (None, []):
+                if key != "kind" and value not in (None, [], {}):
                     self.stdout.write(f"  {key}: {_shown(value)}")
         labels = {
             "unmirrored": _("Declared, with no policy row - run migrate"),
@@ -125,6 +163,11 @@ class Command(BaseCommand):
         for key, names in differing.items():
             if names:
                 self.stdout.write(f"{labels[key]}: {', '.join(names)}")
+        for change in changing:
+            line = _("%(kind)s on %(channel)s: %(now)s now, %(after)s after the next migrate") % change
+            if change["withdrawn"]:
+                line += _(" - %(withdrawn)s endpoints' subscriptions to it go inert") % change
+            self.stdout.write(line)
         for kind, endpoints in inert.items():
             self.stdout.write(
                 _("%(kind)s isn't sent on webhook - %(count)s endpoints' subscriptions to it are inert: %(ids)s")

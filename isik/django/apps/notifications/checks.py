@@ -114,6 +114,7 @@ def setting_problems():
                     _("ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on %(name)s, which can't be loaded: %(error)s")
                     % {"name": name, "error": missing}
                 )
+    problems += _deployment_policy_problems()
     if _sent_on(Channel.WEBHOOK):
         name = conf.setting("PROJECT_NAME")
         if conf.signature_header() is None:
@@ -398,15 +399,28 @@ def _channel_problems(kind):
             % {"kind": kind.name, "channels": ", ".join(invalid)}
         )
     configured = conf.setting("CHANNELS")
-    unnamed = [channel for channel in configured if channel not in kind.channels]
+    deployments = conf.deployment_policies()
+    unnamed = [channel for channel in configured if channel not in kind.channels and channel not in deployments]
     if unnamed:
         problems.append(
             _(
                 "%(kind)s says nothing of %(channels)s - its channels name every channel "
-                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on, Policy.NEVER where it never goes out."
+                "ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] turns on that CHANNEL_DEFAULTS and CHANNEL_FORCED "
+                "don't, Policy.NEVER where it never goes out."
             )
             % {"kind": kind.name, "channels": ", ".join(unnamed)}
         )
+    forced = conf.policies_in("CHANNEL_FORCED")
+    for channel, policy in kind.channels.items():
+        if channel in forced and policy in Policy.values and policy != forced[channel]:
+            problems.append(
+                _(
+                    "%(kind)s is sent on %(channel)s under %(policy)s, and "
+                    "ISIK['DJANGO']['NOTIFICATIONS']['CHANNEL_FORCED'] forces %(forced)s there - change the kind, "
+                    "or leave %(channel)s out of it."
+                )
+                % {"kind": kind.name, "channel": channel, "policy": policy, "forced": forced[channel]}
+            )
     unconfigured = [channel for channel in kind.channels if channel not in configured]
     if unconfigured:
         problems.append(
@@ -425,6 +439,65 @@ def _channel_problems(kind):
                 "Policy.MANDATORY or Policy.NEVER."
             )
             % {"kind": kind.name, "channels": ", ".join(unchosen)}
+        )
+    return problems
+
+
+def _deployment_policy_problems():
+    """What's wrong with `CHANNEL_DEFAULTS` and `CHANNEL_FORCED`: each held to what a kind's channels are."""
+    problems = []
+    for key in ("CHANNEL_DEFAULTS", "CHANNEL_FORCED"):
+        setting = f"ISIK['DJANGO']['NOTIFICATIONS']['{key}']"
+        given = conf.setting(key)
+        if not isinstance(given, Mapping):
+            problems.append(
+                _("%(setting)s is {channel: Policy}, not %(given)r.") % {"setting": setting, "given": given}
+            )
+            continue
+        untyped = [channel for channel in given if not isinstance(channel, ChannelName)]
+        if untyped:
+            problems.append(
+                _(
+                    "%(setting)s names %(channels)s by plain text - name each as Channel.EMAIL does, or by the "
+                    "ChannelName register_channel() returned."
+                )
+                % {"setting": setting, "channels": ", ".join(untyped)}
+            )
+        unconfigured = [channel for channel in given if channel not in conf.setting("CHANNELS")]
+        if unconfigured:
+            problems.append(
+                _("%(setting)s names %(channels)s, which ISIK['DJANGO']['NOTIFICATIONS']['CHANNELS'] doesn't turn on.")
+                % {"setting": setting, "channels": ", ".join(unconfigured)}
+            )
+        invalid = [channel for channel, policy in given.items() if policy not in Policy.values]
+        if invalid:
+            problems.append(
+                _("%(setting)s gives %(channels)s something other than a Policy.")
+                % {"setting": setting, "channels": ", ".join(invalid)}
+            )
+        unchosen = [
+            channel
+            for channel, policy in given.items()
+            if policy in CHOSEN and channel not in unconfigured and not _chosen_by_people(channel)
+        ]
+        if unchosen:
+            problems.append(
+                _(
+                    "%(setting)s leaves %(channels)s to each person's choice, and no person chooses there - "
+                    "Policy.MANDATORY or Policy.NEVER."
+                )
+                % {"setting": setting, "channels": ", ".join(unchosen)}
+            )
+    both = [
+        channel for channel in conf.policies_in("CHANNEL_DEFAULTS") if channel in conf.policies_in("CHANNEL_FORCED")
+    ]
+    if both:
+        problems.append(
+            _(
+                "ISIK['DJANGO']['NOTIFICATIONS'] both defaults and forces %(channels)s - a forced policy is the only "
+                "one there, so its default is never read. Name each channel in one of them."
+            )
+            % {"channels": ", ".join(both)}
         )
     return problems
 
@@ -592,8 +665,9 @@ def shared_endpoint_warnings():
         _(
             "%(model)s is keyed to the user model by %(keys)s, and "
             "ISIK['DJANGO']['NOTIFICATIONS']['ENDPOINT_OWNER_FIELD'] is unset - so every endpoint is sent every "
-            "user's notices of its kinds. Set it to the owner's key, or say why they're the deployment's with "
-            "ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
+            "user's notices of its kinds. Set it to the owner's key, and each endpoint is sent only the notices "
+            "whose audience holds its owner - one owned by an account no audience holds, an application's, is sent "
+            "nothing. Or say why they're the deployment's with ENDPOINTS_SHARED=SharedEndpoints(reason=...)."
         )
         % {"model": endpoint._meta.label, "keys": ", ".join(keys)}
     ]

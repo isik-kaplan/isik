@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-11-20
+
+### Added
+
+- `CHANNEL_DEFAULTS` and `CHANNEL_FORCED` - `{ChannelName: Policy}`, the deployment's say on a channel for every
+  kind. A kind may leave out a channel either names, and is sent there under it. A kind naming a defaulted
+  channel keeps its own policy; one naming a forced channel with another policy is refused at startup
+  (`isik.E014`), naming the kind, the channel and both policies. A channel in both, one `CHANNELS` doesn't turn
+  on, or a policy a kind couldn't have there is refused. A recorded kind is outside both. The kind's policies,
+  its own and the deployment's, are what its row mirrors.
+- `manage.py notices` shows each kind's channels the deployment set (`set_by`), and before a `migrate`, what it
+  changes on each kind and channel - and how many endpoints' subscriptions a kind leaving webhook leaves inert
+  (`pending` in `--format json`).
+- `Kind.declared_policies` - the policies a kind names - beside `Kind.policies`, now its own and the
+  deployment's, and `Kind.policy_set_by(channel)`.
+
+### Changed
+
+- `isik.W008` says that with `ENDPOINT_OWNER_FIELD` set, an endpoint owned by an account no audience holds - an
+  application's - is sent nothing.
+
 ### Fixed
 
 - The fan-out sends on the channels, under the policies, of a kind's mirrored `NoticeKindPolicy` row - as the

@@ -54,7 +54,7 @@ from django.db.models.expressions import RawSQL
 from isik._internal.reasons import require_exemptions
 from isik._internal.translation import gettext as _
 from isik.common.utils.exemptions import Exemption
-from isik.django.apps.notifications import swapping
+from isik.django.apps.notifications import conf, swapping
 from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.choices import CHOSEN, KindStatus, Policy, Scope, Source
 
@@ -191,9 +191,29 @@ class Kind:
         return f"notify_{self.name}"
 
     @property
-    def policies(self):
-        """{channel: Policy} - its channels, or none while they're something else, which a check names."""
+    def declared_policies(self):
+        """{channel: Policy} - the channels it names, or none while they're something else, which a check names."""
         return self.channels if isinstance(self.channels, Mapping) else {}
+
+    @property
+    def policies(self):
+        """
+        {channel: Policy} - what it's sent on each channel under: the policies it names, and for each channel it
+        leaves out, the deployment's - `CHANNEL_FORCED`'s, else `CHANNEL_DEFAULTS`'. A recorded kind is its own.
+        """
+        declared = self.declared_policies
+        if self.source == Source.RECORDED:
+            return declared
+        deployments = conf.deployment_policies()
+        return {**declared, **{channel: deployments[channel] for channel in deployments if channel not in declared}}
+
+    def policy_set_by(self, channel):
+        """Who set the policy it's sent on `channel` under: "declared", "forced", "default", or None for none."""
+        if channel in self.declared_policies:
+            return "declared"
+        if channel not in self.policies:
+            return None
+        return "forced" if channel in conf.policies_in("CHANNEL_FORCED") else "default"
 
     def policy_on(self, channel):
         """The `Policy` it's sent on `channel` under - `Policy.NEVER` for a channel it doesn't name."""
