@@ -214,7 +214,7 @@ declare_setting("display_name", models.CharField(max_length=100), "", own=OnHold
   own field, or `set_setting()`.
 - **`visible_to_holder=False`** - kept out of the holder's listing; staff's alone.
 - **`null_label`** - what a person reads for None, for a setting where None means something: a cap with no
-  limit, a colour that's the site's own. Giving it is what lets the setting be None - every other setting always
+  limit, a color that's the site's own. Giving it is what lets the setting be None - every other setting always
   has a value, and `isik.E017` refuses a field with `null=True` or a default of None without it. **A setting
   with a `null_label` has None as its default** (`isik.E017` refuses another): a holder's own value of None and
   no choice at all are the same column, so None has to be what no choice means.

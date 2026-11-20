@@ -62,7 +62,7 @@ declare_setting(
 declare_setting(
     "staff_note", models.TextField(), default="", label="Staff note", visible_to_holder=False, feature=INTERNAL
 )
-# None is a value of these - "No limit", the site's own colours - so each says what a person reads for it.
+# None is a value of these - "No limit", the site's own colors - so each says what a person reads for it.
 declare_setting(
     "max_seats",
     models.PositiveIntegerField(null=True),

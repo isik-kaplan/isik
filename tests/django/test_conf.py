@@ -284,7 +284,7 @@ class TestIsikIsConfigured:
         assert self.messages() == [
             "ISIK names 'ZZZ', which isn't one of EXEMPTIONS, DJANGO.",
             "ISIK['DJANGO'] names 'QQQ', which isn't one of CHECKS, PRIMARY_KEY, SCHEMA_LANGUAGE, FEATURES, "
-            "NOTIFICATIONS, SMS, SYNC, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, TEMPLATED_FIELDS.",
+            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, TEMPLATED_FIELDS.",
         ]
 
     def test_every_key_is_looked_at(self, settings):
@@ -293,7 +293,7 @@ class TestIsikIsConfigured:
         assert self.messages() == [
             "ISIK names 'ZZZ', which isn't one of EXEMPTIONS, DJANGO.",
             "ISIK['DJANGO'] names 'QQQ', which isn't one of CHECKS, PRIMARY_KEY, SCHEMA_LANGUAGE, FEATURES, "
-            "NOTIFICATIONS, SMS, SYNC, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, TEMPLATED_FIELDS.",
+            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, TEMPLATED_FIELDS.",
         ]
 
     def test_a_key_that_isnt_a_string(self, settings):

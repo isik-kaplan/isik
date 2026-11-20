@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-11-20
+
+### Added
+
+- `isik.django.apps.inbound` (`isik[inbound]`) - webhooks a project receives. A source per sender
+  (`declare_source()`), verified by its `verifier` - `IsikSignature` for isik's own signature, one isik project
+  receiving another's - and written down once per source and sender's event id (`Unidentified(reason=...)` for a
+  sender naming none), in the partition its `partition` reads from the request before anything is written. Answered
+  at once; each event handed to its `@handles()` handler in a task, with the mark in the same transaction, tried
+  again on `BACKOFF`, given up on after `MAX_ATTEMPTS` and retried by hand (`retry_event()`), taken back from a dead
+  worker after `STRANDED_AFTER`, its payload dropped once handled where `payload_kept` says, and pruned past
+  `RETENTION` by `tasks.work`. `isik.E028`.
+- `isik.django.apps.accounts` - a person deleting their own account. `DeletableAccount` on the user model;
+  `request_deletion()` ends every session (a `session_epoch` signs them, the password untouched) and has the
+  account deleted after `DELETION_AFTER`; `cancel_pending_deletion()`, from the login, cancels it; the sweep
+  deletes it with `DELETION_BACKEND` - `Erase` or `Anonymize` (a tombstone). The project registers its models'
+  rows of a person with `erasure()` - any model's, a library's included - and isik its own; a row deleted takes its
+  history, a field anonymized is anonymized in its history too. `isik.E029` holds every key to the user model to
+  `CASCADE`, `SET_NULL`, or a registration.
+- `null_label` on a features setting: None becomes a value of it, with what a person reads for it - "No limit". Its
+  default is None; it's listed as `<type>_or_null`, with `null_label` beside the value or `{value: null, label}`
+  among a choice's `choices`, and set and forced to None like any value. Without the feature, None under
+  `AtMost(n)`/`AtLeast(n)` is `n` - as Postgres' `LEAST` and `GREATEST` answer, in `effective()` as in
+  `effective_expression()`.
+- Each model isik generates is set on the module it names, so the shell's automatic imports find it.
+
+### Changed
+
+- The inbox, subscription, device, endpoint and delivery viewsets answer a subclass's `serializer_class` before
+  building their own - a subclass that set it, which was silently ignored, now gets its own serializer.
+- `isik.W002` stays quiet for an owner whose app still has migrations to apply on the database - a fresh `migrate`
+  no longer warns of the lock triggers it's about to install.
+- `isik.E017` lets a setting be None only with a `null_label`, and refuses a `null_label` on a field that can't be
+  None, beside a default that isn't None, or beside a choice of None.
+
 ## [0.59.0] - 2026-11-20
 
 ### Added

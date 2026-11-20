@@ -157,6 +157,7 @@ class TestTheSettings:
             "choice_rules",
             "sync",
             "inbound",
+            "accounts",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -234,7 +235,7 @@ class TestTheSettingsCheck:
             "Check.SINGLETONS, Check.PRECONDITIONS, Check.HISTORY_INDEXES, Check.EXEMPTIONS, Check.DOCUMENTATION, "
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
             "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE, "
-            "Check.CONSTRAINT_MESSAGES, Check.SCOPED_KEYS, Check.CHOICE_RULES, Check.SYNC, Check.INBOUND."
+            "Check.CONSTRAINT_MESSAGES, Check.SCOPED_KEYS, Check.CHOICE_RULES, Check.SYNC, Check.INBOUND, Check.ACCOUNTS."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
