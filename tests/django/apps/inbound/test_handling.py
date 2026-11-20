@@ -82,6 +82,44 @@ class TestHandled:
         assert pipeline.process(None, str(event.pk)) is None
         assert handled == []
 
+    def test_only_the_event_named(self, handled):
+        # The other first, so any pending event but the one named is the other.
+        other, event = received(event_id="evt_2"), received()
+
+        pipeline.process(None, str(event.pk))
+
+        assert (fresh(event).state, fresh(other).state, fresh(other).attempt_count) == (
+            EventState.PROCESSED,
+            EventState.PENDING,
+            0,
+        )
+
+    def test_claimed_while_its_handler_runs(self, monkeypatch):
+        seen = []
+        monkeypatch.setitem(
+            handlers,
+            ("acme", "invoice_voided"),
+            lambda event: seen.append((event.claimed_at, fresh(event).state, fresh(event).claimed_at)),
+        )
+        event = received()
+
+        pipeline.process(None, str(event.pk))
+
+        ((claimed_at, state, stored),) = seen
+        assert (state, stored) == (EventState.PROCESSING, claimed_at)
+        assert claimed_at is not None
+
+    def test_a_finish_marks_only_its_own_event(self, handled, monkeypatch):
+        now = timezone.now()
+        monkeypatch.setattr(pipeline.timezone, "now", lambda: now)
+        other = received(event_id="evt_2", state=EventState.PROCESSING, claimed_at=now)
+        event = received(next_attempt_at=now - timedelta(seconds=1))
+
+        done = pipeline.process(None, str(event.pk))
+
+        assert (done.state, done.claimed_at) == (EventState.PROCESSED, None)
+        assert (fresh(other).state, fresh(other).claimed_at) == (EventState.PROCESSING, now)
+
     def test_what_the_handler_writes_commits_with_the_mark(self, monkeypatch):
         monkeypatch.setitem(handlers, ("acme", "invoice_voided"), lambda event: Widget.objects.create(name="paid"))
         event = received()
@@ -98,9 +136,13 @@ class TestHandled:
         monkeypatch.setitem(handlers, ("acme", "invoice_voided"), taken_back)
         event = received()
 
-        assert pipeline.process(None, str(event.pk)) is None
+        with caplog_at_warning() as caplog:
+            assert pipeline.process(None, str(event.pk)) is None
         assert not Widget.objects.filter(name="twice").exists()
         assert fresh(event).state == EventState.PROCESSING
+        assert [record.getMessage() for record in caplog] == [
+            f"Inbound event {event.pk} was taken back while it was handled; its finish is dropped."
+        ]
 
 
 class TestFailed:
@@ -126,7 +168,7 @@ class TestFailed:
         assert not Widget.objects.filter(name="half").exists()
 
     def test_each_failure_waits_the_next_delay_the_last_repeating(self, failing, monkeypatch):
-        monkeypatch.setattr(pipeline.random, "uniform", lambda low, high: 0)
+        monkeypatch.setattr(pipeline.random, "uniform", lambda low, high: low)
         event = received(attempt_count=2)
 
         pipeline.process(None, str(event.pk))
@@ -155,6 +197,16 @@ class TestFailed:
 
         assert done.state == fresh(event).state == EventState.ABANDONED
         assert fresh(event).processed_at is not None
+        assert fresh(event).last_error == "the ledger is down"
+
+    def test_logged_with_the_event(self, failing, caplog):
+        event = received()
+
+        pipeline.process(None, str(event.pk))
+
+        (logged,) = [record for record in caplog.records if record.name == "isik.django.apps.inbound.pipeline"]
+        assert logged.getMessage() == f"Inbound event {event.pk} failed in its handler."
+        assert logged.exc_info is not None
 
     def test_tried_again_before_max_attempts(self, failing, settings):
         inbound(settings, MAX_ATTEMPTS=3)
@@ -203,6 +255,19 @@ class TestWork:
         assert done == {"asked": 1, "taken_back": 1, "pruned": 0}
         assert asked == [(None, str(stranded.pk))]
 
+    def test_takes_back_only_whats_still_held(self, asked):
+        abandoned = received(state=EventState.ABANDONED, claimed_at=timezone.now() - timedelta(hours=1))
+        stranded = received(
+            event_id="evt_2",
+            state=EventState.PROCESSING,
+            claimed_at=timezone.now() - timedelta(hours=1),
+            next_attempt_at=timezone.now() + timedelta(days=1),
+        )
+
+        assert pipeline.work()["taken_back"] == 1
+        assert fresh(abandoned).state == EventState.ABANDONED
+        assert fresh(stranded).next_attempt_at <= timezone.now()
+
     def test_asks_again_for_every_due_event_oldest_first(self, asked):
         later = received(next_attempt_at=timezone.now() - timedelta(minutes=1))
         sooner = received(event_id="evt_2", next_attempt_at=timezone.now() - timedelta(minutes=2))
@@ -250,17 +315,35 @@ class TestWork:
         assert pipeline.work() == {"asked": 1, "taken_back": 1, "pruned": 1}
 
 
+def _entering(entered):
+    @contextmanager
+    def in_partition(key):
+        entered.append(key)
+        yield
+
+    return in_partition
+
+
+@contextmanager
+def caplog_at_warning():
+    import logging
+
+    records = []
+    handler = logging.Handler(logging.WARNING)
+    handler.emit = records.append
+    logger = logging.getLogger("isik.django.apps.inbound.pipeline")
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
+
+
 class TestPartitions:
     @pytest.fixture
     def partitioned(self, settings):
         entered = []
-
-        @contextmanager
-        def in_partition(key):
-            entered.append(key)
-            yield
-
-        inbound(settings, PARTITIONS=lambda: ["north", "south"], IN_PARTITION=in_partition)
+        inbound(settings, PARTITIONS=lambda: ["north", "south"], IN_PARTITION=_entering(entered))
         return entered
 
     def test_the_task_handles_it_in_the_partition_it_names(self, partitioned, handled):
@@ -280,6 +363,20 @@ class TestPartitions:
     def test_work_goes_through_each_partition(self, partitioned, asked):
         assert pipeline.work() == {"asked": 0, "taken_back": 0, "pruned": 0}
         assert partitioned == ["north", "south"]
+
+    def test_work_adds_up_every_partitions(self, partitioned, asked, settings):
+        # The fake partitions share one table: what the first takes back, prunes or asks for is counted with
+        # what the second does.
+        inbound(
+            settings,
+            PARTITIONS=lambda: ["north", "south"],
+            IN_PARTITION=_entering(partitioned),
+            RETENTION=timedelta(days=1),
+        )
+        received(state=EventState.PROCESSING, claimed_at=timezone.now() - timedelta(hours=1))
+        received(event_id="evt_2", state=EventState.PROCESSED, received_at=timezone.now() - timedelta(days=2))
+
+        assert pipeline.work() == {"asked": 2, "taken_back": 1, "pruned": 1}
 
     def test_with_none_nothing_is_entered(self, handled):
         event = received()
@@ -310,3 +407,31 @@ def test_a_db_round_trip_for_an_event_naming_its_source_and_id():
     with connection.cursor() as cursor:
         cursor.execute("SELECT count(*) FROM isik_inbound_event")
         assert cursor.fetchone() == (2,)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_event_another_worker_holds_is_skipped(handled):
+    import threading
+
+    from django.db import connection as default
+    from django.db import transaction
+
+    event = received()
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with transaction.atomic():
+            InboundEvent.objects.select_for_update().get(pk=event.pk)
+            held.set()
+            release.wait(5)
+        default.close()
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    held.wait(5)
+    try:
+        assert pipeline.process(None, str(event.pk)) is None
+    finally:
+        release.set()
+        holder.join(5)
+    assert pipeline.process(None, str(event.pk)).state == EventState.PROCESSED

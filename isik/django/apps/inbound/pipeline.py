@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from isik._internal.translation import gettext as _
@@ -109,9 +110,10 @@ def _claim(event_id):
         )
         if event is None:
             return None
-        event.state, event.claimed_at, event.attempt_count = EventState.PROCESSING, now, event.attempt_count + 1
-        event.save(update_fields=["state", "claimed_at", "attempt_count"])
-    return event
+        _events().filter(pk=event.pk).update(
+            state=EventState.PROCESSING, claimed_at=now, attempt_count=F("attempt_count") + 1
+        )
+    return _events().get(pk=event.pk)
 
 
 def _finish(event, state):
@@ -134,18 +136,12 @@ def _failed(event, error):
 
 
 def _update_claimed(event, fields):
-    moved = (
-        _events()
-        .filter(pk=event.pk, state=EventState.PROCESSING, claimed_at=event.claimed_at)
-        .update(**fields, claimed_at=None)
-    )
+    # The worker's own claim, as it made it: one taken back since has none, and one claimed again another.
+    moved = _events().filter(pk=event.pk, claimed_at=event.claimed_at).update(**fields, claimed_at=None)
     if not moved:
         logger.warning("Inbound event %s was taken back while it was handled; its finish is dropped.", event.pk)
         return None
-    for name, value in fields.items():
-        setattr(event, name, value)
-    event.claimed_at = None
-    return event
+    return _events().get(pk=event.pk)
 
 
 def retry_event(event):
@@ -165,8 +161,8 @@ def _partitions():
 
 
 def _limited(queryset):
-    batch = conf.setting("BATCH")
-    return queryset if batch is None else queryset[:batch]
+    # Sliced to None, it's every row.
+    return queryset[: conf.setting("BATCH")]
 
 
 def work():
@@ -178,28 +174,23 @@ def work():
     now = timezone.now()
     for partition in _partitions():
         with in_partition(partition):
-            stranded = _limited(
-                _events()
-                .filter(state=EventState.PROCESSING, claimed_at__lt=now - conf.setting("STRANDED_AFTER"))
-                .values_list("pk", flat=True)
+            stranded = _events().filter(
+                state=EventState.PROCESSING, claimed_at__lt=now - conf.setting("STRANDED_AFTER")
             )
             done["taken_back"] += (
                 _events()
-                .filter(pk__in=list(stranded), state=EventState.PROCESSING)
+                .filter(pk__in=_limited(stranded.order_by("claimed_at")).values("pk"))
                 .update(state=EventState.PENDING, claimed_at=None, next_attempt_at=now)
             )
-            due = list(
-                _limited(
-                    _events().filter(state=EventState.PENDING, next_attempt_at__lte=now).order_by("next_attempt_at")
-                )
-            )
+            pending = _events().filter(state=EventState.PENDING, next_attempt_at__lte=now)
+            due = list(_limited(pending.order_by("next_attempt_at")))
             for event in due:
                 _ask(event)
             done["asked"] += len(due)
             retention = conf.setting("RETENTION")
             if retention is not None:
-                old = _limited(
-                    _events().filter(state__in=DONE, received_at__lt=now - retention).values_list("pk", flat=True)
+                old = _events().filter(state__in=DONE, received_at__lt=now - retention)
+                done["pruned"] += (
+                    _events().filter(pk__in=_limited(old.order_by("received_at")).values("pk")).delete()[0]
                 )
-                done["pruned"] += _events().filter(pk__in=list(old)).delete()[0]
     return done

@@ -4,7 +4,7 @@ import json
 import time
 
 import pytest
-from django.test import Client
+from django.test import Client, TestCase
 
 from isik.django.apps.inbound.choices import EventState
 from isik.django.apps.inbound.models import InboundEvent
@@ -124,3 +124,44 @@ class TestRefused:
 
         assert self.refusal(answered) == (400, "unidentified")
         assert answered.json()["detail"] == "The body names no event id."
+
+
+class TestPartitioned:
+    def test_the_partition_the_request_names_is_entered_first_and_kept(self, settings, monkeypatch, asked):
+        import dataclasses
+        from contextlib import contextmanager
+
+        from isik.django.apps.inbound import sources
+        from isik.django.conf import isik_areas
+
+        entered = []
+
+        @contextmanager
+        def in_partition(key):
+            entered.append(key)
+            yield
+
+        isik_areas(settings).INBOUND = {
+            **isik_areas(settings).INBOUND,
+            "PARTITIONS": lambda: ["north"],
+            "IN_PARTITION": in_partition,
+        }
+        monkeypatch.setitem(
+            sources.sources,
+            "acme",
+            dataclasses.replace(sources.sources["acme"], partition=lambda request: request.headers["X-Tenant"]),
+        )
+        body = json.dumps(INVOICE).encode()
+
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            answered = Client().post(
+                "/in/acme/",
+                body,
+                content_type="application/json",
+                headers={"X-Acme-Signature": signed(body), "X-Tenant": "north"},
+            )
+
+        assert (answered.status_code, entered) == (200, ["north"])
+        event = InboundEvent.objects.get()
+        assert event.partition == "north"
+        assert asked == [("north", str(event.pk))]
