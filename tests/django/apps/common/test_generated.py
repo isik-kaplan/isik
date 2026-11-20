@@ -1,5 +1,9 @@
 """The models isik generates are marked, so a project needn't guess them by name."""
 
+import sys
+import types
+
+import pytest
 from django.db import models
 from django.test.utils import isolate_apps
 
@@ -69,3 +73,37 @@ def test_a_model_a_maker_builds_is_a_maker(monkeypatch):
 
     assert built.isik_generated == "maker"
     assert generated_models("maker") == [built]
+
+
+def test_each_is_found_on_the_module_it_names():
+    for model in generated_models():
+        assert getattr(sys.modules[model.__module__], model.__name__) is model
+
+
+@isolate_apps("tests.testapp")
+def test_a_modules_own_name_is_kept_and_an_earlier_copy_replaced(monkeypatch):
+    monkeypatch.setattr(generated, "_generated", {})
+    module = types.ModuleType("tests.made_up")
+    module.Own = own = object()
+    monkeypatch.setitem(sys.modules, "tests.made_up", module)
+    meta = type("Meta", (), {"app_label": "testapp"})
+
+    named = mark_generated(type("Own", (models.Model,), {"__module__": "tests.made_up", "Meta": meta}), "lock")
+    first = mark_generated(type("Copy", (models.Model,), {"__module__": "tests.made_up", "Meta": meta}), "lock")
+    with pytest.warns(RuntimeWarning, match="already registered"):
+        again = mark_generated(type("Copy", (models.Model,), {"__module__": "tests.made_up", "Meta": meta}), "lock")
+
+    assert named.__name__ == "Own"
+    assert module.Own is own
+    assert first is not again
+    assert module.Copy is again
+
+
+@isolate_apps("tests.testapp")
+def test_a_module_not_imported_is_left_be(monkeypatch):
+    monkeypatch.setattr(generated, "_generated", {})
+    meta = type("Meta", (), {"app_label": "testapp"})
+    model = type("Nowhere", (models.Model,), {"__module__": "tests.never_imported", "Meta": meta})
+
+    assert mark_generated(model, "maker") is model
+    assert "tests.never_imported" not in sys.modules

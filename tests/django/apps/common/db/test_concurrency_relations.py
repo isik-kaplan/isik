@@ -12,6 +12,7 @@ from django.db import connection, connections, transaction
 from django.test.utils import isolate_apps
 from django.utils.functional import SimpleLazyObject
 
+from isik.django.apps.common import checks
 from isik.django.apps.common.checks import every_concurrency_relation_is_locked
 from isik.django.apps.common.db import models as base_models
 from isik.django.apps.common.db.concurrency import (
@@ -489,6 +490,37 @@ class TestTheLockTriggers:
         )
 
         assert every_concurrency_relation_is_locked(None, databases=["default"]) == []
+
+    def test_an_owner_whose_app_is_still_migrating_is_left_alone(self, monkeypatch):
+        monkeypatch.setattr(
+            type(base_models.relation_locks[0][3]),
+            "get_installation_status",
+            lambda self, model, database: ("UNINSTALLED", None),
+        )
+        monkeypatch.setattr(checks, "apps_migrating", lambda database: {"testapp"})
+
+        assert every_concurrency_relation_is_locked(None, databases=["default"]) == []
+
+    def test_an_owner_whose_app_is_migrated_is_still_checked(self, monkeypatch):
+        monkeypatch.setattr(
+            type(base_models.relation_locks[0][3]),
+            "get_installation_status",
+            lambda self, model, database: ("UNINSTALLED", None),
+        )
+        monkeypatch.setattr(base_models, "relation_locks", base_models.relation_locks[:1])
+        monkeypatch.setattr(checks, "apps_migrating", lambda database: {"auth"})
+
+        assert len(every_concurrency_relation_is_locked(None, databases=["default"])) == 1
+
+    def test_the_apps_still_migrating_are_those_with_a_migration_unapplied(self):
+        from django.db.migrations.recorder import MigrationRecorder
+
+        assert checks.apps_migrating("default") == set()
+        # The app's latest one, as a migration not applied yet is to migrate.
+        latest = MigrationRecorder.Migration.objects.filter(app="testapp").latest("applied")
+        latest.delete()
+
+        assert checks.apps_migrating("default") == {"testapp"}
 
     def test_without_databases_nothing_is_asked(self, monkeypatch):
         monkeypatch.setattr(type(base_models.relation_locks[0][3]), "get_installation_status", None)

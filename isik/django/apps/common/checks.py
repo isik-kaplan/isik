@@ -478,18 +478,33 @@ def every_precondition_view_has_options_that_make_sense(options, **kwargs):
     ]
 
 
+def apps_migrating(database):
+    """The labels of the apps with migrations not yet applied on `database`."""
+    from django.db import connections
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connections[database])
+    plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+    return {migration.app_label for migration, _backwards in plan}
+
+
 @isik_check(Check.RELATION_LOCKS, Tags.database)
 def every_concurrency_relation_is_locked(options, databases=None, **kwargs):
     """
     A relation a version covers is safe only while its trigger locks the owner row - see
     `concurrency_relations`. A warning, not an error: `migrate` runs this before it applies the
-    migration that installs the trigger, and an error would stop it doing so.
+    migration that installs the trigger, and an error would stop it doing so. A relation whose owner's app
+    has migrations still to apply on the database is left alone - applying them is what installs it, so
+    `migrate` doesn't warn of the triggers it's about to install.
     """
     from isik.django.apps.common.db.models import relation_locks
 
     warnings = []
     for database in databases or ():
+        migrating = apps_migrating(database)
         for owner, relation, proxy, trigger in relation_locks:
+            if owner._meta.app_label in migrating:
+                continue
             status, _enabled = trigger.get_installation_status(proxy, database=database)
             # A database the router keeps the model off holds no such table to lock.
             if status in ("INSTALLED", "UNALLOWED"):

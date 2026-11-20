@@ -370,7 +370,7 @@ class InboxViewSet(IdempotencyMixin, PreconditionMixin, BaseViewSet, mixins.List
         return items
 
     def get_serializer_class(self):
-        return inbox_item_serializer(get_inbox_item_model())
+        return self.serializer_class or inbox_item_serializer(get_inbox_item_model())
 
     @extend_schema(request=None)
     @action(detail=True, methods=["post"])
@@ -426,7 +426,7 @@ class SubscriptionViewSet(
         )
 
     def get_serializer_class(self):
-        return subscription_serializer(get_subscription_model())
+        return self.serializer_class or subscription_serializer(get_subscription_model())
 
     # The row is written by subscribe(), which sets one or replaces the one before.
     def perform_create(self, serializer):
@@ -670,7 +670,7 @@ class DeviceViewSet(
         return get_device_model()._default_manager.filter(user=self.request.user).order_by("pk")
 
     def get_serializer_class(self):
-        return device_serializer(get_device_model())
+        return self.serializer_class or device_serializer(get_device_model())
 
     def perform_create(self, serializer):
         serializer.instance = register_device(self.request.user, **serializer.validated_data)
@@ -727,7 +727,7 @@ class EndpointViewSet(
         return self.owned_endpoints().order_by("pk")
 
     def get_serializer_class(self):
-        return endpoint_serializer(get_endpoint_model())
+        return self.serializer_class or endpoint_serializer(get_endpoint_model())
 
     def _answer(self, endpoint):
         return Response(self.get_serializer(endpoint).data)
@@ -824,7 +824,7 @@ class DeliveryViewSet(
     precondition_exempt_actions = {"retry": _EXEMPT["retry"]}
 
     def get_serializer_class(self):
-        return delivery_serializer(get_delivery_model(), get_delivery_attempt_model())
+        return self.serializer_class or delivery_serializer(get_delivery_model(), get_delivery_attempt_model())
 
     @none_during_schema_generation
     def get_queryset(self):
