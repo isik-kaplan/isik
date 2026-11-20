@@ -51,7 +51,8 @@ INVOICE_VOIDED = declare_kind("invoice_voided")  # in one module of every kind -
     condition=pgtrigger.Q(old__voided_at__isnull=True, new__voided_at__isnull=False),
     snapshot=["number", "customer"],
     audience=Field("customer"),
-    # Every channel CHANNELS turns on, each with its policy - see kinds.md.
+    # Every channel CHANNELS turns on, each with its policy, but those CHANNEL_DEFAULTS or CHANNEL_FORCED
+    # speak for - see kinds.md.
     channels=dict.fromkeys((Channel.INBOX, Channel.EMAIL), Policy.MANDATORY) | {Channel.WEBHOOK: Policy.NEVER},
 )
 class Invoice(BaseModel):

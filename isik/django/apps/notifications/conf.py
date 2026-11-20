@@ -44,8 +44,8 @@ DEFAULTS = {
     "CHANNELS": (Channel.INBOX, Channel.EMAIL, Channel.WEBHOOK),
     # {channel: Policy} - the deployment's say on a channel. A kind may leave out a channel either names, and is
     # sent there under it. A default is only that: a kind naming the channel is sent under its own policy. A
-    # forced policy is the only one a kind may name there - one naming another is refused by a check. A kind
-    # isik's record_email() records is outside both.
+    # forced policy is the only one a kind may name there - one naming another is refused by a check. A recorded
+    # kind is outside both: isik decides its channels.
     "CHANNEL_DEFAULTS": {},
     "CHANNEL_FORCED": {},
     # {"header": the webhook signature header's name, over X-<PROJECT_NAME>-Signature}.

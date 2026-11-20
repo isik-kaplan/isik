@@ -98,7 +98,8 @@ trigger is in your app's migration, like any pgtrigger trigger.
 
 - **`on` has no default.** A kind writing a notice on every save of its row is a choice to make, not one
   to fall into.
-- **`channels` names every channel `CHANNELS` turns on**, each with its policy (see
+- **`channels` names every channel `CHANNELS` turns on**, each with its policy - but one
+  `CHANNEL_DEFAULTS` or `CHANNEL_FORCED` speaks for (see
   [the policy on each channel](#the-policy-on-each-channel)).
 - **`snapshot` is an allow-list, and it's required to say what leaves the row.** A column it doesn't
   name never reaches the ledger - a secret column on the model stays where it is. The notice's
@@ -118,7 +119,10 @@ trigger is in your app's migration, like any pgtrigger trigger.
 
 ## The policy on each channel
 
-A kind's `channels` maps each channel `CHANNELS` turns on to the `Policy` it's sent there under:
+Every kind states a policy for every channel `CHANNELS` turns on - nothing about what a kind does on a channel is
+left unsaid. Its `channels` maps each channel to the `Policy` it's sent there under, and may leave out only a
+channel the deployment's settings speak for
+([`CHANNEL_DEFAULTS` and `CHANNEL_FORCED`](#the-deployments-say-channel_defaults-and-channel_forced)):
 
 | policy | on that channel |
 |---|---|
@@ -141,9 +145,10 @@ Each key is a `ChannelName`: isik's own as `Channel.INBOX`, `Channel.EMAIL`, `Ch
 returned it - so a misspelt channel is a name your editor and linter catch, and `isik.E014` names a key
 written as plain text.
 
-Every channel is named, `Policy.NEVER` included: what a kind does on each channel is read in its
-declaration, a webhook's among them, and a channel added to `CHANNELS` later is decided for each kind before
-startup passes - `isik.E014` names every kind that leaves it unnamed. A channel no person chooses on - a
+Every channel is named, `Policy.NEVER` included - by the kind, or by the deployment's settings: what a kind
+does on each channel is read in its declaration and those settings, a webhook's among them, and a channel added
+to `CHANNELS` later is decided for each kind before startup passes - `isik.E014` names every kind that leaves
+it unnamed where no setting names it. A channel no person chooses on - a
 webhook, whose endpoints choose their kinds - takes `Policy.MANDATORY` or `Policy.NEVER`; a channel says
 which it is with `chosen_by_people` (see [your own channel](channels.md#your-own)). An endpoint
 asking for a kind whose webhook policy is `Policy.NEVER` is refused.
@@ -159,7 +164,8 @@ ISIK = {"DJANGO": {"NOTIFICATIONS": {
 }}}
 ```
 
-- **A kind may leave out a channel either names**, and is sent there under the setting's policy.
+- **A kind may leave out a channel either names**, and is sent there under the setting's policy. One leaving
+  out a channel neither names is refused, as ever.
 - **`CHANNEL_DEFAULTS` is a default**: a kind naming the channel is sent there under its own policy.
 - **`CHANNEL_FORCED` is the only policy there**: a kind naming the channel with another one is refused at
   startup (`isik.E014`), naming the kind, the channel and both policies - change the kind, or leave the
@@ -167,11 +173,13 @@ ISIK = {"DJANGO": {"NOTIFICATIONS": {
 - A channel in both is refused - its default would never be read. Each policy is held to what a kind's is:
   `Policy.DEFAULT_ON` or `Policy.DEFAULT_OFF` on webhook is refused, and so is a channel `CHANNELS` doesn't
   turn on.
-- A recorded kind is outside both: its email is the record of one its caller sent, not a send of isik's.
+- A recorded kind is outside both: isik decides its channels - mandatory, on email alone, the record of an
+  email its caller sent - so no setting can disagree with them.
 
 The kind's policies - its own and the deployment's - are what its policy row mirrors, so they arrive at the
 next `migrate` like any change to a kind's channels, everywhere at once. `manage.py notices` shows, for each
-kind, which channels the settings set (`set_by`), and before that `migrate`, what it changes:
+kind, which channels the settings set (`set_by`) - so a default deciding a channel for a kind written before
+the channel was turned on is in plain sight - and before that `migrate`, what it changes:
 
 ```
 parcel_flagged on webhook: mandatory now, never after the next migrate - 3 endpoints' subscriptions to it go inert

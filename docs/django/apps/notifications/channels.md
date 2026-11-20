@@ -129,7 +129,7 @@ of your own. A success clears the count.
 (`EndpointKind`) to a kind whose webhook policy is `Policy.NEVER` - or names none - is refused when it's written,
 by the database (`check_violation`, `<model>: the kind is not sent on webhook.`) and by `EndpointViewSet`, which
 refuses it with `kind_not_sent_on_webhook`: `<kind> isn't sent to webhooks.` The database's guard fails closed on purpose: a policy row whose `channels`
-has no `webhook` key counts as not sent on webhook. A declaration names every channel, so a mirrored row always
+has no `webhook` key counts as not sent on webhook. A kind's policies name every channel, so a mirrored row always
 has it - but should one ever lack it, an endpoint is refused rather than quietly taken.
 
 A kind can still move to `Policy.NEVER` on webhook after endpoints subscribed - its declaration changes, and the
