@@ -165,3 +165,36 @@ class TestPartitioned:
         event = InboundEvent.objects.get()
         assert event.partition == "north"
         assert asked == [("north", str(event.pk))]
+
+
+class TestReadFromTheRequest:
+    def test_the_id_and_type_may_be_read_from_its_headers(self, monkeypatch, asked):
+        import dataclasses
+
+        from isik.django.apps.inbound import sources
+
+        monkeypatch.setitem(
+            sources.sources,
+            "acme",
+            dataclasses.replace(
+                sources.sources["acme"],
+                event_id=lambda request, payload: request.headers["X-Event-Id"],
+                event_type=lambda request, payload: request.headers["X-Event-Type"],
+            ),
+        )
+        body = json.dumps({}).encode()
+
+        Client().post(
+            "/in/acme/",
+            body,
+            content_type="application/json",
+            headers={"X-Acme-Signature": signed(body), "X-Event-Id": "evt_9", "X-Event-Type": "invoice_paid"},
+        )
+
+        assert InboundEvent.objects.values_list("event_id", "event_type").get() == ("evt_9", "invoice_paid")
+
+    def test_a_refusal_is_logged_with_its_source_and_reason(self, caplog):
+        post("acme", INVOICE, signature=False)
+
+        (logged,) = [record for record in caplog.records if record.name == "isik.django.apps.inbound.views"]
+        assert logged.getMessage() == "An inbound acme webhook was refused: The request carries no X-Acme-Signature."

@@ -14,24 +14,25 @@ import uuid
 
 import pgtrigger
 from django.contrib.auth import get_user_model
-from django.db import router
 from django.db.models.deletion import Collector
 
 from isik.django.apps.accounts.erasures import erasures
+
+
+class _EveryRow(Collector):
+    """A collector holding every row a delete reaches - none deleted in bulk unseen, so each one's history is found."""
+
+    def can_fast_delete(self, *args, **kwargs):
+        return False
 
 
 def _doomed(objects):
     """{model: {pk, ...}} - `objects`, and every row their delete cascades to."""
     if not objects:
         return {}
-    collector = Collector(using=router.db_for_write(type(objects[0])))
+    collector = _EveryRow(using=objects[0]._state.db)
     collector.collect(objects)
-    doomed = {}
-    for model, instances in collector.data.items():
-        doomed.setdefault(model, set()).update(instance.pk for instance in instances)
-    for queryset in collector.fast_deletes:
-        doomed.setdefault(queryset.model, set()).update(queryset.values_list("pk", flat=True))
-    return doomed
+    return {model: {instance.pk for instance in instances} for model, instances in collector.data.items()}
 
 
 def _events_of(model):

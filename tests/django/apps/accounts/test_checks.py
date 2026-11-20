@@ -37,6 +37,24 @@ class TestRegistering:
         assert (found.lookup(), found.delete, found.anonymize) == ("user", True, {})
         assert registered["testapp.ForceableSubscription"] is found
 
+    def test_nothing_deleted_unless_asked(self, registered):
+        found = erasure("testapp.Widget", via="owner", anonymize={"name": ""})
+
+        assert (found.delete, found.anonymize) == (False, {"name": ""})
+
+    def test_isiks_own_with_every_app_installed(self, registered):
+        registered.clear()
+
+        register_isiks_own()
+
+        assert {label: (entry.via, entry.delete) for label, entry in registered.items()} == {
+            "isik_notifications_audience.Subscription": (None, True),
+            "isik_notifications_audience.InboxItem": (None, True),
+            "isik_notifications_audience.Device": (None, True),
+            "idempotency_by_reference.IdempotencyClaim": ("claimed_by", True),
+            "idempotency_with_body.IdempotencyClaimWithBody": ("claimed_by", True),
+        }
+
     def test_by_class_or_label_alike(self, registered):
         assert erasure(EmailUser).model == "testapp.EmailUser"
         assert erasure(EmailUser).lookup() == "pk"
@@ -49,8 +67,12 @@ class TestRegistering:
             erasure(Parcel, delete=True).lookup()
 
     def test_deleted_or_anonymized_not_both(self, registered):
-        with pytest.raises(ImproperlyConfigured, match="testapp.Widget's rows are deleted or anonymized, not both"):
+        with pytest.raises(ImproperlyConfigured) as refused:
             erasure("testapp.Widget", delete=True, anonymize={"name": ""})
+
+        assert str(refused.value) == (
+            "testapp.Widget's rows are deleted or anonymized, not both - give delete=True or anonymize."
+        )
 
     def test_isiks_own_are_registered_for_each_app_installed(self, registered, monkeypatch):
         registered.clear()
@@ -80,9 +102,24 @@ class TestTheSettings:
         assert accounts_can_work(None) == []
 
     def test_keys_it_doesnt_know(self, settings):
-        accounts(settings, COLOR="red")
+        accounts(settings, COLOR="red", SIZE=1)
 
-        assert setting_problems() == [f"{AREA} has keys it doesn't know: COLOR."]
+        assert setting_problems() == [f"{AREA} has keys it doesn't know: COLOR, SIZE."]
+
+    def test_an_area_that_isnt_a_dict_is_none(self, settings):
+        isik_areas(settings).ACCOUNTS = ["DELETION_AFTER"]
+
+        assert conf.configured() == {}
+
+    def test_anonymizing_with_the_user_registered(self, settings):
+        accounts(settings, DELETION_BACKEND=Anonymize)
+
+        assert setting_problems() == []
+
+    def test_erasing_with_nothing_said_of_the_user(self, settings, registered):
+        del registered["testapp.EmailUser"]
+
+        assert setting_problems() == []
 
     @pytest.mark.parametrize("after", [None, 14, timedelta(seconds=-1)])
     def test_a_deletion_after_that_isnt_one(self, settings, after):
@@ -136,7 +173,10 @@ class TestTheRows:
 
     @isolate_apps("tests.testapp")
     def test_a_key_that_would_block_or_outlive_a_deletion(self, registered, monkeypatch):
+        from isik.django.apps.features.bases import ERASE
+
         class Receipt(models.Model):
+            settled = models.ForeignKey(EmailUser, on_delete=ERASE, related_name="+")
             buyer = models.ForeignKey(EmailUser, on_delete=models.PROTECT, related_name="+")
             seller = models.ForeignKey(EmailUser, on_delete=models.DO_NOTHING, related_name="+")
             payer = models.ForeignKey(EmailUser, on_delete=models.CASCADE, related_name="+")

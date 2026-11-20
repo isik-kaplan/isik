@@ -12,4 +12,6 @@ erasure(
         "last_name": "",
     },
 )
-erasure("testapp.Widget", via="owner", anonymize={"name": "a deleted person's widget"})
+erasure(
+    "testapp.Widget", via="owner", anonymize={"name": lambda widget: f"a deleted person's widget of {widget.count}"}
+)

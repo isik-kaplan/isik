@@ -501,6 +501,20 @@ class TestTheLockTriggers:
 
         assert every_concurrency_relation_is_locked(None, databases=["default"]) == []
 
+    def test_an_owner_still_migrating_doesnt_stop_the_next_being_checked(self, monkeypatch):
+        import types
+
+        lock = base_models.relation_locks[0]
+        elsewhere = types.SimpleNamespace(_meta=types.SimpleNamespace(app_label="elsewhere", label="elsewhere.Thing"))
+        monkeypatch.setattr(base_models, "relation_locks", [lock, (elsewhere, *lock[1:])])
+        monkeypatch.setattr(
+            type(lock[3]), "get_installation_status", lambda self, model, database: ("UNINSTALLED", None)
+        )
+        monkeypatch.setattr(checks, "apps_migrating", lambda database: {"testapp"})
+
+        (warning,) = every_concurrency_relation_is_locked(None, databases=["default"])
+        assert warning.msg.startswith("elsewhere.Thing's version covers")
+
     def test_an_owner_whose_app_is_migrated_is_still_checked(self, monkeypatch):
         monkeypatch.setattr(
             type(base_models.relation_locks[0][3]),

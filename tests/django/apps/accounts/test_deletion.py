@@ -190,9 +190,9 @@ class TestAnonymized:
         deletion.delete_account(alice)
 
         widget.refresh_from_db()
-        assert (widget.owner_id, widget.name, widget.count) == (alice.pk, "a deleted person's widget", 3)
+        assert (widget.owner_id, widget.name, widget.count) == (alice.pk, "a deleted person's widget of 3", 3)
         assert set(WidgetEvent.objects.filter(pgh_obj_id=widget.pk).values_list("name", flat=True)) == {
-            "a deleted person's widget"
+            "a deleted person's widget of 3"
         }
         assert not Subscription.objects.exists()
 
@@ -216,3 +216,53 @@ class TestAnonymized:
         _scrub_history(Widget, widget.pk, {"not_a_column": "x"})
 
         assert set(WidgetEvent.objects.filter(pgh_obj_id=widget.pk).values_list("name", flat=True)) == {"Al's"}
+
+
+class TestTheSessionHash:
+    def test_signed_with_the_password_and_epoch(self, alice):
+        import uuid
+
+        from django.utils.crypto import salted_hmac
+
+        alice.session_epoch = uuid.UUID(int=7)
+
+        assert (
+            alice.get_session_auth_hash()
+            == salted_hmac(
+                "isik.django.apps.accounts.bases.DeletableAccount.get_session_auth_hash",
+                f"{alice.password}:{alice.session_epoch}",
+                algorithm="sha256",
+            ).hexdigest()
+        )
+
+
+class TestWrittenAlone:
+    def test_asking_writes_only_the_deletion_and_epoch(self, alice):
+        EmailUser.objects.filter(pk=alice.pk).update(first_name="Alice")
+
+        request_deletion(alice)
+
+        assert EmailUser.objects.get(pk=alice.pk).first_name == "Alice"
+
+
+def test_the_user_rows_own_history_is_scrubbed_with_what_was_set(alice, settings, monkeypatch):
+    from isik.django.apps.accounts import backends
+
+    anonymizing(settings)
+    scrubbed = []
+    monkeypatch.setattr(backends, "_scrub_history", lambda model, pk, values: scrubbed.append((model, pk, values)))
+
+    deletion.delete_account(alice)
+
+    assert scrubbed == [
+        (
+            EmailUser,
+            alice.pk,
+            {
+                "email": f"deleted-{alice.pk}@example.invalid",
+                "username": f"deleted-{alice.pk}",
+                "first_name": "",
+                "last_name": "",
+            },
+        )
+    ]

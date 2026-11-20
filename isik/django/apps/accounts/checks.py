@@ -56,7 +56,7 @@ def setting_problems():
 
 def _history(model):
     # A history table's keys are its copies of the row's - an id that resolves to nothing once the person is gone.
-    return model._meta.app_label == "pghistory" or hasattr(model, "pgh_tracked_model")
+    return hasattr(model, "pgh_tracked_model")
 
 
 def account_problems():
@@ -79,7 +79,7 @@ def account_problems():
             if not key.is_relation or key.related_model is not user or key.remote_field.on_delete in SETTLED:
                 continue
             # An on_delete that removes the rows itself - features' ERASE - says so.
-            if getattr(key.remote_field.on_delete, "settles_deletion", False):
+            if "settles_deletion" in vars(key.remote_field.on_delete):
                 continue
             problems.append(
                 _(

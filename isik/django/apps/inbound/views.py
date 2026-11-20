@@ -54,7 +54,7 @@ def receive(request, source):
         if declared.identifies_events and not event_id:
             return _refused(400, _("The body names no event id."), "unidentified")
         record(declared, None if event_id is None else str(event_id), str(event_type), payload, partition)
-    return HttpResponse(status=200)
+    return HttpResponse()
 
 
 def inbound_urls():

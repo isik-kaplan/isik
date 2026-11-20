@@ -283,6 +283,14 @@ class TestTheSchema:
         assert setting["discriminator"]["propertyName"] == "type"
         kinds = {"bool", "int", "decimal", "float", "duration", "text", "choice"}
         assert set(setting["discriminator"]["mapping"]) == kinds | {f"{kind}_or_null" for kind in kinds}
+        schemas = generated["components"]["schemas"]
+        assert schemas["IntOrNullSetting"]["description"] == "A setting holding a int value, or None."
+        assert schemas["IntSetting"]["description"] == "A setting holding a int value."
+        assert schemas["IntOrNullSetting"]["properties"]["null_label"]["description"] == (
+            "What None is, as a person reads it."
+        )
+        assert schemas["PatchedIntOrNullSettingValue"]["properties"]["value"].get("nullable") is True
+        assert "nullable" not in schemas["PatchedIntSettingValue"]["properties"]["value"]
         nullable = generated["components"]["schemas"]["IntOrNullSetting"]["properties"]
         assert nullable["value"].get("nullable") is True
         assert "null_label" in generated["components"]["schemas"]["IntOrNullSetting"]["required"]
