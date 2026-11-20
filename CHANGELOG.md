@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `isik.E017` lets a setting be None only with a `null_label`, and refuses a `null_label` on a field that can't be
   None, beside a default that isn't None, or beside a choice of None.
 
+### Fixed
+
+- `lifted_constraint()` on a model with a key to another table: a write in the block left that key's check deferred
+  to the commit, and Postgres refused to put the constraint back - "cannot ALTER TABLE ... because it has pending
+  trigger events". The block's deferred checks now run as it ends, and every constraint deferred by default is
+  deferred again.
+
 ## [0.59.0] - 2026-11-20
 
 ### Added

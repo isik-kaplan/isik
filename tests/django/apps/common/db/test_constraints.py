@@ -36,7 +36,8 @@ from isik.django.apps.common.db.constraints import (
     unclassified_validators,
 )
 from isik.django.apps.common.db.models import FullCleanOnSaveModel
-from tests.testapp.models import CleanedNote, Widget
+from tests.django.apps.notifications import kind_named
+from tests.testapp.models import CleanedNote, EmailUser, ForceableSubscription, Widget
 
 
 pytestmark = pytest.mark.django_db
@@ -788,6 +789,28 @@ class TestLiftedConstraint:
         with pytest.raises(IntegrityError), transaction.atomic():
             _set_kind(later, "nonsense")
         assert CleanedNote.objects.get(pk=written.pk).kind == "nonsense"
+
+    def test_a_write_leaving_a_foreign_keys_check_to_the_commit(self):
+        # Django's keys are INITIALLY DEFERRED: the block's write leaves one pending, which Postgres won't alter
+        # a table with - so it's run as the block ends, and every key deferred by default is deferred again.
+        alice = EmailUser.objects.create(username="alice", email="alice@example.com")
+        kind = kind_named("parcel_shipped")
+
+        with lifted_constraint(ForceableSubscription, "testapp_forceablesubscription_chosen_or_forced"):
+            row = ForceableSubscription.objects.create(user=alice, kind=kind)
+
+        assert "testapp_forceablesubscription_chosen_or_forced" in {
+            each.name for each in ForceableSubscription._meta.constraints
+        }
+        # A key to nobody, let through until the check deferred to the commit runs - rolled back with it.
+        written = False
+        with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE testapp_forceablesubscription SET user_id = %s WHERE id = %s", [uuid.uuid4().hex, row.pk.hex]
+            )
+            written = True
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        assert written
 
     def test_a_block_that_raises_gets_it_back_in_python(self):
         before = CleanedNote._meta.constraints

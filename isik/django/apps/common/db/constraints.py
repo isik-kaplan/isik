@@ -445,6 +445,21 @@ def unclassified_validators(over=None):
     )
 
 
+# Defers again every constraint deferred by default - SET CONSTRAINTS has no way back to each one's default.
+DEFER_AGAIN = """
+DO $$
+DECLARE deferred text;
+BEGIN
+    SELECT string_agg(format('%I.%I', namespace.nspname, constraint_.conname), ', ') INTO deferred
+    FROM pg_constraint constraint_ JOIN pg_namespace namespace ON namespace.oid = constraint_.connamespace
+    WHERE constraint_.condeferrable AND constraint_.condeferred;
+    IF deferred IS NOT NULL THEN
+        EXECUTE 'SET CONSTRAINTS ' || deferred || ' DEFERRED';
+    END IF;
+END $$;
+"""
+
+
 @contextmanager
 def lifted_constraint(model, name):
     """For a test: the CHECK named `name` lifted from `model` for the block, in Python and at the column.
@@ -459,7 +474,9 @@ def lifted_constraint(model, name):
 
     Put back at the column afterwards `NOT VALID`: later writes are checked, and the rows the block
     wrote, which it may well refuse, stay until the test's rollback. A block that raises gets it back
-    in Python only - its transaction is likely broken, and the rollback puts the column's back.
+    in Python only - its transaction is likely broken, and the rollback puts the column's back. Checks
+    the block's writes deferred to the commit - a foreign key's - run as it ends, so a write it let through
+    that breaks one fails there rather than at the test's rollback, which never runs them.
     """
     lifted = next((each for each in model._meta.constraints if each.name == name), None)
     if not isinstance(lifted, models.CheckConstraint):
@@ -482,5 +499,11 @@ def lifted_constraint(model, name):
         yield
     finally:
         model._meta.constraints = constraints
-    with connection.schema_editor() as editor:
-        editor.execute(f"{lifted.create_sql(model, editor)} NOT VALID")
+    # The block's writes may have left checks deferred to the commit - a foreign key's, which Django makes
+    # INITIALLY DEFERRED - and Postgres refuses to alter a table with any pending. Run them now, put the
+    # constraint back, then defer again the ones deferred by default.
+    with connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        with connection.schema_editor() as editor:
+            editor.execute(f"{lifted.create_sql(model, editor)} NOT VALID")
+        cursor.execute(DEFER_AGAIN)
