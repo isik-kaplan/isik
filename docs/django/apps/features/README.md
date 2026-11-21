@@ -236,6 +236,10 @@ declare_setting("display_name", models.CharField(max_length=100), "", own=OnHold
   clamped to a limit. That's what Postgres' `LEAST` and `GREATEST` answer for a NULL, so `effective()` answers
   it too: the Python and the SQL (`effective_expression()`) must never differ.
 
+  A project's own endpoint setting or forcing a value passes None through to the setting - `set_setting()` and
+  `force_setting()` take it where the setting has a `null_label` and refuse it where it hasn't. A field of its
+  own that refuses null first lets the Python API set "no limit" and the HTTP API not.
+
 Labels and descriptions are lazy-translated text shown to holders - after declaring them, run
 `makemessages` and clear the fuzzy guesses it writes (see [kinds](../notifications/kinds.md#what-a-person-reads-labels-and-messages)).
 
