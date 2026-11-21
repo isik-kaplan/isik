@@ -591,7 +591,7 @@ msgstr ""
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
 
-#: isik/django/apps/common/db/constraints.py:467
+#: isik/django/apps/common/db/constraints.py:486
 #, python-format
 msgid "%(model)s has no CHECK constraint named %(name)r."
 msgstr ""
@@ -2660,7 +2660,7 @@ msgstr ""
 msgid "Only an abandoned delivery is retried, and this one is %(state)s."
 msgstr ""
 
-#: isik/django/apps/inbound/pipeline.py:159
+#: isik/django/apps/inbound/pipeline.py:155
 #, python-format
 msgid "Only an event given up on is retried by hand, and %(event)s isn't."
 msgstr ""
@@ -4621,7 +4621,7 @@ msgstr ""
 msgid "last seen at"
 msgstr ""
 
-#: isik/django/apps/common/db/constraints.py:471
+#: isik/django/apps/common/db/constraints.py:490
 #, python-format
 msgid "lifted_constraint() drops %(name)r from the table, so it runs inside a transaction that rolls back - a test's own."
 msgstr ""
