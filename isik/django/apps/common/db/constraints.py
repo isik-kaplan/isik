@@ -445,6 +445,8 @@ def unclassified_validators(over=None):
     )
 
 
+# Runs now every check deferred to the commit.
+RUN_DEFERRED = "SET CONSTRAINTS ALL IMMEDIATE"
 # Defers again every constraint deferred by default - SET CONSTRAINTS has no way back to each one's default.
 DEFER_AGAIN = """
 DO $$
@@ -503,7 +505,7 @@ def lifted_constraint(model, name):
     # INITIALLY DEFERRED - and Postgres refuses to alter a table with any pending. Run them now, put the
     # constraint back, then defer again the ones deferred by default.
     with connection.cursor() as cursor:
-        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        cursor.execute(RUN_DEFERRED)
         with connection.schema_editor() as editor:
             editor.execute(f"{lifted.create_sql(model, editor)} NOT VALID")
         cursor.execute(DEFER_AGAIN)
