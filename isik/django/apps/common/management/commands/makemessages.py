@@ -13,7 +13,8 @@ EXTENSIONS = ["html", "txt", "py", "mjml"]
 
 
 class Command(makemessages.Command):
-    def handle(self, *args, **options):
+    def handle(self, **options):
+        # makemessages takes no positional arguments - its options are all it's handed.
         if options["domain"] == "django" and not options["extensions"]:
             options["extensions"] = EXTENSIONS
-        return super().handle(*args, **options)
+        return super().handle(**options)

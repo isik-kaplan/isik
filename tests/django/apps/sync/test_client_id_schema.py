@@ -53,3 +53,11 @@ def test_a_serializer_with_no_other_field_required_or_no_id(serializer, required
     )
 
     assert components(True, rows=viewset)[serializer.Meta.ref_name]["required"] == required
+
+
+def test_each_direction_mapped_as_its_own():
+    schemas = components(True, projects=ProjectViewSet)
+
+    # A blank name is refused on the way in - which only the request's mapping says.
+    assert schemas["ProjectRequest"]["properties"]["name"]["minLength"] == 1
+    assert "minLength" not in schemas["Project"]["properties"]["name"]

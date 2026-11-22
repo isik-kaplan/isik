@@ -9,7 +9,7 @@ from django.core.management.commands import makemessages
 def handled(monkeypatch):
     """The options Django's own makemessages is handed - instead of it running."""
     seen = []
-    monkeypatch.setattr(makemessages.Command, "handle", lambda self, *args, **options: seen.append(options))
+    monkeypatch.setattr(makemessages.Command, "handle", lambda self, **options: seen.append(options))
     return seen
 
 

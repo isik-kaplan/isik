@@ -1007,7 +1007,7 @@ msgstr ""
 msgid "%(name)s is a column of pghistory's context table already."
 msgstr ""
 
-#: isik/django/apps/features/operations.py:232
+#: isik/django/apps/features/operations.py:237
 #, python-format
 msgid "%(name)s is forced, so it can't be changed."
 msgstr ""
@@ -1052,7 +1052,7 @@ msgstr ""
 msgid "%(name)s needs %(other)s"
 msgstr ""
 
-#: isik/django/apps/features/operations.py:234
+#: isik/django/apps/features/operations.py:239
 #, python-format
 msgid "%(name)s needs a feature you don't have."
 msgstr ""
@@ -1858,7 +1858,7 @@ msgstr ""
 msgid "A required setting has no default - drop default= or required=True."
 msgstr ""
 
-#: isik/django/apps/sync/drf.py:45
+#: isik/django/apps/sync/drf.py:47
 msgid "A row with this id exists already."
 msgstr ""
 
@@ -1888,7 +1888,7 @@ msgstr ""
 msgid "A trigger"
 msgstr ""
 
-#: isik/django/apps/sync/drf.py:213
+#: isik/django/apps/sync/drf.py:233
 msgid "A whole number of at least 1."
 msgstr ""
 
