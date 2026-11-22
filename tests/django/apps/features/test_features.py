@@ -479,6 +479,20 @@ class TestWriting:
 
         assert (revoke(alice, "webhooks"), revoke(alice, "webhooks")) == (2, 0)
 
+    def test_a_revoke_narrowed_to_a_source_and_a_reference(self, alice):
+        grant(alice, "webhooks", source="manual")
+        grant(alice, "webhooks", source="subscription", reference="inv-1")
+        grant(alice, "webhooks", source="subscription", reference="inv-2")
+        grant(alice, "webhooks", source="trial", reference="inv-1")
+
+        assert revoke(alice, "webhooks", source="subscription", reference="inv-1") == 1
+        assert revoke(alice, "webhooks", source="subscription") == 1
+        assert revoke(alice, "webhooks", reference="inv-1") == 1
+        assert has_feature(alice, "webhooks")
+        # An empty reference narrows to the grants made with none - not to every grant.
+        assert revoke(alice, "webhooks", reference="") == 1
+        assert not has_feature(alice, "webhooks")
+
     def test_a_setting_that_isnt_declared(self, alice):
         with pytest.raises(SettingRefused, match="^No setting called ghost is declared.$"):
             set_setting(alice, "ghost", 1)

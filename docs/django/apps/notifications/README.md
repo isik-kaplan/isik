@@ -194,7 +194,7 @@ superuser turning triggers off - it narrows accidents, not attackers.
 | `PARTITIONS`, `IN_PARTITION`, `PARTITION_EXISTS`, `DEFAULT_PARTITION` | None | see [partitions.md](partitions.md) |
 | `ATTEMPT_RETENTION`, `NOTICE_RETENTION` | 30 days, 90 days | None keeps them |
 | `BATCH_SIZE` | 100 | notices one fan-out takes |
-| `EMAIL_CONTEXT` | `None` | `f(delivery, notice) -> dict` every email the shipped senders render starts from, under the kind's own context |
+| `EMAIL_CONTEXT` | `None` | `f(delivery, notice) -> dict` every email the shipped senders render starts from, under the kind's own context and `recipient` and `address` |
 | `ACTOR_CONTEXT_KEY` | `"user"` | the history context's key naming who acted - each notice's `actor_id`; `None` records no one ([who acted](channels.md#who-acted)) |
 | `NOTICE_CONTEXT_KEYS` | `()` | the history context's keys each notice keeps in `context`, such as the actor's schema |
 | `ENDPOINT_OWNER_FIELD` | `None` | the endpoint's lookup naming its owner, when endpoints are owned: each then hears only notices whose audience holds its owner ([webhook](channels.md#webhook)) |

@@ -81,7 +81,8 @@ A synced model's REST API is what the feed reads rows with and push writes them 
   `concurrency_parts()` doesn't - what they read changes with nothing the log hears of;
 - **`ClientPrimaryKeyMixin`** on its create serializer: the client makes a row's id offline and refers to the
   row by it in the writes it queues after. An id a row has already is a 409, `primary_key_taken`; an id not sent
-  is made as ever.
+  is made as ever. Its schema, with `COMPONENT_SPLIT_REQUEST` on, has the id optional in the request and required
+  in the response, so a generated client's row type has an id.
 
 `isik.E027` refuses a declaration missing any of it.
 

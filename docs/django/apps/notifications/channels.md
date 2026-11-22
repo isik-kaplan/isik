@@ -35,8 +35,9 @@ project's to send a third party, in its own payload.
 Sent by `EMAIL_SENDER(delivery, notice, address)`, inside the delivery's partition. Two senders ship:
 
 - `send_from_templates` (the default) renders `notifications/<kind>/subject.txt` and `body.txt` - and
-  `body.html` when it exists - with `notice`, `delivery`, `data` and `previous`, over what
-  `EMAIL_CONTEXT(delivery, notice)` gives every email (the site's name, say).
+  `body.html` when it exists - with `recipient` (the user it's to, or None for an address belonging to
+  nobody), `address`, `notice`, `delivery`, `data` and `previous`, over what `EMAIL_CONTEXT(delivery, notice)`
+  gives every email (the site's name, say).
 - `send_from_mjml_templates` is the same, its HTML from `notifications/<kind>/body.mjml` through isik's
   MJML rendering.
 
@@ -46,6 +47,10 @@ Both send through Django's mail with a `Message-ID` taken from the delivery's id
   and `body.html` escaped, as HTML;
 - need Django's template backend, which `isik.E014` checks while one of them is the sender, along with
   each email kind's `subject.txt` and `body.txt`.
+
+A sender of your own reads the same: `delivery.email.address` and `delivery.email.user_id` on the email
+delivery, and `recipient_of(delivery)` (`isik.django.apps.notifications.channels.email`) for the user, read once
+per delivery.
 
 Every sender - these, or yours - runs in the recipient's language: `RECIPIENT_LANGUAGE(user)`, by default
 the user's `language` when it's set to something - an empty one means no choice was made, and the site's

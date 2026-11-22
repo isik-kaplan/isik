@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-11-22
+
+### Added
+
+- `manage.py makemessages` in the common app - Django's, its django domain reading `.mjml` templates too when no
+  `--extension` names the files, so the strings of mail rendered through MJML reach the catalog.
+- `recipient` (the user, or None for an address belonging to nobody) and `address` in every notice email the
+  shipped senders render, and `recipient_of(delivery)` reading the same user, once per delivery, for a sender of a
+  project's own.
+- `source=` and `reference=` on the features app's `revoke()`, narrowing it to the grants from one source and under
+  one reference - a store's refund ending the grant of the purchase refunded, and leaving a hand-made one standing.
+
+### Changed
+
+- A `ClientPrimaryKeyMixin` serializer's id is required in its response schema (with `COMPONENT_SPLIT_REQUEST` on),
+  and optional in its request, so a generated client's row type has an id.
+
 ## [0.60.0] - 2026-11-20
 
 ### Added

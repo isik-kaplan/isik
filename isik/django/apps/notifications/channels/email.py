@@ -7,9 +7,10 @@ two senders here, rendering templates named by the kind:
 - `send_from_mjml_templates` - the same, its HTML from `body.mjml` through isik's MJML rendering.
 
 Every sender - these or a project's own - runs in the recipient's language (`RECIPIENT_LANGUAGE`). These
-two start each email's context from `EMAIL_CONTEXT`, and render the plain-text templates with no HTML
-escaping - an apostrophe in a subject is an apostrophe, not `&#x27;`. Both need Django's own template
-backend, which a check holds them to. A template that doesn't exist fails the delivery for good: sending it
+two start each email's context from `EMAIL_CONTEXT`, give it `recipient` (the user, or None) and `address`
+(`recipient_of(delivery)` reads the same user for a sender of a project's own), and render the plain-text
+templates with no HTML escaping - an apostrophe in a subject is an apostrophe, not `&#x27;`. Both need Django's
+own template backend, which a check holds them to. A template that doesn't exist fails the delivery for good: sending it
 again finds the same nothing.
 """
 
@@ -42,10 +43,26 @@ def language_of(user):
     return getattr(user, "language", None) or None
 
 
+# Where recipient_of() keeps the user it read, on the delivery itself: read once, however often it's asked.
+RECIPIENT = "_isik_recipient"
+
+
+def recipient_of(delivery):
+    """
+    The user an email delivery is to, or None for an address belonging to nobody - read once for the delivery, so
+    a sender of a project's own asks for it at no further cost. It's read in the partition it's first asked in:
+    sending asks it in the delivery's, before the sender runs.
+    """
+    if RECIPIENT not in delivery.__dict__:
+        user_id = delivery.email.user_id
+        delivery.__dict__[RECIPIENT] = get_user_model()._default_manager.filter(pk=user_id).first()
+    return delivery.__dict__[RECIPIENT]
+
+
 def _language(delivery):
     """The language the delivery's email is written in - its user's, when it has one - or None."""
     # An address belonging to nobody - user_id null - finds no user, and is written in the site's language.
-    user = get_user_model()._default_manager.filter(pk=delivery.email.user_id).first()
+    user = recipient_of(delivery)
     return conf.setting("RECIPIENT_LANGUAGE")(user) if user is not None else None
 
 
@@ -62,6 +79,8 @@ def _send(delivery, notice, address, html):
     shared = conf.setting("EMAIL_CONTEXT")
     context = {
         **(shared(delivery, notice) if shared is not None else {}),
+        "recipient": recipient_of(delivery),
+        "address": address,
         "notice": notice,
         "delivery": delivery,
         "data": notice.snapshot,
@@ -84,8 +103,8 @@ def _send(delivery, notice, address, html):
 def send_from_templates(delivery, notice, address):
     """
     The default `EMAIL_SENDER`: renders `notifications/<kind>/subject.txt` and `body.txt` - and `body.html`,
-    when there is one - with `EMAIL_CONTEXT`'s, then `notice`, `delivery`, `data` (the snapshot) and
-    `previous`, and sends them
+    when there is one - with `EMAIL_CONTEXT`'s, then `recipient` (the user, or None), `address`, `notice`,
+    `delivery`, `data` (the snapshot) and `previous`, and sends them
     through Django's mail. Its Message-ID is the delivery's, the same on every attempt, so a receiving
     server can drop a second copy.
     """

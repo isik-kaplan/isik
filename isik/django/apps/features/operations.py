@@ -138,15 +138,20 @@ def _held_only_by(holder, made, name):
     return set() if others.exists() else {name}
 
 
-def revoke(holder, feature):
-    """Revokes every grant of `feature` to `holder` not revoked yet. Returns how many it revoked."""
+def revoke(holder, feature, *, source=None, reference=None):
+    """
+    Revokes every grant of `feature` to `holder` not revoked yet - those from `source`, when given, and those under
+    `reference`, when given: a store's refund ends the store's grant of that purchase, and leaves a hand-made one
+    standing. Returns how many it revoked.
+    """
     name = str(feature)
+    narrowed = {key: value for key, value in (("source", source), ("reference", reference)) if value is not None}
     with in_holder_schema(), transaction.atomic():
         forget(holder)
         before = held_features(holder)
         revoked = (
             get_grant_model()
-            ._default_manager.filter(holder=holder, feature__name=name, status=GrantStatus.ACTIVE)
+            ._default_manager.filter(holder=holder, feature__name=name, status=GrantStatus.ACTIVE, **narrowed)
             .update(status=GrantStatus.REVOKED)
         )
         forget(holder)

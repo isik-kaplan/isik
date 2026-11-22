@@ -10,7 +10,7 @@ from django.utils import translation
 from isik.django.apps.notifications import pipeline
 from isik.django.apps.notifications.audience.helpers import subscribe
 from isik.django.apps.notifications.channels import email as email_module
-from isik.django.apps.notifications.channels.email import language_of
+from isik.django.apps.notifications.channels.email import language_of, recipient_of
 from isik.django.apps.notifications.kinds import raise_notice
 from isik.django.apps.notifications.models import Delivery, DeliveryAttempt, DeliveryState
 from isik.django.conf import isik_areas
@@ -117,6 +117,47 @@ class TestTheSharedContext:
 
         assert asked == [(reminded.pk, reminded.notice_id)]
         assert {(context["site_name"], context["data"]["name"]) for context in rendered} == {("Acme", NAME)}
+
+
+class TestTheRecipient:
+    @pytest.fixture
+    def rendered(self, monkeypatch):
+        contexts = []
+        original = email_module.plain
+        monkeypatch.setattr(
+            email_module, "plain", lambda name, context: contexts.append(context) or original(name, context)
+        )
+        return contexts
+
+    def test_every_email_knows_who_it_is_to_and_where(self, reminded, rendered, alice):
+        pipeline.send(reminded.pk)
+
+        assert {(context["recipient"], context["address"]) for context in rendered} == {(alice, "alice@example.com")}
+
+    def test_an_address_belonging_to_nobody_is_to_no_one(self, reminded, rendered):
+        reminded.email.user_id = None
+        reminded.email.save()
+
+        pipeline.send(reminded.pk)
+
+        assert {(context["recipient"], context["address"]) for context in rendered} == {(None, "alice@example.com")}
+
+    def test_they_win_over_the_shared_context(self, reminded, rendered, settings, alice):
+        isik_areas(settings).NOTIFICATIONS = {
+            **isik_areas(settings).NOTIFICATIONS,
+            "EMAIL_CONTEXT": lambda delivery, notice: {"recipient": "shadowed", "address": "shadowed"},
+        }
+
+        pipeline.send(reminded.pk)
+
+        assert {(context["recipient"], context["address"]) for context in rendered} == {(alice, "alice@example.com")}
+
+    def test_read_once_for_a_delivery(self, reminded, alice, django_assert_num_queries):
+        delivery = Delivery.objects.select_related("email").get(pk=reminded.pk)
+
+        with django_assert_num_queries(1):
+            assert recipient_of(delivery) == alice
+            assert recipient_of(delivery) == alice
 
 
 class TestMjml:

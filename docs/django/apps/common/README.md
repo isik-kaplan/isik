@@ -23,6 +23,7 @@ Plain-Python helpers that come up in Django code just as often live in `isik.com
 - `project.py` — `project_app_configs(labels=None)`: the installed apps that are the project's own -
   not installed as a library, and not isik's; what the model checks and `manage.py exemptions` read
 - `manage.py exemptions` — every exemption by rule; see [exemptions.md](../../../common/utils/exemptions.md)
+- `manage.py makemessages` — Django's, reading `.mjml` templates too; see [email/templates.md](email/templates.md#translating-mjml-templates)
 
 `apps.py` is Django `AppConfig` boilerplate — its label is `isik_common`, and `CommonConfig.ready()`
 imports `db.lookups` so the `length` lookup registers on startup.

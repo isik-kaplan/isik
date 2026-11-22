@@ -45,8 +45,12 @@ from isik.django.apps.features.resolution import has_feature
 grant(org, WEBHOOKS, source="subscription", reference=invoice.number)
 grant(org, BETA, source="trial", expires_at=now + timedelta(days=14))
 revoke(org, BETA)                         # every grant of it not revoked yet; returns how many
+revoke(org, WEBHOOKS, source="subscription", reference=invoice.number)  # only that source's, under that reference
 has_feature(org, WEBHOOKS)                # in force now: started, not expired, not revoked
 ```
+
+`source=` and `reference=` narrow a revoke to the grants from one source, and under one reference: a refund
+ends the grant of the purchase refunded, and a grant made by hand, or from another source, stands.
 
 Grants are a ledger. A database trigger refuses a delete, a TRUNCATE and every update except a revoke -
 `status` from `active` to `revoked`, once, never undone - and a grant written already revoked; a grant after

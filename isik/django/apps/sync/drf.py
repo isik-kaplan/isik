@@ -10,6 +10,8 @@ push runs for every entry.
 import hashlib
 
 from django.db import IntegrityError, transaction
+from drf_spectacular.extensions import OpenApiSerializerExtension
+from drf_spectacular.settings import spectacular_settings
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException, ValidationError
@@ -82,6 +84,24 @@ class ClientPrimaryKeyMixin:
             if pk is not None and model._default_manager.filter(pk=pk).exists():
                 raise PrimaryKeyTaken() from None
             raise
+
+
+class ClientPrimaryKeySchema(OpenApiSerializerExtension):
+    """
+    A `ClientPrimaryKeyMixin` serializer's schema: its id required in a response - every row read back has one -
+    and optional in a request, a create's to send or leave out. With `COMPONENT_SPLIT_REQUEST` off one component
+    describes both, and the id in it is optional, as a request takes it.
+    """
+
+    target_class = ClientPrimaryKeyMixin
+    match_subclasses = True
+
+    def map_serializer(self, auto_schema, direction):
+        schema = auto_schema._map_serializer(self.target, direction, bypass_extensions=True)
+        pk = self.target.Meta.model._meta.pk.name
+        if direction == "response" and spectacular_settings.COMPONENT_SPLIT_REQUEST and pk in schema["properties"]:
+            schema["required"] = sorted({*schema.get("required", ()), pk})
+        return schema
 
 
 class PerEntryThrottle:
