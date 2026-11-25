@@ -15,13 +15,13 @@
         "method": "GET",
         "path": "/sync/capabilities",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         }
       },
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "protocol": 1,

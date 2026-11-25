@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "isik.django.apps.sync",
     "isik.django.apps.inbound",
     "isik.django.apps.accounts",
+    "isik.django.apps.scheduling",
     "tests.testapp",
 ]
 
@@ -117,6 +118,7 @@ ISIK = {
             ),
         },
         "ACCOUNTS": {"DELETION_AFTER": timedelta(days=14), "ERASURES": "tests.testapp.erasures"},
+        "SCHEDULING": {"TASKS": "tests.testapp.scheduled_tasks"},
         "INBOUND": {
             "SOURCES": "tests.testapp.inbound_sources",
             "BACKOFF": (60, 300),

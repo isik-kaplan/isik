@@ -6,6 +6,7 @@ from isik.django.apps.common.db.fields import IfUnset, if_unset, redeclare
 from isik.django.apps.common.db.history import (
     APPEND_ONLY_TRIGGERS,
     ContextField,
+    EditableHistory,
     context_fields_trigger,
     event_model_for,
     history_middleware_installed,
@@ -42,6 +43,7 @@ __all__ = [
     "ScopedForeignKeyConstraint",
     "ScopedModel",
     "APPEND_ONLY_TRIGGERS",
+    "EditableHistory",
     "BaseModel",
     "ChoiceRules",
     "EnumField",

@@ -41,6 +41,12 @@ SPECTACULAR_SETTINGS = {
 }
 ```
 
+Mount the routes anywhere, and tell the client where: `@isikk/core`'s `syncPath` option (`/sync` by default) is
+their path under the client's `baseUrl`, which stays the API origin - every synced model is read at its own path
+from the schema. Routed under `v0/` beside the rest of an API (`path("v0/", include(sync.urls))`), the client sets
+`syncPath: "/v0/sync"`. A server test reversing the routes by name finds them wherever they're mounted, and can't
+catch a client looking elsewhere - a client finding no sync route pauses, naming the URL it asked.
+
 `SyncViewSet` takes the project's authentication, and needs an authenticated person: a stranger is answered
 401, which pauses a client. It's served outside `ATOMIC_REQUESTS` - push commits each entry on its own - with
 the reason `isik.E011` asks for.
@@ -209,6 +215,7 @@ to keep a local table of it:
 | `PAGE_LIMIT` | the most row changes one page carries | None - what a client asks |
 | `LAG_WARNING` | how long an open transaction may hold the feed back before each page logs a warning | None - no warning |
 | `PUSH` | `{"BACKEND": ..., "OPTIONS": {...}}` | `ViewPushBackend`, no limits |
+| `PROTOCOL_HEADER` | the header every request and response names the protocol version in - the client's `protocolHeader` the same | `Sync-Protocol` |
 
 With `OFFLINE_PERIOD` set, `isik.E027` holds `RETENTION` to at least it - a client offline that long would come
 back to a cursor pruning passed - and `ISIK['DJANGO']['IDEMPOTENCY']['RETENTION']` to longer than it - a client

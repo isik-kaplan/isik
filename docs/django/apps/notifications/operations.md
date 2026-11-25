@@ -3,21 +3,22 @@
 ## The tasks and the beat schedule
 
 `isik.django.apps.notifications.tasks` holds the Celery tasks, each a `HistoryContextTask` named
-`isik.notifications.*`. isik schedules nothing - merge its entries into your own beat:
+`isik.notifications.*`. The four beat runs are declared as scheduled tasks ([scheduling](../scheduling/README.md)):
+`fan_out` every 10 seconds, `reap_stranded` every minute, `prune_attempts` and `prune_notices` every hour. Merge them
+into your beat, changing any you like:
 
 ```python
 # celery.py
-from isik.django.apps.notifications.schedule import merge_beat_schedule
+from isik.django.scheduling import merge_beat_schedule, override_scheduled_task
 
 app = Celery("project")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-merge_beat_schedule(app, fan_out_every=timedelta(seconds=10))
+override_scheduled_task("isik.notifications.fan_out", every=timedelta(seconds=5))
+merge_beat_schedule(app)
 ```
 
-It merges once the app is configured: reading `app.conf` in `celery.py` itself would load the settings
-while the project's package is still half imported. `beat_schedule()` is the entries alone, for a schedule
-built another way. Test that your app's schedule holds them - `isik.W006` catches a project that never
-merged them, nothing one that lost them later.
+Run isik's scheduler instead, and the declarations are its schedule. Test that your app's schedule holds them -
+`isik.W006` catches a project that never merged them, nothing one that lost them later.
 
 | task | what it does |
 |---|---|
@@ -53,15 +54,15 @@ hold the request for up to `ENDPOINT_TIMEOUT`. That's what running tasks inline 
 it isn't acceptable.
 
 The checks hold both: **`isik.W006`** warns when isik sees nothing starting a fan-out - no middleware, no
-`FAN_OUT_AFTER_TASKS`, and no `fan_out` in the Celery app's `beat_schedule`. A cron or django-celery-beat's
-rows, which isik can't see, are said with a reason (the reasons' types are in
+`FAN_OUT_AFTER_TASKS`, no `fan_out` in the Celery app's `beat_schedule`, and isik's scheduler not running. A cron,
+which isik can't see, are said with a reason (the reasons' types are in
 `isik.django.apps.notifications.exemptions`): `FAN_OUT_BY=ScheduledElsewhere(reason="a cron runs
 notices --work every minute")`. **`isik.W007`** warns when tasks run inline, a fan-out follows each write
 and some kind is sent by webhook; `SENDS_INLINE=SendsInline(reason=...)` says why that's fine.
 
 | background jobs | what starts the work |
 |---|---|
-| a worker and a beat | `beat_schedule()` merged |
+| a worker and a beat | `merge_beat_schedule()`, or isik's scheduler |
 | a worker, no beat | the middleware, `FAN_OUT_AFTER_TASKS`, and a cron of `notices --work` with `FAN_OUT_BY` |
 | inline | the middleware, `FAN_OUT_AFTER_TASKS`, and a cron of `notices --work` |
 

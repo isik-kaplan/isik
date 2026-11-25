@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 from django.core.management import CommandError, call_command
 
+from isik.common.utils import exemption_listing
+from isik.common.utils.exemption_listing import ExemptionEntry, ExemptionRule
 from isik.common.utils.exemptions import declared_exemptions, exemption_class
 from isik.django.apps.common import exemptions as project
 from isik.django.apps.common import project as project_apps
 from isik.django.apps.common.db import constraints
 from isik.django.apps.common.db.constraints import DJANGO_VALIDATORS_WITHOUT_ONE
 from isik.django.apps.common.exemptions import (
-    ExemptionEntry,
-    ExemptionRule,
     policy_rule,
     project_exemption_rules,
     project_exemptions,
@@ -228,7 +228,7 @@ class TestALibrarysOwn:
         assert projects
         assert [e for e in projects if e.file == CONSTRAINTS or e.library] == []
         assert {rule.rule: rule.count for rule in project_exemption_rules(URLCONF)}[DATABASE_FORM] == len(projects)
-        assert command._where(*teaching_site()) not in run("--rule", DATABASE_FORM)[0]
+        assert exemption_listing.where(*teaching_site()) not in run("--rule", DATABASE_FORM)[0]
 
     def test_asked_for_they_are_listed_where_isik_made_them(self):
         own = [e for e in project_exemptions(URLCONF, include_library=True) if e.rule == DATABASE_FORM]
@@ -246,7 +246,7 @@ class TestALibrarysOwn:
         listed = json.loads(run("--rule", DATABASE_FORM, "--include-library", "--format", "json")[0])["exemptions"]
         rules = json.loads(run("--rules", "--include-library", "--format", "json")[0])["rules"]
 
-        assert f"{command._where(*teaching_site())}  " in out
+        assert f"{exemption_listing.where(*teaching_site())}  " in out
         assert {(e["file"], e["line"]) for e in listed if e["library"]} == {teaching_site()}
         assert next(r["count"] for r in rules if r["rule"] == DATABASE_FORM) == len(listed)
 
@@ -256,10 +256,10 @@ class TestEdges:
         assert project._source(type("Dynamic", (), {})) == (None, None)
 
     def test_an_exemption_without_a_site_is_shown_as_unknown(self):
-        assert command._where(None, None) == "?"
+        assert exemption_listing.where(None, None) == "?"
 
     def test_a_path_outside_the_working_directory_stays_absolute(self, tmp_path):
-        assert command._where(str(tmp_path / "x.py"), 3) == f"{tmp_path / 'x.py'}:3"
+        assert exemption_listing.where(str(tmp_path / "x.py"), 3) == f"{tmp_path / 'x.py'}:3"
 
     def test_a_rule_without_exemptions_prints_nothing(self):
         assert run("--rule", "tests.command-unused") == ("", "")
@@ -296,13 +296,13 @@ class TestCountsAndOrder:
 
 class TestTheOutput:
     def test_columns_line_up_and_the_last_runs_on(self):
-        assert command._columns([("a", "bb", "last one"), ("ccc", "d", "x")]) == [
+        assert exemption_listing.columns([("a", "bb", "last one"), ("ccc", "d", "x")]) == [
             "a    bb  last one",
             "ccc  d   x",
         ]
 
     def test_a_path_under_the_working_directory_is_relative(self):
-        assert command._where(str(Path.cwd() / "apps" / "x.py"), 3) == f"{Path('apps') / 'x.py'}:3"
+        assert exemption_listing.where(str(Path.cwd() / "apps" / "x.py"), 3) == f"{Path('apps') / 'x.py'}:3"
 
     def test_rows_are_one_per_line(self, monkeypatch):
         entries = [

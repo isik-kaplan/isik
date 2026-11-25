@@ -43,7 +43,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "limit": "2"
@@ -52,7 +52,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "changes": [
@@ -100,7 +100,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "cursor": "$cursor:1",
@@ -110,7 +110,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "changes": [
@@ -144,7 +144,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "cursor": "$cursor:2",
@@ -154,7 +154,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1",
+          "Sync-Protocol": "1",
           "ETag": "$feed:1"
         },
         "body": {
@@ -170,7 +170,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "cursor": "$cursor:3",
@@ -180,7 +180,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1",
+          "Sync-Protocol": "1",
           "ETag": "$feed:2"
         },
         "body": {
@@ -196,7 +196,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1",
+          "Sync-Protocol": "1",
           "If-None-Match": "$feed:2"
         },
         "query": {
@@ -207,7 +207,7 @@
       "response": {
         "status": 304,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         }
       }
     }

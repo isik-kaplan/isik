@@ -105,3 +105,14 @@ def test_encrypting_asks_for_a_password():
   per group and per selector choice. **`write_settings_table(path, target)`** writes it between
   `<!-- settings:settings -->` and `<!-- /settings:settings -->` (`name=` picks another block), and
   **`assert_docs_current(path, target)`** fails when the docs' copy is out of date.
+
+## The `isik` command
+
+The `cli` extra installs `isik`, isik's own commands - for any project, Django or not:
+
+- `isik exemptions` - every exemption the project makes, by rule ([exemptions](../common/utils/exemptions.md)).
+- `isik check public_names` - every name isik puts where someone outside the project sees it, and whether the
+  project left isik's default ([public names](../django/public_names.md)).
+
+A command over a Django project loads Django first, as `django-admin` does: from `DJANGO_SETTINGS_MODULE`, or
+`--settings`, with the working directory first on the path.

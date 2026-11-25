@@ -390,9 +390,16 @@ class TestTheGrantHistoryCheck:
 
     @isolate_apps("tests.testapp")
     def test_one_whose_history_can_be_edited(self):
-        from isik.django.apps.common.db import track_events
+        from isik.django.apps.common.db import EditableHistory, track_events
 
-        model = self.grants("Editable", track_events(append_only=False))
+        model = self.grants(
+            "Editable",
+            track_events(
+                append_only=EditableHistory(
+                    reason="Grants backfilled by hand from the old billing system, then sealed."
+                )
+            ),
+        )
 
         assert checks.grant_history_problems(model) == [
             f"{model._meta.label}'s history can be edited - when a grant was revoked has to stay as written. Keep it "

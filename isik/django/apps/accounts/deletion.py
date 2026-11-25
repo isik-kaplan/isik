@@ -24,11 +24,12 @@ def request_deletion(user):
     the first date. Returns when it's deleted.
     """
     with transaction.atomic():
-        if user.deletes_at is None:
+        first = user.deletes_at is None
+        if first:
             user.deletes_at = timezone.now() + conf.setting("DELETION_AFTER")
         user.session_epoch = uuid.uuid4()
         user.save(update_fields=["deletes_at", "session_epoch"])
-        account_deletion_requested.send(sender=type(user), user=user, deletes_at=user.deletes_at)
+        account_deletion_requested.send(sender=type(user), user=user, deletes_at=user.deletes_at, first=first)
     return user.deletes_at
 
 

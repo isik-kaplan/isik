@@ -16,8 +16,9 @@ The senders a project receives webhooks from - each declared once as a source - 
         ...
 
 What's the sender's is the project's: how it signs (a verifier - `IsikSignature` for one isik project receiving
-another's webhooks, a project's own for any other scheme), where its event id and type are, and the partition a
-request is for. isik verifies, dedupes, writes down, answers and hands each event to its handler.
+another's webhooks, `SharedSecret` for a sender sending a secret as it is, a project's own for any other scheme),
+where its event id and type are, and the partition a request is for. isik verifies, dedupes, writes down, answers
+and hands each event to its handler.
 """
 
 import hashlib
@@ -76,6 +77,27 @@ class IsikSignature:
             hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest() for secret in self.secrets(request) if secret
         ]
         if not any(hmac.compare_digest(want, given) for want in expected for given in signatures):
+            raise Unverified(_("%(header)s matches none of the source's secrets.") % {"header": self.header})
+
+
+class SharedSecret:
+    """
+    Verifies a secret the sender sends as it is - the value set in its dashboard, in `header` (`Authorization`,
+    say): the header's whole value, compared in constant time with each of `secrets(request)`, so a secret being
+    rotated out still verifies. `secrets` is a function of the request, so a partitioned project reads the
+    partition's own.
+    """
+
+    def __init__(self, *, header, secrets):
+        self.header, self.secrets = header, secrets
+
+    def verify(self, request):
+        value = request.headers.get(self.header)
+        if not value:
+            raise Unverified(_("The request carries no %(header)s.") % {"header": self.header})
+        given = value.encode()
+        # An empty secret never matches: a header with no value is refused above.
+        if not any(hmac.compare_digest(secret.encode(), given) for secret in self.secrets(request)):
             raise Unverified(_("%(header)s matches none of the source's secrets.") % {"header": self.header})
 
 

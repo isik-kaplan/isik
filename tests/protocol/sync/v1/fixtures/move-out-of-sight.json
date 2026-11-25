@@ -22,7 +22,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "limit": "10"
@@ -31,7 +31,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "changes": [
@@ -80,7 +80,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "cursor": "$cursor:1",
@@ -90,7 +90,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "changes": [

@@ -32,7 +32,7 @@ ISIK = {"DJANGO": {"NOTIFICATIONS": {"PROJECT_NAME": "Acme"}}}   # only needed o
 ```
 
 Then declare a kind on the model it watches, write its email templates if it's sent by email, call
-`merge_beat_schedule(app)` in your `celery.py` (see [operations.md](operations.md)), and run `migrate` - which
+`merge_beat_schedule(app)` (`isik.django.scheduling`) in your `celery.py` (see [operations.md](operations.md)), and run `migrate` - which
 also writes each kind's policy row. A project with no webhook kinds sets no `ISIK["DJANGO"]["NOTIFICATIONS"]` at all.
 
 Your `transaction=True` tests keep working: the ledger refuses `TRUNCATE`, which a test's flush uses, and

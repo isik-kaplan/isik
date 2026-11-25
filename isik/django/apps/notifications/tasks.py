@@ -1,6 +1,6 @@
 """
-The notifications' Celery tasks, each a thin call into `pipeline.py`. `schedule.beat_schedule()` names them
-for a project's beat.
+The notifications' Celery tasks, each a thin call into `pipeline.py` - the scheduled ones declared as
+`isik.notifications.*` (`isik.django.scheduling`).
 """
 
 from isik._internal import check_extra

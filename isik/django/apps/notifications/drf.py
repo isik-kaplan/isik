@@ -69,6 +69,7 @@ from isik.django.drf.error_handling import refusal
 from isik.django.drf.viewsets.base import BaseViewSet
 from isik.django.drf.viewsets.preconditions import NoPrecondition, PreconditionMixin
 from isik.django.drf.viewsets.schema_generation import none_during_schema_generation
+from isik.django.drf.viewsets.swapped import SwappedModel
 
 
 @makes_own_exemptions
@@ -329,19 +330,6 @@ def endpoint_serializer(model):
 
     EndpointSerializer.Meta.model = model
     return EndpointSerializer
-
-
-class SwappedModel:
-    """
-    A viewset's `model`, read from its getter whenever it's asked for - the model a project swapped in, not
-    the one isik ships - so isik's checks and schema generation find it on the class, with no request.
-    """
-
-    def __init__(self, getter):
-        self.getter = getter
-
-    def __get__(self, instance, owner):
-        return self.getter()
 
 
 # Each viewset's docstring, and each action's, is what drf-spectacular publishes to the project's API callers -

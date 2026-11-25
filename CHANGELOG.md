@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-11-25
+
+### Added
+
+- `isik.django.scheduling` - scheduled tasks declared once, in code: `scheduled_task(name, task=..., every= or
+  crontab=, staff_may=, on_restart=, source_editable=, paused=)`, `override_scheduled_task()` changing any - isik's
+  own included - and `merge_beat_schedule(app)` putting every declared task with a schedule in a Celery app's beat.
+  isik declares its apps' tasks: the notifications' and the features sweep with the schedules they had, the
+  accounts deletion sweep and inbound work with none, for the project to give.
+- `isik.django.apps.scheduling` (`isik[scheduling]`) - staff controls over them: each task's state in a row of a
+  swappable, history-tracked model (`AbstractScheduledTaskState`); isik's beat scheduler
+  (`isik.django.apps.scheduling.scheduler:Scheduler`) running the tasks as declarations and rows say, read again
+  every `beat_max_loop_interval`; `migrate` and each start reconciling the rows - a restart mode the code no longer
+  lets staff choose set back, loudly, and at a start a `CODE` task's schedule and pause; `ScheduledTaskViewSet` -
+  pause, resume, run now, reschedule, switch the restart mode, reset now or at the next start, each as the task's
+  `staff_may` and `source_editable` allow, and a 403 `not_allowed_by_declaration` otherwise; `manage.py
+  scheduled_tasks`, listing them and pruning rows nothing declares. `isik.E031`.
+- `isik.E030` (`Check.APPEND_ONLY_HISTORY`) - an event model of the project's, tracked by isik or a bare
+  `pghistory.track()`, whose table doesn't refuse an update, a delete and a TRUNCATE of its events.
+  `append_only=EditableHistory(reason=...)` says why one may be edited.
+- The `isik` command (the `cli` extra): `isik exemptions`, listing a project's exemptions with or without Django,
+  and `isik check public_names`.
+- `isik.django.public_names` - every name isik puts where someone outside the project sees it, each a setting with
+  a default - and `manage.py public_names`, saying which the project left at isik's default.
+- `ISIK['DJANGO']['SYNC']['PROTOCOL_HEADER']`, the sync protocol's header, `Sync-Protocol` by default.
+- `SharedSecret(header=..., secrets=...)`, an inbound verifier for a sender sending a secret as it is.
+- `first` on `account_deletion_requested`, True for the request that set `deletes_at`.
+
+### Changed
+
+- The sync protocol's header is `Sync-Protocol`, not `Isik-Sync-Protocol` - `@isikk/core` 0.28.0 sends it.
+- `track_history()`/`track_events()` take `append_only=EditableHistory(reason=...)` alone: a bare `False` or `True`
+  is a TypeError, and `PGHISTORY_APPEND_ONLY` isn't read - a history is append-only unless it says why not.
+- The beat helpers are `isik.django.scheduling`'s: `features.schedule`, `notifications.schedule`, and the accounts'
+  and inbound's `tasks.beat_schedule()` are gone - `merge_beat_schedule(app)` merges every app's, and
+  `override_scheduled_task()` changes a schedule.
+- `manage.py exemptions` prints through `isik.common.utils.exemption_listing`, shared with `isik exemptions`.
+- Translating leaves Django's settings unloaded until something else loads them - a message before then is
+  translated by stdlib gettext.
+
 ## [0.61.0] - 2026-11-22
 
 ### Added

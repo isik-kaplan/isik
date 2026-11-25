@@ -133,12 +133,13 @@ their order - a trial starting and ending between two sweeps is told as both. Wh
 written - one starting now, or already started - `grant()` tells then, so the sweep tells each boundary
 once. Its first run only notes where it starts.
 
-Run it from beat - in `celery.py`, before Django is set up:
+Run it from beat - it's the scheduled task `isik.features.sweep`, every minute ([scheduling](../scheduling/README.md)).
+In `celery.py`, before Django is set up:
 
 ```python
-from isik.django.apps.features.schedule import merge_beat_schedule
+from isik.django.scheduling import merge_beat_schedule
 
-merge_beat_schedule(app)              # isik.features.sweep every minute; sweep_every= to change it
+merge_beat_schedule(app)
 ```
 
 or from a cron, with `manage.py features --sweep`.
@@ -149,7 +150,7 @@ or not. `"next_boundary"` runs it when one is due instead:
 ```python
 ISIK = {"DJANGO": {"FEATURES": {"SWEEP": "next_boundary"}}}                      # SWEEP_LOOKAHEAD: an hour unless set
 
-merge_beat_schedule(app, sweep_every=timedelta(hours=1))        # now only the backstop
+override_scheduled_task("isik.features.sweep", every=timedelta(hours=1))        # now only the backstop
 ```
 
 - Each `grant()` with a start or an end still to come, once it's committed, and each sweep, schedule one

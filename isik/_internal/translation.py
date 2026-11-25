@@ -40,11 +40,15 @@ def _django_translation():
 def gettext(message):
     translation = _django_translation()
     if translation is not None:
+        from django.conf import settings
         from django.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
 
+        # Settings not loaded yet are left alone: translating mustn't be what imports the settings module - a command
+        # line may still be about to say which, or where it is.
         try:
-            return translation.gettext(message)
-        except (AppRegistryNotReady, ImproperlyConfigured):  # settings or apps not ready yet
+            if settings.configured:
+                return translation.gettext(message)
+        except (AppRegistryNotReady, ImproperlyConfigured):  # apps not ready yet
             pass
     return stdlib_gettext.dgettext(DOMAIN, message)
 

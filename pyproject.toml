@@ -29,6 +29,8 @@ celery = ["isik[django]", "celery"]
 notifications = ["isik[django,celery]", "httpx"]
 # isik.django.apps.inbound hands each received webhook to its handler in a celery task.
 inbound = ["isik[django,celery]"]
+# isik.django.apps.scheduling runs the declared scheduled tasks on its own beat scheduler.
+scheduling = ["isik[django,celery]"]
 # Its push channel speaks HTTP/2 to APNs and FCM itself, signing each service's token with pyjwt - no middleman.
 push = ["isik[notifications]", "httpx[http2]", "pyjwt[crypto]"]
 # isik.django.sms's Twilio sender speaks Twilio's REST API over httpx itself - no SDK.
@@ -39,7 +41,11 @@ tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
 # Ranges, not pins: an app pins its own click and questionary, and isik.cli must not fight that.
 cli = ["click>=8.1", "questionary>=2.1.1"]
-all = ["isik[sentry,django,drf,celery,notifications,push,sms,sync,tiptap,templated_fields,cli,inbound]"]
+all = ["isik[sentry,django,drf,celery,notifications,push,sms,sync,tiptap,templated_fields,cli,inbound,scheduling]"]
+
+[project.scripts]
+# isik's own commands - `isik exemptions`, `isik check public_names` - on the cli extra.
+isik = "isik.cli.main:isik"
 
 [project.entry-points.pytest11]
 # Lets a transaction=True test's flush through each table's TRUNCATE protection (ProtectTruncate) - a no-op

@@ -12,9 +12,10 @@ repeating that setup at each call site. Extra `kwargs` pass straight through to
   with `trackers`, which carry their own - both is a `TypeError`.
 - The event table is append-only: it refuses updates and deletes (pghistory's `append_only`, its
   trigger named `append_only`) and a `TRUNCATE` (`ProtectTruncate`, named `protect_truncate`) -
-  `APPEND_ONLY_TRIGGERS` has both names, for a check of a project's own.
-  `append_only=False` leaves a model's out; `PGHISTORY_APPEND_ONLY = False` leaves out every one that
-  doesn't say. Something that must rewrite events - erasing a person, a test's backdating - steps
+  `APPEND_ONLY_TRIGGERS` has both names. `append_only=EditableHistory(reason=...)` leaves a model's out,
+  saying why - listed by `manage.py exemptions`; nothing else does, and pghistory's `PGHISTORY_APPEND_ONLY`
+  isn't read. `isik.E030` refuses any event model of the project's - tracked here or by a bare
+  `pghistory.track()` - whose table lacks the two, unless it says why. Something that must rewrite events - erasing a person, a test's backdating - steps
   past them with `pgtrigger.ignore()`, and a test's flush goes through on its own (see
   [the pytest plugin](README.md)).
 - The event model is marked as isik's: `generated_models("event")` lists it (see
@@ -46,8 +47,8 @@ class TrackedSession(Session):
         proxy = True
 ```
 
-A bare `pghistory.track()` gets none of that - and pghistory alone never refuses a `TRUNCATE`, so where
-`PGHISTORY_APPEND_ONLY` gives one `append_only`, `isik.E015` asks for the `ProtectTruncate` beside it.
+A bare `pghistory.track()` gets none of that - pghistory alone never refuses a `TRUNCATE` - and `isik.E030`
+refuses its event model until its table refuses both; tracking it with `track_history()` instead does.
 
 - Generates a `WidgetEvent` history model with a `pgh_label` (`"insert"`/`"update"`/`"delete"`)
   and `pgh_obj`/`pgh_obj_id` columns, populated by real Postgres triggers on `Widget` — requires

@@ -134,7 +134,7 @@ def test_no_mixin_of_isiks_overrides_get_serializer():
         importlib.import_module(f"{viewsets.__name__}.{info.name}") for info in pkgutil.iter_modules(viewsets.__path__)
     ]
     modules.append(importlib.import_module("isik.django.apps.notifications.drf"))
-    assert len(modules) == 12
+    assert len(modules) == 13
     overriding = [
         f"{cls.__module__}.{cls.__name__}"
         for module in modules

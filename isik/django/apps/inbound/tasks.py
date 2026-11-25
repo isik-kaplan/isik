@@ -1,6 +1,6 @@
 """
-The inbound app's Celery tasks, each a thin call into `pipeline.py`. `beat_schedule()` names `work` for a project's
-beat.
+The inbound app's Celery tasks, each a thin call into `pipeline.py`. `work` is the scheduled task `isik.inbound.work`
+(`isik.django.scheduling`), which the project gives a schedule.
 """
 
 from isik._internal import check_extra
@@ -23,8 +23,3 @@ def process(partition, event_id):
 @shared_task(base=HistoryContextTask, name="isik.inbound.work")
 def work():
     return pipeline.work()
-
-
-def beat_schedule(every):
-    """The beat entry running `work` every `every` seconds - for a project to merge into its own schedule."""
-    return {"isik.inbound.work": {"task": "isik.inbound.work", "schedule": every}}

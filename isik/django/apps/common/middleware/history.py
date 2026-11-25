@@ -12,6 +12,7 @@ from isik.django.apps.common.db.context_columns import UUID_PATTERN
 from isik.django.apps.common.db.history import _open_history_context
 from isik.django.apps.common.db.models import uuid7
 from isik.django.conf import django_setting
+from isik.django.public_names import REQUEST_ID_HEADER
 
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,6 @@ logger = logging.getLogger(__name__)
 OPTIONAL_CONTEXT_KEYS = ("version", "build", "request_id", "correlation_id", "trace_id")
 # The keys whose value a setting gives, the same for every request - required once the key is named.
 FROM_SETTINGS = {"version": "CONTEXT_VERSION", "build": "CONTEXT_BUILD"}
-# Where a request's correlation id is read from and answered under, unless
-# ISIK['DJANGO']['HISTORY']['REQUEST_ID_HEADER'] names another.
-REQUEST_ID_HEADER = "X-Request-ID"
 # Where a Sentry trace arrives: `<trace id>-<span id>[-<sampled>]`.
 TRACE_HEADER = "sentry-trace"
 
@@ -145,7 +143,7 @@ class HistoryContextMiddleware(HistoryMiddleware):
         """
         if hasattr(request, "request_id"):
             return None
-        header = django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)
+        header = REQUEST_ID_HEADER.value()
         request.request_id = str(uuid7())
         sent = request.headers.get(header)
         request.correlation_id = well_formed(sent) or request.request_id
@@ -157,7 +155,7 @@ class HistoryContextMiddleware(HistoryMiddleware):
         refused = self.identify(request)
         response = self._served(request) if refused is None else refused
         if django_setting("HISTORY", "RETURN_REQUEST_ID", True):
-            response[django_setting("HISTORY", "REQUEST_ID_HEADER", REQUEST_ID_HEADER)] = request.correlation_id
+            response[REQUEST_ID_HEADER.value()] = request.correlation_id
         return response
 
     def _served(self, request):

@@ -1,4 +1,5 @@
-"""The accounts app's Celery task - `beat_schedule()` names it for a project's beat."""
+"""The accounts app's Celery task - declared as the scheduled task `isik.accounts.sweep_deletions`
+(`isik.django.scheduling`), which the project gives a schedule."""
 
 from isik._internal import check_extra
 
@@ -14,8 +15,3 @@ from isik.django.celery.tasks import HistoryContextTask  # noqa: E402
 @shared_task(base=HistoryContextTask, name="isik.accounts.sweep_deletions")
 def sweep_deletions():
     return deletion.sweep_deletions()
-
-
-def beat_schedule(every):
-    """The beat entry running `sweep_deletions` every `every` seconds - for a project to merge into its own."""
-    return {"isik.accounts.sweep_deletions": {"task": "isik.accounts.sweep_deletions", "schedule": every}}

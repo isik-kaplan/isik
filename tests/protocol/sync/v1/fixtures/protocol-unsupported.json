@@ -12,7 +12,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "2"
+          "Sync-Protocol": "2"
         }
       },
       "response": {
@@ -45,7 +45,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "2"
+          "Sync-Protocol": "2"
         },
         "body": {
           "entries": []
@@ -66,7 +66,7 @@
         "method": "GET",
         "path": "/sync/capabilities",
         "headers": {
-          "Isik-Sync-Protocol": "2"
+          "Sync-Protocol": "2"
         }
       },
       "response": {

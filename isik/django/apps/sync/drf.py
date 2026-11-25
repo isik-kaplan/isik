@@ -28,9 +28,9 @@ from isik.django.apps.sync.feed import CursorExpired, Feed
 from isik.django.apps.sync.push import ETAG
 from isik.django.drf.viewsets.base import BaseViewSet
 from isik.django.drf.viewsets.preconditions import matches
+from isik.django.public_names import SYNC_PROTOCOL_HEADER
 
 
-PROTOCOL_HEADER = "Isik-Sync-Protocol"
 IF_NONE_MATCH = "If-None-Match"
 # The protocol versions this server speaks.
 PROTOCOLS = (1,)
@@ -168,8 +168,9 @@ class SyncViewSet(BaseViewSet):
     - `POST push` - `{entries: [...]}`, answered `{results: [...]}` - 413 for one holding more than the backend's
       limits.
 
-    Every request names its protocol version in `Isik-Sync-Protocol`, and a missing or unknown one is refused
-    with 400. Every response names it too. A person must be authenticated - 401 otherwise.
+    Every request names its protocol version in `ISIK['DJANGO']['SYNC']['PROTOCOL_HEADER']` (`Sync-Protocol`), and
+    a missing or unknown one is refused with 400. Every response names it too. A person must be authenticated -
+    401 otherwise.
     """
 
     permission_classes = [IsAuthenticated]
@@ -181,7 +182,7 @@ class SyncViewSet(BaseViewSet):
     def check_permissions(self, request):
         # After authentication and before throttling, which reads a push's body.
         super().check_permissions(request)
-        if request.headers.get(PROTOCOL_HEADER) not in [str(protocol) for protocol in PROTOCOLS]:
+        if request.headers.get(SYNC_PROTOCOL_HEADER.value()) not in [str(protocol) for protocol in PROTOCOLS]:
             raise ProtocolUnsupported()
         if self.action == "push":
             # Read before anything parses it: its size is held to MAX_BYTES.
@@ -198,7 +199,7 @@ class SyncViewSet(BaseViewSet):
 
     @property
     def default_response_headers(self):
-        return {**super().default_response_headers, PROTOCOL_HEADER: str(PROTOCOLS[-1])}
+        return {**super().default_response_headers, SYNC_PROTOCOL_HEADER.value(): str(PROTOCOLS[-1])}
 
     def get_throttles(self):
         if self.action != "push":

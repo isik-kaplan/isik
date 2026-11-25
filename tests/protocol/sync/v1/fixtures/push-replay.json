@@ -22,7 +22,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "query": {
           "limit": "10"
@@ -31,7 +31,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "changes": [
@@ -71,7 +71,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "entries": [
@@ -104,7 +104,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "results": [
@@ -141,7 +141,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "entries": [
@@ -174,7 +174,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "results": [

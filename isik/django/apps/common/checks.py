@@ -50,6 +50,8 @@ to - every one by default. Anything else in
 | Check.SYNC                 | isik.E027              | a sync setting or syncs() declaration that can't work        |
 | Check.INBOUND              | isik.E028              | an inbound setting or source declaration that can't work     |
 | Check.ACCOUNTS             | isik.E029              | account deletion that can't work or leaves a person's rows   |
+| Check.APPEND_ONLY_HISTORY  | isik.E030              | a history whose events can be edited, not saying why         |
+| Check.SCHEDULING           | isik.E031              | a scheduled task that can't run or can't be what it says     |
 
 These always run: `isik.E022` refuses an `ISIK` that isn't a dict of the keys isik reads, `isik.E023` a
 swappable model setting a project set itself that disagrees with the model `ISIK` names for it, and - where
@@ -102,6 +104,8 @@ class Check(Enum):
     SYNC = "sync"
     INBOUND = "inbound"
     ACCOUNTS = "accounts"
+    APPEND_ONLY_HISTORY = "append_only_history"
+    SCHEDULING = "scheduling"
 
 
 class CheckOption(Enum):
@@ -164,6 +168,8 @@ CHECKS = {
     Check.SYNC: (),
     Check.INBOUND: (),
     Check.ACCOUNTS: (),
+    Check.APPEND_ONLY_HISTORY: (CheckOption.APPS,),
+    Check.SCHEDULING: (),
 }
 
 # Checks a project turns on, rather than off: each refuses what's a choice, not a mistake.
@@ -618,6 +624,17 @@ def every_event_model_indexes_its_streams(options, **kwargs):
 
     hint = _("See object_stream_index(table) (isik.django.apps.common.db.history).")
     return [Error(problem, hint=hint, id="isik.E008") for problem in history_index_problems(_project_configs(options))]
+
+
+@isik_check(Check.APPEND_ONLY_HISTORY, Tags.models)
+def every_history_is_append_only(options, **kwargs):
+    """A history records what happened only while nothing can rewrite it."""
+    from isik.django.apps.common.db.history import history_append_only_problems
+
+    hint = _("See track_history() and EditableHistory (isik.django.apps.common.db).")
+    return [
+        Error(problem, hint=hint, id="isik.E030") for problem in history_append_only_problems(_project_configs(options))
+    ]
 
 
 @isik_check(Check.TRUNCATE_PROTECTION, Tags.models)

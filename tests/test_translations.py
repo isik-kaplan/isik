@@ -180,6 +180,14 @@ class TestTranslationRuntime:
             monkeypatch.setattr("django.utils.translation.gettext", not_ready)
             assert translation.gettext("hello") == "hello"
 
+    def test_settings_not_loaded_yet_are_left_alone(self, monkeypatch):
+        from django.conf import LazySettings
+
+        monkeypatch.setattr(LazySettings, "configured", property(lambda settings: False))
+        monkeypatch.setattr("django.utils.translation.gettext", lambda message: pytest.fail("loaded the settings"))
+
+        assert translation.gettext("hello") == "hello"
+
     def test_without_django_the_isik_domain_is_used(self, monkeypatch, tmp_path):
         import django.utils
 

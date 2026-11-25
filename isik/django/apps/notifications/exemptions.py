@@ -17,7 +17,7 @@ class ScheduledElsewhere(
     rule="isik.django.notifications.fan-out-started",
     why=(
         "A notice waits until something starts a fan-out, and isik sees only its middleware, FAN_OUT_AFTER_TASKS "
-        "and beat_schedule() in the Celery app's beat."
+        "and the scheduled fan_out in the Celery app's beat."
     ),
 ):
     """What starts the fan-out where isik can't see it - the notifications area's `FAN_OUT_BY`."""

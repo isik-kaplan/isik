@@ -212,6 +212,21 @@ def carried_by_copies(decorators):
     ]
 ```
 
+## Listing them - `isik exemptions`
+
+`isik exemptions` (the `cli` extra) lists every exemption a project makes, by rule, in any project. One with no
+Django names the modules that make them, and where its code is - every exemption call and type there is held to
+having been loaded, as below:
+
+```console
+$ isik exemptions --import billing.policies --path src/billing
+$ isik exemptions --import billing.policies --rules --format json
+```
+
+Without `--path`, the scan reads each imported module's top-level package. In a Django project -
+`DJANGO_SETTINGS_MODULE` set, or `--settings` - it loads Django first and is `manage.py exemptions`, its options
+and all.
+
 ## In a Django project
 
 `manage.py exemptions` puts these together. It loads the models and every urlconf the project serves,

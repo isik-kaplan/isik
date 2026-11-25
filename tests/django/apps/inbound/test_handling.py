@@ -395,9 +395,6 @@ class TestTasks:
     def test_work(self, asked):
         assert tasks.work() == {"asked": 0, "taken_back": 0, "pruned": 0}
 
-    def test_the_beat_entry(self):
-        assert tasks.beat_schedule(60) == {"isik.inbound.work": {"task": "isik.inbound.work", "schedule": 60}}
-
 
 def test_a_db_round_trip_for_an_event_naming_its_source_and_id():
     event = received()

@@ -65,14 +65,17 @@ class TestAsked:
         request = HttpRequest()
         request.session = client.session
         assert get_user(request).is_authenticated is False
-        assert heard == [(account_deletion_requested, EmailUser, {"user": alice, "deletes_at": deletes_at})]
+        assert heard == [
+            (account_deletion_requested, EmailUser, {"user": alice, "deletes_at": deletes_at, "first": True})
+        ]
 
-    def test_asking_again_keeps_the_first_date_and_signs_out_again(self, alice):
+    def test_asking_again_keeps_the_first_date_and_signs_out_again(self, alice, heard):
         first = request_deletion(alice)
         epoch = alice.session_epoch
 
         assert request_deletion(alice) == first
         assert alice.session_epoch != epoch
+        assert [kwargs["first"] for _signal, _sender, kwargs in heard] == [True, False]
 
     def test_until_then_a_session_is_signed_as_django_signs_it(self, alice):
         assert alice.get_session_auth_hash() == AbstractBaseUser.get_session_auth_hash(alice)
@@ -125,11 +128,8 @@ class TestSwept:
 
         assert sweep_deletions() == 1
 
-    def test_the_task_and_its_beat_entry(self, alice):
+    def test_the_task(self, alice):
         assert tasks.sweep_deletions() == 0
-        assert tasks.beat_schedule(3600) == {
-            "isik.accounts.sweep_deletions": {"task": "isik.accounts.sweep_deletions", "schedule": 3600}
-        }
 
 
 class TestErased:

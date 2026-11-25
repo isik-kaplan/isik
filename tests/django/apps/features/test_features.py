@@ -1,11 +1,9 @@
 """Features, grants and overrideable settings: declaring, resolving, writing, the sweep and erasing a holder."""
 
-import gc
 from datetime import timedelta
 
 import pgtrigger
 import pytest
-from celery import Celery
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, ProgrammingError, connection, models, transaction
 from django.db.models import ProtectedError
@@ -13,7 +11,7 @@ from django.test.utils import CaptureQueriesContext, isolate_apps
 from django.utils import timezone
 
 from isik.django.apps.common.forcing import ForceRefused
-from isik.django.apps.features import declarations, operations, resolution, schedule, swapping, tasks
+from isik.django.apps.features import declarations, operations, resolution, swapping, tasks
 from isik.django.apps.features.declarations import AtLeast, AtMost, Default, Fixed, Setting
 from isik.django.apps.features.guards import FeatureMissing, requires_feature
 from isik.django.apps.features.models import Feature, FeatureGrant, SweepCursor
@@ -1121,34 +1119,6 @@ def test_the_command_sweeps(capsys):
 def test_the_task_sweeps():
     assert tasks.sweep_boundaries() == 0
     assert operations.sweep_boundaries() == 0
-
-
-class TestTheBeatSchedule:
-    def test_its_entry(self):
-        assert schedule.beat_schedule() == {
-            "isik.features.sweep": {"task": tasks.sweep_boundaries.name, "schedule": timedelta(minutes=1)}
-        }
-        assert schedule.beat_schedule(sweep_every=5)["isik.features.sweep"]["schedule"] == 5
-
-    def test_its_merged_once_the_app_is_configured(self):
-        app = Celery("merging", set_as_current=False)
-        app.conf.beat_schedule = {"renew": {"task": "app.renew", "schedule": 60}}
-
-        schedule.merge_beat_schedule(app, sweep_every=5)
-        assert app.configured is False
-        gc.collect()
-
-        assert app.conf.beat_schedule == {
-            "renew": {"task": "app.renew", "schedule": 60},
-            **schedule.beat_schedule(sweep_every=5),
-        }
-
-    def test_into_an_app_with_no_schedule_of_its_own(self):
-        app = Celery("merging", set_as_current=False)
-
-        schedule.merge_beat_schedule(app)
-
-        assert app.conf.beat_schedule == schedule.beat_schedule()
 
 
 class TestAFixedValueWithoutTheFeature:

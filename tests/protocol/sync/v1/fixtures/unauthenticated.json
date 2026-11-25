@@ -12,7 +12,7 @@
         "method": "GET",
         "path": "/sync/changes",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         }
       },
       "response": {
@@ -24,7 +24,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "entries": []

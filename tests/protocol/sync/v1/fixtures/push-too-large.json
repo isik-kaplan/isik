@@ -15,7 +15,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "entries": [
@@ -51,7 +51,7 @@
       "response": {
         "status": 413,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "code": "sync_push_too_large",
@@ -65,7 +65,7 @@
         "method": "POST",
         "path": "/sync/push",
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "entries": [
@@ -88,7 +88,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "Isik-Sync-Protocol": "1"
+          "Sync-Protocol": "1"
         },
         "body": {
           "results": [

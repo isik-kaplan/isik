@@ -1,32 +1,12 @@
-import json
-from pathlib import Path
-
 from django.core.management.base import BaseCommand, CommandError
 
-from isik._internal.translation import gettext as _
+from isik.common.utils.exemption_listing import UnknownRule, report
 from isik.django.apps.common.exemptions import (
     project_exemption_rules,
     project_exemptions,
     unimported_project_exemption_types,
     unseen_project_exemptions,
 )
-
-
-def _where(file, line):
-    """`file:line`, relative to the working directory when it's under it."""
-    if file is None:
-        return "?"
-    try:
-        file = Path(file).relative_to(Path.cwd())
-    except ValueError:
-        pass
-    return f"{file}:{line}"
-
-
-def _columns(rows):
-    """Each row's cells padded to line up, the last left as is."""
-    widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]) - 1)]
-    return ["  ".join([*(row[i].ljust(width) for i, width in enumerate(widths)), row[-1]]) for row in rows]
 
 
 class Command(BaseCommand):
@@ -51,84 +31,26 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, rule, rules, format, urlconf, include_library, **options):
-        if rules:
-            self._rules(project_exemption_rules(urlconf, include_library=include_library), format)
-            return
-        entries = project_exemptions(urlconf, include_library=include_library)
-        if rule is not None:
-            known = {each.rule for each in project_exemption_rules(urlconf)}
-            if rule not in known:
-                raise CommandError(_("No exemption type or policy exempts from %(rule)r.") % {"rule": rule})
-            entries = [entry for entry in entries if entry.rule == rule]
-        unseen = unseen_project_exemptions(urlconf)
-        unimported = unimported_project_exemption_types(urlconf)
-        if format == "json":
-            self.stdout.write(
-                json.dumps(
-                    {
-                        "exemptions": [
-                            {
-                                "rule": entry.rule,
-                                "declared_by": entry.declared_by,
-                                "action": entry.action,
-                                "reason": entry.reason,
-                                "file": entry.file,
-                                "line": entry.line,
-                                "library": entry.library,
-                            }
-                            for entry in entries
-                        ],
-                        "unseen": [{"file": file, "line": line, "name": name} for file, line, name in unseen],
-                        "unimported_types": [
-                            {"file": file, "line": line, "name": name} for file, line, name in unimported
-                        ],
-                    },
-                    indent=2,
-                )
-            )
-            self._fail_if_incomplete(unseen, unimported)
-            return
-        rows = [
-            (
-                entry.rule,
-                _where(entry.file, entry.line),
-                f"{entry.action} - {entry.reason}" if entry.action else entry.reason,
-            )
-            for entry in entries
-        ]
-        if rows:
-            self.stdout.write("\n".join(_columns(rows)))
-        for file, line, name in unseen:
-            self.stderr.write(
-                _(
-                    "%(where)s makes an exemption through %(name)s that loading the project didn't - it isn't "
-                    "listed above."
-                )
-                % {"where": _where(file, line), "name": name}
-            )
-        for file, line, name in unimported:
-            self.stderr.write(
-                _(
-                    "%(where)s declares %(name)s, which loading the project didn't import - its exemptions aren't "
-                    "listed."
-                )
-                % {"where": _where(file, line), "name": name}
-            )
-        self._fail_if_incomplete(unseen, unimported)
-
-    def _fail_if_incomplete(self, unseen, unimported):
+        try:
+            out, problems, failure = django_report(urlconf, include_library, rule=rule, rules_only=rules, format=format)
+        except UnknownRule as unknown:
+            raise CommandError(str(unknown)) from None
+        if out:
+            self.stdout.write(out)
+        for problem in problems:
+            self.stderr.write(problem)
         # A listing missing some of the project's exemptions fails, so a CI step running it is a gate
         # and not only a report. Each one is named above.
-        if unseen or unimported:
-            raise CommandError(
-                _("%(count)d exemption call(s) or type(s) weren't loaded, so the listing isn't complete.")
-                % {"count": len(unseen) + len(unimported)}
-            )
+        if failure is not None:
+            raise CommandError(failure)
 
-    def _rules(self, found, format):
-        if format == "json":
-            payload = [{"rule": each.rule, "why": each.why, "count": each.count} for each in found]
-            self.stdout.write(json.dumps({"rules": payload}, indent=2))
-            return
-        if found:
-            self.stdout.write("\n".join(_columns([(each.rule, str(each.count), each.why) for each in found])))
+
+def django_report(urlconf, include_library, **options):
+    """`report()` of the Django project's exemptions - `manage.py exemptions`', and `isik exemptions`' in one."""
+    return report(
+        lambda: project_exemptions(urlconf, include_library=include_library),
+        lambda: project_exemption_rules(urlconf, include_library=include_library),
+        lambda: unseen_project_exemptions(urlconf),
+        lambda: unimported_project_exemption_types(urlconf),
+        **options,
+    )

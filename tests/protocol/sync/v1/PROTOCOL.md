@@ -12,7 +12,9 @@ directory.
 ## Versioning
 
 - Every request to `/sync/capabilities`, `/sync/changes` and `/sync/push` carries
-  `Isik-Sync-Protocol: 1`, and every response to one echoes it.
+  `Sync-Protocol: 1`, and every response to one echoes it. The header's name is the project's - the server's
+  `ISIK['DJANGO']['SYNC']['PROTOCOL_HEADER']`, the client's `protocolHeader` - and `Sync-Protocol` unless both set
+  another; the fixtures use it. Where the three routes are mounted is the project's too - the client's `syncPath`.
 - A request with a missing or unsupported version gets
   `400 { "code": "sync_protocol_unsupported", "supported": [1] }`. A client that gets it stops
   syncing and asks to be updated; it retries nothing.

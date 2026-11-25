@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.usefixtures("
 
 ALICE = "0190a000-0000-7000-8000-a00000000001"
 TEAM = "0190a000-0000-7000-8000-b00000000007"
-HEADERS = {"Isik-Sync-Protocol": "1"}
+HEADERS = {"Sync-Protocol": "1"}
 
 
 @pytest.fixture

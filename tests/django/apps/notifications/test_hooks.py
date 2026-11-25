@@ -10,7 +10,8 @@ from django.core.management import call_command
 from django.http import HttpResponse
 from django.test import RequestFactory
 
-from isik.django.apps.notifications import checks, exemptions, hooks, pipeline, schedule
+from isik.django import scheduling
+from isik.django.apps.notifications import checks, exemptions, hooks, pipeline
 from isik.django.apps.notifications.audiences import Subscribers
 from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.hooks import FanOutAfterWritesMiddleware, fan_out_if_waiting
@@ -104,8 +105,8 @@ def test_the_work_command_prunes_until_nothing_is_left(dispatched, settings, mon
 
 
 class Beat:
-    def __init__(self, schedule=None, eager=False):
-        self.beat_schedule, self.task_always_eager = schedule, eager
+    def __init__(self, schedule=None, eager=False, scheduler="celery.beat:PersistentScheduler"):
+        self.beat_schedule, self.task_always_eager, self.beat_scheduler = schedule, eager, scheduler
 
 
 @pytest.fixture
@@ -127,16 +128,21 @@ class TestNothingStartsAFanOut:
         celery_conf()
 
         warning = (
-            "Nothing starts a fan-out, so no notice is ever sent: merge beat_schedule() into the Celery app's "
-            "beat, add FanOutAfterWritesMiddleware, set FAN_OUT_AFTER_TASKS, or - when a cron or "
-            "django-celery-beat runs it - say so with FAN_OUT_BY=ScheduledElsewhere(reason=...)."
+            "Nothing starts a fan-out, so no notice is ever sent: merge_beat_schedule() into the Celery app, run "
+            "isik's scheduler, add FanOutAfterWritesMiddleware, set FAN_OUT_AFTER_TASKS, or - when a cron runs it - "
+            "say so with FAN_OUT_BY=ScheduledElsewhere(reason=...)."
         )
         assert [
             (message.id, message.msg, message.hint) for message in checks.notifications_can_work(app_configs=None)
         ] == [("isik.W006", warning, "See isik.django.apps.notifications.")]
 
     def test_a_merged_beat_schedule_starts_it(self, unacknowledged, celery_conf):
-        celery_conf(schedule={"other": {"task": "app.work"}, **schedule.beat_schedule()})
+        celery_conf(schedule={"other": {"task": "app.work"}, **scheduling.beat_schedule()})
+
+        assert checks.fan_out_warnings() == []
+
+    def test_isiks_scheduler_starts_it(self, unacknowledged, celery_conf):
+        celery_conf(scheduler=scheduling.SCHEDULER)
 
         assert checks.fan_out_warnings() == []
 
@@ -170,9 +176,7 @@ class TestNothingStartsAFanOut:
     def test_the_real_celery_app_is_read(self):
         from celery import current_app
 
-        assert hooks.fan_out_scheduled() is bool(
-            [entry for entry in (current_app.conf.beat_schedule or {}).values() if entry["task"] == hooks.FAN_OUT_TASK]
-        )
+        assert hooks.fan_out_scheduled() is scheduling.beat_runs(hooks.FAN_OUT_TASK, current_app.conf)
         assert hooks.runs_inline() is bool(current_app.conf.task_always_eager)
 
 

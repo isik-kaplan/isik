@@ -12,8 +12,8 @@
 ## isik.cli
 
 - [cli/](cli/README.md) - a `Settings` class's options, environment variables and questions on a click
-  command, a check that each setting can be reached all three ways, and a generated settings table
-  (`cli` extra)
+  command, a check that each setting can be reached all three ways, a generated settings table, and the
+  `isik` command - `isik exemptions`, `isik check public_names` (`cli` extra)
 
 Using isik from Django? Its imports all start with `isik.django`, so these are easy to miss and come
 up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `Exemption`
@@ -27,6 +27,8 @@ up constantly: `first_of`/`not_none`, `with_attrs`, `returns`/`raises`, `Exempti
 
 - [django/conf.md](django/conf.md) - `ISIK`, the one setting every part of isik is configured in, and
   `override_isik()` for tests
+- [django/public_names.md](django/public_names.md) - the names isik puts on the wire - headers - each a setting,
+  and `manage.py public_names` / `isik check public_names` listing which the project left at isik's default
 - [django/sms.md](django/sms.md) - `send_sms()`: SMS sent through a configured sender - console, an outbox
   for tests, Twilio - like Django's email backends (`sms` extra)
 
@@ -50,6 +52,9 @@ The `django` and `drf` extras assume PostgreSQL - see [installing](../README.md#
   with the same `Idempotency-Key` replays the first response, by reference or from a kept body
 - [django/apps/inbound/](django/apps/inbound/README.md) - webhooks a project receives: verified, written
   down once per sender's event id, answered at once, and handed to a handler in a task (`inbound` extra)
+- [django/apps/scheduling/](django/apps/scheduling/README.md) - scheduled tasks declared in code
+  (`isik.django.scheduling`, merged into beat), and staff controls over them: isik's beat scheduler, each task's
+  state in a row, and an API pausing, running and rescheduling as each declaration allows (`scheduling` extra)
 - [django/apps/notifications/](django/apps/notifications/README.md) - notices written by a trigger in
   the changing transaction, fanned out to the inbox, email, webhooks and phones (`notifications` extra;
   `push` for phones)

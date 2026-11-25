@@ -852,6 +852,17 @@ push = [
     { name = "pyjwt", extra = ["crypto"] },
     { name = "whitenoise" },
 ]
+scheduling = [
+    { name = "celery" },
+    { name = "dalf" },
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "django-lifecycle" },
+    { name = "django-object-actions" },
+    { name = "django-pghistory" },
+    { name = "mjml-python" },
+    { name = "whitenoise" },
+]
 sentry = [
     { name = "sentry-sdk" },
 ]
@@ -906,6 +917,7 @@ requires-dist = [
     { name = "celery", marker = "extra == 'inbound'" },
     { name = "celery", marker = "extra == 'notifications'" },
     { name = "celery", marker = "extra == 'push'" },
+    { name = "celery", marker = "extra == 'scheduling'" },
     { name = "click", marker = "extra == 'all'", specifier = ">=8.1" },
     { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "dalf", marker = "extra == 'all'" },
@@ -915,6 +927,7 @@ requires-dist = [
     { name = "dalf", marker = "extra == 'inbound'" },
     { name = "dalf", marker = "extra == 'notifications'" },
     { name = "dalf", marker = "extra == 'push'" },
+    { name = "dalf", marker = "extra == 'scheduling'" },
     { name = "dalf", marker = "extra == 'sms'" },
     { name = "dalf", marker = "extra == 'sync'" },
     { name = "django", marker = "extra == 'all'" },
@@ -924,6 +937,7 @@ requires-dist = [
     { name = "django", marker = "extra == 'inbound'" },
     { name = "django", marker = "extra == 'notifications'" },
     { name = "django", marker = "extra == 'push'" },
+    { name = "django", marker = "extra == 'scheduling'" },
     { name = "django", marker = "extra == 'sms'" },
     { name = "django", marker = "extra == 'sync'" },
     { name = "django-filter", marker = "extra == 'all'" },
@@ -936,6 +950,7 @@ requires-dist = [
     { name = "django-lifecycle", marker = "extra == 'inbound'" },
     { name = "django-lifecycle", marker = "extra == 'notifications'" },
     { name = "django-lifecycle", marker = "extra == 'push'" },
+    { name = "django-lifecycle", marker = "extra == 'scheduling'" },
     { name = "django-lifecycle", marker = "extra == 'sms'" },
     { name = "django-lifecycle", marker = "extra == 'sync'" },
     { name = "django-object-actions", marker = "extra == 'all'" },
@@ -945,6 +960,7 @@ requires-dist = [
     { name = "django-object-actions", marker = "extra == 'inbound'" },
     { name = "django-object-actions", marker = "extra == 'notifications'" },
     { name = "django-object-actions", marker = "extra == 'push'" },
+    { name = "django-object-actions", marker = "extra == 'scheduling'" },
     { name = "django-object-actions", marker = "extra == 'sms'" },
     { name = "django-object-actions", marker = "extra == 'sync'" },
     { name = "django-pghistory", marker = "extra == 'all'" },
@@ -954,6 +970,7 @@ requires-dist = [
     { name = "django-pghistory", marker = "extra == 'inbound'" },
     { name = "django-pghistory", marker = "extra == 'notifications'" },
     { name = "django-pghistory", marker = "extra == 'push'" },
+    { name = "django-pghistory", marker = "extra == 'scheduling'" },
     { name = "django-pghistory", marker = "extra == 'sms'" },
     { name = "django-pghistory", marker = "extra == 'sync'" },
     { name = "djangorestframework", marker = "extra == 'all'" },
@@ -977,6 +994,7 @@ requires-dist = [
     { name = "mjml-python", marker = "extra == 'inbound'" },
     { name = "mjml-python", marker = "extra == 'notifications'" },
     { name = "mjml-python", marker = "extra == 'push'" },
+    { name = "mjml-python", marker = "extra == 'scheduling'" },
     { name = "mjml-python", marker = "extra == 'sms'" },
     { name = "mjml-python", marker = "extra == 'sync'" },
     { name = "prosemirror", marker = "extra == 'all'" },
@@ -994,10 +1012,11 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'inbound'" },
     { name = "whitenoise", marker = "extra == 'notifications'" },
     { name = "whitenoise", marker = "extra == 'push'" },
+    { name = "whitenoise", marker = "extra == 'scheduling'" },
     { name = "whitenoise", marker = "extra == 'sms'" },
     { name = "whitenoise", marker = "extra == 'sync'" },
 ]
-provides-extras = ["all", "celery", "cli", "django", "drf", "inbound", "notifications", "push", "sentry", "sms", "sync", "templated-fields", "tiptap"]
+provides-extras = ["all", "celery", "cli", "django", "drf", "inbound", "notifications", "push", "scheduling", "sentry", "sms", "sync", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [

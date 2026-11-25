@@ -627,9 +627,9 @@ def fan_out_warnings():
         return []
     return [
         _(
-            "Nothing starts a fan-out, so no notice is ever sent: merge beat_schedule() into the Celery app's beat, "
-            "add FanOutAfterWritesMiddleware, set FAN_OUT_AFTER_TASKS, or - when a cron or django-celery-beat "
-            "runs it - say so with FAN_OUT_BY=ScheduledElsewhere(reason=...)."
+            "Nothing starts a fan-out, so no notice is ever sent: merge_beat_schedule() into the Celery app, run "
+            "isik's scheduler, add FanOutAfterWritesMiddleware, set FAN_OUT_AFTER_TASKS, or - when a cron runs it - "
+            "say so with FAN_OUT_BY=ScheduledElsewhere(reason=...)."
         )
     ]
 

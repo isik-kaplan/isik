@@ -20,6 +20,7 @@ from isik.django.apps.common.db import conditions, constraints, documentation, n
 from isik.django.apps.common.db import history as db_history
 from isik.django.apps.common.db import models as db_models
 from isik.django.apps.common.db import triggers as db_triggers
+from isik.django.apps.common.db.history import EditableHistory
 from isik.django.apps.common.db.triggers import ProtectTruncate
 from isik.django.apps.common.project import project_app_configs
 from isik.django.conf import isik_areas
@@ -158,6 +159,8 @@ class TestTheSettings:
             "sync",
             "inbound",
             "accounts",
+            "append_only_history",
+            "scheduling",
         ]
         assert [option.value for option in CheckOption] == [
             "enabled",
@@ -236,7 +239,7 @@ class TestTheSettingsCheck:
             "Check.NOT_ATOMIC, Check.KEPT_FIELD_CONDITIONS, Check.NOTIFICATIONS, Check.TRUNCATE_PROTECTION, "
             "Check.LABELS, Check.FEATURES, Check.IDENTIFIERS, Check.DECLARED_NAMES, Check.META_INHERITANCE, "
             "Check.CONSTRAINT_MESSAGES, Check.SCOPED_KEYS, Check.CHOICE_RULES, Check.SYNC, Check.INBOUND, "
-            "Check.ACCOUNTS."
+            "Check.ACCOUNTS, Check.APPEND_ONLY_HISTORY, Check.SCHEDULING."
         ]
 
     def test_an_entry_not_a_dict(self, settings):
@@ -645,6 +648,78 @@ def test_the_documentation_check_hands_on_inherited_from_libraries(settings, mon
 
     assert seen == [True, False]
     assert checks.isik_checks_are_configured(None) == []
+
+
+class TestAppendOnlyHistory:
+    APPS = [types.SimpleNamespace(label="testapp")]
+
+    @staticmethod
+    def model(name, app_label="testapp", managed=True, proxy=False, tracked=True, **attrs):
+        meta = types.SimpleNamespace(app_label=app_label, managed=managed, proxy=proxy, label=f"{app_label}.{name}")
+        return type(name, (), {"_meta": meta, "pgh_tracked_model": object() if tracked else None, **attrs})
+
+    def problems(self, monkeypatch, models, *registered):
+        monkeypatch.setattr(db_history.apps, "get_models", lambda: models)
+        monkeypatch.setattr(db_history.pgtrigger, "registered", lambda: list(registered))
+        return db_history.history_append_only_problems(self.APPS)
+
+    @staticmethod
+    def trigger(name):
+        return types.SimpleNamespace(name=name)
+
+    def test_a_history_that_can_be_edited(self, monkeypatch):
+        events = self.model("WidgetEvent")
+
+        assert self.problems(monkeypatch, [events]) == [
+            "testapp.WidgetEvent's history can be edited - its table refuses no update, delete or TRUNCATE of its "
+            "events. Track it with track_events() or track_history(), or say why with "
+            "append_only=EditableHistory(reason=...)."
+        ]
+
+    @pytest.mark.parametrize("names", [("append_only",), ("protect_truncate",)])
+    def test_refusing_only_one_of_the_two(self, monkeypatch, names):
+        events = self.model("WidgetEvent")
+
+        assert len(self.problems(monkeypatch, [events], *((events, self.trigger(name)) for name in names))) == 1
+
+    def test_refusing_both(self, monkeypatch):
+        events = self.model("WidgetEvent")
+        both = [(events, self.trigger("append_only")), (events, self.trigger("protect_truncate"))]
+
+        assert self.problems(monkeypatch, [events], *both) == []
+
+    def test_another_tables_triggers_dont_count(self, monkeypatch):
+        events, other = self.model("WidgetEvent"), self.model("OtherEvent")
+        both = [(other, self.trigger("append_only")), (other, self.trigger("protect_truncate"))]
+
+        assert len(self.problems(monkeypatch, [events, other], *both)) == 1
+
+    def test_one_saying_why(self, monkeypatch):
+        why = EditableHistory(reason="Backfilled from the old system each night, rows corrected in place.")
+
+        assert self.problems(monkeypatch, [self.model("WidgetEvent", isik_editable_history=why)]) == []
+
+    @pytest.mark.parametrize(
+        "options",
+        [{"tracked": False}, {"app_label": "elsewhere"}, {"managed": False}, {"proxy": True}],
+        ids=["not-an-event-model", "another-app", "unmanaged", "proxy"],
+    )
+    def test_not_asked_of(self, monkeypatch, options):
+        assert self.problems(monkeypatch, [self.model("WidgetEvent", **options)]) == []
+
+    def test_the_test_project_has_none(self):
+        assert checks.every_history_is_append_only(app_configs=None) == []
+
+    def test_the_check_reports_them(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(db_history, "history_append_only_problems", lambda configs: seen.append(configs) or ["one"])
+
+        errors = checks.every_history_is_append_only(app_configs=None)
+
+        assert [(error.id, error.msg, error.hint) for error in errors] == [
+            ("isik.E030", "one", "See track_history() and EditableHistory (isik.django.apps.common.db).")
+        ]
+        assert [config.label for config in seen[0]] == ["testapp"]
 
 
 class TestTruncateProtection:

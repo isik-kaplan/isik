@@ -34,7 +34,7 @@ from tests.testapp.sync_views import TaskViewSet
 
 ALICE = "0190a000-0000-7000-8000-a00000000001"
 TASK = "0190a000-0000-7000-8000-100000000001"
-HEADERS = {"Isik-Sync-Protocol": "1"}
+HEADERS = {"Sync-Protocol": "1"}
 
 
 def created(key="k", number=1, **body):
@@ -320,7 +320,7 @@ class TestTheEndpoints:
     def test_name_their_protocol_on_every_answer(self, client):
         response = client.get("/sync/changes")
 
-        assert (response.status_code, response["Isik-Sync-Protocol"]) == (400, "1")
+        assert (response.status_code, response["Sync-Protocol"]) == (400, "1")
 
 
 def test_the_module_reads_its_backend_from_the_setting():

@@ -21,7 +21,9 @@ ISIK = {"DJANGO": {"ACCOUNTS": {
     "ERASURES": "users.erasures",                # the module registering the project's models
 }}}
 
-CELERY_BEAT_SCHEDULE = {**tasks.beat_schedule(every=3600)}    # isik.django.apps.accounts.tasks
+# celery.py - the sweep is the scheduled task isik.accounts.sweep_deletions, with no schedule of isik's
+override_scheduled_task("isik.accounts.sweep_deletions", every=timedelta(hours=1))   # isik.django.scheduling
+merge_beat_schedule(app)
 ```
 
 `DeletableAccount` adds two columns to the user model, `deletes_at` and `session_epoch`. `DELETION_AFTER` has no
@@ -48,8 +50,10 @@ user.is_pending_deletion
 - **Deleting** - `tasks.sweep_deletions` (or `deletion.sweep_deletions()`) deletes every account whose `deletes_at`
   has come; `deletion.delete_account(user)` deletes one now. Each in a transaction of its own.
 
-Signals (`isik.django.apps.accounts.signals`): `account_deletion_requested(user, deletes_at)`,
+Signals (`isik.django.apps.accounts.signals`): `account_deletion_requested(user, deletes_at, first)`,
 `account_deletion_cancelled(user)`, and `account_deleted(user_id)` once the deleting transaction commits.
+`account_deletion_requested` is sent on every request - each ends the person's sessions - with `first` True only for
+the one that set `deletes_at`: a mail saying "your account will be deleted" is sent when `first` is, once.
 
 ## Erase or anonymize
 

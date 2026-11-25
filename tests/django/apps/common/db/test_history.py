@@ -9,7 +9,7 @@ from django.db import connection, models
 from django.test import override_settings
 from django.test.utils import isolate_apps
 
-from isik.django.apps.common.db import APPEND_ONLY_TRIGGERS, track_events, track_history
+from isik.django.apps.common.db import APPEND_ONLY_TRIGGERS, EditableHistory, track_events, track_history
 from isik.django.apps.common.db import history as history_module
 from isik.django.apps.common.db.history import (
     ContextField,
@@ -448,28 +448,28 @@ class TestTrackEventsOptions:
         assert {"append_only", "protect_truncate"} <= self.triggers_of(track_events()(_fresh_model("AppendOnly")))
 
     @isolate_apps("tests.testapp")
-    def test_pghistorys_setting_turns_it_off(self, settings):
+    def test_pghistorys_setting_isnt_read(self, settings):
         settings.PGHISTORY_APPEND_ONLY = False
 
-        assert self.triggers_of(track_events()(_fresh_model("Editable"))).isdisjoint(
-            {"append_only", "protect_truncate"}
-        )
+        assert {"append_only", "protect_truncate"} <= self.triggers_of(track_events()(_fresh_model("StillKept")))
 
     @isolate_apps("tests.testapp")
-    def test_a_model_says_so_over_the_setting(self, settings):
-        settings.PGHISTORY_APPEND_ONLY = False
+    def test_an_editable_history_says_why(self):
+        editable = EditableHistory(reason="Backfilled from the old system, then sealed.")
 
-        assert {"append_only", "protect_truncate"} <= self.triggers_of(
-            track_events(append_only=True)(_fresh_model("Kept"))
-        )
+        tracked = track_events(append_only=editable)(_fresh_model("Loose"))
+
+        assert self.triggers_of(tracked).isdisjoint({"append_only", "protect_truncate"})
+        assert tracked.pgh_event_model.isik_editable_history is editable
 
     @isolate_apps("tests.testapp")
-    def test_a_model_says_no_over_the_default(self, settings):
-        if hasattr(settings, "PGHISTORY_APPEND_ONLY"):
-            del settings.PGHISTORY_APPEND_ONLY
+    @pytest.mark.parametrize("given", [False, True, "no"])
+    def test_anything_else_is_refused(self, given):
+        with pytest.raises(TypeError) as raised:
+            track_events(append_only=given)(_fresh_model(f"Refused{uuid.uuid4().hex[:8]}"))
 
-        assert self.triggers_of(track_events(append_only=False)(_fresh_model("Loose"))).isdisjoint(
-            {"append_only", "protect_truncate"}
+        assert str(raised.value) == (
+            "append_only takes EditableHistory(reason=...) - a history is append-only unless it says why it isn't."
         )
 
     @isolate_apps("tests.testapp")
@@ -643,7 +643,9 @@ class TestTrackHistory:
 
         with pytest.MonkeyPatch.context() as patching:
             patching.setattr(pghistory, "track", track)
-            track_history(append_only=False)(_fresh_model("Bare"))
+            track_history(
+                append_only=EditableHistory(reason="Rewritten by the nightly import, which corrects old rows in place.")
+            )(_fresh_model("Bare"))
 
         assert "meta" not in handed
         assert handed["append_only"] is False
@@ -665,11 +667,13 @@ class TestTrackHistory:
             )
 
     @isolate_apps("tests.testapp")
-    def test_append_only_turned_off(self, settings):
-        settings.PGHISTORY_APPEND_ONLY = False
+    def test_an_editable_history(self):
+        editable = EditableHistory(reason="Rewritten by the nightly import, which corrects old rows in place.")
 
-        assert self.triggers_of(track_history()(_fresh_model("Loose"))).isdisjoint(APPEND_ONLY_TRIGGERS)
-        assert set(APPEND_ONLY_TRIGGERS) <= self.triggers_of(track_history(append_only=True)(_fresh_model("Kept")))
+        assert self.triggers_of(track_history(append_only=editable)(_fresh_model("Loose"))).isdisjoint(
+            APPEND_ONLY_TRIGGERS
+        )
+        assert set(APPEND_ONLY_TRIGGERS) <= self.triggers_of(track_history()(_fresh_model("Kept")))
 
 
 class TestHistorySwappedWith:

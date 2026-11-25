@@ -52,8 +52,10 @@ def started_after_writes():
 
 
 def fan_out_scheduled():
-    """Whether the Celery app's beat runs `fan_out` - `beat_schedule()` merged into it."""
-    return any(entry["task"] == FAN_OUT_TASK for entry in (_celery_conf().beat_schedule or {}).values())
+    """Whether the Celery app's beat runs `fan_out` - its declaration merged into beat, or isik's scheduler running."""
+    from isik.django.scheduling import beat_runs
+
+    return beat_runs(FAN_OUT_TASK, _celery_conf())
 
 
 def runs_inline():

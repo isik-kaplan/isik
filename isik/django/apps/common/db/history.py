@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pghistory
 import pgtrigger
+from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
@@ -13,6 +14,7 @@ from pghistory.core import DeleteEvent, InsertEvent, UpdateEvent
 from pghistory.middleware import HistoryMiddleware
 
 from isik._internal.translation import gettext as _
+from isik.common.utils.exemptions import Exemption
 from isik.common.utils.sentinel import Sentinel
 from isik.django.apps.common.db.constraints import fitted_name
 from isik.django.apps.common.db.triggers import ProtectTruncate
@@ -203,6 +205,57 @@ def _refuse_colliding_context_fields(cls, context_fields, fields, exclude):
 # or a delete, and the ProtectTruncate beside it.
 APPEND_ONLY_TRIGGERS = ("append_only", "protect_truncate")
 
+# Where a history that can be edited keeps why, on its event model.
+EDITABLE_HISTORY = "isik_editable_history"
+
+
+class EditableHistory(
+    Exemption,
+    rule="isik.django.history.editable",
+    why=(
+        "A history whose events can be updated, deleted or truncated records what someone left there, not what "
+        "happened."
+    ),
+):
+    """Why a model's history can be edited - `track_history(append_only=EditableHistory(reason=...))`."""
+
+
+def _append_only(append_only):
+    """Whether a history is append-only: unless it's an `EditableHistory`, saying why not."""
+    if append_only is None:
+        return True
+    if isinstance(append_only, EditableHistory):
+        return False
+    raise TypeError(
+        _("append_only takes EditableHistory(reason=...) - a history is append-only unless it says why it isn't.")
+    )
+
+
+def history_append_only_problems(app_configs):
+    """
+    Each event model of `app_configs` - tracked by isik or by a bare `pghistory.track()` - whose table doesn't refuse
+    an update, a delete and a TRUNCATE of its events (`APPEND_ONLY_TRIGGERS`), and doesn't say why with an
+    `EditableHistory`. The system check `isik.E030` reports them.
+    """
+    labels = {config.label for config in app_configs}
+    triggers = {}
+    for model, trigger in pgtrigger.registered():
+        triggers.setdefault(model, set()).add(trigger.name)
+    return [
+        _(
+            "%(model)s's history can be edited - its table refuses no update, delete or TRUNCATE of its events. Track "
+            "it with track_events() or track_history(), or say why with append_only=EditableHistory(reason=...)."
+        )
+        % {"model": model._meta.label}
+        for model in apps.get_models()
+        if getattr(model, "pgh_tracked_model", None) is not None
+        and model._meta.app_label in labels
+        and model._meta.managed
+        and not model._meta.proxy
+        and getattr(model, EDITABLE_HISTORY, None) is None
+        and not set(APPEND_ONLY_TRIGGERS) <= triggers.get(model, set())
+    ]
+
 
 def track_history(*trackers, context_fields=(), append_only=None, **kwargs):
     """
@@ -218,10 +271,11 @@ def track_history(*trackers, context_fields=(), append_only=None, **kwargs):
     - `context_fields` - each a real, indexed column of the event table (`ContextField`). One named like a
       field the history tracks is refused: the event model would hold the context's value where the row's
       was.
-    - `append_only` - whether the event table refuses updates and deletes (pghistory's own option, its
-      trigger `append_only`) and a TRUNCATE (`ProtectTruncate`, `protect_truncate`) - both named in
-      `APPEND_ONLY_TRIGGERS`. Left out, pghistory's `PGHISTORY_APPEND_ONLY` decides where a project set
-      it, and it's on where not: a history that can be edited isn't one.
+    - `append_only` - the event table refuses updates and deletes (pghistory's own option, its trigger
+      `append_only`) and a TRUNCATE (`ProtectTruncate`, `protect_truncate`) - both named in
+      `APPEND_ONLY_TRIGGERS`. `EditableHistory(reason=...)` leaves them out, saying why - it's listed by
+      `manage.py exemptions`, and the event model carries it, which `isik.E030` reads. Nothing else does:
+      pghistory's `PGHISTORY_APPEND_ONLY` isn't read, a history that can be edited isn't one.
 
     The event model is marked as isik's (`generated_models("event")`).
     """
@@ -235,12 +289,12 @@ def track_history(*trackers, context_fields=(), append_only=None, **kwargs):
             options["attrs"] = {**attrs, **options.get("attrs", {})}
         if trigger:
             meta["triggers"] = [*meta.get("triggers", []), trigger]
-        options["append_only"] = (
-            getattr(settings, "PGHISTORY_APPEND_ONLY", True) if append_only is None else append_only
-        )
+        options["append_only"] = _append_only(append_only)
         if options["append_only"]:
             # pghistory's append_only refuses updates and deletes; a TRUNCATE would still empty the table at once.
             meta["triggers"] = [*meta.get("triggers", []), ProtectTruncate(name=APPEND_ONLY_TRIGGERS[1])]
+        else:
+            options["attrs"] = {**options.get("attrs", {}), EDITABLE_HISTORY: append_only}
         if meta:
             options["meta"] = meta
         tracked = pghistory.track(*trackers, **options)(cls)

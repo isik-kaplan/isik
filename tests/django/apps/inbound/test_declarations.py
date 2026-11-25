@@ -11,6 +11,7 @@ from isik.django.apps.inbound.checks import inbound_can_work, setting_problems, 
 from isik.django.apps.inbound.choices import PayloadKept
 from isik.django.apps.inbound.sources import (
     IsikSignature,
+    SharedSecret,
     Unidentified,
     declare_source,
     handler_for,
@@ -398,3 +399,48 @@ class TestTheSignature:
             self.signer().verify(self.request(**{"X-Sig": "t=1000,v1=abc=def"}))
 
         assert str(refused.value) == "X-Sig matches none of the source's secrets."
+
+
+class TestTheSharedSecret:
+    def request(self, **headers):
+        from django.test import RequestFactory
+
+        return RequestFactory().post("/in/x/", b"{}", content_type="application/json", headers=headers)
+
+    def verifier(self, secrets=None):
+        return SharedSecret(header="Authorization", secrets=secrets or (lambda request: ["", "old", "new"]))
+
+    def test_keeps_what_its_given(self):
+        secrets = lambda request: ["s"]  # noqa: E731
+        verifier = SharedSecret(header="X-Secret", secrets=secrets)
+
+        assert (verifier.header, verifier.secrets) == ("X-Secret", secrets)
+
+    @pytest.mark.parametrize("secret", ["old", "new"])
+    def test_any_of_its_secrets(self, secret):
+        self.verifier().verify(self.request(Authorization=secret))
+
+    def test_its_secrets_are_the_requests(self):
+        verifier = self.verifier(lambda request: [request.headers["X-Tenant"]])
+
+        verifier.verify(self.request(Authorization="tenant-secret", **{"X-Tenant": "tenant-secret"}))
+
+    @pytest.mark.parametrize("given", ["neither", "old ", "Bearer old"])
+    def test_another_value(self, given):
+        with pytest.raises(sources.Unverified) as refused:
+            self.verifier().verify(self.request(Authorization=given))
+
+        assert str(refused.value) == "Authorization matches none of the source's secrets."
+
+    def test_an_empty_secret_matches_nothing(self):
+        with pytest.raises(sources.Unverified):
+            self.verifier(lambda request: [""]).verify(self.request(Authorization=" "))
+
+    def test_none_sent(self):
+        with pytest.raises(sources.Unverified) as refused:
+            self.verifier().verify(self.request())
+
+        assert str(refused.value) == "The request carries no Authorization."
+
+    def test_a_value_outside_ascii(self):
+        self.verifier(lambda request: ["ş"]).verify(self.request(Authorization="ş"))

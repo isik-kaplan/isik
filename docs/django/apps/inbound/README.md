@@ -24,7 +24,9 @@ ISIK = {"DJANGO": {"INBOUND": {
 
 urlpatterns = [path("webhooks/", include(inbound_urls()))]   # isik.django.apps.inbound.views - POST /webhooks/<source>/
 
-CELERY_BEAT_SCHEDULE = {**tasks.beat_schedule(every=60)}       # isik.django.apps.inbound.tasks
+# celery.py - tasks.work is the scheduled task isik.inbound.work, with no schedule of isik's
+override_scheduled_task("isik.inbound.work", every=timedelta(minutes=1))   # isik.django.scheduling
+merge_beat_schedule(app)
 ```
 
 `BACKOFF` and `STRANDED_AFTER` have no default - an event can't be tried again or taken back without them, and
@@ -54,8 +56,10 @@ def invoice(event):
   is answered 401 and nothing is written. `IsikSignature` verifies isik's own webhook signature
   (`t=<time>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, see [channels](../notifications/channels.md#webhook)) - one isik
   project receiving another's webhooks - within `tolerance` of now, against any of `secrets(request)`, so a
-  secret being rotated out still verifies. Any other sender's scheme is a class of the project's own with a
-  `verify(request)`.
+  secret being rotated out still verifies. `SharedSecret(header=..., secrets=...)` verifies a sender sending a
+  secret as it is - the value set in its dashboard, in `Authorization`, say, as RevenueCat does: the header's whole
+  value against any of `secrets(request)`, in constant time. Any other sender's scheme is a class of the project's
+  own with a `verify(request)`.
 - **`event_id`** - f(request, payload) -> the sender's id for the event, which a resend repeats: one event is
   kept per source and id. A sender that names none is declared so, with a reason -
   `event_id=Unidentified(reason="...")` - and each of its requests is then written down and handled again; isik

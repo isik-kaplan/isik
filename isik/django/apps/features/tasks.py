@@ -1,6 +1,6 @@
 """
-The features app's Celery task - `sweep_boundaries`, for a project's beat: `merge_beat_schedule(app)`, from
-`isik.django.apps.features.schedule`, adds it.
+The features app's Celery task - `sweep_boundaries`, the scheduled task `isik.features.sweep`
+(`isik.django.scheduling`), every minute unless the project changes it.
 """
 
 from isik._internal import check_extra

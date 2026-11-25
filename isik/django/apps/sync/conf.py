@@ -14,6 +14,7 @@ system check, `isik.E027`.
 from django.utils.module_loading import import_string
 
 from isik.django.conf import django_area
+from isik.django.public_names import SYNC_PROTOCOL_HEADER
 
 
 DEFAULTS = {
@@ -34,6 +35,8 @@ DEFAULTS = {
     # The options every backend takes: MAX_ENTRIES and MAX_BYTES, the most entries and bytes one push holds,
     # and THROTTLE_SCOPE, the DRF throttle scope counting a person's entries - each None, none, unless set.
     "PUSH": {},
+    # The header every sync request and response names its protocol version in - a client sends the same.
+    "PROTOCOL_HEADER": SYNC_PROTOCOL_HEADER.default,
 }
 
 # The backend a push runs on when PUSH names none.

@@ -284,7 +284,7 @@ class TestIsikIsConfigured:
         assert self.messages() == [
             "ISIK names 'ZZZ', which isn't one of EXEMPTIONS, DJANGO.",
             "ISIK['DJANGO'] names 'QQQ', which isn't one of CHECKS, PRIMARY_KEY, SCHEMA_LANGUAGE, FEATURES, "
-            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, "
+            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, SCHEDULING, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, "
             "TEMPLATED_FIELDS.",
         ]
 
@@ -294,7 +294,7 @@ class TestIsikIsConfigured:
         assert self.messages() == [
             "ISIK names 'ZZZ', which isn't one of EXEMPTIONS, DJANGO.",
             "ISIK['DJANGO'] names 'QQQ', which isn't one of CHECKS, PRIMARY_KEY, SCHEMA_LANGUAGE, FEATURES, "
-            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, "
+            "NOTIFICATIONS, SMS, SYNC, INBOUND, ACCOUNTS, SCHEDULING, HISTORY, SESSIONS, IDEMPOTENCY, DRF, FEEDBACK, "
             "TEMPLATED_FIELDS.",
         ]
 

@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 
 from isik._internal.translation import gettext as _
 from isik.django.conf import django_setting
+from isik.django.public_names import DEAD_SESSION_HEADER
 
 
 class CookieORHeaderSessionMiddleware(SessionMiddleware):
@@ -39,11 +40,6 @@ class CookieORHeaderSessionMiddleware(SessionMiddleware):
             if cookie_session_key != header_session_key:
                 raise SuspiciousOperation(_("Session key mismatch"))
         return cookie_session_key or header_session_key
-
-
-# Where DeadSessionCookieMiddleware says the cookie was dead, unless ISIK['DJANGO']['SESSIONS']['DEAD_SESSION_HEADER']
-# names another.
-DEAD_SESSION_HEADER = "Session-Expired"
 
 
 def session_exists(session_key):
@@ -92,5 +88,5 @@ class DeadSessionCookieMiddleware:
                 domain=settings.SESSION_COOKIE_DOMAIN,
                 samesite=settings.SESSION_COOKIE_SAMESITE,
             )
-            response[django_setting("SESSIONS", "DEAD_SESSION_HEADER", DEAD_SESSION_HEADER)] = "true"
+            response[DEAD_SESSION_HEADER.value()] = "true"
         return response

@@ -4,45 +4,15 @@ Every exemption a Django project declares, by rule - what `manage.py exemptions`
 """
 
 import inspect
-from collections import Counter
-from dataclasses import dataclass
 from operator import attrgetter
 
 from django.urls import get_resolver
 
-from isik.common.utils.exemptions import (
-    TEST_CODE,
-    declared_exemptions,
-    exemption_types,
-    unimported_exemption_types,
-    unseen_exemption_calls,
-)
+from isik.common.utils.exemption_listing import ExemptionEntry, exemption_rules, typed_exemptions
+from isik.common.utils.exemptions import TEST_CODE, unimported_exemption_types, unseen_exemption_calls
 from isik.common.utils.strings import camel_to_snake
 from isik.django.apps.common.project import project_app_configs
 from isik.django.apps.common.urlconfs import project_urlconfs
-
-
-@dataclass(frozen=True)
-class ExemptionEntry:
-    """
-    One exemption: the rule it skips, what declared it, why, and where - `action` for a policy's own, and
-    `library` for one a library made for itself (`makes_own_exemptions()`).
-    """
-
-    rule: str
-    declared_by: str
-    reason: str
-    file: str | None
-    line: int | None
-    action: str | None = None
-    library: bool = False
-
-
-@dataclass(frozen=True)
-class ExemptionRule:
-    rule: str
-    why: str
-    count: int
 
 
 def policy_rule(policy):
@@ -94,21 +64,8 @@ def project_exemptions(urlconf=None, *, include_library=False):
     themselves are left out unless `include_library`.
     """
     _load_everything(urlconf)
-    typed = [
-        ExemptionEntry(
-            exemption.rule,
-            type(exemption).__qualname__,
-            exemption.reason,
-            exemption.file,
-            exemption.line,
-            library=exemption.library,
-        )
-        for exemption in declared_exemptions(include_library=include_library)
-        # A request policy's are listed under the policy, with the action each exempts - below.
-        if not exemption.listed_by_policy
-    ]
     policies, _ = _policy_entries(urlconf)
-    return sorted([*typed, *policies], key=attrgetter("rule"))
+    return sorted([*typed_exemptions(include_library=include_library), *policies], key=attrgetter("rule"))
 
 
 def project_exemption_rules(urlconf=None, *, include_library=False):
@@ -116,11 +73,8 @@ def project_exemption_rules(urlconf=None, *, include_library=False):
     Each rule the project can be exempted from, why it's there, and how many exemptions it has - with
     the libraries' own counted only when `include_library`.
     """
-    counts = Counter(entry.rule for entry in project_exemptions(urlconf, include_library=include_library))
-    whys = {rule: cls.why for rule, cls in exemption_types().items() if not cls.listed_by_policy}
-    for rule, policy in _policy_entries(urlconf)[1].items():
-        whys[rule] = _policy_why(policy)
-    return [ExemptionRule(rule, why, counts[rule]) for rule, why in sorted(whys.items())]
+    whys = {rule: _policy_why(policy) for rule, policy in _policy_entries(urlconf)[1].items()}
+    return exemption_rules(project_exemptions(urlconf, include_library=include_library), whys)
 
 
 def _policy_why(policy):

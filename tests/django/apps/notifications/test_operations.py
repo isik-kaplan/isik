@@ -1,16 +1,10 @@
 """manage.py notices, the tasks and their beat schedule, and the shared TRUNCATE protection."""
 
-import gc
 import json
-import os
-import subprocess
-import sys
-from datetime import timedelta
 from io import StringIO
 
 import pgtrigger
 import pytest
-from celery import Celery
 from django.core.management import CommandError, call_command
 from django.db import ProgrammingError, connection
 from django.test import TransactionTestCase
@@ -21,7 +15,7 @@ from isik.django.apps.common.db import (
     flushing_through_truncate_protection,
     truncate_protections,
 )
-from isik.django.apps.notifications import pipeline, schedule, tasks
+from isik.django.apps.notifications import pipeline, tasks
 from isik.django.apps.notifications.models import NoticeKindPolicy
 from isik.django.conf import isik_areas
 
@@ -141,65 +135,6 @@ class TestTheTasks:
             "isik.notifications.send",
             "isik.notifications.fan_out_shard",
         ]
-
-    def test_the_beat_schedule(self):
-        assert schedule.beat_schedule() == {
-            "isik.notifications.fan_out": {"task": "isik.notifications.fan_out", "schedule": timedelta(seconds=10)},
-            "isik.notifications.reap_stranded": {
-                "task": "isik.notifications.reap_stranded",
-                "schedule": timedelta(minutes=1),
-            },
-            "isik.notifications.prune_attempts": {
-                "task": "isik.notifications.prune_attempts",
-                "schedule": timedelta(hours=1),
-            },
-            "isik.notifications.prune_notices": {
-                "task": "isik.notifications.prune_notices",
-                "schedule": timedelta(hours=1),
-            },
-        }
-        assert schedule.beat_schedule(fan_out_every=1)["isik.notifications.fan_out"]["schedule"] == 1
-
-    def test_the_beat_schedule_names_the_tasks(self):
-        named = {entry["task"] for entry in schedule.beat_schedule().values()}
-
-        assert named == {
-            task.name for task in (tasks.fan_out, tasks.reap_stranded, tasks.prune_attempts, tasks.prune_notices)
-        }
-
-    def test_its_merged_once_the_app_is_configured(self):
-        app = Celery("merging", set_as_current=False)
-        app.conf.beat_schedule = {"renew": {"task": "app.renew", "schedule": 60}}
-
-        schedule.merge_beat_schedule(app, fan_out_every=5)
-        assert app.configured is False
-        gc.collect()
-
-        merged = app.conf.beat_schedule
-        assert merged == {"renew": {"task": "app.renew", "schedule": 60}, **schedule.beat_schedule(fan_out_every=5)}
-
-    def test_its_merged_into_an_app_with_no_schedule_of_its_own(self):
-        app = Celery("merging", set_as_current=False)
-
-        schedule.merge_beat_schedule(app)
-
-        assert app.conf.beat_schedule == schedule.beat_schedule()
-
-    def test_the_beat_schedule_is_imported_before_django_is_set_up(self):
-        # What a project's celery.py does - before django.setup(), with no settings at all.
-        run = subprocess.run(
-            [
-                sys.executable,
-                "-I",
-                "-c",
-                "from isik.django.apps.notifications.schedule import beat_schedule; beat_schedule()",
-            ],
-            capture_output=True,
-            text=True,
-            env={key: value for key, value in os.environ.items() if key != "DJANGO_SETTINGS_MODULE"},
-        )
-
-        assert run.returncode == 0, run.stderr
 
 
 class TestTruncateProtection:
