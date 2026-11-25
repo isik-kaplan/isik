@@ -315,3 +315,17 @@ class TestWhatBeatRuns:
         installed(ACCOUNTS)
 
         assert beat_runs("isik.accounts.sweep_deletions", self.conf(scheduler=SCHEDULER)) is False
+
+
+def test_isiks_own_task_built():
+    assert scheduling._isik_task("isik.x", timedelta(seconds=3)) == ScheduledTask(
+        "isik.x", "isik.x", every=timedelta(seconds=3)
+    )
+    assert scheduling._isik_task("isik.y") == ScheduledTask("isik.y", "isik.y")
+
+
+def test_a_schedule_given_drops_the_other_kind(fresh):
+    override_scheduled_task("isik.features.sweep", paused=True)
+    override_scheduled_task("isik.features.sweep", crontab="0 3 * * *")
+
+    assert scheduling.overrides == {"isik.features.sweep": {"paused": True, "every": None, "crontab": "0 3 * * *"}}

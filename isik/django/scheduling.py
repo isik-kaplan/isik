@@ -59,7 +59,7 @@ def crontab_fields(expression):
             _("%(crontab)r isn't a crontab - it takes five fields: minute hour day-of-month month day-of-week.")
             % {"crontab": expression}
         )
-    return dict(zip(CRONTAB_FIELDS, values, strict=True))
+    return {field: values[at] for at, field in enumerate(CRONTAB_FIELDS)}
 
 
 def celery_schedule(every, crontab):
@@ -159,10 +159,8 @@ def override_scheduled_task(name, **changes):
     may do, `on_restart`. A schedule given replaces the other kind - `crontab=` drops an `every`.
     """
     _checked_schedule(changes.get("every"), changes.get("crontab"))
-    if "every" in changes:
-        changes.setdefault("crontab", None)
-    if "crontab" in changes:
-        changes.setdefault("every", None)
+    if "every" in changes or "crontab" in changes:
+        changes = {"every": None, "crontab": None, **changes}
     overrides[name] = {**overrides.get(name, {}), **changes}
 
 

@@ -164,3 +164,24 @@ def test_a_public_name_is_frozen():
 
     with pytest.raises(AttributeError):
         name.default = "e"
+
+
+class TestInUseAsBuilt:
+    # Each in_use is built as its module is imported - these build them here.
+    @pytest.mark.parametrize(
+        ("middleware", "used"),
+        [
+            ([HISTORY], True),
+            (["tests.django.test_public_names.OwnHistory"], True),
+            ([DEAD_SESSIONS], False),
+            ([], False),
+        ],
+    )
+    def test_a_middlewares(self, settings, middleware, used):
+        settings.MIDDLEWARE = middleware
+
+        assert module._middleware_installed(HISTORY)() is used
+
+    def test_an_apps(self):
+        assert module._app_installed("isik.django.apps.sync")() is True
+        assert module._app_installed("isik.django.apps.nothing")() is False

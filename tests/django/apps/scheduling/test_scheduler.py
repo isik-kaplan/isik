@@ -166,3 +166,21 @@ class TestRefused:
             Scheduler(app=current_app)
 
         assert get_task_state_model()._default_manager.get(name=CLEANUP).paused is True
+
+
+class TestEachEntry:
+    def test_its_name_args_and_options(self, started, changed):
+        changed(CLEANUP, args=(1,), options={"queue": "slow"})
+        started._read()
+
+        entry = started.schedule[CLEANUP]
+        assert (entry.name, entry.args, entry.options) == (CLEANUP, (1,), {"queue": "slow"})
+
+    def test_a_paused_one_skips_only_itself(self, started):
+        first = next(iter(declared_tasks()))
+        state.set_on_restart(CLEANUP, state.Source.DATABASE)
+        get_task_state_model()._default_manager.filter(name=first).update(paused=True)
+        started._read()
+
+        assert first not in started.schedule
+        assert set(started.schedule) == set(declared_tasks()) - {first}

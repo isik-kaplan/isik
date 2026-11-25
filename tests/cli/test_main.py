@@ -163,3 +163,68 @@ def test_nothing_to_list_writes_nothing(capsys):
     main.emit("", [], None)
 
     assert capsys.readouterr() == ("", "")
+
+
+class TestWhatsHandedOn:
+    def test_the_settings_named_load_django(self, no_django, monkeypatch):
+        from isik.django.apps.common.management.commands import exemptions as command
+
+        seen = []
+        monkeypatch.setattr(
+            command, "django_report", lambda *args, **options: seen.append((args, options)) or ("", [], None)
+        )
+
+        code, _out, _err = run(
+            "exemptions", "--settings", "tests.django_settings", "--urlconf", "a.urls", "--include-library"
+        )
+
+        assert code == 0
+        assert seen == [((["a.urls"], True), {"rule": None, "rules_only": False, "format": "text"})]
+
+    def test_no_urlconf_named_is_every_one_served(self, monkeypatch):
+        from isik.django.apps.common.management.commands import exemptions as command
+
+        seen = []
+        monkeypatch.setenv(main.SETTINGS, "tests.django_settings")
+        monkeypatch.setattr(command, "django_report", lambda *args, **options: seen.append(args) or ("", [], None))
+
+        run("exemptions")
+
+        assert seen == [(None, False)]
+
+    def test_without_django_its_options(self, no_django, monkeypatch):
+        seen = []
+        monkeypatch.setattr(
+            main, "plain_report", lambda *args, **options: seen.append((args, options)) or ("", [], None)
+        )
+
+        run("exemptions", "--import", PROJECT, "--path", SCANNED, "--include-library", "--rules", "--format", "json")
+
+        assert seen == [(((PROJECT,), (SCANNED,), True), {"rule": None, "rules_only": True, "format": "json"})]
+
+    def test_the_librarys_own_reach_the_listing(self, no_django, monkeypatch):
+        asked = []
+        monkeypatch.setattr(main, "typed_exemptions", lambda include_library: asked.append(include_library) or [])
+
+        main.plain_report([], [SCANNED], True, rule=None, rules_only=False, format="text")
+        main.plain_report([], [SCANNED], False, rule=None, rules_only=True, format="text")
+
+        assert asked == [True, False]
+
+    def test_public_names_options(self, no_django, monkeypatch):
+        from isik.django.apps.common.management.commands import public_names as command
+
+        seen = []
+        monkeypatch.setattr(command, "chosen_public_names", lambda **options: seen.append(options) or [])
+        monkeypatch.setattr(
+            "isik.django.public_names.public_names_listing", lambda names, format: seen.append(format) or ""
+        )
+
+        run("check", "public_names", "--settings", "tests.django_settings", "--defaults", "--format", "json")
+
+        assert seen == [{"defaults": True, "every": False}, "json"]
+
+    def test_json_is_indented_by_two(self, no_django):
+        _code, out, _err = run("exemptions", "--import", PROJECT, "--path", SCANNED, "--format", "json")
+
+        assert out == json.dumps(json.loads(out), indent=2) + "\n"

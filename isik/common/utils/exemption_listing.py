@@ -37,7 +37,7 @@ class ExemptionRule:
     count: int
 
 
-def typed_exemptions(*, include_library=False):
+def typed_exemptions(*, include_library):
     """Every exemption made so far through an exemption type - a request policy's are its own - by rule."""
     return sorted(
         (
@@ -152,7 +152,7 @@ def incomplete(unseen, unimported):
     }
 
 
-def report(entries, rules, unseen, unimported, *, rule=None, rules_only=False, format="text"):
+def report(entries, rules, unseen, unimported, *, rule, rules_only, format):
     """
     `(out, problems, failure)` for a listing: of `rules` alone when `rules_only`, else of `entries` - only `rule`'s
     when given, one of `rules` or `UnknownRule` - with a line for each of `unseen` and `unimported`, and `failure`

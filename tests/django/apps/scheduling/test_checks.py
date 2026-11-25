@@ -126,7 +126,7 @@ class TestTheCommand:
         assert lines[CLEANUP].split(None, 1)[1] == (
             "0 3 * * *, paused  view, pause, run_now, reschedule, switch_on_restart"
         )
-        assert lines["isik.features.sweep"].split(None, 1)[1].startswith("0:01:00")
+        assert lines["isik.features.sweep"].split()[1:] == ["0:01:00", "view,", "pause"]
         assert err == ""
 
     def test_rows_no_longer_declared(self, rows):
@@ -153,3 +153,68 @@ class TestTheCommand:
         out, _err = self.run()
 
         assert out == ""
+
+
+class TestBuiltAtImport:
+    # What runs as the app loads - built again here, where a mutant of it can be seen.
+    def test_ready_reconciles_after_its_own_migrate(self, monkeypatch):
+        from django.apps import apps
+
+        from isik.django.apps.scheduling import apps as module
+
+        connected = []
+        monkeypatch.setattr(module.post_migrate, "connect", lambda *args, **kwargs: connected.append((args, kwargs)))
+        config = apps.get_app_config("isik_scheduling")
+
+        config.ready()
+
+        assert connected == [
+            ((module.reconcile_after_migrating,), {"sender": config, "dispatch_uid": "isik_scheduling_reconcile"})
+        ]
+
+    def test_ready_imports_the_projects_tasks(self, monkeypatch):
+        from django.apps import apps
+
+        from isik.django import scheduling
+
+        imported = []
+        monkeypatch.setattr(scheduling, "import_tasks_module", lambda: imported.append(True))
+
+        apps.get_app_config("isik_scheduling").ready()
+
+        assert imported == [True]
+
+    def test_the_drf_exemptions(self):
+        from isik.django.apps.scheduling import drf
+
+        own = drf._own_exemptions()
+
+        assert {name: exemption.reason for name, exemption in own.items()} == {
+            "state": "sets the task to the state it names - paused, resumed, reset - so two staff racing agree",
+            "run": "sends the task, changing nothing staff set - when it last ran is only a stamp",
+        }
+        assert drf.ScheduledTaskViewSet.precondition_exempt_actions == {
+            "pause": drf._EXEMPT["state"],
+            "resume": drf._EXEMPT["state"],
+            "reset": drf._EXEMPT["state"],
+            "reset_at_restart": drf._EXEMPT["state"],
+            "run": drf._EXEMPT["run"],
+        }
+
+
+def test_a_setting_that_isnt_a_dict(settings):
+    from isik.django.apps.scheduling import conf
+
+    isik_areas(settings).SCHEDULING = "nonsense"
+
+    assert conf.configured() == {}
+
+
+def test_the_commands_options():
+    from isik.django.apps.scheduling.management.commands import scheduled_tasks
+
+    parser = scheduled_tasks.Command().create_parser("manage.py", "scheduled_tasks")
+    actions = {action.dest: action for action in parser._actions}
+
+    assert actions["prune"].help == "Delete the rows of tasks no longer declared."
+    assert (actions["prune"].default, actions["prune"].const) == (False, True)

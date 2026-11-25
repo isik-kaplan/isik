@@ -706,3 +706,25 @@ class TestHistorySwappedWith:
         # Keyed again with nothing cached to forget - as before anything asked what it's keyed to.
         key_to(event, "another")
         assert key.remote_field.model == "another"
+
+
+@isolate_apps("tests.testapp")
+def test_an_editable_history_keeps_its_other_attrs():
+    editable = EditableHistory(reason="Rewritten by the nightly import, which corrects old rows in place.")
+
+    tracked = track_history(
+        append_only=editable, context_fields=[ContextField("actor", field=models.IntegerField(null=True))]
+    )(_fresh_model("EditableWithContext"))
+
+    events = tracked.pgh_event_model
+    assert events.isik_editable_history is editable
+    assert "actor" in {field.name for field in events._meta.fields}
+
+
+@isolate_apps("tests.testapp")
+def test_an_editable_history_keeps_attrs_it_was_given():
+    editable = EditableHistory(reason="Rewritten by the nightly import, which corrects old rows in place.")
+
+    tracked = track_history(append_only=editable, attrs={"marker": "kept"})(_fresh_model("EditableWithAttrs"))
+
+    assert (tracked.pgh_event_model.marker, tracked.pgh_event_model.isik_editable_history) == ("kept", editable)

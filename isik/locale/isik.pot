@@ -1039,7 +1039,7 @@ msgstr ""
 msgid "%(name)s is forced, so it can't be changed."
 msgstr ""
 
-#: isik/django/scheduling.py:192
+#: isik/django/scheduling.py:190
 #, python-format
 msgid "%(name)s is isik's own scheduled task - change it with override_scheduled_task()."
 msgstr ""
@@ -2695,7 +2695,7 @@ msgstr ""
 msgid "No question used the answers for %(keys)s."
 msgstr ""
 
-#: isik/django/scheduling.py:197
+#: isik/django/scheduling.py:195
 #, python-format
 msgid "No scheduled task called %(name)s is declared to change."
 msgstr ""
