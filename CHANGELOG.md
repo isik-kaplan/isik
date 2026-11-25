@@ -19,11 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `isik.django.apps.scheduling` (`isik[scheduling]`) - staff controls over them: each task's state in a row of a
   swappable, history-tracked model (`AbstractScheduledTaskState`); isik's beat scheduler
   (`isik.django.apps.scheduling.scheduler:Scheduler`) running the tasks as declarations and rows say, read again
-  every `beat_max_loop_interval`; `migrate` and each start reconciling the rows - a restart mode the code no longer
+  every `beat_max_loop_interval`, each task's last run kept on its row so a restart keeps its clock; `migrate` and
+  each start reconciling the rows - a restart mode the code no longer
   lets staff choose set back, loudly, and at a start a `CODE` task's schedule and pause; `ScheduledTaskViewSet` -
   pause, resume, run now, reschedule, switch the restart mode, reset now or at the next start, each as the task's
   `staff_may` and `source_editable` allow, and a 403 `not_allowed_by_declaration` otherwise; `manage.py
   scheduled_tasks`, listing them and pruning rows nothing declares. `isik.E031`.
+- `BOOKKEEPING_FIELDS` on a `DatabaseTimestampsModel` or `VersionedModel`: columns whose writes aren't a change to
+  the row, moving neither `updated_at` nor `version` - and so neither the ETag nor a history leaving them out.
+  `bookkeeping_fields(model)` names them.
 - `isik.E030` (`Check.APPEND_ONLY_HISTORY`) - an event model of the project's, tracked by isik or a bare
   `pghistory.track()`, whose table doesn't refuse an update, a delete and a TRUNCATE of its events.
   `append_only=EditableHistory(reason=...)` says why one may be edited.
@@ -37,12 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The sync protocol's header is `Sync-Protocol`, not `Isik-Sync-Protocol` - `@isikk/core` 0.28.0 sends it.
+- The sync protocol's header is `Sync-Protocol`, not `Isik-Sync-Protocol` - `@isikk/core` 0.28.0 sends it. A
+  project serving the sync app pairs with 0.28.0; one that doesn't is unaffected.
 - `track_history()`/`track_events()` take `append_only=EditableHistory(reason=...)` alone: a bare `False` or `True`
   is a TypeError, and `PGHISTORY_APPEND_ONLY` isn't read - a history is append-only unless it says why not.
 - The beat helpers are `isik.django.scheduling`'s: `features.schedule`, `notifications.schedule`, and the accounts'
   and inbound's `tasks.beat_schedule()` are gone - `merge_beat_schedule(app)` merges every app's, and
-  `override_scheduled_task()` changes a schedule.
+  `override_scheduled_task()` changes a schedule. A schedule a project passed the old helpers (`sweep_every=`,
+  `every=`) doesn't carry over: each declared task runs at isik's declared schedule - the features sweep and
+  `reap_stranded` every minute, `fan_out` every 10 seconds, the prunes hourly - until the project overrides it,
+  `override_scheduled_task("isik.features.sweep", every=timedelta(hours=1))`. `declared_tasks()` says what each one
+  runs at.
 - `manage.py exemptions` prints through `isik.common.utils.exemption_listing`, shared with `isik exemptions`.
 - Translating leaves Django's settings unloaded until something else loads them - a message before then is
   translated by stdlib gettext.

@@ -6,6 +6,7 @@ import pytest
 from celery import current_app
 from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
+from django.utils import timezone
 
 from isik.django.apps.scheduling import scheduler as module
 from isik.django.apps.scheduling import state
@@ -166,6 +167,58 @@ class TestRefused:
             Scheduler(app=current_app)
 
         assert get_task_state_model()._default_manager.get(name=CLEANUP).paused is True
+
+
+class TestItsLastRuns:
+    """Each task's last run, kept on its row - so a restart keeps its clock."""
+
+    def test_each_run_written_to_its_row(self, started):
+        entry = started.schedule[SWEEP]
+
+        new = started.reserve(entry)
+
+        assert new.last_run_at is not None
+        assert row_of(SWEEP).last_run_at == new.last_run_at
+        assert started.schedule[SWEEP] is new
+        assert row_of(CLEANUP).last_run_at is None
+
+    def test_a_write_moves_neither_its_etag_nor_its_history(self, started):
+        before = row_of(SWEEP)
+        events = get_task_state_model().pgh_event_model.objects.count()
+
+        started.reserve(started.schedule[SWEEP])
+
+        assert row_of(SWEEP).updated_at == before.updated_at
+        assert get_task_state_model().pgh_event_model.objects.count() == events
+
+    def test_a_start_reads_them_back(self, rows, clock, monkeypatch):
+        ran = timezone.now() - timedelta(hours=5)
+        get_task_state_model()._default_manager.filter(name=SWEEP).update(last_run_at=ran)
+        monkeypatch.setattr(current_app.conf, "beat_schedule", {})
+
+        assert Scheduler(app=current_app, max_interval=60).schedule[SWEEP].last_run_at == ran
+
+    def test_one_never_run_starts_now(self, started):
+        assert started.schedule[CLEANUP].last_run_at is not None
+
+    def test_a_resumed_one_reads_its_row(self, started, clock):
+        ran = timezone.now() - timedelta(days=2)
+        state.pause(CLEANUP)
+        clock["at"] += 60
+        assert CLEANUP not in started.schedule
+        get_task_state_model()._default_manager.filter(name=CLEANUP).update(last_run_at=ran)
+        state.resume(CLEANUP)
+        clock["at"] += 60
+
+        assert started.schedule[CLEANUP].last_run_at == ran
+
+    def test_old_connections_are_closed_before_writing(self, started, monkeypatch):
+        closed = []
+        monkeypatch.setattr(module, "close_old_connections", lambda: closed.append(True))
+
+        started.reserve(started.data[SWEEP])
+
+        assert closed == [True]
 
 
 class TestEachEntry:

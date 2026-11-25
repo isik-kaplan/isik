@@ -90,6 +90,65 @@ def test_the_kept_fields_are_named_as_the_trigger_is_made_not_as_it_is_rendered(
     assert base_models._version_triggers(VersionedWidget)[0].kept == ("version", "updated_at")
 
 
+class TestBookkeepingFields:
+    """A model's BOOKKEEPING_FIELDS: columns whose writes aren't a change to the row."""
+
+    def test_none_by_default(self):
+        assert base_models.bookkeeping_fields(TimestampedNote) == ()
+
+    def test_a_models_own(self, monkeypatch):
+        monkeypatch.setattr(TimestampedNote, "BOOKKEEPING_FIELDS", ["text"], raising=False)
+
+        assert base_models.bookkeeping_fields(TimestampedNote) == ("text",)
+
+    def test_left_out_of_what_moves_updated_at(self, monkeypatch):
+        monkeypatch.setattr(TimestampedNote, "BOOKKEEPING_FIELDS", ("text",), raising=False)
+
+        _, stamp_updated_at = base_models._timestamp_triggers(TimestampedNote)
+
+        assert stamp_updated_at.bookkeeping == ("text",)
+        assert stamp_updated_at.get_func(TimestampedNote) == (
+            'IF ((OLD."created_at" IS DISTINCT FROM (NEW."created_at") OR OLD."id" IS DISTINCT FROM (NEW."id"))) OR '
+            'NEW."updated_at" > OLD."updated_at" THEN '
+            'NEW."updated_at" = GREATEST(clock_timestamp(), OLD."updated_at" + interval \'1 microsecond\'); '
+            'ELSE NEW."updated_at" = OLD."updated_at"; END IF; RETURN NEW;'
+        )
+
+    def test_left_out_of_what_moves_the_version(self, monkeypatch):
+        monkeypatch.setattr(VersionedNote, "BOOKKEEPING_FIELDS", ("text",), raising=False)
+
+        (bump_version,) = base_models._version_triggers(VersionedNote)
+
+        assert bump_version.bookkeeping == ("text",)
+        assert '"text"' not in bump_version.get_func(VersionedNote)
+
+    @pytest.mark.parametrize("name", ["updated_at", "version"])
+    def test_a_database_kept_one_refused(self, monkeypatch, name):
+        monkeypatch.setattr(VersionedWidget, "BOOKKEEPING_FIELDS", ("name", name), raising=False)
+
+        with pytest.raises(ImproperlyConfigured) as refused:
+            base_models.bookkeeping_fields(VersionedWidget)
+
+        assert str(refused.value) == (
+            f"testapp.VersionedWidget.BOOKKEEPING_FIELDS names {name} - a bookkeeping field is a column of the "
+            "model's own, and no database-kept one."
+        )
+
+    def test_one_that_isnt_a_column_refused(self, monkeypatch):
+        from tests.testapp.models import TaggedWidget
+
+        monkeypatch.setattr(TaggedWidget, "BOOKKEEPING_FIELDS", ("tags",), raising=False)
+
+        with pytest.raises(ImproperlyConfigured, match="names tags"):
+            base_models.bookkeeping_fields(TaggedWidget)
+
+    def test_one_the_model_doesnt_have_refused(self, monkeypatch):
+        monkeypatch.setattr(TimestampedNote, "BOOKKEEPING_FIELDS", ("text", "nothing"), raising=False)
+
+        with pytest.raises(ImproperlyConfigured, match="names nothing"):
+            base_models.bookkeeping_fields(TimestampedNote)
+
+
 def test_updated_at_moves_on_by_a_microsecond_when_the_clock_is_behind_it():
     """A clock stepping back, or two writes in one microsecond, mustn't leave it where it was - it's a
     concurrency token."""

@@ -74,7 +74,14 @@ schedule of the Celery app's own beside it is refused at its start, as is a decl
 doesn't exist. Each task's row says what staff did to it: `paused`, the schedule they gave it (`every` or
 `crontab`, both null for the declaration's), the restart mode they chose (`on_restart`, null for the
 declaration's), and when they last ran it by hand. The scheduler reads the rows again every
-`beat_max_loop_interval`, so what staff change reaches beat within it.
+`beat_max_loop_interval` (Celery's `CELERY_BEAT_MAX_LOOP_INTERVAL`), so what staff change reaches beat within it -
+the project sets how soon.
+
+Beat writes each task's last run to its row (`last_run_at`) as it sends it, and a scheduler start reads it back, so
+a restart keeps every task's clock: an interval task runs an interval after its last run, not after the restart,
+and one that came due while beat was down runs once at the start. `last_run_at` is a bookkeeping field of the row
+(`BOOKKEEPING_FIELDS`, see [models](../common/db/models.md#bookkeeping-fields)) - writing it moves neither the
+row's `ETag` nor its history.
 
 `migrate`, and each scheduler start, reconcile the rows: every declared task gets its row, seeded from its
 declaration, and a restart mode staff chose where the code no longer lets them (`source_editable` turned off) is
@@ -112,7 +119,8 @@ Each task answers with:
   "saved": {"every": 3600, "crontab": null, "paused": false, "on_restart": null},
   "effective": {"every": 3600, "crontab": null, "paused": false, "on_restart": "code"},
   "may": ["view", "pause", "run_now"],
-  "run_by_hand_at": null
+  "run_by_hand_at": null,
+  "last_run_at": "2026-11-25T03:00:00.004Z"
 }
 ```
 
@@ -122,7 +130,7 @@ task whose declaration says `source_editable`.
 ## Owning the model
 
 ```python
-@track_events()
+@track_events(exclude=["last_run_at"])
 class ScheduledTaskState(AbstractScheduledTaskState):       # isik.django.apps.scheduling.bases
     class Meta(AbstractScheduledTaskState.Meta):
         db_table = "scheduled_task_state"
@@ -130,4 +138,5 @@ class ScheduledTaskState(AbstractScheduledTaskState):       # isik.django.apps.s
 ISIK = {"DJANGO": {"SCHEDULING": {"TASK_MODEL": "ops.ScheduledTaskState"}}}
 ```
 
-Its history is what says who paused, rescheduled or ran a task - `isik.E031` asks for it.
+Its history is what says who paused, rescheduled or ran a task - `isik.E031` asks for it, leaving out
+`last_run_at`, which beat writes at every run.

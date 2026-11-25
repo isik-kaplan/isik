@@ -51,13 +51,25 @@ def declaration_problems():
 
 
 def history_problems():
-    """Whether the task state model keeps a history - what says who paused, rescheduled or ran a task."""
+    """
+    Whether the task state model keeps a history - what says who paused, rescheduled or ran a task - and one
+    leaving out `last_run_at`, which beat writes at every run.
+    """
     model = get_task_state_model()
-    if getattr(model, "pgh_event_model", None) is None:
+    event = getattr(model, "pgh_event_model", None)
+    if event is None:
         return [
             _(
                 "%(model)s has no history - it says who paused, rescheduled or ran a task. Track it with "
-                "@track_events()."
+                '@track_events(exclude=["last_run_at"]).'
+            )
+            % {"model": model._meta.label}
+        ]
+    if any(field.name == "last_run_at" for field in event._meta.fields):
+        return [
+            _(
+                "%(model)s's history records last_run_at, which beat writes at every run - an event per run. Track "
+                'it with @track_events(exclude=["last_run_at"]).'
             )
             % {"model": model._meta.label}
         ]

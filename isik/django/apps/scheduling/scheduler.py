@@ -1,9 +1,9 @@
 """
 isik's beat scheduler - `CELERY_BEAT_SCHEDULER = "isik.django.apps.scheduling.scheduler:Scheduler"`. Its schedule is
 the declared tasks, each as its row says - paused ones left out - read again every `beat_max_loop_interval`, so what
-staff change reaches beat within it. At its start it reconciles the rows (`state.reconcile(restart=True)`), and
-refuses a beat schedule of the Celery app's own beside the declarations, and a declaration naming a task Celery
-doesn't have.
+staff change reaches beat within it. Each task's last run is kept on its row, so a restart keeps its clock. At its
+start it reconciles the rows (`state.reconcile(restart=True)`), and refuses a beat schedule of the Celery app's own
+beside the declarations, and a declaration naming a task Celery doesn't have.
 """
 
 import time
@@ -19,6 +19,7 @@ from django.db import close_old_connections  # noqa: E402
 
 from isik._internal.translation import gettext as _  # noqa: E402
 from isik.django.apps.scheduling import state  # noqa: E402
+from isik.django.apps.scheduling.swapping import get_task_state_model  # noqa: E402
 from isik.django.scheduling import declared_tasks  # noqa: E402
 
 
@@ -45,13 +46,24 @@ class Scheduler(beat.Scheduler):
                 _("Scheduled tasks name Celery tasks that don't exist: %(tasks)s.") % {"tasks": ", ".join(unknown)}
             )
 
+    def reserve(self, entry):
+        """The entry's next run, as Celery's - with its last run written to its row, for a restart to read back."""
+        new = super().reserve(entry)
+        close_old_connections()
+        get_task_state_model()._default_manager.filter(name=new.name).update(last_run_at=new.last_run_at)
+        return new
+
     def _read(self):
-        """The schedule, as the declarations and the rows say now - each entry's last run kept."""
+        """
+        The schedule, as the declarations and the rows say now - each entry's last run kept, and at a start read
+        from its row.
+        """
         close_old_connections()
         saved = state.rows()
         entries = {}
         for name, task in declared_tasks().items():
-            current = state.effective_state(task, saved.get(name))
+            row = saved[name]
+            current = state.effective_state(task, row)
             if current.paused or current.schedule is None:
                 continue
             previous = self.data.get(name)
@@ -62,7 +74,7 @@ class Scheduler(beat.Scheduler):
                 args=task.args,
                 kwargs=task.kwargs,
                 options=task.options,
-                last_run_at=previous.last_run_at if previous is not None else None,
+                last_run_at=previous.last_run_at if previous is not None else row.last_run_at,
                 app=self.app,
             )
         self.data = entries

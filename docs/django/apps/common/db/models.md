@@ -79,6 +79,22 @@ touch_rows(Invoice.objects.filter(pk=invoice.pk))   # returns the number of rows
 A trigger of the project's own whose condition compares columns should leave the kept fields out - see
 [conditions](conditions.md).
 
+### Bookkeeping fields
+
+A model's `BOOKKEEPING_FIELDS` are columns whose writes aren't a change to the row - a last run, a last seen. The
+triggers leave them out of what they compare, so a write to them alone leaves `updated_at` and `version` where
+they were: the ETag stays put, and a history leaving them out of its events records nothing.
+
+```python
+class Device(BaseModel):
+    BOOKKEEPING_FIELDS = ("last_seen_at",)
+
+    last_seen_at = models.DateTimeField(null=True)
+```
+
+`bookkeeping_fields(model)` names them, `()` for a model with none. Each is a column of the model's own, and no
+database-kept field - anything else is refused as the model is registered.
+
 ```python
 from isik.django.apps.common.db import BaseModel
 

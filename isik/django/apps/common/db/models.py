@@ -435,15 +435,37 @@ def database_kept_fields(model):
     return tuple(names)
 
 
-def _row_changes(model, kept):
+def bookkeeping_fields(model):
     """
-    The SQL for "this UPDATE changes the row": a column other than the `kept` ones differs from OLD, or a
-    kept one was moved forward - `touch_rows()`, or another kept field's trigger having moved it.
+    The names of `model`'s fields whose writes aren't a change to the row - its `BOOKKEEPING_FIELDS` - or `()`.
+    Writing one alone leaves the database-kept fields where they were, and so the row's ETag and its history.
+    Each must be a concrete field of the model, and no database-kept one.
+    """
+    names = tuple(getattr(model, "BOOKKEEPING_FIELDS", ()))
+    kept = database_kept_fields(model)
+    # Its columns, not each field's `concrete` - a many-to-many field is "concrete" before Django 6.0.
+    columns = {field.name for field in model._meta.concrete_fields}
+    for name in names:
+        if name in kept or name not in columns:
+            raise ImproperlyConfigured(
+                _(
+                    "%(model)s.BOOKKEEPING_FIELDS names %(field)s - a bookkeeping field is a column of the "
+                    "model's own, and no database-kept one."
+                )
+                % {"model": model._meta.label, "field": name}
+            )
+    return names
+
+
+def _row_changes(model, kept, bookkeeping=()):
+    """
+    The SQL for "this UPDATE changes the row": a column other than the `kept` and `bookkeeping` ones differs
+    from OLD, or a kept one was moved forward - `touch_rows()`, or another kept field's trigger having moved it.
     """
     quote = connection.ops.quote_name
     # A generated column isn't computed yet in a BEFORE trigger's NEW - it follows the others anyway.
     derived = [field.name for field in model._meta.concrete_fields if field.generated]
-    others = pgtrigger.AnyChange(exclude=[*kept, *derived]).resolve(model)
+    others = pgtrigger.AnyChange(exclude=[*kept, *bookkeeping, *derived]).resolve(model)
     columns = [quote(model._meta.get_field(name).column) for name in kept]
     forward = [f"NEW.{column} > OLD.{column}" for column in columns]
     return " OR ".join([f"({others})", *forward])
@@ -454,23 +476,25 @@ class _KeptFieldTrigger(pgtrigger.Trigger):
     A BEFORE UPDATE trigger moving `field` on with `step` (SQL over `{column}`) when the row changes,
     and holding it at OLD when it doesn't - see `_row_changes()`. It fires on every UPDATE: held at OLD,
     a stale value a write sends back can't take the field backwards. `kept` is every database-kept
-    field of the model, named when it's registered: a migration renders the trigger against a model of
-    its own state, which is no subclass of the bases that say which they are.
+    field of the model and `bookkeeping` its bookkeeping fields, named when it's registered: a migration
+    renders the trigger against a model of its own state, which is no subclass of the bases that say which
+    they are and carries none of the model's class attributes.
     """
 
     when = pgtrigger.Before
     operation = pgtrigger.Update
 
-    def __init__(self, *, name, field, step, kept):
-        self.field, self.step, self.kept = field, step, kept
+    def __init__(self, *, name, field, step, kept, bookkeeping):
+        self.field, self.step, self.kept, self.bookkeeping = field, step, kept, bookkeeping
         super().__init__(name=name)
 
     def get_func(self, model):
         # The column, not the field name: a subclass giving the field a db_column would otherwise leave
         # the trigger assigning to a column that doesn't exist, failing every UPDATE.
         column = connection.ops.quote_name(model._meta.get_field(self.field).column)
+        changes = _row_changes(model, self.kept, self.bookkeeping)
         return (
-            f"IF {_row_changes(model, self.kept)} THEN NEW.{column} = {self.step.format(column=column)}; "
+            f"IF {changes} THEN NEW.{column} = {self.step.format(column=column)}; "
             f"ELSE NEW.{column} = OLD.{column}; END IF; RETURN NEW;"
         )
 
@@ -496,6 +520,7 @@ def _timestamp_triggers(model):
             field="updated_at",
             step="GREATEST(clock_timestamp(), OLD.{column} + interval '1 microsecond')",
             kept=database_kept_fields(model),
+            bookkeeping=bookkeeping_fields(model),
         ),
     ]
 
@@ -508,7 +533,11 @@ def _version_triggers(model):
     # updated_at without the version.
     return [
         _KeptFieldTrigger(
-            name="bump_version", field="version", step="OLD.{column} + 1", kept=database_kept_fields(model)
+            name="bump_version",
+            field="version",
+            step="OLD.{column} + 1",
+            kept=database_kept_fields(model),
+            bookkeeping=bookkeeping_fields(model),
         )
     ]
 

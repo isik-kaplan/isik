@@ -91,6 +91,9 @@ class ScheduledTaskSerializer(serializers.Serializer):
         child=serializers.CharField(), read_only=True, help_text=gettext_lazy("What staff may do to it.")
     )
     run_by_hand_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    last_run_at = serializers.DateTimeField(
+        read_only=True, allow_null=True, help_text=gettext_lazy("When beat last sent it on its schedule.")
+    )
 
     def to_representation(self, row):
         task = declared_tasks()[row.name]
@@ -103,6 +106,7 @@ class ScheduledTaskSerializer(serializers.Serializer):
                 "effective": state.effective_state(task, row),
                 "may": state.may(task),
                 "run_by_hand_at": row.run_by_hand_at,
+                "last_run_at": row.last_run_at,
             }
         )
 

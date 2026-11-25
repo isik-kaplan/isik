@@ -1,12 +1,14 @@
 """The scheduled tasks over REST - staff doing to each what its declaration allows, and refused the rest."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from isik.django.apps.scheduling import state
+from isik.django.apps.scheduling.swapping import get_task_state_model
 from isik.django.scheduling import Source, StaffMay
 from tests.django.apps.scheduling.conftest import CLEANUP, row_of
 from tests.testapp.models import EmailUser
@@ -73,7 +75,20 @@ class TestReading:
             "effective": {"every": 3600, "crontab": None, "paused": False, "on_restart": "code"},
             "may": ["view", "pause", "run_now", "reschedule", "switch_on_restart"],
             "run_by_hand_at": None,
+            "last_run_at": None,
         }
+
+    def test_its_last_run(self, client):
+        ran = timezone.now()
+        get_task_state_model()._default_manager.filter(name=CLEANUP).update(last_run_at=ran)
+
+        assert datetime.fromisoformat(client.get(URL).json()["last_run_at"]) == ran
+
+    def test_a_run_leaves_its_etag(self, client):
+        before = etag(client)
+        get_task_state_model()._default_manager.filter(name=CLEANUP).update(last_run_at=timezone.now())
+
+        assert etag(client) == before
 
     def test_every_one_staff_may_view(self, client, changed):
         changed(SWEEP, staff_may=StaffMay.PAUSE)

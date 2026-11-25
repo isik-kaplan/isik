@@ -68,7 +68,27 @@ class TestTheHistory:
 
         assert checks.history_problems() == [
             "ops.ScheduledTaskState has no history - it says who paused, rescheduled or ran a task. Track it with "
-            "@track_events()."
+            '@track_events(exclude=["last_run_at"]).'
+        ]
+
+    def test_one_recording_each_run(self, monkeypatch):
+        class Field:
+            def __init__(self, name):
+                self.name = name
+
+        class Recording:
+            class _meta:
+                label = "ops.ScheduledTaskState"
+
+            class pgh_event_model:
+                class _meta:
+                    fields = [Field("paused"), Field("last_run_at")]
+
+        monkeypatch.setattr(checks, "get_task_state_model", lambda: Recording)
+
+        assert checks.history_problems() == [
+            "ops.ScheduledTaskState's history records last_run_at, which beat writes at every run - an event per "
+            'run. Track it with @track_events(exclude=["last_run_at"]).'
         ]
 
 
