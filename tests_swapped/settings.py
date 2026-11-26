@@ -1,5 +1,5 @@
-"""Settings for the swapped project - its own database, and every notifications, features and sync model the
-project's."""
+"""Settings for the swapped project - its own database, and every notifications, features, sync and scheduling
+model the project's."""
 
 import getpass
 import os
@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "isik.django.apps.notifications.audience",
     "isik.django.apps.features",
     "isik.django.apps.sync",
+    "isik.django.apps.scheduling",
     "tests_swapped.owned",
 ]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -73,5 +74,6 @@ ISIK = {
             "OVERRIDES_MODEL": "owned.OrganizationOverrides",
         },
         "SYNC": {"LOG_MODEL": "owned.SyncLogEntry"},
+        "SCHEDULING": {"TASK_MODEL": "owned.ScheduledTaskState"},
     },
 }

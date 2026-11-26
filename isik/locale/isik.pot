@@ -598,7 +598,7 @@ msgstr ""
 msgid "%(model)s has no @track_events() history to serve."
 msgstr ""
 
-#: isik/django/apps/common/db/constraints.py:486
+#: isik/django/apps/common/db/constraints.py:488
 #, python-format
 msgid "%(model)s has no CHECK constraint named %(name)r."
 msgstr ""
@@ -874,7 +874,7 @@ msgstr ""
 msgid "%(model)s's table is named by Django, %(table)s - declare its Meta.db_table."
 msgstr ""
 
-#: isik/django/apps/common/db/conditions.py:146
+#: isik/django/apps/common/db/conditions.py:147
 #, python-format
 msgid "%(model)s's trigger %(trigger)s has a condition comparing %(fields)s, which the database moves whenever any other column changes - leave them out of it."
 msgstr ""
@@ -4882,7 +4882,7 @@ msgstr ""
 msgid "last seen at"
 msgstr ""
 
-#: isik/django/apps/common/db/constraints.py:490
+#: isik/django/apps/common/db/constraints.py:492
 #, python-format
 msgid "lifted_constraint() drops %(name)r from the table, so it runs inside a transaction that rolls back - a test's own."
 msgstr ""

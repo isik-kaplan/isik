@@ -1,6 +1,6 @@
 """
-Every notifications and features model, the project's own - empty subclasses of isik's bases, under tables of
-their own.
+Every notifications, features, sync and scheduling model, the project's own - empty subclasses of isik's bases,
+under tables of their own.
 """
 
 import pgtrigger
@@ -17,6 +17,7 @@ from isik.django.apps.notifications.audiences import Field
 from isik.django.apps.notifications.channels import Channel
 from isik.django.apps.notifications.kinds import declare_kind, notifies
 from isik.django.apps.notifications.models import Policy
+from isik.django.apps.scheduling.bases import AbstractScheduledTaskState
 from isik.django.apps.sync.bases import AbstractSyncLogEntry
 from isik.django.apps.sync.declarations import Memberships, syncs
 
@@ -185,3 +186,12 @@ class SyncLogEntry(AbstractSyncLogEntry):
 class Folder(UUIDPrimaryKeyModel, DatabaseTimestampsModel):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="folders")
     name = models.CharField(max_length=50)
+
+
+# The scheduled task state the project's own, as the scheduling README has it.
+
+
+@track_events(exclude=["last_run_at"])
+class ScheduledTaskState(AbstractScheduledTaskState):
+    class Meta(AbstractScheduledTaskState.Meta):
+        db_table = "owned_scheduled_task_state"

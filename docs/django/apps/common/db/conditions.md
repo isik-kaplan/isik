@@ -46,7 +46,9 @@ Each trigger on a model of `app_configs` whose condition compares a kept field, 
 `[]`. It reads pgtrigger's registry, so pghistory's event triggers are included, and it reads:
 
 - a change condition (`AnyChange` and the rest) - by the fields it compares, after `exclude` and
-  `exclude_auto`. Every column in an AFTER trigger is fine; every column in a BEFORE trigger isn't.
+  `exclude_auto`. Every column in an AFTER trigger is fine, its
+  [bookkeeping fields](models.md#bookkeeping-fields) left out or not - pghistory's `track_events(exclude=[...])` of
+  them; every column in a BEFORE trigger isn't.
 - a `pgtrigger.Q` - by the `old__<field>`/`new__<field>` it names, in its keys and in `F()` values,
   nested `Q`s included.
 

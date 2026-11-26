@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.1] - 2026-11-26
+
+### Fixed
+
+- A swapped-out model is constrained too - its choices and validator constraints, which isik's migration of it
+  carries - so `makemigrations --check` is clean in a project owning `ScheduledTaskState`.
+- `isik.E013` passes an AFTER trigger comparing every column but the model's bookkeeping fields, such as the history
+  `track_events(exclude=["last_run_at"])` makes for an owned `ScheduledTaskState`.
+
 ## [0.62.0] - 2026-11-25
 
 ### Added

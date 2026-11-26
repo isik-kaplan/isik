@@ -412,7 +412,9 @@ def install():
     from django.apps import apps as django_apps
 
     teach_django_its_validators()
-    for model in django_apps.get_models():
+    # Swapped-out models too: a migration of isik's still builds the table a project's own replaces, constraints
+    # and all, so the model its state compares with carries them.
+    for model in django_apps.get_models(include_swapped=True):
         constrain(model)
     # No dispatch_uid: Django keys a connection on the receiver's identity, and a second `ready()`
     # finds the same function object, so this cannot connect twice.

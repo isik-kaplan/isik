@@ -120,6 +120,23 @@ class TestWhatAConditionReads:
         assert self.read(pgtrigger.AnyChange(exclude=["version", "updated_at"])) == []
         assert self.read(AnyChange(exclude=["name"]), when=pgtrigger.Before) == []
 
+    def test_every_column_but_bookkeeping_ones_after_the_write_is_fine(self, monkeypatch):
+        """A write to a bookkeeping field alone moves no kept field - pghistory's `exclude=` compares the rest."""
+        monkeypatch.setattr(VersionedWidget, "BOOKKEEPING_FIELDS", ("name",), raising=False)
+
+        assert self.read(pgtrigger.AnyChange(exclude=["name"])) == []
+        assert self.read(pgtrigger.AnyChange()) == []
+        assert self.read(pgtrigger.AnyChange(exclude=["name"]), when=pgtrigger.Before) == ["version", "updated_at"]
+        assert self.read(pgtrigger.AnyChange(exclude=["name", "id"])) == ["version", "updated_at"]
+
+    def test_the_scheduled_task_states_history_is_fine(self):
+        from isik.django.apps.scheduling.models import ScheduledTaskState
+
+        triggers = [trigger for model, trigger in pgtrigger.registered() if model is ScheduledTaskState]
+
+        assert triggers
+        assert all(conditions._kept_fields_read(trigger, ScheduledTaskState) == [] for trigger in triggers)
+
     @isolate_apps("tests.testapp")
     @pytest.mark.parametrize("option", ["auto_now", "auto_now_add"])
     def test_exclude_auto_leaves_the_auto_fields_out(self, option):

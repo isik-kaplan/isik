@@ -23,7 +23,7 @@ from django.db import models
 from django.db.models import F, Q
 
 from isik._internal.translation import gettext as _
-from isik.django.apps.common.db.models import database_kept_fields
+from isik.django.apps.common.db.models import bookkeeping_fields, database_kept_fields
 
 
 def _kept_fields_of(model):
@@ -84,13 +84,14 @@ CHANGES = (pgtrigger.AnyChange, pgtrigger.AnyDontChange, pgtrigger.AllChange, pg
 
 def _change_reads(condition, model, trigger):
     """The fields a change condition compares that it shouldn't - none when it compares every column
-    after the row is written, which is every change and only one."""
-    names = {field.name for field in model._meta.fields}
+    after the row is written, which is every change and only one. Its bookkeeping fields may be left out
+    of that: a write to them alone moves no kept field."""
+    names = {field.name for field in model._meta.fields} - set(bookkeeping_fields(model))
     excluded = {model._meta.get_field(name).name for name in condition.exclude}
     if condition.exclude_auto:
         excluded |= _auto_fields(model)
     compared = ({model._meta.get_field(name).name for name in condition.fields} or names) - excluded
-    if compared == names and trigger.when == pgtrigger.After:
+    if compared >= names and trigger.when == pgtrigger.After:
         return set()
     return compared
 

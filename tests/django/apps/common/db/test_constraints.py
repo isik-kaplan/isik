@@ -614,6 +614,21 @@ class TestInstalling:
 
         assert [c.name for c in model._meta.constraints] == [_name(model._meta.get_field("kind"), "choices")]
 
+    def test_it_reaches_a_swapped_out_model(self, monkeypatch):
+        """isik's migration still builds a model a project's own swaps out, constraints and all - and
+        makemigrations compares that migration with the model."""
+        from isik.django.apps.common.db import constraints
+
+        reached = []
+        monkeypatch.setattr(constraints, "constrain", reached.append)
+        monkeypatch.setattr(
+            django_apps, "get_models", lambda include_swapped=False: ["swapped out"] if include_swapped else []
+        )
+
+        install()
+
+        assert reached == ["swapped out"]
+
     def test_it_connects_once_however_often_it_runs(self):
         """Django keys a connection on the receiver's identity, so a second `ready()` finds the same
         function - and two receivers would mean the second finds every name taken."""
