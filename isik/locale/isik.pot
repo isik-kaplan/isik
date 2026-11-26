@@ -4837,7 +4837,7 @@ msgstr ""
 msgid "isik check public_names reads a Django project's settings - set %(setting)s."
 msgstr ""
 
-#: isik/django/public_names.py:109
+#: isik/django/public_names.py:111
 msgid "isik's default"
 msgstr ""
 
@@ -5274,7 +5274,7 @@ msgstr ""
 msgid "session epoch"
 msgstr ""
 
-#: isik/django/public_names.py:109
+#: isik/django/public_names.py:111
 msgid "set"
 msgstr ""
 
@@ -5398,15 +5398,15 @@ msgstr ""
 msgid "template source is %(length)s chars, over the %(limit)s limit"
 msgstr ""
 
-#: isik/django/public_names.py:75
+#: isik/django/public_names.py:77
 msgid "the header a request's correlation id is read from, and answered under"
 msgstr ""
 
-#: isik/django/public_names.py:68
+#: isik/django/public_names.py:70
 msgid "the header every sync request and response names its protocol version in"
 msgstr ""
 
-#: isik/django/public_names.py:82
+#: isik/django/public_names.py:84
 msgid "the header saying a request's session cookie is dead"
 msgstr ""
 

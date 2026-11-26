@@ -52,7 +52,9 @@ class PublicName:
 def _middleware_installed(path):
     def installed():
         wanted = import_string(path)
-        return any(issubclass(import_string(each), wanted) for each in settings.MIDDLEWARE)
+        # A middleware may be a function - allauth's is - which is no subclass of anything.
+        loaded = (import_string(each) for each in settings.MIDDLEWARE)
+        return any(isinstance(each, type) and issubclass(each, wanted) for each in loaded)
 
     return installed
 

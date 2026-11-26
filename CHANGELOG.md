@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.2] - 2026-11-26
+
+### Fixed
+
+- `manage.py public_names` and `isik check public_names` read a middleware written as a function - allauth's
+  `AccountMiddleware` is one - beside the classes in `MIDDLEWARE`, rather than crashing on it.
+
 ## [0.62.1] - 2026-11-26
 
 ### Fixed

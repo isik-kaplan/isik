@@ -28,6 +28,10 @@ class OwnHistory(HistoryContextMiddleware):
     pass
 
 
+def function_middleware(get_response):
+    return get_response
+
+
 class TestEach:
     def test_the_three(self):
         assert [(name.setting, name.default) for name in PUBLIC_NAMES] == [
@@ -175,6 +179,8 @@ class TestInUseAsBuilt:
             (["tests.django.test_public_names.OwnHistory"], True),
             ([DEAD_SESSIONS], False),
             ([], False),
+            (["tests.django.test_public_names.function_middleware"], False),
+            (["tests.django.test_public_names.function_middleware", HISTORY], True),
         ],
     )
     def test_a_middlewares(self, settings, middleware, used):
