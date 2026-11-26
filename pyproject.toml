@@ -20,7 +20,9 @@ dependencies = []
 
 [project.optional-dependencies]
 sentry = ["sentry-sdk"]
-django = ["django", "mjml-python", "django-pghistory", "django-object-actions", "dalf", "django-lifecycle", "whitenoise"]
+django = ["django", "mjml-python", "django-pghistory", "django-lifecycle", "whitenoise"]
+# isik.django.apps.common.admin - BaseAdmin and action - builds on django-object-actions and dalf.
+django-admin = ["isik[django]", "django-object-actions", "dalf"]
 # isik.django.drf builds on isik.django.apps (BaseModel, history tracking), so it brings the django extra.
 drf = ["isik[django]", "djangorestframework", "django-filter", "drf-spectacular"]
 # isik.django.celery carries pghistory context into a worker, so it brings the django extra.
@@ -41,7 +43,7 @@ tiptap = ["prosemirror"]
 templated_fields = ["jinja2"]
 # Ranges, not pins: an app pins its own click and questionary, and isik.cli must not fight that.
 cli = ["click>=8.1", "questionary>=2.1.1"]
-all = ["isik[sentry,django,drf,celery,notifications,push,sms,sync,tiptap,templated_fields,cli,inbound,scheduling]"]
+all = ["isik[sentry,django,django-admin,drf,celery,notifications,push,sms,sync,tiptap,templated_fields,cli,inbound,scheduling]"]
 
 [project.scripts]
 # isik's own commands - `isik exemptions`, `isik check public_names` - on the cli extra.

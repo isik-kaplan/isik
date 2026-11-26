@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.62.2] - 2026-11-26
+## [0.63.0] - 2026-11-26
+
+### Changed
+
+- The admin is an extra of its own: `isik[django-admin]` brings django-object-actions and dalf, which `isik[django]`
+  no longer does. A project using `isik.django.apps.common.admin` (`BaseAdmin`, `action`) installs
+  `isik[django-admin]`; importing it without them names the extra.
 
 ### Fixed
 

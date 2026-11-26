@@ -9,6 +9,7 @@ scoped permissions, serializer and viewset mixins, and HTTP exceptions you can r
 ```bash
 pip install isik              # isik.common only - no dependencies
 pip install isik[django]      # isik.django.apps, isik.django.http_exceptions
+pip install isik[django-admin]  # isik.django.apps.common.admin - brings the django extra with it
 pip install isik[drf]         # isik.django.drf - brings the django extra with it
 pip install isik[celery]      # isik.django.celery - brings the django extra with it
 pip install isik[cli]         # isik.cli - click and questionary

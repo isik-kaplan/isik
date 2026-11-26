@@ -780,11 +780,9 @@ all = [
 ]
 celery = [
     { name = "celery" },
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "mjml-python" },
     { name = "whitenoise" },
@@ -794,6 +792,14 @@ cli = [
     { name = "questionary" },
 ]
 django = [
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "django-lifecycle" },
+    { name = "django-pghistory" },
+    { name = "mjml-python" },
+    { name = "whitenoise" },
+]
+django-admin = [
     { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -804,12 +810,10 @@ django = [
     { name = "whitenoise" },
 ]
 drf = [
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-filter" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
@@ -818,22 +822,18 @@ drf = [
 ]
 inbound = [
     { name = "celery" },
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "mjml-python" },
     { name = "whitenoise" },
 ]
 notifications = [
     { name = "celery" },
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "httpx" },
     { name = "mjml-python" },
@@ -841,11 +841,9 @@ notifications = [
 ]
 push = [
     { name = "celery" },
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "httpx", extra = ["http2"] },
     { name = "mjml-python" },
@@ -854,11 +852,9 @@ push = [
 ]
 scheduling = [
     { name = "celery" },
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "mjml-python" },
     { name = "whitenoise" },
@@ -867,23 +863,19 @@ sentry = [
     { name = "sentry-sdk" },
 ]
 sms = [
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "httpx" },
     { name = "mjml-python" },
     { name = "whitenoise" },
 ]
 sync = [
-    { name = "dalf" },
     { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-filter" },
     { name = "django-lifecycle" },
-    { name = "django-object-actions" },
     { name = "django-pghistory" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
@@ -921,18 +913,11 @@ requires-dist = [
     { name = "click", marker = "extra == 'all'", specifier = ">=8.1" },
     { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "dalf", marker = "extra == 'all'" },
-    { name = "dalf", marker = "extra == 'celery'" },
-    { name = "dalf", marker = "extra == 'django'" },
-    { name = "dalf", marker = "extra == 'drf'" },
-    { name = "dalf", marker = "extra == 'inbound'" },
-    { name = "dalf", marker = "extra == 'notifications'" },
-    { name = "dalf", marker = "extra == 'push'" },
-    { name = "dalf", marker = "extra == 'scheduling'" },
-    { name = "dalf", marker = "extra == 'sms'" },
-    { name = "dalf", marker = "extra == 'sync'" },
+    { name = "dalf", marker = "extra == 'django-admin'" },
     { name = "django", marker = "extra == 'all'" },
     { name = "django", marker = "extra == 'celery'" },
     { name = "django", marker = "extra == 'django'" },
+    { name = "django", marker = "extra == 'django-admin'" },
     { name = "django", marker = "extra == 'drf'" },
     { name = "django", marker = "extra == 'inbound'" },
     { name = "django", marker = "extra == 'notifications'" },
@@ -946,6 +931,7 @@ requires-dist = [
     { name = "django-lifecycle", marker = "extra == 'all'" },
     { name = "django-lifecycle", marker = "extra == 'celery'" },
     { name = "django-lifecycle", marker = "extra == 'django'" },
+    { name = "django-lifecycle", marker = "extra == 'django-admin'" },
     { name = "django-lifecycle", marker = "extra == 'drf'" },
     { name = "django-lifecycle", marker = "extra == 'inbound'" },
     { name = "django-lifecycle", marker = "extra == 'notifications'" },
@@ -954,18 +940,11 @@ requires-dist = [
     { name = "django-lifecycle", marker = "extra == 'sms'" },
     { name = "django-lifecycle", marker = "extra == 'sync'" },
     { name = "django-object-actions", marker = "extra == 'all'" },
-    { name = "django-object-actions", marker = "extra == 'celery'" },
-    { name = "django-object-actions", marker = "extra == 'django'" },
-    { name = "django-object-actions", marker = "extra == 'drf'" },
-    { name = "django-object-actions", marker = "extra == 'inbound'" },
-    { name = "django-object-actions", marker = "extra == 'notifications'" },
-    { name = "django-object-actions", marker = "extra == 'push'" },
-    { name = "django-object-actions", marker = "extra == 'scheduling'" },
-    { name = "django-object-actions", marker = "extra == 'sms'" },
-    { name = "django-object-actions", marker = "extra == 'sync'" },
+    { name = "django-object-actions", marker = "extra == 'django-admin'" },
     { name = "django-pghistory", marker = "extra == 'all'" },
     { name = "django-pghistory", marker = "extra == 'celery'" },
     { name = "django-pghistory", marker = "extra == 'django'" },
+    { name = "django-pghistory", marker = "extra == 'django-admin'" },
     { name = "django-pghistory", marker = "extra == 'drf'" },
     { name = "django-pghistory", marker = "extra == 'inbound'" },
     { name = "django-pghistory", marker = "extra == 'notifications'" },
@@ -990,6 +969,7 @@ requires-dist = [
     { name = "mjml-python", marker = "extra == 'all'" },
     { name = "mjml-python", marker = "extra == 'celery'" },
     { name = "mjml-python", marker = "extra == 'django'" },
+    { name = "mjml-python", marker = "extra == 'django-admin'" },
     { name = "mjml-python", marker = "extra == 'drf'" },
     { name = "mjml-python", marker = "extra == 'inbound'" },
     { name = "mjml-python", marker = "extra == 'notifications'" },
@@ -1008,6 +988,7 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'all'" },
     { name = "whitenoise", marker = "extra == 'celery'" },
     { name = "whitenoise", marker = "extra == 'django'" },
+    { name = "whitenoise", marker = "extra == 'django-admin'" },
     { name = "whitenoise", marker = "extra == 'drf'" },
     { name = "whitenoise", marker = "extra == 'inbound'" },
     { name = "whitenoise", marker = "extra == 'notifications'" },
@@ -1016,7 +997,7 @@ requires-dist = [
     { name = "whitenoise", marker = "extra == 'sms'" },
     { name = "whitenoise", marker = "extra == 'sync'" },
 ]
-provides-extras = ["all", "celery", "cli", "django", "drf", "inbound", "notifications", "push", "scheduling", "sentry", "sms", "sync", "templated-fields", "tiptap"]
+provides-extras = ["all", "celery", "cli", "django", "django-admin", "drf", "inbound", "notifications", "push", "scheduling", "sentry", "sms", "sync", "templated-fields", "tiptap"]
 
 [package.metadata.requires-dev]
 dev = [
